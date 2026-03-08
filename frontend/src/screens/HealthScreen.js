@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Modal, SafeAreaView, Platform, KeyboardAvoidingView } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Modal, SafeAreaView, Platform, KeyboardAvoidingView, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 
@@ -78,11 +78,26 @@ export default function HealthScreen({ healthProfile, setHealthProfile, isSideba
         setInputStates(prev => ({ ...prev, [sectionKey]: text }));
     };
 
-    const renderSection = (section) => {
-        const items = healthProfile[section.key] || [];
+    const AnimatedSectionCard = ({ section, items }) => {
+        const hoverAnim = React.useRef(new Animated.Value(1)).current;
+
+        const handleMouseEnter = () => {
+            if (Platform.OS === 'web') {
+                Animated.spring(hoverAnim, { toValue: 1.02, friction: 6, useNativeDriver: true }).start();
+            }
+        };
+
+        const handleMouseLeave = () => {
+            if (Platform.OS === 'web') {
+                Animated.spring(hoverAnim, { toValue: 1, friction: 6, useNativeDriver: true }).start();
+            }
+        };
 
         return (
-            <View key={section.key} style={[styles.card, { borderColor: section.borderColor }]}>
+            <Animated.View
+                style={[styles.card, { borderColor: section.borderColor, transform: [{ scale: hoverAnim }] }]}
+                {...(Platform.OS === 'web' ? { onMouseEnter: handleMouseEnter, onMouseLeave: handleMouseLeave } : {})}
+            >
                 {/* Section Header */}
                 <View style={[styles.sectionHeader, { backgroundColor: section.bgColor }]}>
                     <View style={styles.headerIconContainer}>
@@ -133,8 +148,13 @@ export default function HealthScreen({ healthProfile, setHealthProfile, isSideba
                         </View>
                     )}
                 </View>
-            </View>
+            </Animated.View>
         );
+    };
+
+    const renderSection = (section) => {
+        const items = healthProfile[section.key] || [];
+        return <AnimatedSectionCard key={section.key} section={section} items={items} />;
     };
 
     return (

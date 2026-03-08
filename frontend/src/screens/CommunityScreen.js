@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, ActivityIndicator, RefreshControl, Platform } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, ActivityIndicator, RefreshControl, Platform, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { colors } from '../theme/colors';
@@ -106,31 +106,63 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user }) {
         return past.toLocaleDateString('ko-KR');
     };
 
-    const renderRecipeCard = (item, isPopular = false) => (
-        <TouchableOpacity key={item.id} style={styles.card} onPress={() => onNavigate && onNavigate('recipe-detail', item)}>
-            <Image source={{ uri: item.image }} style={styles.cardImage} />
-            <View style={styles.cardContent}>
-                <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-                <View style={styles.cardMeta}>
-                    {isPopular ? (
-                        <>
-                            <Ionicons name="eye-outline" size={14} color={colors.textSecondary} />
-                            <Text style={styles.metaText}>{item.views}</Text>
-                            <Ionicons name="heart-outline" size={14} color={colors.accent} style={{ marginLeft: 8 }} />
-                            <Text style={styles.metaText}>{item.likes}</Text>
-                        </>
-                    ) : (
-                        <>
-                            <Ionicons name="star" size={14} color="#F59E0B" />
-                            <Text style={styles.metaText}>{item.rating}</Text>
-                            <Ionicons name="time-outline" size={14} color={colors.textSecondary} style={{ marginLeft: 8 }} />
-                            <Text style={styles.metaText}>{item.time}분</Text>
-                        </>
-                    )}
-                </View>
-            </View>
-        </TouchableOpacity>
-    );
+    const AnimatedRecipeCard = ({ item, isPopular }) => {
+        const hoverAnim = React.useRef(new Animated.Value(1)).current;
+
+        const handleMouseEnter = () => {
+            if (Platform.OS === 'web') {
+                Animated.spring(hoverAnim, { toValue: 1.05, friction: 5, useNativeDriver: true }).start();
+            }
+        };
+
+        const handleMouseLeave = () => {
+            if (Platform.OS === 'web') {
+                Animated.spring(hoverAnim, { toValue: 1, friction: 5, useNativeDriver: true }).start();
+            }
+        };
+
+        return (
+            <Animated.View style={[{ transform: [{ scale: hoverAnim }] }]}>
+                <TouchableOpacity key={item.id} style={styles.card} onPress={() => onNavigate && onNavigate('recipe-detail', item)}
+                    activeOpacity={0.9}
+                    {...(Platform.OS === 'web' ? { onMouseEnter: handleMouseEnter, onMouseLeave: handleMouseLeave } : {})}
+                >
+                    {/* fallback image if undefined */}
+                    <Image source={{ uri: item.imageUrl || item.image || 'https://images.unsplash.com/photo-1476124369491-e7addf5db371?w=800&q=80' }} style={styles.cardImage} />
+                    <View style={styles.cardContent}>
+                        {item.score && (
+                            <View style={styles.aiBadge}>
+                                <Text style={styles.aiBadgeText}>AI Score: {Math.round(item.score)}</Text>
+                            </View>
+                        )}
+                        <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+
+                        {item.reason ? (
+                            <Text style={styles.recoReason} numberOfLines={2}>{item.reason}</Text>
+                        ) : (
+                            <View style={styles.cardMeta}>
+                                {isPopular ? (
+                                    <>
+                                        <Ionicons name="heart" size={14} color={colors.error} />
+                                        <Text style={styles.metaText}>{item.likeCount || item.likes || 0}</Text>
+                                        <Ionicons name="chatbubble" size={14} color={colors.textSecondary} style={{ marginLeft: 8 }} />
+                                        <Text style={styles.metaText}>{item.commentCount || 0}</Text>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Ionicons name="star" size={14} color="#F59E0B" />
+                                        <Text style={styles.metaText}>{item.rating}</Text>
+                                        <Ionicons name="time-outline" size={14} color={colors.textSecondary} style={{ marginLeft: 8 }} />
+                                        <Text style={styles.metaText}>{item.time}분</Text>
+                                    </>
+                                )}
+                            </View>
+                        )}
+                    </View>
+                </TouchableOpacity>
+            </Animated.View>
+        );
+    };
 
     const renderUserPostCard = (post) => (
         <TouchableOpacity
@@ -248,20 +280,7 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user }) {
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
                                 {aiRecommendations.length > 0 ? (
                                     aiRecommendations.map(reco => (
-                                        <TouchableOpacity
-                                            key={reco.id}
-                                            style={[styles.card, { width: 200 }]}
-                                            onPress={() => onNavigate && onNavigate('recipe-detail', { id: reco.recipeId })}
-                                        >
-                                            <Image source={{ uri: reco.imageUrl || 'https://images.unsplash.com/photo-1476124369491-e7addf5db371?w=400&q=80' }} style={[styles.cardImage, { height: 120 }]} />
-                                            <View style={styles.cardContent}>
-                                                <View style={styles.aiBadge}>
-                                                    <Text style={styles.aiBadgeText}>AI Score: {Math.round(reco.score)}</Text>
-                                                </View>
-                                                <Text style={styles.cardTitle} numberOfLines={1}>{reco.title}</Text>
-                                                <Text style={styles.recoReason} numberOfLines={2}>{reco.reason}</Text>
-                                            </View>
-                                        </TouchableOpacity>
+                                        <AnimatedRecipeCard key={reco.id || reco.recipeId} item={{ ...reco, id: reco.recipeId || reco.id }} />
                                     ))
                                 ) : (
                                     <View style={styles.emptySmall}>
@@ -293,25 +312,7 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user }) {
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
                                 {popularPosts.length > 0 ? (
                                     popularPosts.map(post => (
-                                        <TouchableOpacity
-                                            key={post.id}
-                                            style={styles.card}
-                                            onPress={() => onNavigate && onNavigate('post-detail', post)}
-                                        >
-                                            <Image
-                                                source={{ uri: post.imageUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&q=80' }}
-                                                style={styles.cardImage}
-                                            />
-                                            <View style={styles.cardContent}>
-                                                <Text style={styles.cardTitle} numberOfLines={1}>{post.title}</Text>
-                                                <View style={styles.cardMeta}>
-                                                    <Ionicons name="heart" size={14} color={colors.error} />
-                                                    <Text style={styles.metaText}>{post.likeCount || 0}</Text>
-                                                    <Ionicons name="chatbubble" size={14} color={colors.textSecondary} style={{ marginLeft: 8 }} />
-                                                    <Text style={styles.metaText}>{post.commentCount || 0}</Text>
-                                                </View>
-                                            </View>
-                                        </TouchableOpacity>
+                                        <AnimatedRecipeCard key={post.id} item={post} isPopular={true} />
                                     ))
                                 ) : (
                                     <Text style={styles.emptyText}>게시글이 없습니다</Text>
@@ -464,20 +465,21 @@ const styles = StyleSheet.create({
         fontSize: 14,
     },
     card: {
-        width: 150,
+        width: 220,
         backgroundColor: 'white',
-        borderRadius: 16,
+        borderRadius: 20,
         overflow: 'hidden',
         borderWidth: 1,
         borderColor: '#E5E7EB',
+        ...Platform.select({ web: { boxShadow: '0px 4px 20px rgba(0,0,0,0.06)' } })
     },
     cardImage: {
         width: '100%',
-        height: 100,
+        height: 140,
         backgroundColor: '#F3F4F6',
     },
     cardContent: {
-        padding: 12,
+        padding: 16,
     },
     cardTitle: {
         fontSize: 14,

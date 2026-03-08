@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, Platform } from 'react-native';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import axios from 'axios';
 import config from './src/config';
@@ -11,12 +11,15 @@ import FridgeScreen from './src/screens/FridgeScreen';
 import LoginScreen from './src/screens/LoginScreen';
 // HomeScreen removed (merged into Community)
 import LandingPageScreen from './src/screens/LandingPageScreen';
+import DashboardScreen from './src/screens/DashboardScreen';
 import RecipeDetailScreen from './src/screens/RecipeDetailScreen';
 import CommunityScreen from './src/screens/CommunityScreen';
 import CreatePostScreen from './src/screens/CreatePostScreen';
 import PostDetailScreen from './src/screens/PostDetailScreen';
 import SearchScreen from './src/screens/SearchScreen';
 import LoadingScreen from './src/screens/LoadingScreen';
+import UpgradeScreen from './src/screens/UpgradeScreen';
+import PaymentResultScreen from './src/screens/PaymentResultScreen';
 
 import Sidebar from './src/components/Sidebar';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -37,28 +40,52 @@ function AppContent() {
     }
   }, [isAppReady, authLoading]);
 
-  // 애니메이션 효과를 위해 최소 2.5초는 로딩 화면 유지
+  // 애니메이션 효과를 위해 최소 2.5초는 로딩 화면 유지 (웹 대시보드 제외)
   useEffect(() => {
+    const isDashboard = Platform.OS === 'web' && window.location.pathname === '/dashboard';
+    const delay = isDashboard ? 0 : 2500;
+
     const timer = setTimeout(() => {
       setIsAppReady(true);
-    }, 2500);
+    }, delay);
     return () => clearTimeout(timer);
+  }, []);
+
+  // 🌐 웹 라우팅: 마운트 시 URL 경로와 currentScreen 동기화
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const path = window.location.pathname;
+      if (path === '/dashboard') {
+        setCurrentScreen('dashboard');
+        // 대시보드의 경우 즉시 로딩 완료 처리
+        setIsAppReady(true);
+      } else if (path === '/login') {
+        setCurrentScreen('login');
+      } else if (path === '/about') {
+        setCurrentScreen('about');
+      } else if (path === '/payment-result') {
+        setCurrentScreen('payment-result');
+        setIsAppReady(true);
+      }
+    }
   }, []);
 
 
   // 📝 Record daily activity (attendance)
   React.useEffect(() => {
-    if (isLoggedIn) {
+    if (isLoggedIn && user?.token) {
       const logActivity = async () => {
         try {
-          await axios.post(`${config.API_BASE_URL}/activities/log`, { isAi: false });
+          await axios.post(`${config.API_BASE_URL}/activities/log`, { isAi: false }, {
+            headers: { Authorization: `Bearer ${user.token}` }
+          });
         } catch (e) {
           console.log("Activity log failed", e);
         }
       };
       logActivity();
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, user]);
 
   const handleNavigate = (screen, data = null) => {
     // 🔒 보호된 라우트 체크
@@ -108,6 +135,10 @@ function AppContent() {
 
   const renderScreen = () => {
     switch (currentScreen) {
+      case 'payment-result':
+        return (
+          <PaymentResultScreen onNavigate={handleNavigate} />
+        );
       case 'recipe-detail':
         return (
           <RecipeDetailScreen
@@ -201,6 +232,10 @@ function AppContent() {
             user={user}
           />
         );
+      case 'dashboard':
+        return (
+          <DashboardScreen />
+        );
       case 'login':
         return (
           <LoginScreen
@@ -208,12 +243,25 @@ function AppContent() {
             onGuest={() => setCurrentScreen('chat')}
           />
         );
+      case 'upgrade':
+        return (
+          <UpgradeScreen
+            onBack={() => setCurrentScreen('chat')}
+            onSuccess={() => {
+              setCurrentScreen('chat');
+              // refreshUser will be called inside UpgradeScreen or here
+            }}
+          />
+        );
       default:
         return null;
     }
   };
 
-  if (!isAppReady || authLoading) {
+  // 대시보드의 경우 인증 로딩 대기 없이 즉시 렌더링하도록 조건 완화
+  const shouldShowLoading = !isAppReady || (authLoading && currentScreen !== 'dashboard');
+
+  if (shouldShowLoading) {
     return <LoadingScreen />;
   }
 
@@ -249,5 +297,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+    ...Platform.select({
+      web: {
+        width: '100%',
+        alignSelf: 'center',
+        boxShadow: '0px 0px 40px rgba(0,0,0,0.05)',
+      }
+    })
   },
 });

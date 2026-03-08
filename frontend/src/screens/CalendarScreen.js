@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ScrollView, Modal, Platform, ActivityIndicator, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ScrollView, Modal, Platform, ActivityIndicator, Alert, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import axios from 'axios';
@@ -213,6 +213,57 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
         );
     };
 
+    const AnimatedDayCell = ({ date, index, activity, meal, dateKey }) => {
+        const hoverAnim = React.useRef(new Animated.Value(1)).current;
+
+        const handleMouseEnter = () => {
+            if (Platform.OS === 'web' && date) {
+                Animated.spring(hoverAnim, { toValue: 1.1, friction: 5, useNativeDriver: true }).start();
+            }
+        };
+
+        const handleMouseLeave = () => {
+            if (Platform.OS === 'web' && date) {
+                Animated.spring(hoverAnim, { toValue: 1, friction: 5, useNativeDriver: true }).start();
+            }
+        };
+
+        return (
+            <Animated.View style={[styles.dayCellWrapper, { transform: [{ scale: hoverAnim }] }]}>
+                <TouchableOpacity
+                    style={[
+                        styles.dayCell,
+                        date && isToday(date) && styles.todayCell,
+                        date && !isToday(date) && activity && (activity.hasAiInteraction ? styles.aiDayCell : styles.activeDayCell)
+                    ]}
+                    onPress={() => handleDateClick(date)}
+                    disabled={!date}
+                    activeOpacity={0.7}
+                    {...(Platform.OS === 'web' ? { onMouseEnter: handleMouseEnter, onMouseLeave: handleMouseLeave } : {})}
+                >
+                    {date && (
+                        <>
+                            <Text style={[
+                                styles.dayText,
+                                isToday(date) && styles.todayText,
+                                !isToday(date) && index % 7 === 0 && { color: '#EF4444' },
+                                !isToday(date) && index % 7 === 6 && { color: '#3B82F6' },
+                            ]}
+                            >
+                                {date.getDate()}
+                            </Text>
+                            <View style={styles.dotsRow}>
+                                {meal?.breakfast && <View style={[styles.mealDot, { backgroundColor: '#F59E0B' }]} />}
+                                {meal?.lunch && <View style={[styles.mealDot, { backgroundColor: '#10B981' }]} />}
+                                {meal?.dinner && <View style={[styles.mealDot, { backgroundColor: '#3B82F6' }]} />}
+                            </View>
+                        </>
+                    )}
+                </TouchableOpacity>
+            </Animated.View>
+        );
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             {/* Header */}
@@ -265,43 +316,7 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
                         const dateKey = date ? formatDate(date) : null;
                         const activity = dateKey ? activityData[dateKey] : null;
 
-                        return (
-                            <TouchableOpacity
-                                key={index}
-                                style={[
-                                    styles.dayCell,
-                                    date && isToday(date) && styles.todayCell,
-                                    date && !isToday(date) && activity && (activity.hasAiInteraction ? styles.aiDayCell : styles.activeDayCell)
-                                ]}
-                                onPress={() => handleDateClick(date)}
-                                disabled={!date}
-                            >
-                                {date && (
-                                    <>
-                                        <Text style={[
-                                            styles.dayText,
-                                            isToday(date) && styles.todayText,
-                                            !isToday(date) && index % 7 === 0 && { color: '#EF4444' },
-                                            !isToday(date) && index % 7 === 6 && { color: '#3B82F6' },
-                                        ]}
-                                        >
-                                            {date.getDate()}
-                                        </Text>
-                                        <View style={styles.dotsRow}>
-                                            {meal?.breakfast && (
-                                                <View style={[styles.mealDot, { backgroundColor: '#F59E0B' }]} />
-                                            )}
-                                            {meal?.lunch && (
-                                                <View style={[styles.mealDot, { backgroundColor: '#10B981' }]} />
-                                            )}
-                                            {meal?.dinner && (
-                                                <View style={[styles.mealDot, { backgroundColor: '#3B82F6' }]} />
-                                            )}
-                                        </View>
-                                    </>
-                                )}
-                            </TouchableOpacity>
-                        );
+                        return <AnimatedDayCell key={index} date={date} index={index} activity={activity} meal={meal} dateKey={dateKey} />;
                     })}
                 </View>
 
@@ -502,16 +517,24 @@ const styles = StyleSheet.create({
         flexWrap: 'wrap',
         paddingHorizontal: 24,
     },
-    dayCell: {
+    dayCellWrapper: {
         width: '14.28%', // 100% / 7
         aspectRatio: 1,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    dayCell: {
+        width: '85%',
+        height: '85%',
+        justifyContent: 'center',
+        alignItems: 'center',
         marginVertical: 4,
         borderRadius: 12,
+        ...Platform.select({ web: { cursor: 'pointer' } })
     },
     todayCell: {
         backgroundColor: colors.primary,
+        ...Platform.select({ web: { boxShadow: '0px 4px 10px rgba(109,40,217,0.3)' } })
     },
     dayText: {
         fontSize: 16,

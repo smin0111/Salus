@@ -20,4 +20,7 @@ public class User {
     private String password;
     private String name;
     private LocalDateTime createdAt;
+
+    @Enumerated(EnumType.STRING)
+    private UserGrade grade = UserGrade.BASIC;
 }

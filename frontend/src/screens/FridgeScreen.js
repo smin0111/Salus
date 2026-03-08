@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView, TextInput, Modal, Platform, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView, TextInput, Modal, Platform, ActivityIndicator, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import * as ImagePicker from 'expo-image-picker';
@@ -259,6 +259,78 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
         ? fridgeItems
         : fridgeItems.filter(item => item.category === selectedCategory);
 
+    const AnimatedItemCard = ({ item }) => {
+        const hoverAnim = React.useRef(new Animated.Value(1)).current;
+        const daysLeft = Math.ceil((new Date(item.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
+        const expiryColors = getExpiryColor(daysLeft);
+
+        const handleMouseEnter = () => {
+            if (Platform.OS === 'web') {
+                Animated.spring(hoverAnim, { toValue: 1.03, friction: 5, useNativeDriver: true }).start();
+            }
+        };
+
+        const handleMouseLeave = () => {
+            if (Platform.OS === 'web') {
+                Animated.spring(hoverAnim, { toValue: 1, friction: 5, useNativeDriver: true }).start();
+            }
+        };
+
+        return (
+            <Animated.View
+                style={[styles.itemCard, { transform: [{ scale: hoverAnim }] }]}
+                {...(Platform.OS === 'web' ? { onMouseEnter: handleMouseEnter, onMouseLeave: handleMouseLeave } : {})}
+            >
+                <View style={styles.itemHeader}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+                        <View style={styles.quantityContainer}>
+                            <TouchableOpacity
+                                onPress={() => handleAdjustQuantity(item.id, item.quantity, -1)}
+                                style={styles.qtyBtn}
+                            >
+                                <Ionicons name="remove-circle-outline" size={18} color="#6B7280" />
+                            </TouchableOpacity>
+                            <Text style={styles.itemQuantity}>{item.quantity}</Text>
+                            <TouchableOpacity
+                                onPress={() => handleAdjustQuantity(item.id, item.quantity, 1)}
+                                style={styles.qtyBtn}
+                            >
+                                <Ionicons name="add-circle-outline" size={18} color="#6B7280" />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                    <View style={styles.cardActions}>
+                        <TouchableOpacity onPress={() => openEditModal(item)} style={{ marginRight: 8 }}>
+                            <Ionicons name="create-outline" size={18} color="#4B5563" />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDeleteItem(item.id)}>
+                            <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                <View style={styles.tagRow}>
+                    <View style={styles.categoryTag}>
+                        <Text style={styles.categoryTagText}>{item.category}</Text>
+                    </View>
+                </View>
+
+                <View style={[styles.expiryTag, { backgroundColor: expiryColors.bg, borderColor: expiryColors.border }]}>
+                    <Ionicons name="time-outline" size={14} color={expiryColors.text} />
+                    <Text style={[styles.expiryText, { color: expiryColors.text }]}>
+                        {daysLeft < 0 ? '기한 만료' : daysLeft === 0 ? '오늘 만료' : `${daysLeft}일 남음`}
+                    </Text>
+                    {daysLeft <= 1 && daysLeft >= 0 && (
+                        <View style={styles.alertBadge}>
+                            <Text style={styles.alertBadgeText}>임박</Text>
+                        </View>
+                    )}
+                </View>
+            </Animated.View>
+        );
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
@@ -361,60 +433,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
 
                 {/* Item Grid */}
                 <View style={styles.grid}>
-                    {filteredItems.map(item => {
-                        const daysLeft = Math.ceil((new Date(item.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
-                        const expiryColors = getExpiryColor(daysLeft);
-                        return (
-                            <View key={item.id} style={styles.itemCard}>
-                                <View style={styles.itemHeader}>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-                                        <View style={styles.quantityContainer}>
-                                            <TouchableOpacity
-                                                onPress={() => handleAdjustQuantity(item.id, item.quantity, -1)}
-                                                style={styles.qtyBtn}
-                                            >
-                                                <Ionicons name="remove-circle-outline" size={18} color="#6B7280" />
-                                            </TouchableOpacity>
-                                            <Text style={styles.itemQuantity}>{item.quantity}</Text>
-                                            <TouchableOpacity
-                                                onPress={() => handleAdjustQuantity(item.id, item.quantity, 1)}
-                                                style={styles.qtyBtn}
-                                            >
-                                                <Ionicons name="add-circle-outline" size={18} color="#6B7280" />
-                                            </TouchableOpacity>
-                                        </View>
-                                    </View>
-                                    <View style={styles.cardActions}>
-                                        <TouchableOpacity onPress={() => openEditModal(item)} style={{ marginRight: 8 }}>
-                                            <Ionicons name="create-outline" size={18} color="#4B5563" />
-                                        </TouchableOpacity>
-                                        <TouchableOpacity onPress={() => handleDeleteItem(item.id)}>
-                                            <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-
-                                <View style={styles.tagRow}>
-                                    <View style={styles.categoryTag}>
-                                        <Text style={styles.categoryTagText}>{item.category}</Text>
-                                    </View>
-                                </View>
-
-                                <View style={[styles.expiryTag, { backgroundColor: expiryColors.bg, borderColor: expiryColors.border }]}>
-                                    <Ionicons name="time-outline" size={14} color={expiryColors.text} />
-                                    <Text style={[styles.expiryText, { color: expiryColors.text }]}>
-                                        {daysLeft < 0 ? '기한 만료' : daysLeft === 0 ? '오늘 만료' : `${daysLeft}일 남음`}
-                                    </Text>
-                                    {daysLeft <= 1 && daysLeft >= 0 && (
-                                        <View style={styles.alertBadge}>
-                                            <Text style={styles.alertBadgeText}>임박</Text>
-                                        </View>
-                                    )}
-                                </View>
-                            </View>
-                        );
-                    })}
+                    {filteredItems.map(item => <AnimatedItemCard key={item.id} item={item} />)}
                 </View>
 
                 {filteredItems.length === 0 && (
@@ -633,6 +652,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'white',
         borderWidth: 1,
         borderColor: '#E5E7EB',
+        ...Platform.select({ web: { cursor: 'pointer' } })
     },
     categoryChipSelected: {
         backgroundColor: '#3B82F6',
@@ -680,12 +700,13 @@ const styles = StyleSheet.create({
         paddingBottom: 24,
     },
     itemCard: {
-        width: '48%',
+        width: Platform.OS === 'web' ? '31%' : '48%',
         backgroundColor: 'white',
         padding: 16,
         borderRadius: 16,
         borderWidth: 1,
         borderColor: '#F3F4F6',
+        ...Platform.select({ web: { boxShadow: '0px 2px 10px rgba(0,0,0,0.03)' } })
     },
     itemHeader: {
         flexDirection: 'row',

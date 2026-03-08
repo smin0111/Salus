@@ -163,6 +163,20 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // Refresh User Data (e.g., after payment)
+    const refreshUser = async () => {
+        if (!token) return;
+        try {
+            const response = await axios.get(`${config.API_BASE_URL}/users/me`);
+            const userData = response.data;
+            setUser(userData);
+            await SafeStorage.setItem('user_data', JSON.stringify(userData));
+            console.log('User data refreshed:', userData.grade);
+        } catch (e) {
+            console.error('Failed to refresh user data:', e);
+        }
+    };
+
     // Axios Interceptor for JWT
     useEffect(() => {
         const interceptor = axios.interceptors.request.use(
@@ -178,7 +192,7 @@ export const AuthProvider = ({ children }) => {
     }, [token]);
 
     return (
-        <AuthContext.Provider value={{ isLoggedIn, user, token, login, logout, loading }}>
+        <AuthContext.Provider value={{ isLoggedIn, user, token, login, logout, refreshUser, loading }}>
             {children}
         </AuthContext.Provider>
     );

@@ -14,4 +14,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     // ID 목록으로 사용자 조회
     List<User> findByIdIn(List<Long> ids);
+
+    long countByCreatedAtAfter(java.time.LocalDateTime dateTime);
+
+    // PLUS 구독자 수
+    long countByGrade(com.mychefai.healthytable.domain.UserGrade grade);
+
+    // 전일 DAU 계산용 (어제 기준 활동자 수)
+    long countByCreatedAtBetween(java.time.LocalDateTime from, java.time.LocalDateTime to);
 }

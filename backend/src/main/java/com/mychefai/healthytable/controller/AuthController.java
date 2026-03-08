@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/auth")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
 public class AuthController {
@@ -19,7 +18,7 @@ public class AuthController {
     private final JwtTokenProvider jwtTokenProvider;
     private final com.mychefai.healthytable.service.OAuthService oAuthService;
 
-    @PostMapping("/google")
+    @PostMapping("/api/auth/google")
     public ResponseEntity<?> loginGoogle(@RequestBody com.mychefai.healthytable.dto.LoginRequestDTO request) {
         try {
             // 1. Verify Token with Google
@@ -50,7 +49,7 @@ public class AuthController {
         }
     }
 
-    @PostMapping("/kakao")
+    @PostMapping("/api/auth/kakao")
     @SuppressWarnings("unchecked")
     public ResponseEntity<?> loginKakao(@RequestBody com.mychefai.healthytable.dto.LoginRequestDTO request) {
         try {
@@ -96,6 +95,26 @@ public class AuthController {
             System.err.println("Kakao Login Error: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(401).body("Invalid Kakao Token: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 현재 로그인된 사용자 정보 조회 (결제 후 등급 갱신에 사용)
+     */
+    @GetMapping("/api/users/me")
+    public ResponseEntity<?> getMyInfo(@RequestHeader(value = "Authorization", required = false) String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.status(401).body("Unauthorized");
+        }
+        String token = authHeader.substring(7);
+        try {
+            Long userId = Long.parseLong(jwtTokenProvider.getUserId(token));
+            User user = userRepository.findById(userId).orElse(null);
+            if (user == null)
+                return ResponseEntity.status(404).body("User not found");
+            return ResponseEntity.ok(user);
+        } catch (Exception e) {
+            return ResponseEntity.status(401).body("Invalid token");
         }
     }
 }

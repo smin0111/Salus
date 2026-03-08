@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Modal, Alert, Switch } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Modal, Alert, Switch, Animated, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import * as Speech from 'expo-speech'; // TTS
@@ -37,9 +37,114 @@ const Typewriter = ({ text, onComplete }) => {
     return <Text style={styles.aiText}>{displayedText}</Text>;
 };
 
+const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, openPlanModal, handleStreamingComplete }) => {
+    const scaleAnim = useRef(new Animated.Value(0.95)).current;
+    const opacityAnim = useRef(new Animated.Value(0)).current;
+    const isHovered = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        Animated.parallel([
+            Animated.timing(opacityAnim, {
+                toValue: 1,
+                duration: 300,
+                useNativeDriver: true,
+            }),
+            Animated.spring(scaleAnim, {
+                toValue: 1,
+                friction: 8,
+                tension: 40,
+                useNativeDriver: true,
+            })
+        ]).start();
+    }, []);
+
+    const handleMouseEnter = () => {
+        if (Platform.OS === 'web') {
+            Animated.spring(isHovered, {
+                toValue: 1.02,
+                friction: 5,
+                useNativeDriver: true,
+            }).start();
+        }
+    };
+
+    const handleMouseLeave = () => {
+        if (Platform.OS === 'web') {
+            Animated.spring(isHovered, {
+                toValue: 1,
+                friction: 5,
+                useNativeDriver: true,
+            }).start();
+        }
+    };
+
+    return (
+        <Animated.View
+            style={[
+                styles.messageBubble,
+                item.sender === 'user' ? styles.userBubble : styles.aiBubble,
+                { opacity: opacityAnim, transform: [{ scale: scaleAnim }, { scale: isHovered }] }
+            ]}
+            {...(Platform.OS === 'web' ? { onMouseEnter: handleMouseEnter, onMouseLeave: handleMouseLeave } : {})}
+        >
+            {item.sender === 'ai' && (
+                <View style={styles.aiAvatar}>
+                    <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 10 }}>AI</Text>
+                </View>
+            )}
+            <View style={{ flexShrink: 1 }}>
+                {item.sender === 'ai' && item.isTyping ? (
+                    <Typewriter
+                        text={item.text}
+                        onComplete={() => handleStreamingComplete(item.id)}
+                    />
+                ) : (
+                    <Text style={[
+                        styles.messageText,
+                        item.sender === 'user' ? styles.userText : styles.aiText
+                    ]}
+                        selectable={true}
+                    >
+                        {item.text}
+                    </Text>
+                )}
+
+                {/* AI Message Actions */}
+                {item.sender === 'ai' && !item.isTyping && (
+                    <View style={styles.messageActions}>
+                        {/* TTS Button */}
+                        <TouchableOpacity
+                            style={styles.actionIconButton}
+                            onPress={() => speak(item.text, item.id)}
+                        >
+                            <Ionicons
+                                name={speakingMessageId === item.id ? "volume-high" : "volume-medium-outline"}
+                                size={16}
+                                color={speakingMessageId === item.id ? colors.primary : "#9CA3AF"}
+                            />
+                        </TouchableOpacity>
+
+                        {/* Add to Plan Button (Logged in only) */}
+                        {isLoggedIn && (
+                            <TouchableOpacity
+                                style={styles.addToPlanButton}
+                                onPress={() => openPlanModal(item.text)}
+                            >
+                                <Ionicons name="calendar-outline" size={14} color={colors.secondary} />
+                                <Text style={styles.addToPlanText}>식단에 추가</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                )}
+            </View>
+        </Animated.View>
+    );
+};
+
 export default function ChatScreen({ messages, setMessages, healthProfile, setMealData, isSidebarOpen, onToggleSidebar, onLoginPress }) {
-    const { isLoggedIn } = useAuth();
+    const { isLoggedIn, user } = useAuth();
     const [inputText, setInputText] = useState('');
+
     const [loading, setLoading] = useState(false);
     const [useFridge, setUseFridge] = useState(true); // Default ON
     const flatListRef = useRef(null);
@@ -215,6 +320,18 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    const handleKeyPress = (e) => {
+        if (Platform.OS === 'web') {
+            // IME 조합 중이면 전송 방지 (중복 전송 버그 해결)
+            if (e.nativeEvent.isComposing) return;
+
+            if (e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+    };
+
     useEffect(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
     }, [messages]);
@@ -325,60 +442,16 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     };
 
     const renderItem = ({ item }) => (
-        <View style={[
-            styles.messageBubble,
-            item.sender === 'user' ? styles.userBubble : styles.aiBubble
-        ]}>
-            {item.sender === 'ai' && (
-                <View style={styles.aiAvatar}>
-                    <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 10 }}>AI</Text>
-                </View>
-            )}
-            <View style={{ flexShrink: 1 }}>
-                {item.sender === 'ai' && item.isTyping ? (
-                    <Typewriter
-                        text={item.text}
-                        onComplete={() => handleStreamingComplete(item.id)}
-                    />
-                ) : (
-                    <Text style={[
-                        styles.messageText,
-                        item.sender === 'user' ? styles.userText : styles.aiText
-                    ]}>
-                        {item.text}
-                    </Text>
-                )}
-
-                {/* AI Message Actions */}
-                {item.sender === 'ai' && !item.isTyping && (
-                    <View style={styles.messageActions}>
-                        {/* TTS Button */}
-                        <TouchableOpacity
-                            style={styles.actionIconButton}
-                            onPress={() => speak(item.text, item.id)}
-                        >
-                            <Ionicons
-                                name={speakingMessageId === item.id ? "volume-high" : "volume-medium-outline"}
-                                size={16}
-                                color={speakingMessageId === item.id ? colors.primary : "#9CA3AF"}
-                            />
-                        </TouchableOpacity>
-
-                        {/* Add to Plan Button (Logged in only) */}
-                        {isLoggedIn && (
-                            <TouchableOpacity
-                                style={styles.addToPlanButton}
-                                onPress={() => openPlanModal(item.text)}
-                            >
-                                <Ionicons name="calendar-outline" size={14} color={colors.secondary} />
-                                <Text style={styles.addToPlanText}>식단에 추가</Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                )}
-            </View>
-        </View>
+        <AnimatedMessageBubble
+            item={item}
+            speakingMessageId={speakingMessageId}
+            speak={speak}
+            isLoggedIn={isLoggedIn}
+            openPlanModal={openPlanModal}
+            handleStreamingComplete={handleStreamingComplete}
+        />
     );
+
 
     return (
         <SafeAreaView style={styles.container}>
@@ -389,7 +462,22 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                         <Ionicons name="menu" size={24} color={colors.text} />
                     </TouchableOpacity>
                     <View>
-                        <Text style={styles.headerTitle}>AI 셰프</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Text style={styles.headerTitle}>AI 셰프</Text>
+                            {isLoggedIn && user && (
+                                <View style={[
+                                    styles.gradeBadge,
+                                    user.grade === 'PLUS' ? styles.gradeBadgePlus : styles.gradeBadgeBasic
+                                ]}>
+                                    <Text style={[
+                                        styles.gradeBadgeText,
+                                        user.grade === 'PLUS' ? styles.gradeBadgeTextPlus : styles.gradeBadgeTextBasic
+                                    ]}>
+                                        {user.grade === 'PLUS' ? 'PLUS' : 'BASIC'}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
                         <Text style={styles.headerSubtitle}>무엇이든 물어보세요</Text>
                     </View>
                 </View>
@@ -419,76 +507,157 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             </View>
 
             {messages.length <= 1 ? (
-                <View style={styles.emptyStateContainer}>
-                    <View style={styles.logoContainer}>
-                        <Ionicons name="chatbubbles" size={48} color="white" />
+                // ✨ ChatGPT 스타일: 콘텐츠 없을 때 입력창이 중앙에 위치
+                <View style={styles.centeredInputContainer}>
+                    <View style={styles.emptyStateContent}>
+                        <Text style={styles.emptyTitle}>오늘은 어떤 요리를 해볼까요?</Text>
+                        <View style={styles.suggestionChips}>
+                            <TouchableOpacity
+                                style={styles.suggestionChip}
+                                onPress={() => { setInputText('냉장고 재료로 만들 수 있는 요리'); }}
+                            >
+                                <Text style={styles.suggestionText}>냉장고 재료로 만들 수 있는 요리</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.suggestionChip}
+                                onPress={() => { setInputText('간단한 10분 컷 아침 식사'); }}
+                            >
+                                <Text style={styles.suggestionText}>간단한 10분 컷 아침 식사</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                    <Text style={styles.emptyTitle}>대화를 시작해보세요!</Text>
-                    <Text style={styles.emptySubtitle}>"오이 채썰기는 어떻게 해?"{"\n"}"오늘 저녁 메뉴 추천해줘"</Text>
+
+                    {/* Centered Input */}
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS === "ios" ? "padding" : "height"}
+                        keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+                        style={{ width: '100%' }}
+                    >
+                        {isLoggedIn && (
+                            <View style={styles.optionsBar}>
+                                <TouchableOpacity
+                                    style={[styles.fridgeChip, useFridge && styles.fridgeChipActive]}
+                                    onPress={() => setUseFridge(!useFridge)}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={[styles.fridgeIndicator, { backgroundColor: useFridge ? '#10B981' : '#9CA3AF' }]} />
+                                    <Ionicons
+                                        name={useFridge ? "restaurant" : "restaurant-outline"}
+                                        size={14}
+                                        color={useFridge ? "white" : "#6B7280"}
+                                    />
+                                    <Text style={[styles.fridgeChipText, useFridge && styles.fridgeChipTextActive]}>
+                                        {useFridge ? "내 냉장고 기반 추천" : "일반 레시피 추천"}
+                                    </Text>
+                                    {useFridge && (
+                                        <View style={styles.activeBadge}>
+                                            <Text style={styles.activeBadgeText}>ON</Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                        <View style={styles.inputFloatingContainer}>
+                            <View style={styles.inputWrapper}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="무엇이든 물어보세요"
+                                    placeholderTextColor="#9CA3AF"
+                                    value={inputText}
+                                    onChangeText={setInputText}
+                                    onKeyPress={handleKeyPress}
+                                    multiline
+                                    numberOfLines={1}
+                                />
+                                <TouchableOpacity style={styles.micButton} onPress={() => Alert.alert("준비 중", "음성 인식 기능은 준비 중입니다.")}>
+                                    <Ionicons name="mic-outline" size={24} color="#4B5563" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.sendButton, { backgroundColor: inputText.trim() ? colors.primary : '#E5E7EB' }]}
+                                    onPress={sendMessage}
+                                    disabled={loading || !inputText.trim()}
+                                >
+                                    <Ionicons name="arrow-up" size={18} color="white" />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </KeyboardAvoidingView>
                 </View>
             ) : (
-                <FlatList
-                    ref={flatListRef}
-                    data={messages}
-                    renderItem={renderItem}
-                    keyExtractor={item => item.id.toString()}
-                    contentContainerStyle={styles.listContent}
-                    style={styles.list}
-                />
-            )}
-
-            {loading && (
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color={colors.secondary} />
-                    <Text style={styles.loadingText}>답변을 생각하고 있어요...</Text>
-                </View>
-            )}
-
-            <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
-                keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
-                style={styles.inputContainer}
-            >
-                {/* Options Bar (Above Input) */}
-                <View style={styles.optionsBar}>
-                    {isLoggedIn && (
-                        <TouchableOpacity
-                            style={[styles.fridgeChip, useFridge && styles.fridgeChipActive]}
-                            onPress={() => setUseFridge(!useFridge)}
-                            activeOpacity={0.7}
-                        >
-                            <Ionicons
-                                name={useFridge ? "snow" : "close-circle"}
-                                size={16}
-                                color={useFridge ? colors.primary : "#EF4444"}
-                            />
-                            <Text style={[styles.fridgeChipText, useFridge && styles.fridgeChipTextActive]}>
-                                {useFridge ? "❄️ 냉장고 활용 중" : "🚫 냉장고 미사용"}
-                            </Text>
-                        </TouchableOpacity>
-                    )}
-                </View>
-
-                <View style={styles.inputWrapper}>
-                    {/* STT Button (Placeholder) */}
-                    <TouchableOpacity style={styles.micButton} onPress={() => Alert.alert("준비 중", "음성 인식 기능은 준비 중입니다.")}>
-                        <Ionicons name="mic-outline" size={24} color={colors.textSecondary} />
-                    </TouchableOpacity>
-
-                    <TextInput
-                        style={styles.input}
-                        placeholder="메시지를 입력하세요..."
-                        value={inputText}
-                        onChangeText={setInputText}
-                        onSubmitEditing={sendMessage}
-                        multiline
+                // 회화 시작 후: FlatList + 하단 고정 입력창
+                <>
+                    <FlatList
+                        ref={flatListRef}
+                        data={messages}
+                        renderItem={renderItem}
+                        keyExtractor={item => item.id.toString()}
+                        contentContainerStyle={styles.listContent}
+                        style={styles.list}
                     />
-                    <TouchableOpacity style={styles.sendButton} onPress={sendMessage} disabled={loading}>
-                        <Ionicons name="send" size={20} color="white" />
-                    </TouchableOpacity>
 
-                </View>
-            </KeyboardAvoidingView>
+                    {loading && (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator size="small" color={colors.secondary} />
+                            <Text style={styles.loadingText}>답변을 생각하고 있어요...</Text>
+                        </View>
+                    )}
+
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS === "ios" ? "padding" : "height"}
+                        keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+                        style={styles.inputContainerWrapper}
+                    >
+                        {isLoggedIn && (
+                            <View style={styles.optionsBar}>
+                                <TouchableOpacity
+                                    style={[styles.fridgeChip, useFridge && styles.fridgeChipActive]}
+                                    onPress={() => setUseFridge(!useFridge)}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={[styles.fridgeIndicator, { backgroundColor: useFridge ? '#10B981' : '#9CA3AF' }]} />
+                                    <Ionicons
+                                        name={useFridge ? "restaurant" : "restaurant-outline"}
+                                        size={14}
+                                        color={useFridge ? "white" : "#6B7280"}
+                                    />
+                                    <Text style={[styles.fridgeChipText, useFridge && styles.fridgeChipTextActive]}>
+                                        {useFridge ? "내 냉장고 기반 추천" : "일반 레시피 추천"}
+                                    </Text>
+                                    {useFridge && (
+                                        <View style={styles.activeBadge}>
+                                            <Text style={styles.activeBadgeText}>ON</Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                        <View style={styles.inputFloatingContainer}>
+                            <View style={styles.inputWrapper}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="무엇이든 물어보세요"
+                                    placeholderTextColor="#9CA3AF"
+                                    value={inputText}
+                                    onChangeText={setInputText}
+                                    onKeyPress={handleKeyPress}
+                                    multiline
+                                    numberOfLines={1}
+                                />
+                                <TouchableOpacity style={styles.micButton} onPress={() => Alert.alert("준비 중", "음성 인식 기능은 준비 중입니다.")}>
+                                    <Ionicons name="mic-outline" size={24} color="#4B5563" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.sendButton, { backgroundColor: inputText.trim() ? colors.primary : '#E5E7EB' }]}
+                                    onPress={sendMessage}
+                                    disabled={loading || !inputText.trim()}
+                                >
+                                    <Ionicons name="arrow-up" size={18} color="white" />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </KeyboardAvoidingView>
+                </>
+            )}
 
             <Modal
                 animationType="slide"
@@ -558,7 +727,8 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                     </View>
                 </View>
             </Modal>
-        </SafeAreaView >
+
+        </SafeAreaView>
     );
 }
 
@@ -572,46 +742,135 @@ const styles = StyleSheet.create({
     loginButton: { backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 },
     loginButtonText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
     list: { flex: 1 },
-    listContent: { padding: 16, paddingBottom: 20 },
-    messageBubble: { padding: 12, borderRadius: 16, marginBottom: 16, maxWidth: '85%', flexDirection: 'row', alignItems: 'flex-start' },
-    userBubble: { backgroundColor: '#374151', alignSelf: 'flex-end', borderBottomRightRadius: 4 },
-    aiBubble: { backgroundColor: 'white', alignSelf: 'flex-start', borderBottomLeftRadius: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
-    aiAvatar: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.secondary, justifyContent: 'center', alignItems: 'center', marginRight: 8, marginTop: 2 },
-    messageText: { fontSize: 15, lineHeight: 22 },
-    userText: { color: 'white' },
+    listContent: {
+        padding: 16,
+        paddingBottom: 40,
+        ...Platform.select({
+            web: {
+                maxWidth: 800,
+                width: '100%',
+                alignSelf: 'center',
+            }
+        })
+    },
+    messageBubble: { padding: 12, borderRadius: 16, marginBottom: 20, flexDirection: 'row', alignItems: 'flex-start' },
+    userBubble: { backgroundColor: '#F4F4F5', alignSelf: 'flex-end', borderBottomRightRadius: 4, maxWidth: '85%', paddingHorizontal: 16, paddingVertical: 12 },
+    aiBubble: { backgroundColor: 'transparent', alignSelf: 'flex-start', width: '100%' },
+    aiAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', marginRight: 16, marginTop: 2 },
+    messageText: { fontSize: 16, lineHeight: 26 },
+    userText: { color: '#1F2937' },
     aiText: { color: '#1F2937' },
-    messageActions: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 10 },
-    addToPlanButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ECFDF5', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8 },
-    addToPlanText: { color: colors.secondary, fontSize: 12, fontWeight: '600', marginLeft: 4 },
+    messageActions: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 12 },
+    addToPlanButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8 },
+    addToPlanText: { color: '#9CA3AF', fontSize: 12, fontWeight: '600', marginLeft: 4 },
     actionIconButton: { padding: 4 },
-    loadingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12 },
+    loadingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 20 },
     loadingText: { marginLeft: 10, color: '#6B7280', fontSize: 14 },
-    inputContainer: {
-        backgroundColor: 'white',
-        borderTopWidth: 1,
-        borderTopColor: '#E5E7EB',
-        paddingBottom: Platform.OS === 'ios' ? 20 : 0
+    gradeBadge: {
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 8,
+        marginLeft: 8,
+        borderWidth: 1,
+    },
+    gradeBadgePlus: {
+        backgroundColor: '#FFFBEB',
+        borderColor: '#FDE047',
+    },
+    gradeBadgeBasic: {
+        backgroundColor: '#F3F4F6',
+        borderColor: '#E5E7EB',
+    },
+    gradeBadgeText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    gradeBadgeTextPlus: {
+        color: '#D97706',
+    },
+    gradeBadgeTextBasic: {
+        color: '#6B7280',
+    },
+
+    // Floating Input Styles
+    inputContainerWrapper: {
+        width: '100%',
+        paddingBottom: Platform.OS === 'ios' ? 24 : 16,
+        ...Platform.select({ web: { paddingBottom: 40 } })
+    },
+    inputFloatingContainer: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 26,
+        borderWidth: 1,
+        borderColor: '#E8EAED',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        elevation: 2,
+        marginHorizontal: 16,
+        marginTop: 4,
+        ...Platform.select({ web: { maxWidth: 800, width: '100%', alignSelf: 'center', marginHorizontal: 0 } })
     },
     optionsBar: {
         flexDirection: 'row',
         paddingHorizontal: 16,
-        paddingTop: 12,
         paddingBottom: 8,
-        gap: 8,
+        ...Platform.select({ web: { maxWidth: 800, width: '100%', alignSelf: 'center', paddingHorizontal: 0 } })
     },
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingBottom: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 6,
     },
-    micButton: { padding: 10, marginRight: 4 },
-    input: { flex: 1, backgroundColor: '#F3F4F6', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, fontSize: 16, marginRight: 8, maxHeight: 100 },
-    sendButton: { backgroundColor: colors.secondary, borderRadius: 24, width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+    micButton: { padding: 6, marginLeft: 4 },
+    input: {
+        flex: 1,
+        backgroundColor: 'transparent',
+        paddingHorizontal: 4,
+        paddingVertical: 0,
+        fontSize: 15,
+        marginRight: 8,
+        maxHeight: 160,
+        color: '#202124', // 구글 텍스트 컴
+        textAlignVertical: 'center',
+        lineHeight: 22,
+        ...Platform.select({
+            web: {
+                outlineStyle: 'none',
+                overflowY: 'hidden',
+                resize: 'none',
+                lineHeight: '22px',
+            }
+        })
+    },
+    sendButton: {
+        borderRadius: 20,
+        width: 36,
+        height: 36,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#E8F0FE', // 구글 파란색 연한 버튼 기본값
+    },
+
+    // Empty State - ChatGPT style
+    centeredInputContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        paddingBottom: Platform.OS === 'ios' ? 24 : 16,
+        ...Platform.select({ web: { paddingBottom: 40 } })
+    },
+    emptyStateContent: {
+        alignItems: 'center',
+        marginBottom: 32,
+        paddingHorizontal: 20,
+    },
     emptyStateContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-    logoContainer: { width: 80, height: 80, backgroundColor: colors.primary, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
-    emptyTitle: { fontSize: 24, fontWeight: 'bold', color: '#1F2937', marginBottom: 8 },
-    emptySubtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 40 },
+    emptyTitle: { fontSize: 28, fontWeight: 'bold', color: '#1F2937', marginBottom: 30 },
+    suggestionChips: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', justifyContent: 'center' },
+    suggestionChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: 'white' },
+    suggestionText: { color: '#4B5563', fontSize: 14, fontWeight: '500' },
 
     // Modal Styles
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
@@ -677,12 +936,13 @@ const styles = StyleSheet.create({
         elevation: 1,
     },
     fridgeChipActive: {
-        backgroundColor: colors.primary,
-        borderColor: colors.primary,
-        shadowColor: colors.primary,
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 3,
+        backgroundColor: '#10B981', // Emerald green for active status
+        borderColor: '#10B981',
+        shadowColor: '#10B981',
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 5,
+        transform: [{ scale: 1.02 }]
     },
     fridgeChipText: {
         fontSize: 13,
@@ -691,6 +951,25 @@ const styles = StyleSheet.create({
         letterSpacing: -0.2
     },
     fridgeChipTextActive: {
+        color: 'white',
+    },
+    fridgeIndicator: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        marginRight: 4,
+    },
+    activeBadge: {
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        marginLeft: 8,
+    },
+    activeBadgeText: {
+        color: 'white',
+        fontSize: 10,
+        fontWeight: '900',
     },
     toggleDotOn: {
         backgroundColor: colors.primary
