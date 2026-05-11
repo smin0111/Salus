@@ -1,14 +1,14 @@
 package com.mychefai.healthytable.repository;
 
-import com.mychefai.healthytable.domain.HealthProfile;
+import com.mychefai.healthytable.domain.HealthCheckup;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
 @Repository
-public interface HealthProfileRepository extends JpaRepository<HealthProfile, Long> {
-    Optional<HealthProfile> findByUserId(Long userId);
+public interface HealthCheckupRepository extends JpaRepository<HealthCheckup, Long> {
+    Optional<HealthCheckup> findTopByUserIdOrderByCheckupDateDescIdDesc(Long userId);
 
     long countByUserId(Long userId);
 

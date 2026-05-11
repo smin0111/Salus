@@ -61,7 +61,7 @@ export default function LoadingScreen() {
                     </Animated.View>
                 </View>
 
-                <Text style={styles.brandName}>MyChefAI</Text>
+                <Text style={styles.brandName}>Salus</Text>
                 <Text style={styles.tagline}>당신을 위한 스마트 인공지능 셰프</Text>
             </Animated.View>
 

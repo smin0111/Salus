@@ -1,0 +1,12 @@
+CREATE INDEX idx_health_profiles_user_id ON health_profiles (user_id);
+CREATE INDEX idx_fridge_items_user_id ON fridge_items (user_id);
+CREATE INDEX idx_meal_logs_user_id ON meal_logs (user_id);
+CREATE INDEX idx_recommendations_user_id ON recommendations (user_id);
+CREATE INDEX idx_activity_logs_user_id ON activity_logs (user_id);
+CREATE INDEX idx_community_posts_user_id ON community_posts (user_id);
+CREATE INDEX idx_post_comments_user_id ON post_comments (user_id);
+CREATE INDEX idx_post_comments_post_id ON post_comments (post_id);
+CREATE INDEX idx_post_likes_user_id ON post_likes (user_id);
+CREATE INDEX idx_post_likes_post_id ON post_likes (post_id);
+CREATE INDEX idx_recipe_shares_user_id ON recipe_shares (user_id);
+CREATE INDEX idx_payments_user_id ON payments (user_id);

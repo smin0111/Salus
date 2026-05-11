@@ -2,6 +2,7 @@ package com.mychefai.healthytable.config;
 
 import com.mychefai.healthytable.security.JwtAuthenticationFilter;
 import com.mychefai.healthytable.security.IpWhitelistFilter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -23,6 +24,9 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final IpWhitelistFilter ipWhitelistFilter;
     private final CoopHeaderFilter coopHeaderFilter;
+
+    @Value("${app.cors.allowed-origins:*}")
+    private String allowedOrigins;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
             IpWhitelistFilter ipWhitelistFilter,
@@ -52,6 +56,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").permitAll()
                         // 그 외 요청은 인증 필요
                         .requestMatchers("/api/fridge/**").authenticated()
+                        .requestMatchers("/api/health-checkups/**").authenticated()
+                        .requestMatchers("/api/users/**").authenticated()
                         .anyRequest().permitAll() // 개발 편의를 위해 나머지 허용
                 )
                 .addFilterBefore(coopHeaderFilter, UsernamePasswordAuthenticationFilter.class)
@@ -64,7 +70,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("*"));
+        configuration.setAllowedOrigins(List.of(allowedOrigins.split(",")));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
 

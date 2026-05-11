@@ -143,17 +143,17 @@ export default function LandingPageScreen({ onNavigate }) {
 
                         <View style={styles.mockupContainer}>
                             <View style={styles.safetyRow}>
-                                <Text style={styles.badIng}>🔴 설탕 사용 감지</Text>
+                                <Text style={styles.badIng}>주의: 설탕 사용 감지</Text>
                                 <Ionicons name="arrow-forward" size={16} color="#CBD5E1" />
                                 <View style={styles.goodBadge}>
-                                    <Text style={styles.goodIng}>🟢 스테비아로 대체 처방</Text>
+                                    <Text style={styles.goodIng}>대체: 스테비아 사용</Text>
                                 </View>
                             </View>
                             <View style={[styles.safetyRow, { marginTop: 8 }]}>
-                                <Text style={styles.badIng}>🔴 밀가루 튀김 조리</Text>
+                                <Text style={styles.badIng}>주의: 밀가루 튀김 조리</Text>
                                 <Ionicons name="arrow-forward" size={16} color="#CBD5E1" />
                                 <View style={styles.goodBadge}>
-                                    <Text style={styles.goodIng}>🟢 아몬드루 구이로 변경</Text>
+                                    <Text style={styles.goodIng}>대체: 아몬드루 구이</Text>
                                 </View>
                             </View>
                         </View>

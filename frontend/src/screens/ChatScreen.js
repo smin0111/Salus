@@ -160,7 +160,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     const [speakingMessageId, setSpeakingMessageId] = useState(null);
     const [bestVoice, setBestVoice] = useState(null);
 
-    // 🎙️ Cooking Mode State (NEW)
+    // Cooking Mode State
     const [isCookingMode, setIsCookingMode] = useState(false);
     const [isListening, setIsListening] = useState(false);
 
@@ -191,7 +191,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         findBestVoice();
     }, []);
 
-    // 🎙️ Voice Recognition Setup
+    // Voice Recognition Setup
     useEffect(() => {
         Voice.onSpeechResults = onSpeechResults;
         Voice.onSpeechError = onSpeechError;
@@ -265,7 +265,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         setInputText('');
         setLoading(true);
 
-        // 📝 Record AI Activity
+        // Record AI Activity
         if (isLoggedIn) {
             axios.post(`${config.API_BASE_URL}/activities/log`, { isAi: true }).catch(e => console.log("AI Activity log failed", e));
         }
@@ -277,7 +277,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 content: msg.text
             }));
 
-            console.log('🔍 [DEBUG] Sending to AI:', { useFridge, messageText });
+            console.log('[DEBUG] Sending to AI:', { useFridge, messageText });
 
             const response = await axios.post(`${config.API_BASE_URL}/chat/message`, {
                 message: messageText,
@@ -285,7 +285,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 useFridge: useFridge
             });
 
-            console.log('✅ [DEBUG] AI Response received');
+            console.log('[DEBUG] AI Response received');
 
             const rawAiText = response.data.reply;
             const cleanedText = cleanAiResponse(rawAiText);
@@ -299,7 +299,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
             setMessages(prev => [...prev, aiMessage]);
 
-            // 🎙️ Auto TTS in Cooking Mode
+            // Auto TTS in Cooking Mode
             if (isCookingMode) {
                 // Wait for typing animation to finish, then speak
                 setTimeout(() => {
@@ -313,7 +313,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             }
         } catch (error) {
             console.error(error);
-            const errorMessage = { id: Date.now() + 1, text: '죄송해요, 연결이 원활하지 않네요. 다시 말씀해 주시겠어요? 😥', sender: 'ai' };
+            const errorMessage = { id: Date.now() + 1, text: '죄송해요, 연결이 원활하지 않네요. 다시 말씀해 주시겠어요?', sender: 'ai' };
             setMessages(prev => [...prev, errorMessage]);
         } finally {
             setLoading(false);
@@ -344,7 +344,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
     const speak = (text, id) => {
         if (!isLoggedIn) {
-            Alert.alert("멤버십 기능 🔒", "음성 듣기 기능은 로그인 후 이용 가능합니다.");
+            Alert.alert("멤버십 기능", "음성 듣기 기능은 로그인 후 이용 가능합니다.");
             return;
         }
 
@@ -420,7 +420,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
             await axios.post(`${config.API_BASE_URL}/meallogs`, payload);
 
-            Alert.alert("✅ 저장 완료", "식단에 추가되었습니다!");
+            Alert.alert("저장 완료", "식단에 추가되었습니다.");
 
             // Update local state to reflect change immediately
             setMealData(prev => ({
@@ -482,7 +482,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                     </View>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    {/* 🎙️ Cooking Mode Toggle */}
+                    {/* Cooking Mode Toggle */}
                     {isLoggedIn && (
                         <TouchableOpacity
                             style={[styles.cookingModeButton, isCookingMode && styles.cookingModeActive]}
@@ -507,7 +507,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             </View>
 
             {messages.length <= 1 ? (
-                // ✨ ChatGPT 스타일: 콘텐츠 없을 때 입력창이 중앙에 위치
+                // 콘텐츠 없을 때 입력창이 중앙에 위치
                 <View style={styles.centeredInputContainer}>
                     <View style={styles.emptyStateContent}>
                         <Text style={styles.emptyTitle}>오늘은 어떤 요리를 해볼까요?</Text>
@@ -893,7 +893,7 @@ const styles = StyleSheet.create({
     cancelButtonText: { color: '#374151', fontWeight: '600' },
     confirmButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
 
-    // 🎙️ Cooking Mode Styles
+    // Cooking Mode Styles
     cookingModeButton: {
         width: 44,
         height: 44,

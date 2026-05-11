@@ -254,13 +254,13 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user }) {
                     style={[styles.tab, activeTab === 'recommendation' && styles.activeTab]}
                     onPress={() => setActiveTab('recommendation')}
                 >
-                    <Text style={[styles.tabText, activeTab === 'recommendation' && styles.activeTabText]}>✨ 추천</Text>
+                    <Text style={[styles.tabText, activeTab === 'recommendation' && styles.activeTabText]}>추천</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={[styles.tab, activeTab === 'feed' && styles.activeTab]}
                     onPress={() => setActiveTab('feed')}
                 >
-                    <Text style={[styles.tabText, activeTab === 'feed' && styles.activeTabText]}>📱 피드</Text>
+                    <Text style={[styles.tabText, activeTab === 'feed' && styles.activeTabText]}>피드</Text>
                 </TouchableOpacity>
             </View>
 
@@ -275,7 +275,7 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user }) {
                         {/* AI Section */}
                         <View style={styles.section}>
                             <View style={styles.sectionHeader}>
-                                <Text style={styles.sectionTitle}>맞춤 추천 레시피 (AI PICK) 👨‍🍳</Text>
+                                <Text style={styles.sectionTitle}>맞춤 추천 레시피 (AI PICK)</Text>
                             </View>
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
                                 {aiRecommendations.length > 0 ? (
@@ -293,7 +293,7 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user }) {
                         {/* Popular Section */}
                         <View style={styles.section}>
                             <View style={styles.sectionHeader}>
-                                <Text style={styles.sectionTitle}>인기 요리 🔥</Text>
+                                <Text style={styles.sectionTitle}>인기 요리</Text>
                                 <View style={styles.timeframeContainer}>
                                     {['daily', 'weekly', 'monthly'].map(tf => (
                                         <TouchableOpacity

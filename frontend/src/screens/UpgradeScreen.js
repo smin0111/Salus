@@ -47,7 +47,7 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
                     });
 
                     if (response.status === 200) {
-                        Alert.alert("성공", "플러스 멤버십으로 업그레이드되었습니다! 🎉");
+                        Alert.alert("성공", "플러스 멤버십으로 업그레이드되었습니다.");
                         if (onSuccess) onSuccess();
                     }
                 } catch (error) {

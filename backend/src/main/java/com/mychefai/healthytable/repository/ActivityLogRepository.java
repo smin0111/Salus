@@ -13,6 +13,10 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long> 
 
     Optional<ActivityLog> findByUserAndActivityDate(User user, LocalDate activityDate);
 
+    long countByUser(User user);
+
+    void deleteByUser(User user);
+
     long countByActivityDate(LocalDate activityDate);
 
     long countByActivityDateAndHasAiInteraction(LocalDate activityDate, Boolean hasAiInteraction);

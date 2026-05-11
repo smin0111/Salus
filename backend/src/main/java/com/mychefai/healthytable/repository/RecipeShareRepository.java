@@ -17,4 +17,8 @@ public interface RecipeShareRepository extends JpaRepository<RecipeShare, Long> 
 
     // 특정 사용자가 공유한 레시피 조회
     List<RecipeShare> findByUserIdOrderByCreatedAtDesc(Long userId);
+
+    long countByUserId(Long userId);
+
+    void deleteByUserId(Long userId);
 }

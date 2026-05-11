@@ -16,4 +16,8 @@ public interface MealLogRepository extends JpaRepository<MealLog, Long> {
     Optional<MealLog> findByUserAndRecordDate(User user, LocalDate recordDate);
 
     List<MealLog> findByUserAndRecordDateBetween(User user, LocalDate startDate, LocalDate endDate);
+
+    long countByUser(User user);
+
+    void deleteByUser(User user);
 }

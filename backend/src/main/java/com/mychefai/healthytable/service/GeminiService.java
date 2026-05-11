@@ -31,7 +31,7 @@ public class GeminiService {
         promptBuilder.append("System: 당신은 'MyChef AI'입니다. 친절하고 전문적인 셰프 페르소나를 유지하세요. ");
         promptBuilder.append("요리법, 식재료, 건강 식단에 대한 질문에 답변하고, 일상적인 대화도 자연스럽게 이어가세요. ");
         promptBuilder.append("레시피를 추천하거나 음식에 대해 설명할 때는 반드시 1인분 칼로리 정보를 'XXXkcal' 형식으로 포함해주세요. ");
-        promptBuilder.append("답변은 한국어로, 이모지를 적절히 사용하여 친근하게 해주세요.\n");
+        promptBuilder.append("답변은 한국어로, 담백하고 친근한 말투로 작성해주세요. 이모지는 사용하지 마세요.\n");
 
         // Append History
         if (history != null) {
@@ -56,7 +56,7 @@ public class GeminiService {
                     if (response.getCandidates() != null && !response.getCandidates().isEmpty()) {
                         return response.getCandidates().get(0).getContent().getParts().get(0).getText();
                     }
-                    return "죄송해요, 답변을 생각하는 데 문제가 생겼어요. 🍳";
+                    return "죄송해요, 답변을 생각하는 데 문제가 생겼어요.";
                 })
                 .onErrorResume(e -> {
                     e.printStackTrace();
@@ -70,7 +70,7 @@ public class GeminiService {
                         "건강/상황 고려: [%s]. " +
                         "이 재료들을 활용해 만들 수 있는 맛있고 건강한 요리를 하나 추천해주세요. " +
                         "요리 이름, 간단한 설명, 필요한 재료(계량 포함), 조리 순서를 알려주세요. " +
-                        "**중요: 반드시 이 요리의 1인분 총 칼로리를 계산하여 응답 마지막에 '총 XXXkcal' 형식으로 명시해주세요.**",
+                        "중요: 반드시 이 요리의 1인분 총 칼로리를 계산하여 응답 마지막에 '총 XXXkcal' 형식으로 명시해주세요.",
                 String.join(", ", ingredients),
                 healthContext);
         return getChatResponse(prompt, null);
@@ -121,12 +121,12 @@ public class GeminiService {
 
     public Mono<String> analyzeMonthlyMealPlan(List<com.mychefai.healthytable.domain.MealLog> logs) {
         if (logs == null || logs.isEmpty()) {
-            return Mono.just("이번 달은 아직 식단 기록이 없네요. 😅 꾸준한 기록이 건강의 첫걸음입니다!");
+            return Mono.just("이번 달은 아직 식단 기록이 없습니다. 꾸준한 기록이 건강의 첫걸음입니다.");
         }
 
         StringBuilder prompt = new StringBuilder();
         prompt.append("다음은 사용자의 한 달간 식단 기록입니다. 데이터를 분석하여 월간 식습관에 대한 짧고 친근한 총평(한줄평)을 작성해주세요. ");
-        prompt.append("칭찬할 점과 개선할 점을 포함해주세요. 이모지를 사용해서 부드럽게 표현해주세요. (100자 이내)\n\n");
+        prompt.append("칭찬할 점과 개선할 점을 포함해주세요. 이모지는 사용하지 말고 담백하게 표현해주세요. (100자 이내)\n\n");
         prompt.append("[식단 기록]\n");
 
         for (com.mychefai.healthytable.domain.MealLog log : logs) {

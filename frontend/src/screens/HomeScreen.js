@@ -65,7 +65,7 @@ export default function HomeScreen({ onNavigate, onToggleSidebar }) {
                     <Ionicons name="menu" size={28} color={colors.text} />
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>
-                    <Text style={styles.greeting}>안녕하세요, 미식가님! 👋</Text>
+                    <Text style={styles.greeting}>안녕하세요, 미식가님!</Text>
                     <Text style={styles.subtitle}>오늘의 건강한 한 끼를 찾아보세요.</Text>
                 </View>
                 <TouchableOpacity onPress={() => onNavigate('search')} style={styles.searchButton}>
@@ -76,7 +76,7 @@ export default function HomeScreen({ onNavigate, onToggleSidebar }) {
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
                 {/* Hero: Today's Top Pick */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>오늘의 AI 추천 👨‍🍳</Text>
+                    <Text style={styles.sectionTitle}>오늘의 AI 추천</Text>
                     <TouchableOpacity style={styles.heroCard} onPress={() => onNavigate('recipe-detail', featuredRecipe)}>
                         <Image source={{ uri: featuredRecipe.image }} style={styles.heroImage} />
                         <View style={styles.heroOverlay}>
@@ -85,7 +85,7 @@ export default function HomeScreen({ onNavigate, onToggleSidebar }) {
                             </View>
                             <Text style={styles.heroTitle}>{featuredRecipe.title}</Text>
                             <Text style={styles.heroDesc}>{featuredRecipe.description}</Text>
-                            <Text style={styles.heroReason}>💡 {featuredRecipe.reason}</Text>
+                            <Text style={styles.heroReason}>{featuredRecipe.reason}</Text>
                         </View>
                     </TouchableOpacity>
                 </View>
@@ -104,7 +104,7 @@ export default function HomeScreen({ onNavigate, onToggleSidebar }) {
                 {/* Horizontal List 2: Popular */}
                 <View style={[styles.section, { marginBottom: 40 }]}>
                     <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>지금 뜨는 인기 요리 🔥</Text>
+                        <Text style={styles.sectionTitle}>지금 뜨는 인기 요리</Text>
                         <TouchableOpacity><Text style={styles.seeAll}>더보기</Text></TouchableOpacity>
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>

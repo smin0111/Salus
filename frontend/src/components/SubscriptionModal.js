@@ -35,7 +35,7 @@ const SubscriptionModal = ({ visible, onClose, onSubscribe, user }) => {
                 pg: "kakaopay.TC0ONETIME", // 카카오페이 테스트 PG
                 pay_method: "card",
                 merchant_uid: merchantUid,
-                name: "MyChefAI Plus 구독",
+                name: "Salus Plus 구독",
                 amount: 10000,
                 buyer_email: user?.email || "",
                 buyer_name: user?.name || "사용자",
@@ -72,7 +72,7 @@ const SubscriptionModal = ({ visible, onClose, onSubscribe, user }) => {
                         <View style={styles.iconContainer}>
                             <Ionicons name="star" size={32} color={colors.primary} />
                         </View>
-                        <Text style={styles.modalTitle}>MyChefAI <Text style={styles.plusText}>Plus</Text></Text>
+                        <Text style={styles.modalTitle}>Salus <Text style={styles.plusText}>Plus</Text></Text>
                         <Text style={styles.modalSubtitle}>프리미엄 요리 비서를 만나보세요</Text>
                     </View>
 

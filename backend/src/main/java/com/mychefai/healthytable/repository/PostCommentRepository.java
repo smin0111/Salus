@@ -17,4 +17,10 @@ public interface PostCommentRepository extends JpaRepository<PostComment, Long> 
 
     // 특정 사용자가 작성한 댓글 조회
     List<PostComment> findByUserIdOrderByCreatedAtDesc(Long userId);
+
+    long countByUserId(Long userId);
+
+    void deleteByUserId(Long userId);
+
+    void deleteByPostIdIn(List<Long> postIds);
 }

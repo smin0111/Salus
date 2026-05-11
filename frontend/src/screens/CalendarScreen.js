@@ -184,7 +184,7 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
             >
                 <View style={styles.mealHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                        <Text style={{ fontSize: 20, marginRight: 8 }}>{icon}</Text>
+                        {icon ? <Text style={{ fontSize: 12, color: color, marginRight: 8 }}>{icon}</Text> : null}
                         <Text style={[styles.mealTitle, { color: color }]}>{title}</Text>
                         {isAi && (
                             <View style={styles.aiBadge}>
@@ -192,7 +192,7 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
                             </View>
                         )}
                         {hasDetails && (
-                            <Text style={{ fontSize: 12, color: color, marginLeft: 8 }}>📖</Text>
+                            <Text style={{ fontSize: 12, color: color, marginLeft: 8 }}>상세</Text>
                         )}
                     </View>
                     {calories && (
@@ -323,7 +323,7 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
                 {/* Monthly AI Analysis Banner */}
                 {monthlyAnalysis ? (
                     <View style={styles.analysisCard}>
-                        <Text style={styles.analysisTitle}>🤖 AI 셰프의 이번 달 코멘트</Text>
+                        <Text style={styles.analysisTitle}>AI 셰프의 이번 달 코멘트</Text>
                         <Text style={styles.analysisText}>{monthlyAnalysis}</Text>
                     </View>
                 ) : null}
@@ -331,7 +331,7 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
                 {/* Stats */}
                 <View style={styles.statsContainer}>
                     <View style={[styles.statCard, { borderColor: '#FCD34D' }]}>
-                        <Text style={styles.statIcon}>🌅</Text>
+                        <Text style={styles.statIcon}>아침</Text>
                         <View>
                             <Text style={styles.statLabel}>아침</Text>
                             <Text style={styles.statValue}>
@@ -340,7 +340,7 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
                         </View>
                     </View>
                     <View style={[styles.statCard, { borderColor: '#34D399' }]}>
-                        <Text style={styles.statIcon}>☀️</Text>
+                        <Text style={styles.statIcon}>점심</Text>
                         <View>
                             <Text style={styles.statLabel}>점심</Text>
                             <Text style={styles.statValue}>
@@ -349,7 +349,7 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
                         </View>
                     </View>
                     <View style={[styles.statCard, { borderColor: '#60A5FA' }]}>
-                        <Text style={styles.statIcon}>🌙</Text>
+                        <Text style={styles.statIcon}>저녁</Text>
                         <View>
                             <Text style={styles.statLabel}>저녁</Text>
                             <Text style={styles.statValue}>
@@ -397,14 +397,13 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
                         )}
 
                         <ScrollView contentContainerStyle={styles.mealList}>
-                            {renderMealSection('breakfast', '🌅', '아침', '#F59E0B', '#FFFBEB')}
-                            {renderMealSection('lunch', '☀️', '점심', '#10B981', '#ECFDF5')}
-                            {renderMealSection('dinner', '🌙', '저녁', '#3B82F6', '#EFF6FF')}
+                            {renderMealSection('breakfast', '', '아침', '#F59E0B', '#FFFBEB')}
+                            {renderMealSection('lunch', '', '점심', '#10B981', '#ECFDF5')}
+                            {renderMealSection('dinner', '', '저녁', '#3B82F6', '#EFF6FF')}
 
                             {/* Snacks */}
                             <View style={[styles.mealSection, { backgroundColor: '#FDF2F8', borderColor: '#DB277740' }]}>
                                 <View style={styles.mealHeader}>
-                                    <Text style={{ fontSize: 20, marginRight: 8 }}>🍪</Text>
                                     <Text style={[styles.mealTitle, { color: '#DB2777' }]}>간식</Text>
                                 </View>
                                 {selectedMeal?.snacks && selectedMeal.snacks.length > 0 ? (

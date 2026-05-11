@@ -7,6 +7,7 @@ import config from './src/config';
 import ChatScreen from './src/screens/ChatScreen';
 import CalendarScreen from './src/screens/CalendarScreen';
 import HealthScreen from './src/screens/HealthScreen';
+import HealthCheckupScreen from './src/screens/HealthCheckupScreen';
 import FridgeScreen from './src/screens/FridgeScreen';
 import LoginScreen from './src/screens/LoginScreen';
 // HomeScreen removed (merged into Community)
@@ -20,6 +21,7 @@ import SearchScreen from './src/screens/SearchScreen';
 import LoadingScreen from './src/screens/LoadingScreen';
 import UpgradeScreen from './src/screens/UpgradeScreen';
 import PaymentResultScreen from './src/screens/PaymentResultScreen';
+import AccountSettingsScreen from './src/screens/AccountSettingsScreen';
 
 import Sidebar from './src/components/Sidebar';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -27,6 +29,7 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 function AppContent() {
   // Navigation State
   const [currentScreen, setCurrentScreen] = useState('chat'); // Default to AI Chat
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [selectedPost, setSelectedPost] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAppReady, setIsAppReady] = useState(false);
@@ -51,7 +54,7 @@ function AppContent() {
     return () => clearTimeout(timer);
   }, []);
 
-  // 🌐 웹 라우팅: 마운트 시 URL 경로와 currentScreen 동기화
+  // 웹 라우팅: 마운트 시 URL 경로와 currentScreen 동기화
   useEffect(() => {
     if (Platform.OS === 'web') {
       const path = window.location.pathname;
@@ -71,7 +74,7 @@ function AppContent() {
   }, []);
 
 
-  // 📝 Record daily activity (attendance)
+  // Record daily activity (attendance)
   React.useEffect(() => {
     if (isLoggedIn && user?.token) {
       const logActivity = async () => {
@@ -88,8 +91,8 @@ function AppContent() {
   }, [isLoggedIn, user]);
 
   const handleNavigate = (screen, data = null) => {
-    // 🔒 보호된 라우트 체크
-    const protectedScreens = ['community', 'fridge', 'calendar', 'health', 'create-post'];
+    // 보호된 라우트 체크
+    const protectedScreens = ['community', 'fridge', 'calendar', 'health', 'health-checkup', 'account-settings', 'create-post'];
     // 'home' is removed from protected list as it's no longer a standalone screen
 
     if (protectedScreens.includes(screen) && !isLoggedIn) {
@@ -109,7 +112,7 @@ function AppContent() {
 
   // Global Data State
   const [messages, setMessages] = useState([
-    { id: 1, text: '안녕하세요! 건강한 식탁을 위한 AI 셰프입니다. 👨‍🍳\n알레르기나 건강 정보를 알려주시면 더 안전한 레시피를 추천해드려요!', sender: 'ai' }
+    { id: 1, text: '안녕하세요! 건강한 식탁을 위한 AI 셰프입니다.\n알레르기나 건강 정보를 알려주시면 더 안전한 레시피를 추천해드려요.', sender: 'ai' }
   ]);
 
   const [healthProfile, setHealthProfile] = useState({
@@ -213,6 +216,20 @@ function AppContent() {
             setHealthProfile={setHealthProfile}
             isSidebarOpen={isSidebarOpen}
             onToggleSidebar={() => setIsSidebarOpen(true)}
+          />
+        );
+      case 'health-checkup':
+        return (
+          <HealthCheckupScreen
+            onToggleSidebar={() => setIsSidebarOpen(true)}
+            onNavigate={handleNavigate}
+          />
+        );
+      case 'account-settings':
+        return (
+          <AccountSettingsScreen
+            onToggleSidebar={() => setIsSidebarOpen(true)}
+            onNavigate={handleNavigate}
           />
         );
       case 'fridge':

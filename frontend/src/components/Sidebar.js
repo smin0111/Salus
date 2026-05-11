@@ -13,6 +13,8 @@ const MENU_ITEMS = [
     { id: 'fridge', label: '나의 냉장고', icon: 'nutrition', color: '#3B82F6' },
     { id: 'calendar', label: '식단 캘린더', icon: 'calendar', color: colors.primary },
     { id: 'health', label: '나의 건강정보', icon: 'heart', color: colors.health },
+    { id: 'health-checkup', label: '건강검진', icon: 'document-text', color: '#6366F1' },
+    { id: 'account-settings', label: '계정과 개인정보', icon: 'shield-checkmark', color: '#0F766E' },
 ];
 
 import { useAuth } from '../context/AuthContext';
@@ -37,7 +39,7 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                         </View>
                         <View>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Text style={styles.title}>{isLoggedIn && user ? user.name : 'MyChefAI'}</Text>
+                                <Text style={styles.title}>{isLoggedIn && user ? user.name : 'Salus'}</Text>
                                 {isLoggedIn && user?.grade === 'PLUS' && (
                                     <View style={styles.inlinePlusBadge}>
                                         <Text style={styles.inlinePlusBadgeText}>PLUS</Text>
@@ -105,7 +107,7 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                     <View style={styles.footer}>
                         <TouchableOpacity style={[styles.accountButton, { marginBottom: 8 }]} onPress={() => { onNavigate('about'); onClose(); }}>
                             <Ionicons name="information-circle-outline" size={24} color="#4B5563" />
-                            <Text style={styles.accountText}>MyChefAI 정보</Text>
+                            <Text style={styles.accountText}>Salus 정보</Text>
                             <Ionicons name="chevron-forward" size={16} color="#9CA3AF" style={{ marginLeft: 'auto' }} />
                         </TouchableOpacity>
                         {isLoggedIn ? (
@@ -141,7 +143,7 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                         });
 
                         if (response.data.success) {
-                            Alert.alert("구독 완료 🎉", "플러스 회원이 되신 것을 환영합니다.");
+                            Alert.alert("구독 완료", "플러스 회원이 되신 것을 환영합니다.");
                             await refreshUser(); // 유저 상태 리프레시 (PLUS 뱃지 즉시 반영)
                             onClose(); // 사이드바 닫기
                         } else {

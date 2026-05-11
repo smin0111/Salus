@@ -128,7 +128,7 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
     };
 
     const handleDeleteComment = async (commentId) => {
-        console.log('🗑️ Delete button clicked for comment:', commentId);
+        console.log('Delete button clicked for comment:', commentId);
         console.log('User info:', { userId: user?.id, user });
 
         // Web-compatible confirmation
@@ -154,23 +154,23 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
             });
 
         if (!confirmDelete) {
-            console.log('❌ Delete cancelled');
+            console.log('Delete cancelled');
             return;
         }
 
-        console.log('✅ Delete confirmed, sending request...');
+        console.log('Delete confirmed, sending request...');
         try {
             const deleteUrl = `${config.API_BASE_URL}/community/comments/${commentId}?userId=${user.id}`;
             console.log('DELETE URL:', deleteUrl);
 
             const response = await axios.delete(deleteUrl);
-            console.log('✅ Delete successful:', response.data);
+            console.log('Delete successful:', response.data);
 
             await loadComments();
             await loadPostDetails();
-            console.log('✅ Comments reloaded');
+            console.log('Comments reloaded');
         } catch (error) {
-            console.error('❌ 댓글 삭제 실패:', error);
+            console.error('댓글 삭제 실패:', error);
             console.error('Error response:', error.response?.data);
             console.error('Error status:', error.response?.status);
 
@@ -183,7 +183,7 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
     };
 
     const handleDeletePost = async () => {
-        console.log('⚠️ handleDeletePost 함수 실행됨');
+        console.log('handleDeletePost 함수 실행됨');
         console.log('Alert.alert 호출 직전');
         Alert.alert(
             '게시글 삭제',
@@ -192,13 +192,13 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
                 {
                     text: '취소',
                     style: 'cancel',
-                    onPress: () => console.log('❌ 취소 버튼 클릭됨')
+                    onPress: () => console.log('취소 버튼 클릭됨')
                 },
                 {
                     text: '삭제',
                     style: 'destructive',
                     onPress: async () => {
-                        console.log('✅ 삭제 확인 버튼 클릭됨');
+                        console.log('삭제 확인 버튼 클릭됨');
                         try {
                             console.log('게시글 삭제 요청:', {
                                 postId: post.id,
@@ -254,7 +254,7 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
     const isAuthor = user && postData && user.id === postData.userId;
 
     // 디버깅 로그
-    console.log('🔍 PostDetailScreen 디버깅:', {
+    console.log('PostDetailScreen 디버깅:', {
         'user 객체': user,
         'user.id': user?.id,
         'postData.userId': postData?.userId,
@@ -272,7 +272,7 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
                 <Text style={styles.headerTitle}>게시글</Text>
                 {isAuthor && (
                     <TouchableOpacity onPress={async () => {
-                        console.log('🗑️ 삭제 버튼 클릭됨 - 직접 삭제');
+                        console.log('삭제 버튼 클릭됨 - 직접 삭제');
                         try {
                             const response = await axios.delete(
                                 `${config.API_BASE_URL}/community/posts/${post.id}?userId=${user.id}`
@@ -313,7 +313,7 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
                     {/* Ingredients */}
                     {postData.ingredients && postData.ingredients.length > 0 && (
                         <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>🛒 재료</Text>
+                            <Text style={styles.sectionTitle}>재료</Text>
                             {postData.ingredients.map((item, index) => (
                                 <Text key={index} style={styles.listItem}>• {item}</Text>
                             ))}
@@ -323,7 +323,7 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
                     {/* Steps */}
                     {postData.steps && postData.steps.length > 0 && (
                         <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>👨‍🍳 조리 순서</Text>
+                            <Text style={styles.sectionTitle}>조리 순서</Text>
                             {postData.steps.map((item, index) => (
                                 <Text key={index} style={styles.stepItem}>
                                     {index + 1}. {item}

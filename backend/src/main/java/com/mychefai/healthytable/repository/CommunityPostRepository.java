@@ -15,6 +15,10 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, Lo
     // 특정 사용자가 작성한 게시글 조회
     List<CommunityPost> findByUserIdOrderByCreatedAtDesc(Long userId);
 
+    long countByUserId(Long userId);
+
+    void deleteByUserId(Long userId);
+
     // 특정 기간 이후 게시글 조회
     List<CommunityPost> findByCreatedAtAfterOrderByCreatedAtDesc(java.time.LocalDateTime date);
 

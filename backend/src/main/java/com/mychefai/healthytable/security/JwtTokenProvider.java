@@ -2,6 +2,7 @@ package com.mychefai.healthytable.security;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
@@ -10,11 +11,13 @@ import java.util.Date;
 @Component
 public class JwtTokenProvider {
 
-    private final String SECRET_KEY = "mychefaisecretkeymychefaisecretkeymychefaisecretkey"; // 32byte 이상
+    @Value("${jwt.secret:mychefaisecretkeymychefaisecretkeymychefaisecretkey}")
+    private String secretKey;
+
     private final long VALIDITY_IN_MS = 3600000; // 1h
 
     private Key getSigningKey() {
-        return Keys.hmacShaKeyFor(SECRET_KEY.getBytes());
+        return Keys.hmacShaKeyFor(secretKey.getBytes());
     }
 
     public String createToken(String userId) {

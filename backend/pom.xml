@@ -12,10 +12,10 @@
     </parent>
     
     <groupId>com.mychefai</groupId>
-    <artifactId>mychefai-backend</artifactId>
+    <artifactId>salus-backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>MyChefAI</name>
-    <description>AI-based Personal Chef Platform</description>
+    <name>Salus</name>
+    <description>AI-based Personal Health and Meal Platform</description>
     
     <properties>
         <java.version>17</java.version>

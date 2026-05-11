@@ -79,7 +79,7 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
 
                 {/* Ingredients */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>재료 🥬</Text>
+                    <Text style={styles.sectionTitle}>재료</Text>
                     {ingredients.map((ing, index) => (
                         <View key={index} style={styles.listItem}>
                             <View style={styles.bullet} />
@@ -90,7 +90,7 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
 
                 {/* Steps */}
                 <View style={[styles.section, { marginBottom: 40 }]}>
-                    <Text style={styles.sectionTitle}>조리 순서 👨‍🍳</Text>
+                    <Text style={styles.sectionTitle}>조리 순서</Text>
                     {steps.map((step, index) => (
                         <View key={index} style={styles.stepItem}>
                             <View style={styles.stepNumber}>

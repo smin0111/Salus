@@ -43,7 +43,7 @@ export default function PaymentResultScreen({ onNavigate }) {
             if (response.data.success) {
                 await refreshUser();
                 setStatus('success');
-                setMessage('플러스 회원이 되신 것을 환영합니다! 🎉');
+                setMessage('플러스 회원이 되신 것을 환영합니다.');
             } else {
                 setStatus('fail');
                 setMessage(response.data.message || '결제 검증에 실패했습니다.');

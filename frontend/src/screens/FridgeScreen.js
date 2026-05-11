@@ -244,7 +244,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
                         });
                     }
                     await fetchFridgeItems();
-                    alert(`${scannedItems.length}개의 재료가 자동으로 등록되었습니다! 🍎`);
+                    alert(`${scannedItems.length}개의 재료가 자동으로 등록되었습니다.`);
                 }
             } catch (error) {
                 console.error('영수증 스캔 실패:', error);
@@ -522,33 +522,33 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
 
                         <View style={styles.ruleTable}>
                             <View style={styles.ruleRow}>
-                                <Text style={styles.ruleLabel}>🍖 육류</Text>
+                                <Text style={styles.ruleLabel}>육류</Text>
                                 <Text style={styles.ruleValue}>+2일</Text>
                             </View>
                             <View style={styles.ruleRow}>
-                                <Text style={styles.ruleLabel}>🥬 채소</Text>
+                                <Text style={styles.ruleLabel}>채소</Text>
                                 <Text style={styles.ruleValue}>+5일</Text>
                             </View>
                             <View style={styles.ruleRow}>
-                                <Text style={styles.ruleLabel}>🍎 과일</Text>
+                                <Text style={styles.ruleLabel}>과일</Text>
                                 <Text style={styles.ruleValue}>+7일</Text>
                             </View>
                             <View style={styles.ruleRow}>
-                                <Text style={styles.ruleLabel}>🥛 유제품</Text>
+                                <Text style={styles.ruleLabel}>유제품</Text>
                                 <Text style={styles.ruleValue}>+10일</Text>
                             </View>
                             <View style={styles.ruleRow}>
-                                <Text style={styles.ruleLabel}>🥚 달걀</Text>
+                                <Text style={styles.ruleLabel}>달걀</Text>
                                 <Text style={styles.ruleValue}>+21일</Text>
                             </View>
                             <View style={styles.ruleRow}>
-                                <Text style={styles.ruleLabel}>📦 기타</Text>
+                                <Text style={styles.ruleLabel}>기타</Text>
                                 <Text style={styles.ruleValue}>+7일</Text>
                             </View>
                         </View>
 
                         <View style={styles.helpTips}>
-                            <Text style={styles.tipText}>• ➕/➖ 버튼으로 수량을 쉽게 조절하세요.</Text>
+                            <Text style={styles.tipText}>• 플러스/마이너스 버튼으로 수량을 쉽게 조절하세요.</Text>
                             <Text style={styles.tipText}>• 연필/쓰레기통 아이콘으로 수정과 삭제 가능!</Text>
                             <Text style={styles.tipText}>• 유통기한은 수정 모달에서 직접 변경 가능합니다.</Text>
                         </View>

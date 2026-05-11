@@ -36,7 +36,7 @@ const LoginForm = ({ onLogin, onGuest, loading, handleSocialLogin }) => {
                     <Ionicons name="restaurant" size={32} color={colors.primary} />
                 </View>
                 <Text style={styles.title}>환영합니다!</Text>
-                <Text style={styles.subtitle}>로그인하고 MyChefAI를 시작하세요</Text>
+                <Text style={styles.subtitle}>로그인하고 Salus를 시작하세요</Text>
             </View>
 
             <View style={styles.buttonStack}>
@@ -54,6 +54,7 @@ const LoginForm = ({ onLogin, onGuest, loading, handleSocialLogin }) => {
                     textColor="#FFFFFF"
                     icon={<Text style={{ color: '#FFF', fontWeight: '900', fontSize: 16 }}>N</Text>}
                     onPress={() => handleSocialLogin('naver')}
+                    loading={loading}
                 />
                 <SocialButton
                     text="Google로 계속하기"
@@ -62,6 +63,7 @@ const LoginForm = ({ onLogin, onGuest, loading, handleSocialLogin }) => {
                     border
                     icon={<Ionicons name="logo-google" size={20} color="#374151" />}
                     onPress={() => handleSocialLogin('google')}
+                    loading={loading}
                 />
             </View>
 
@@ -104,7 +106,7 @@ export default function LoginScreen({ onLogin, onGuest }) {
                 <View style={styles.leftPane}>
                     <View style={styles.brandContainer}>
                         <Ionicons name="restaurant-outline" size={64} color="rgba(255,255,255,0.9)" />
-                        <Text style={styles.brandTitle}>MyChefAI</Text>
+                        <Text style={styles.brandTitle}>Salus</Text>
                         <Text style={styles.brandSlogan}>당신을 위한 스마트 인공지능 셰프</Text>
                     </View>
                     {/* Abstract Circle Decoration */}

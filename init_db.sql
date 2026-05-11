@@ -1,5 +1,5 @@
 -- ==========================================
--- MyChefAI Database Script (Full Reset)
+-- Salus Database Script (Full Reset)
 -- ==========================================
 
 SET FOREIGN_KEY_CHECKS = 0;

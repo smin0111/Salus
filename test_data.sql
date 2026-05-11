@@ -38,8 +38,8 @@ INSERT INTO recipe_stats (recipe_id, view_count, like_count, share_count) VALUES
 
 -- 4. 레시피 공유
 INSERT INTO recipe_shares (user_id, recipe_id, visibility, share_message, created_at) VALUES
-(1, 1, 'PUBLIC', '김치찌개 진짜 맛있어요! 저는 돼지고기 대신 참치 넣어서 먹었어요 👍', DATE_SUB(NOW(), INTERVAL 2 HOUR)),
-(2, 2, 'PUBLIC', '불닭볶음면에 치즈 듬뿍!! 이게 진리입니다 🔥🔥', DATE_SUB(NOW(), INTERVAL 5 HOUR)),
+(1, 1, 'PUBLIC', '김치찌개 진짜 맛있어요! 저는 돼지고기 대신 참치 넣어서 먹었어요', DATE_SUB(NOW(), INTERVAL 2 HOUR)),
+(2, 2, 'PUBLIC', '불닭볶음면에 치즈 듬뿍!! 이게 진리입니다', DATE_SUB(NOW(), INTERVAL 5 HOUR)),
 (3, 3, 'PUBLIC', '바쁜 아침에 딱이에요. 5분 컷!', DATE_SUB(NOW(), INTERVAL 1 DAY)),
 (4, 4, 'PUBLIC', '다이어트 중인데 이거 먹으면 포만감 짱', DATE_SUB(NOW(), INTERVAL 3 HOUR)),
 (1, 4, 'PUBLIC', '저는 여기에 닭가슴살 추가했어요!', DATE_SUB(NOW(), INTERVAL 30 MINUTE));
