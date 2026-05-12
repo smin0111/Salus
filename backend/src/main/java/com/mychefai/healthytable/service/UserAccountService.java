@@ -26,6 +26,7 @@ public class UserAccountService {
     private final PostLikeRepository postLikeRepository;
     private final RecipeShareRepository recipeShareRepository;
     private final PaymentRepository paymentRepository;
+    private final ChatSessionRepository chatSessionRepository;
 
     @Transactional(readOnly = true)
     public UserDataSummaryDTO summarizeUserData(Long userId) {
@@ -43,6 +44,7 @@ public class UserAccountService {
                 .likes(postLikeRepository.countByUserId(userId))
                 .recipeShares(recipeShareRepository.countByUserId(userId))
                 .payments(paymentRepository.countByUser(user))
+                .chatSessions(chatSessionRepository.countByUserId(userId))
                 .build();
     }
 
@@ -68,6 +70,7 @@ public class UserAccountService {
         healthProfileRepository.deleteByUserId(userId);
         mealLogRepository.deleteByUser(user);
         activityLogRepository.deleteByUser(user);
+        chatSessionRepository.deleteByUserId(userId);
         paymentRepository.anonymizeByUser(user);
         userRepository.delete(user);
     }
