@@ -22,6 +22,8 @@ import com.mychefai.healthytable.service.HealthCheckupAnalysisService;
 import com.mychefai.healthytable.service.MealLogService;
 import com.mychefai.healthytable.service.RecipeWorkSessionService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Mono;
@@ -79,6 +81,45 @@ public class ChatController {
         return chatMessageRepository.findBySessionOrderByCreatedAtAsc(session).stream()
                 .map(message -> new ChatDto.Message(message.getRole(), message.getContent()))
                 .toList();
+    }
+
+    @PatchMapping("/sessions/{sessionId}")
+    public ChatDto.SessionSummary updateSessionTitle(
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable Long sessionId,
+            @RequestBody ChatDto.SessionUpdateRequest request) {
+        Long userId = getAuthenticatedUserId(authHeader)
+                .orElseThrow(() -> new IllegalArgumentException("로그인이 필요합니다."));
+
+        String title = normalizeSessionTitle(request != null ? request.getTitle() : null);
+        ChatSession session = chatSessionRepository.findByIdAndUserId(sessionId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("대화 세션을 찾을 수 없습니다."));
+
+        session.setTitle(title);
+        session.touch();
+        ChatSession saved = chatSessionRepository.save(session);
+        return new ChatDto.SessionSummary(
+                saved.getId(),
+                saved.getTitle(),
+                saved.getCreatedAt(),
+                saved.getUpdatedAt());
+    }
+
+    @DeleteMapping("/sessions/{sessionId}")
+    @Transactional
+    public ResponseEntity<Map<String, String>> deleteSession(
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable Long sessionId) {
+        Long userId = getAuthenticatedUserId(authHeader)
+                .orElseThrow(() -> new IllegalArgumentException("로그인이 필요합니다."));
+
+        ChatSession session = chatSessionRepository.findByIdAndUserId(sessionId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("대화 세션을 찾을 수 없습니다."));
+
+        recipeWorkSessionService.clear(userId, sessionId);
+        chatMessageRepository.deleteBySession(session);
+        chatSessionRepository.delete(session);
+        return ResponseEntity.ok(Map.of("message", "대화 세션이 삭제되었습니다."));
     }
 
     @PostMapping("/message")
@@ -288,6 +329,17 @@ public class ChatController {
         }
         String normalized = message.replaceAll("\\s+", " ").trim();
         return normalized.length() > 35 ? normalized.substring(0, 35) + "..." : normalized;
+    }
+
+    private String normalizeSessionTitle(String title) {
+        if (title == null || title.isBlank()) {
+            throw new IllegalArgumentException("대화 제목을 입력해 주세요.");
+        }
+        String normalized = title.replaceAll("\\s+", " ").trim();
+        if (normalized.length() > 120) {
+            throw new IllegalArgumentException("대화 제목은 120자 이하로 입력해 주세요.");
+        }
+        return normalized;
     }
 
     private void saveChatMessage(ChatSession session, String role, String content) {

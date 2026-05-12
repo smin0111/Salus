@@ -127,11 +127,18 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
                         {/* Add to Plan Button (Logged in only) */}
                         {isLoggedIn && (
                             <TouchableOpacity
-                                style={styles.addToPlanButton}
-                                onPress={() => openPlanModal(item.text)}
+                                style={[styles.addToPlanButton, item.isMealSaved && styles.addToPlanButtonSaved]}
+                                onPress={() => openPlanModal(item)}
+                                disabled={item.isMealSaved}
                             >
-                                <Ionicons name="calendar-outline" size={14} color={colors.secondary} />
-                                <Text style={styles.addToPlanText}>식단에 추가</Text>
+                                <Ionicons
+                                    name={item.isMealSaved ? "checkmark-circle" : "calendar-outline"}
+                                    size={14}
+                                    color={item.isMealSaved ? '#10B981' : colors.secondary}
+                                />
+                                <Text style={[styles.addToPlanText, item.isMealSaved && styles.addToPlanTextSaved]}>
+                                    {item.isMealSaved ? '저장됨' : '식단에 추가'}
+                                </Text>
                             </TouchableOpacity>
                         )}
                     </View>
@@ -149,10 +156,14 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     const [useFridge, setUseFridge] = useState(true); // 기본값 ON
     const [chatSessionId, setChatSessionId] = useState(null);
     const [chatSessions, setChatSessions] = useState([]);
+    const [renameModalVisible, setRenameModalVisible] = useState(false);
+    const [editingSession, setEditingSession] = useState(null);
+    const [editingSessionTitle, setEditingSessionTitle] = useState('');
     const flatListRef = useRef(null);
 
     // 식단 추가 모달
     const [modalVisible, setModalVisible] = useState(false);
+    const [selectedMessageId, setSelectedMessageId] = useState(null);
     const [selectedRecipeToAdd, setSelectedRecipeToAdd] = useState(null);
     const [targetDate, setTargetDate] = useState(new Date());
     const [targetMealType, setTargetMealType] = useState('lunch');
@@ -232,6 +243,64 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         setChatSessionId(null);
         setMessages([]);
         setInputText('');
+    };
+
+    const getErrorMessage = (error, fallback) => {
+        return error?.response?.data?.message || error?.message || fallback;
+    };
+
+    const openRenameSession = (session) => {
+        setEditingSession(session);
+        setEditingSessionTitle(session.title || '');
+        setRenameModalVisible(true);
+    };
+
+    const confirmRenameSession = async () => {
+        const title = editingSessionTitle.trim();
+        if (!editingSession || !title) {
+            Alert.alert('확인 필요', '대화 제목을 입력해 주세요.');
+            return;
+        }
+
+        try {
+            const response = await axios.patch(`${config.API_BASE_URL}/chat/sessions/${editingSession.id}`, { title });
+            const updatedSession = response.data;
+            setChatSessions(prev => prev.map(session =>
+                session.id === updatedSession.id ? updatedSession : session
+            ));
+            setRenameModalVisible(false);
+            setEditingSession(null);
+            setEditingSessionTitle('');
+        } catch (error) {
+            Alert.alert('오류', getErrorMessage(error, '대화 제목을 수정하지 못했습니다.'));
+        }
+    };
+
+    const confirmDeleteSession = (session) => {
+        Alert.alert(
+            '대화 삭제',
+            `'${session.title || '대화'}' 대화를 삭제할까요?`,
+            [
+                { text: '취소', style: 'cancel' },
+                {
+                    text: '삭제',
+                    style: 'destructive',
+                    onPress: () => deleteSession(session),
+                },
+            ]
+        );
+    };
+
+    const deleteSession = async (session) => {
+        try {
+            await axios.delete(`${config.API_BASE_URL}/chat/sessions/${session.id}`);
+            setChatSessions(prev => prev.filter(item => item.id !== session.id));
+            if (chatSessionId === session.id) {
+                startNewChat();
+            }
+        } catch (error) {
+            Alert.alert('오류', getErrorMessage(error, '대화를 삭제하지 못했습니다.'));
+        }
     };
 
     // 음성 인식 설정
@@ -341,10 +410,14 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 id: Date.now() + 1,
                 text: cleanedText,
                 sender: 'ai',
-                isTyping: true
+                isTyping: true,
+                isMealSaved: Boolean(response.data.mealSaved),
             };
 
-            setMessages(prev => [...prev, aiMessage]);
+            setMessages(prev => {
+                const nextMessages = response.data.mealSaved ? markLatestAiRecipeSaved(prev) : prev;
+                return [...nextMessages, aiMessage];
+            });
             fetchChatSessions();
 
             // 요리 모드에서는 AI 응답을 자동으로 읽어줌
@@ -422,12 +495,29 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
-    const openPlanModal = (text) => {
+    const markLatestAiRecipeSaved = (messageList) => {
+        const latestRecipeIndex = [...messageList]
+            .map((message, index) => ({ message, index }))
+            .reverse()
+            .find(({ message }) => message.sender === 'ai' && !message.isMealSaved)?.index;
+
+        if (latestRecipeIndex === undefined) {
+            return messageList;
+        }
+
+        return messageList.map((message, index) =>
+            index === latestRecipeIndex ? { ...message, isMealSaved: true } : message
+        );
+    };
+
+    const openPlanModal = (message) => {
+        const text = message.text;
         // 레시피 제목 추출
         const lines = text.split('\n');
         let title = lines[0].replace(/\*\*/g, '').replace(/제목: /g, '').trim();
         if (title.length > 30) title = title.substring(0, 27) + '...';
 
+        setSelectedMessageId(message.id);
         setSelectedRecipeToAdd(title);
         setRecipeDetails({ title: title, fullText: text });
         setModalVisible(true);
@@ -469,6 +559,9 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             await axios.post(`${config.API_BASE_URL}/meallogs`, payload);
 
             Alert.alert("저장 완료", "식단에 추가되었습니다.");
+            setMessages(prev => prev.map(message =>
+                message.id === selectedMessageId ? { ...message, isMealSaved: true } : message
+            ));
 
             // 저장 결과를 화면 상태에 즉시 반영
             setMealData(prev => ({
@@ -482,10 +575,11 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             }));
 
             setModalVisible(false);
+            setSelectedMessageId(null);
 
         } catch (error) {
             console.error('Failed to save meal log:', error);
-            Alert.alert("오류", "저장 실패: " + error.message);
+            Alert.alert("오류", "저장 실패: " + getErrorMessage(error, error.message));
         }
     };
 
@@ -570,17 +664,41 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={{ gap: 8, paddingRight: 16 }}
                         renderItem={({ item }) => (
-                            <TouchableOpacity
+                            <View
                                 style={[styles.sessionChip, chatSessionId === item.id && styles.sessionChipActive]}
-                                onPress={() => loadChatSession(item.id)}
                             >
-                                <Text
-                                    numberOfLines={1}
-                                    style={[styles.sessionChipText, chatSessionId === item.id && styles.sessionChipTextActive]}
+                                <TouchableOpacity
+                                    style={styles.sessionTitleButton}
+                                    onPress={() => loadChatSession(item.id)}
                                 >
-                                    {item.title || '대화'}
-                                </Text>
-                            </TouchableOpacity>
+                                    <Text
+                                        numberOfLines={1}
+                                        style={[styles.sessionChipText, chatSessionId === item.id && styles.sessionChipTextActive]}
+                                    >
+                                        {item.title || '대화'}
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.sessionIconButton}
+                                    onPress={() => openRenameSession(item)}
+                                >
+                                    <Ionicons
+                                        name="pencil"
+                                        size={12}
+                                        color={chatSessionId === item.id ? 'white' : '#6B7280'}
+                                    />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.sessionIconButton}
+                                    onPress={() => confirmDeleteSession(item)}
+                                >
+                                    <Ionicons
+                                        name="trash-outline"
+                                        size={12}
+                                        color={chatSessionId === item.id ? 'white' : '#6B7280'}
+                                    />
+                                </TouchableOpacity>
+                            </View>
                         )}
                     />
                 </View>
@@ -742,6 +860,44 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             <Modal
                 animationType="slide"
                 transparent={true}
+                visible={renameModalVisible}
+                onRequestClose={() => setRenameModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.renameModalContent}>
+                        <View style={styles.modalHeaderTitleRow}>
+                            <Ionicons name="create-outline" size={24} color={colors.primary} />
+                            <Text style={styles.modalTitle}>대화 제목 수정</Text>
+                        </View>
+                        <TextInput
+                            style={styles.titleInput}
+                            value={editingSessionTitle}
+                            onChangeText={setEditingSessionTitle}
+                            placeholder="대화 제목"
+                            placeholderTextColor="#9CA3AF"
+                            maxLength={120}
+                        />
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity
+                                onPress={() => setRenameModalVisible(false)}
+                                style={styles.cancelButton}
+                            >
+                                <Text style={styles.cancelButtonText}>취소</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={confirmRenameSession}
+                                style={styles.confirmButton}
+                            >
+                                <Text style={styles.confirmButtonText}>수정</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            <Modal
+                animationType="slide"
+                transparent={true}
                 visible={modalVisible}
                 onRequestClose={() => setModalVisible(false)}
             >
@@ -801,7 +957,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                                 <Text style={styles.cancelButtonText}>취소</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={confirmAddToPlan} style={[styles.confirmButton, { backgroundColor: '#8B5CF6' }]}>
-                                <Text style={styles.confirmButtonText}>저장 (TEST)</Text>
+                                <Text style={styles.confirmButtonText}>저장</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -833,7 +989,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        maxWidth: 180,
+        maxWidth: 220,
         paddingHorizontal: 12,
         paddingVertical: 7,
         borderRadius: 16,
@@ -852,6 +1008,17 @@ const styles = StyleSheet.create({
     },
     sessionChipTextActive: {
         color: 'white',
+    },
+    sessionTitleButton: {
+        minWidth: 48,
+        maxWidth: 126,
+    },
+    sessionIconButton: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     loginButton: { backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 },
     loginButtonText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
@@ -876,7 +1043,9 @@ const styles = StyleSheet.create({
     aiText: { color: '#1F2937' },
     messageActions: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 12 },
     addToPlanButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8 },
+    addToPlanButtonSaved: { backgroundColor: '#ECFDF5' },
     addToPlanText: { color: '#9CA3AF', fontSize: 12, fontWeight: '600', marginLeft: 4 },
+    addToPlanTextSaved: { color: '#10B981' },
     actionIconButton: { padding: 4 },
     loadingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 20 },
     loadingText: { marginLeft: 10, color: '#6B7280', fontSize: 14 },
@@ -989,6 +1158,7 @@ const styles = StyleSheet.create({
     // 모달 스타일
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     modalContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
+    renameModalContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
     modalHeaderTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
     modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
     recipeCard: { backgroundColor: '#F9FAFB', padding: 16, borderRadius: 12, borderLeftWidth: 4, borderLeftColor: colors.primary, marginBottom: 20 },

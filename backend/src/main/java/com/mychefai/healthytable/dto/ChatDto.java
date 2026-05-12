@@ -50,4 +50,11 @@ public class ChatDto {
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
     }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SessionUpdateRequest {
+        private String title;
+    }
 }
