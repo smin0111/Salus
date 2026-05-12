@@ -93,7 +93,7 @@ public class ChatController {
                 .map(userId -> resolveSession(userId, request))
                 .orElse(null);
 
-        // Get user context if authenticated
+        // 인증된 사용자라면 개인화 컨텍스트를 추가
         if (authenticatedUserId.isPresent()) {
             try {
                 Long userIdLong = authenticatedUserId.get();
@@ -108,7 +108,7 @@ public class ChatController {
                     }
                 }
 
-                // 1. ALWAYS include health profile for safety
+                // 1. 안전을 위해 건강 프로필은 항상 포함
                 healthProfileRepository.findByUserId(userIdLong).ifPresent(profile -> {
                     systemContext.append("\n\n=== 중요: 사용자 건강 정보 (반드시 준수) ===\n");
 
@@ -142,7 +142,7 @@ public class ChatController {
                     systemContext.append("=====================================\n");
                 });
 
-                // 2. Latest health checkup context
+                // 2. 최신 건강검진 컨텍스트
                 healthCheckupRepository.findTopByUserIdOrderByCheckupDateDescIdDesc(userIdLong).ifPresent(checkup -> {
                     HealthCheckupAnalysisDTO analysis = healthCheckupAnalysisService.analyze(checkup);
                     systemContext.append("\n=== 최신 건강검진 기반 식단 정책 ===\n");
@@ -165,7 +165,7 @@ public class ChatController {
                     systemContext.append("====================================\n");
                 });
 
-                // 3. Current recipe work session for Codex-like revisions
+                // 3. 현재 수정 중인 레시피 작업 세션
                 recipeWorkSessionService.find(userIdLong, chatSession.getId()).ifPresent(workSession -> {
                     systemContext.append("\n=== 현재 수정 중인 추천 결과 ===\n");
                     systemContext.append(workSession.getLastRecommendation()).append("\n");
@@ -182,11 +182,11 @@ public class ChatController {
                     recipeWorkSessionService.addModifier(userIdLong, chatSession.getId(), request.getMessage());
                 }
 
-                // 4. Fridge context (with strict enforcement)
+                // 4. 냉장고 컨텍스트
                 List<FridgeItem> fridgeItems = fridgeItemRepository.findByUserIdOrderByExpiryDate(userIdLong);
 
                 if (request.isUseFridge()) {
-                    // FRIDGE ON: Use fridge ingredients
+                    // 냉장고 모드 ON: 냉장고 재료 활용
                     systemContext.append("\n=== 냉장고 모드 ON ===\n");
                     if (!fridgeItems.isEmpty()) {
                         systemContext.append("현재 냉장고에 있는 재료:\n");
@@ -203,7 +203,7 @@ public class ChatController {
                     }
                     systemContext.append("========================\n");
                 } else {
-                    // FRIDGE OFF: Do NOT use fridge ingredients
+                    // 냉장고 모드 OFF: 냉장고 재료 미사용
                     systemContext.append("\n=== 냉장고 모드 OFF ===\n");
                     systemContext.append("중요 지시사항: 사용자가 냉장고 재료를 사용하지 않기로 선택했습니다.\n");
                     systemContext.append("냉장고에 있는 재료를 언급하거나 사용하지 마세요.\n");
@@ -215,7 +215,7 @@ public class ChatController {
             }
         }
 
-        // Combine user message with system context
+        // 사용자 메시지와 시스템 컨텍스트 결합
         if (systemContext.length() > 0) {
             enhancedMessage = request.getMessage() + systemContext.toString();
             System.out.println(">>> AI에게 전달되는 컨텍스트 포함 메시지:");
@@ -243,10 +243,10 @@ public class ChatController {
                 });
     }
 
-    @PostMapping("/stt") // STT Endpoint
+    @PostMapping("/stt") // STT 엔드포인트
     public Mono<Map<String, String>> speechToText(@RequestParam("audio") MultipartFile audioFile) {
-        // Placeholder for VoiceService integration
-        // In a real implementation, we would send this file to OpenAI Whisper API
+        // VoiceService 연동 전 임시 응답
+        // 실제 구현 시 음성 파일을 STT API로 전달
         return Mono.just(Map.of("text", "음성 인식 기능은 아직 서버 키 설정이 필요합니다. (Mock Response)"));
     }
 

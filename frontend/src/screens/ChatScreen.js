@@ -3,12 +3,12 @@ import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, Keyboard
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import * as Speech from 'expo-speech'; // TTS
-import Voice from '@react-native-voice/voice'; // Voice Recognition
+import Voice from '@react-native-voice/voice'; // 음성 인식
 import { colors } from '../theme/colors';
 import config from '../config';
 import { useAuth } from '../context/AuthContext';
 
-// Helper to clean markdown
+// 마크다운 표시 문법 정리
 const cleanAiResponse = (text) => {
     return text
         .replace(/\*\*/g, '')
@@ -146,23 +146,23 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     const [inputText, setInputText] = useState('');
 
     const [loading, setLoading] = useState(false);
-    const [useFridge, setUseFridge] = useState(true); // Default ON
+    const [useFridge, setUseFridge] = useState(true); // 기본값 ON
     const [chatSessionId, setChatSessionId] = useState(null);
     const [chatSessions, setChatSessions] = useState([]);
     const flatListRef = useRef(null);
 
-    // Meal Plan Modal
+    // 식단 추가 모달
     const [modalVisible, setModalVisible] = useState(false);
     const [selectedRecipeToAdd, setSelectedRecipeToAdd] = useState(null);
     const [targetDate, setTargetDate] = useState(new Date());
     const [targetMealType, setTargetMealType] = useState('lunch');
     const [recipeDetails, setRecipeDetails] = useState({ title: '', fullText: '' });
 
-    // TTS State
+    // TTS 상태
     const [speakingMessageId, setSpeakingMessageId] = useState(null);
     const [bestVoice, setBestVoice] = useState(null);
 
-    // Cooking Mode State
+    // 요리 모드 상태
     const [isCookingMode, setIsCookingMode] = useState(false);
     const [isListening, setIsListening] = useState(false);
 
@@ -171,11 +171,11 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             try {
                 const voices = await Speech.getAvailableVoicesAsync();
                 if (voices && voices.length > 0) {
-                    // Filter for Korean voices
+                    // 한국어 음성만 필터링
                     const koVoices = voices.filter(v => v.language.includes('ko'));
 
                     if (koVoices.length > 0) {
-                        // Prefer voices with 'Siri' or 'Premium' or 'Enhanced' in identifier if available
+                        // 가능하면 Siri, Premium, Enhanced 품질의 음성을 우선 사용
                         const premiumVoice = koVoices.find(v =>
                             v.identifier.toLowerCase().includes('siri') ||
                             v.identifier.toLowerCase().includes('premium') ||
@@ -234,7 +234,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         setInputText('');
     };
 
-    // Voice Recognition Setup
+    // 음성 인식 설정
     useEffect(() => {
         Voice.onSpeechResults = onSpeechResults;
         Voice.onSpeechError = onSpeechError;
@@ -249,7 +249,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             const recognizedText = e.value[0];
             console.log('Recognized:', recognizedText);
 
-            // Auto send to AI
+            // 인식된 문장을 바로 AI에게 전송
             sendMessage(recognizedText);
         }
     };
@@ -266,13 +266,13 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
 
         if (isCookingMode) {
-            // Turn off Cooking Mode
+            // 요리 모드 종료
             await Voice.stop();
             setIsCookingMode(false);
             setIsListening(false);
             Speech.speak("요리 모드를 종료합니다.", { language: 'ko-KR' });
         } else {
-            // Turn on Cooking Mode
+            // 요리 모드 시작
             setIsCookingMode(true);
             Speech.speak("요리 모드를 시작합니다. 무엇을 도와드릴까요?", { language: 'ko-KR' });
             startListening();
@@ -289,12 +289,12 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
-    // Auto restart listening after response (Cooking Mode only)
+    // 요리 모드에서는 AI 응답 후 음성 인식을 자동 재시작
     useEffect(() => {
         if (isCookingMode && !loading && !isListening) {
             const timer = setTimeout(() => {
                 startListening();
-            }, 2000); // Wait 2s after AI response, then listen again
+            }, 2000); // AI 응답 후 2초 뒤 다시 듣기 시작
             return () => clearTimeout(timer);
         }
     }, [isCookingMode, loading, isListening]);
@@ -308,13 +308,13 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         setInputText('');
         setLoading(true);
 
-        // Record AI Activity
+        // AI 사용 활동 기록
         if (isLoggedIn) {
             axios.post(`${config.API_BASE_URL}/activities/log`, { isAi: true }).catch(e => console.log("AI Activity log failed", e));
         }
 
         try {
-            // Prepare History for Context
+            // AI 컨텍스트에 전달할 최근 대화 준비
             const history = messages.slice(-10).map(msg => ({
                 role: msg.sender === 'user' ? 'user' : 'model',
                 content: msg.text
@@ -347,15 +347,15 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             setMessages(prev => [...prev, aiMessage]);
             fetchChatSessions();
 
-            // Auto TTS in Cooking Mode
+            // 요리 모드에서는 AI 응답을 자동으로 읽어줌
             if (isCookingMode) {
-                // Wait for typing animation to finish, then speak
+                // 타이핑 애니메이션이 어느 정도 진행된 뒤 읽기 시작
                 setTimeout(() => {
                     const cleanText = cleanedText.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
                     Speech.speak(cleanText, {
                         language: 'ko-KR',
                         rate: 0.9,
-                        onDone: () => setIsListening(false) // Will trigger auto-restart
+                        onDone: () => setIsListening(false) // 자동 재시작 트리거
                     });
                 }, 1000);
             }
@@ -423,7 +423,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     };
 
     const openPlanModal = (text) => {
-        // Extract recipe title (first line or truncated text)
+        // 레시피 제목 추출
         const lines = text.split('\n');
         let title = lines[0].replace(/\*\*/g, '').replace(/제목: /g, '').trim();
         if (title.length > 30) title = title.substring(0, 27) + '...';
@@ -443,14 +443,14 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
         const dateKey = targetDate.toISOString().split('T')[0];
 
-        // Looks for patterns like "120kcal", "120 kcal", "120 칼로리"
+        // "120kcal", "120 kcal", "120 칼로리" 형식 탐색
         const calorieMatch = recipeDetails.fullText.match(/(\d+)\s*(kcal|칼로리)/i);
         const calories = calorieMatch ? parseInt(calorieMatch[1]) : null;
 
         try {
-            // Prepare mealDetails JSON
+            // mealDetails JSON 준비
             const detailsPayload = JSON.stringify({
-                [targetMealType]: { // breakfast, lunch, or dinner
+                [targetMealType]: { // breakfast, lunch, dinner 중 하나
                     fullText: recipeDetails.fullText,
                     savedAt: new Date().toISOString()
                 }
@@ -460,7 +460,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
             const payload = {
                 recordDate: dateKey,
-                [targetMealType]: selectedRecipeToAdd, // User edited title
+                [targetMealType]: selectedRecipeToAdd, // 사용자가 수정한 제목
                 [`${targetMealType}Calories`]: calories,
                 [`isAi${targetMealType.charAt(0).toUpperCase() + targetMealType.slice(1)}`]: true,
                 mealDetails: detailsPayload
@@ -470,7 +470,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
             Alert.alert("저장 완료", "식단에 추가되었습니다.");
 
-            // Update local state to reflect change immediately
+            // 저장 결과를 화면 상태에 즉시 반영
             setMealData(prev => ({
                 ...prev,
                 [dateKey]: {
@@ -906,7 +906,7 @@ const styles = StyleSheet.create({
         color: '#6B7280',
     },
 
-    // Floating Input Styles
+    // 플로팅 입력창 스타일
     inputContainerWrapper: {
         width: '100%',
         paddingBottom: Platform.OS === 'ios' ? 24 : 16,
@@ -947,7 +947,7 @@ const styles = StyleSheet.create({
         fontSize: 15,
         marginRight: 8,
         maxHeight: 160,
-        color: '#202124', // 구글 텍스트 컴
+        color: '#202124', // 구글 텍스트 색상
         textAlignVertical: 'center',
         lineHeight: 22,
         ...Platform.select({
@@ -968,7 +968,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#E8F0FE', // 구글 파란색 연한 버튼 기본값
     },
 
-    // Empty State - ChatGPT style
+    // 빈 상태 화면 스타일
     centeredInputContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -986,7 +986,7 @@ const styles = StyleSheet.create({
     suggestionChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: 'white' },
     suggestionText: { color: '#4B5563', fontSize: 14, fontWeight: '500' },
 
-    // Modal Styles
+    // 모달 스타일
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     modalContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
     modalHeaderTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
@@ -1007,7 +1007,7 @@ const styles = StyleSheet.create({
     cancelButtonText: { color: '#374151', fontWeight: '600' },
     confirmButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
 
-    // Cooking Mode Styles
+    // 요리 모드 스타일
     cookingModeButton: {
         width: 44,
         height: 44,
@@ -1029,7 +1029,7 @@ const styles = StyleSheet.create({
         width: 12,
         height: 12,
         borderRadius: 6,
-        backgroundColor: '#EF4444', // Red
+        backgroundColor: '#EF4444', // 빨간색
         borderWidth: 2,
         borderColor: 'white',
     },
@@ -1050,7 +1050,7 @@ const styles = StyleSheet.create({
         elevation: 1,
     },
     fridgeChipActive: {
-        backgroundColor: '#10B981', // Emerald green for active status
+        backgroundColor: '#10B981', // 활성 상태용 에메랄드 그린
         borderColor: '#10B981',
         shadowColor: '#10B981',
         shadowOpacity: 0.3,

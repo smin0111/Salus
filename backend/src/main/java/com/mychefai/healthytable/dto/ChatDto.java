@@ -13,7 +13,7 @@ public class ChatDto {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class Message {
-        private String role; // "user" or "model"
+        private String role; // "user" 또는 "model"
         private String content;
     }
 
@@ -24,7 +24,7 @@ public class ChatDto {
         private Long sessionId;
         private String message;
         private List<Message> history;
-        private boolean useFridge = true; // Default to true
+        private boolean useFridge = true; // 기본값은 true
     }
 
     @Data
