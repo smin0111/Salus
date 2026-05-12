@@ -147,6 +147,8 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
     const [loading, setLoading] = useState(false);
     const [useFridge, setUseFridge] = useState(true); // Default ON
+    const [chatSessionId, setChatSessionId] = useState(null);
+    const [chatSessions, setChatSessions] = useState([]);
     const flatListRef = useRef(null);
 
     // Meal Plan Modal
@@ -190,6 +192,47 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
         findBestVoice();
     }, []);
+
+    useEffect(() => {
+        if (isLoggedIn) {
+            fetchChatSessions();
+        } else {
+            setChatSessionId(null);
+            setChatSessions([]);
+        }
+    }, [isLoggedIn]);
+
+    const fetchChatSessions = async () => {
+        try {
+            const response = await axios.get(`${config.API_BASE_URL}/chat/sessions`);
+            setChatSessions(response.data || []);
+        } catch (error) {
+            console.log('Failed to fetch chat sessions:', error.message);
+        }
+    };
+
+    const loadChatSession = async (sessionId) => {
+        try {
+            const response = await axios.get(`${config.API_BASE_URL}/chat/sessions/${sessionId}/messages`);
+            const loadedMessages = (response.data || []).map((msg, index) => ({
+                id: `${sessionId}-${index}-${Date.now()}`,
+                text: msg.content,
+                sender: msg.role === 'user' ? 'user' : 'ai',
+                isTyping: false,
+            }));
+            setChatSessionId(sessionId);
+            setMessages(loadedMessages);
+        } catch (error) {
+            console.log('Failed to load chat session:', error.message);
+            Alert.alert('오류', '대화를 불러오지 못했습니다.');
+        }
+    };
+
+    const startNewChat = () => {
+        setChatSessionId(null);
+        setMessages([]);
+        setInputText('');
+    };
 
     // Voice Recognition Setup
     useEffect(() => {
@@ -280,6 +323,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             console.log('[DEBUG] Sending to AI:', { useFridge, messageText });
 
             const response = await axios.post(`${config.API_BASE_URL}/chat/message`, {
+                sessionId: chatSessionId,
                 message: messageText,
                 history: history,
                 useFridge: useFridge
@@ -289,6 +333,9 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
             const rawAiText = response.data.reply;
             const cleanedText = cleanAiResponse(rawAiText);
+            if (response.data.sessionId) {
+                setChatSessionId(response.data.sessionId);
+            }
 
             const aiMessage = {
                 id: Date.now() + 1,
@@ -298,6 +345,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             };
 
             setMessages(prev => [...prev, aiMessage]);
+            fetchChatSessions();
 
             // Auto TTS in Cooking Mode
             if (isCookingMode) {
@@ -505,6 +553,38 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                     )}
                 </View>
             </View>
+
+            {isLoggedIn && (
+                <View style={styles.sessionBar}>
+                    <TouchableOpacity
+                        style={[styles.sessionChip, !chatSessionId && styles.sessionChipActive]}
+                        onPress={startNewChat}
+                    >
+                        <Ionicons name="add" size={14} color={!chatSessionId ? 'white' : '#4B5563'} />
+                        <Text style={[styles.sessionChipText, !chatSessionId && styles.sessionChipTextActive]}>새 대화</Text>
+                    </TouchableOpacity>
+                    <FlatList
+                        horizontal
+                        data={chatSessions}
+                        keyExtractor={(item) => item.id.toString()}
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ gap: 8, paddingRight: 16 }}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity
+                                style={[styles.sessionChip, chatSessionId === item.id && styles.sessionChipActive]}
+                                onPress={() => loadChatSession(item.id)}
+                            >
+                                <Text
+                                    numberOfLines={1}
+                                    style={[styles.sessionChipText, chatSessionId === item.id && styles.sessionChipTextActive]}
+                                >
+                                    {item.title || '대화'}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                    />
+                </View>
+            )}
 
             {messages.length <= 1 ? (
                 // 콘텐츠 없을 때 입력창이 중앙에 위치
@@ -739,6 +819,40 @@ const styles = StyleSheet.create({
     menuButton: { padding: 8, marginRight: 8 },
     headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
     headerSubtitle: { fontSize: 12, color: '#6B7280' },
+    sessionBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: 'white',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+    },
+    sessionChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        maxWidth: 180,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 16,
+        backgroundColor: '#F3F4F6',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    sessionChipActive: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
+    },
+    sessionChipText: {
+        color: '#4B5563',
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    sessionChipTextActive: {
+        color: 'white',
+    },
     loginButton: { backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 },
     loginButtonText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
     list: { flex: 1 },

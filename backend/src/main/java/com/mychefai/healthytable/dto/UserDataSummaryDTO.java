@@ -17,4 +17,5 @@ public class UserDataSummaryDTO {
     private long likes;
     private long recipeShares;
     private long payments;
+    private long chatSessions;
 }
