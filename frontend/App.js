@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Platform } from 'react-native';
+import { StyleSheet, Text, View, Platform, TouchableOpacity, ScrollView } from 'react-native';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import config from './src/config';
 
@@ -10,7 +11,7 @@ import HealthScreen from './src/screens/HealthScreen';
 import HealthCheckupScreen from './src/screens/HealthCheckupScreen';
 import FridgeScreen from './src/screens/FridgeScreen';
 import LoginScreen from './src/screens/LoginScreen';
-// HomeScreen removed (merged into Community)
+// HomeScreen은 커뮤니티 화면으로 통합됨
 import LandingPageScreen from './src/screens/LandingPageScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import RecipeDetailScreen from './src/screens/RecipeDetailScreen';
@@ -26,16 +27,155 @@ import AccountSettingsScreen from './src/screens/AccountSettingsScreen';
 import Sidebar from './src/components/Sidebar';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 
+const WEB_SHELL_EXCLUDED_SCREENS = [
+  'login',
+  'dashboard',
+  'about',
+  'payment-result',
+  'upgrade',
+];
+
+const WEB_NAV_ITEMS = [
+  { id: 'chat', label: 'AI 셰프', caption: '맞춤 레시피 상담', icon: 'sparkles', color: '#EA580C', path: '/chat' },
+  { id: 'community', label: '레시피 허브', caption: '추천과 커뮤니티', icon: 'grid', color: '#10B981', path: '/community' },
+  { id: 'fridge', label: '냉장고', caption: '재료와 유통기한', icon: 'nutrition', color: '#3B82F6', path: '/fridge' },
+  { id: 'calendar', label: '식단 캘린더', caption: '식사 기록', icon: 'calendar', color: '#8B5CF6', path: '/calendar' },
+  { id: 'health', label: '건강 프로필', caption: '알레르기와 식이조건', icon: 'heart', color: '#F43F5E', path: '/health' },
+  { id: 'health-checkup', label: '검진 분석', caption: '수치 기반 추천', icon: 'document-text', color: '#6366F1', path: '/health-checkup' },
+];
+
+const WEB_SCREEN_TITLES = {
+  chat: ['AI 셰프 스튜디오', '냉장고와 건강정보를 함께 보는 맞춤 요리 상담'],
+  community: ['레시피 허브', 'AI 추천, 인기 레시피, 사용자 피드를 한곳에서 둘러보세요'],
+  fridge: ['나의 냉장고', '재료 상태와 유통기한을 기준으로 식단 기회를 찾습니다'],
+  calendar: ['식단 캘린더', 'AI가 추천한 식사와 직접 기록한 식단을 관리합니다'],
+  health: ['건강 프로필', '알레르기, 질환, 식이 제한을 안전하게 반영합니다'],
+  'health-checkup': ['건강검진 분석', '검진 수치를 식단 추천으로 연결합니다'],
+  'account-settings': ['계정과 개인정보', '계정, 구독, 개인정보 설정을 관리합니다'],
+  search: ['통합 검색', '레시피와 커뮤니티 글을 빠르게 찾습니다'],
+  'create-post': ['레시피 공유', '나만의 건강한 식탁을 커뮤니티에 소개합니다'],
+  'post-detail': ['커뮤니티 글', '레시피 이야기와 반응을 확인합니다'],
+  'recipe-detail': ['레시피 상세', '조리 정보와 추천 이유를 확인합니다'],
+};
+
+const WEB_PATH_TO_SCREEN = {
+  '/': 'chat',
+  '/chat': 'chat',
+  '/community': 'community',
+  '/fridge': 'fridge',
+  '/calendar': 'calendar',
+  '/health': 'health',
+  '/health-checkup': 'health-checkup',
+  '/account': 'account-settings',
+  '/search': 'search',
+  '/dashboard': 'dashboard',
+  '/login': 'login',
+  '/about': 'about',
+  '/payment-result': 'payment-result',
+  '/upgrade': 'upgrade',
+};
+
+const getWebPathForScreen = (screen) => {
+  const navItem = WEB_NAV_ITEMS.find(item => item.id === screen);
+  if (navItem) return navItem.path;
+
+  const map = {
+    'account-settings': '/account',
+    search: '/search',
+    dashboard: '/dashboard',
+    login: '/login',
+    about: '/about',
+    'payment-result': '/payment-result',
+    upgrade: '/upgrade',
+  };
+
+  return map[screen] || `/${screen}`;
+};
+
+function WebAppShell({ children, currentScreen, onNavigate, isLoggedIn, user, onLogout }) {
+  const [title, subtitle] = WEB_SCREEN_TITLES[currentScreen] || WEB_SCREEN_TITLES.chat;
+  const userName = isLoggedIn && user?.name ? user.name : '게스트';
+
+  return (
+    <View style={styles.webShell}>
+      <View style={styles.webSidebar}>
+        <TouchableOpacity style={styles.webBrand} onPress={() => onNavigate('chat')} activeOpacity={0.85}>
+          <View style={styles.webBrandMark}>
+            <Ionicons name="restaurant" size={21} color="#111827" />
+          </View>
+        </TouchableOpacity>
+
+        <ScrollView style={styles.webNav} showsVerticalScrollIndicator={false}>
+          {WEB_NAV_ITEMS.map(item => {
+            const isActive = currentScreen === item.id || (item.id === 'community' && currentScreen === 'home');
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.webNavItem, isActive && styles.webNavItemActive]}
+                onPress={() => onNavigate(item.id)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name={item.icon} size={21} color={isActive ? '#111827' : '#6B7280'} />
+                {isActive && <View style={styles.webNavDot} />}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        <View style={styles.webSidebarFooter}>
+          <TouchableOpacity style={styles.webNavItem} onPress={() => onNavigate('account-settings')}>
+            <Ionicons name="shield-checkmark-outline" size={21} color={currentScreen === 'account-settings' ? '#111827' : '#6B7280'} />
+          </TouchableOpacity>
+          {isLoggedIn && (
+            <TouchableOpacity style={styles.webNavItem} onPress={onLogout}>
+              <Ionicons name="log-out-outline" size={21} color="#6B7280" />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.webAvatarButton} onPress={() => onNavigate(isLoggedIn ? 'account-settings' : 'login')}>
+            <Text style={styles.webAvatarText}>{userName.slice(0, 1).toUpperCase()}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.webMain}>
+        <View style={styles.webTopbar}>
+          <TouchableOpacity style={styles.webTopBrand} onPress={() => onNavigate('chat')} activeOpacity={0.85}>
+            <Text style={styles.webTopBrandText}>Salus</Text>
+          </TouchableOpacity>
+          <View style={styles.webTopTitleBlock}>
+            <Text style={styles.webPageTitle}>{title}</Text>
+            <Text style={styles.webPageSubtitle}>{subtitle}</Text>
+          </View>
+          <View style={styles.webTopActions}>
+            <TouchableOpacity style={styles.webIconButton} onPress={() => onNavigate('search')}>
+              <Ionicons name="search" size={19} color="#374151" />
+            </TouchableOpacity>
+            {!isLoggedIn && (
+              <TouchableOpacity style={styles.webPrimaryAction} onPress={() => onNavigate('login')}>
+                <Text style={styles.webPrimaryActionText}>로그인</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.webContentFrame}>
+          {children}
+        </View>
+      </View>
+    </View>
+  );
+}
+
 function AppContent() {
-  // Navigation State
-  const [currentScreen, setCurrentScreen] = useState('chat'); // Default to AI Chat
+  // 내비게이션 상태
+  const [currentScreen, setCurrentScreen] = useState('chat'); // 기본 화면은 AI 채팅
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [selectedPost, setSelectedPost] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAppReady, setIsAppReady] = useState(false);
-  const { isLoggedIn, user, loading: authLoading } = useAuth(); // 인증 복구 상태 추가 및 User 정보
+  const { isLoggedIn, user, logout, loading: authLoading } = useAuth(); // 인증 복구 상태 추가 및 User 정보
 
-  // Initial App Load Simulation
+  // 앱 초기 로딩 처리
   useEffect(() => {
     // 앱 준비 확인 및 인증 복구 완료 대기
     if (isAppReady && !authLoading) {
@@ -57,24 +197,23 @@ function AppContent() {
   // 웹 라우팅: 마운트 시 URL 경로와 currentScreen 동기화
   useEffect(() => {
     if (Platform.OS === 'web') {
-      const path = window.location.pathname;
-      if (path === '/dashboard') {
-        setCurrentScreen('dashboard');
-        // 대시보드의 경우 즉시 로딩 완료 처리
-        setIsAppReady(true);
-      } else if (path === '/login') {
-        setCurrentScreen('login');
-      } else if (path === '/about') {
-        setCurrentScreen('about');
-      } else if (path === '/payment-result') {
-        setCurrentScreen('payment-result');
-        setIsAppReady(true);
-      }
+      const syncPath = () => {
+        const path = window.location.pathname;
+        const nextScreen = WEB_PATH_TO_SCREEN[path] || 'chat';
+        setCurrentScreen(nextScreen);
+        if (nextScreen === 'dashboard' || nextScreen === 'payment-result') {
+          setIsAppReady(true);
+        }
+      };
+
+      syncPath();
+      window.addEventListener('popstate', syncPath);
+      return () => window.removeEventListener('popstate', syncPath);
     }
   }, []);
 
 
-  // Record daily activity (attendance)
+  // 일일 활동 기록
   React.useEffect(() => {
     if (isLoggedIn && user?.token) {
       const logActivity = async () => {
@@ -96,8 +235,11 @@ function AppContent() {
     // 'home' is removed from protected list as it's no longer a standalone screen
 
     if (protectedScreens.includes(screen) && !isLoggedIn) {
-      alert('로그인이 필요한 기능입니다.'); // TODO: 모달이나 토스트로 변경
+      alert('로그인이 필요한 기능입니다.'); // 추후 모달이나 토스트로 변경
       setCurrentScreen('login');
+      if (Platform.OS === 'web') {
+        window.history.pushState({}, '', '/login');
+      }
       return;
     }
 
@@ -107,10 +249,19 @@ function AppContent() {
     if (screen === 'post-detail') {
       setSelectedPost(data);
     }
-    setCurrentScreen(screen);
+    const nextScreen = screen === 'home' ? 'community' : screen;
+    setCurrentScreen(nextScreen);
+    if (Platform.OS === 'web') {
+      window.history.pushState({}, '', getWebPathForScreen(nextScreen));
+    }
   };
 
-  // Global Data State
+  const handleLogout = async () => {
+    await logout();
+    handleNavigate('chat');
+  };
+
+  // 전역 데이터 상태
   const [messages, setMessages] = useState([
     { id: 1, text: '안녕하세요! 건강한 식탁을 위한 AI 셰프입니다.\n알레르기나 건강 정보를 알려주시면 더 안전한 레시피를 추천해드려요.', sender: 'ai' }
   ]);
@@ -146,7 +297,7 @@ function AppContent() {
         return (
           <RecipeDetailScreen
             recipe={selectedRecipe}
-            onBack={() => setCurrentScreen('home')}
+            onBack={() => handleNavigate('community')}
           />
         );
       case 'about':
@@ -156,12 +307,11 @@ function AppContent() {
           />
         );
       case 'home':
-        // Forward 'home' requests to 'community' or 'chat' if needed, 
-        // but for now keeping it as fallback or removing it.
-        // Let's redirect 'home' to 'community' since they correspond now.
+        // 현재 홈 역할은 커뮤니티가 대신하므로 커뮤니티 화면으로 연결
         return (
           <CommunityScreen
             onToggleSidebar={() => setIsSidebarOpen(true)}
+            webMode={Platform.OS === 'web'}
           />
         );
       case 'chat':
@@ -174,6 +324,7 @@ function AppContent() {
             isSidebarOpen={isSidebarOpen}
             onToggleSidebar={() => setIsSidebarOpen(true)}
             onLoginPress={() => handleNavigate('login')}
+            webMode={Platform.OS === 'web'}
           />
         );
       case 'community':
@@ -182,6 +333,7 @@ function AppContent() {
             onToggleSidebar={() => setIsSidebarOpen(true)}
             onNavigate={handleNavigate}
             user={user}
+            webMode={Platform.OS === 'web'}
           />
         );
       case 'create-post':
@@ -244,7 +396,7 @@ function AppContent() {
       case 'search':
         return (
           <SearchScreen
-            onBack={() => setCurrentScreen('community')}
+            onBack={() => handleNavigate('community')}
             onNavigate={handleNavigate}
             user={user}
           />
@@ -256,17 +408,17 @@ function AppContent() {
       case 'login':
         return (
           <LoginScreen
-            onLogin={() => setCurrentScreen('chat')}
-            onGuest={() => setCurrentScreen('chat')}
+            onLogin={() => handleNavigate('chat')}
+            onGuest={() => handleNavigate('chat')}
           />
         );
       case 'upgrade':
         return (
           <UpgradeScreen
-            onBack={() => setCurrentScreen('chat')}
+            onBack={() => handleNavigate('chat')}
             onSuccess={() => {
-              setCurrentScreen('chat');
-              // refreshUser will be called inside UpgradeScreen or here
+              handleNavigate('chat');
+              // 사용자 정보 갱신은 UpgradeScreen 내부에서 처리
             }}
           />
         );
@@ -282,18 +434,39 @@ function AppContent() {
     return <LoadingScreen />;
   }
 
+  const shouldUseWebShell = Platform.OS === 'web' && !WEB_SHELL_EXCLUDED_SCREENS.includes(currentScreen);
+
+  const screenContent = renderScreen();
+
   return (
     <View style={styles.container}>
       <ExpoStatusBar style="auto" />
 
-      {renderScreen()}
+      {shouldUseWebShell ? (
+        <WebAppShell
+          currentScreen={currentScreen}
+          onNavigate={handleNavigate}
+          isLoggedIn={isLoggedIn}
+          user={user}
+          onLogout={handleLogout}
+          healthProfile={healthProfile}
+          fridgeItems={fridgeItems}
+          mealData={mealData}
+        >
+          {screenContent}
+        </WebAppShell>
+      ) : (
+        screenContent
+      )}
 
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        currentScreen={currentScreen}
-        onNavigate={handleNavigate}
-      />
+      {Platform.OS !== 'web' && (
+        <Sidebar
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+          currentScreen={currentScreen}
+          onNavigate={handleNavigate}
+        />
+      )}
     </View>
   );
 }
@@ -313,13 +486,154 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     ...Platform.select({
       web: {
         width: '100%',
         alignSelf: 'center',
-        boxShadow: '0px 0px 40px rgba(0,0,0,0.05)',
       }
     })
+  },
+  webShell: {
+    flex: 1,
+    width: '100%',
+    minHeight: '100vh',
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+  },
+  webSidebar: {
+    width: 76,
+    backgroundColor: '#FFFFFF',
+    borderRightWidth: 1,
+    borderRightColor: '#EEF0F3',
+    paddingHorizontal: 12,
+    paddingTop: 16,
+    paddingBottom: 16,
+    alignItems: 'center',
+  },
+  webBrand: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  webBrandMark: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  webNav: {
+    flex: 1,
+    width: '100%',
+  },
+  webNavItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    marginBottom: 8,
+    position: 'relative',
+  },
+  webNavItemActive: {
+    backgroundColor: '#F1F3F4',
+  },
+  webNavDot: {
+    position: 'absolute',
+    left: -12,
+    width: 3,
+    height: 22,
+    borderRadius: 2,
+    backgroundColor: '#111827',
+  },
+  webSidebarFooter: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 8,
+  },
+  webAvatarButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#111827',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  webAvatarText: {
+    color: 'white',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  webMain: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: '#FFFFFF',
+  },
+  webTopbar: {
+    height: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F3F4',
+  },
+  webTopBrand: {
+    width: 160,
+  },
+  webTopBrandText: {
+    color: '#202124',
+    fontSize: 19,
+    fontWeight: '700',
+  },
+  webTopTitleBlock: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  webPageTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#202124',
+  },
+  webPageSubtitle: {
+    fontSize: 12,
+    color: '#5F6368',
+    marginTop: 2,
+  },
+  webTopActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    width: 160,
+    gap: 8,
+  },
+  webIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  webPrimaryAction: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    backgroundColor: '#111827',
+  },
+  webPrimaryActionText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  webContentFrame: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
   },
 });

@@ -8,6 +8,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
@@ -20,7 +21,7 @@ public class RecipeWorkSessionService {
     private static final Duration TTL = Duration.ofHours(6);
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
-    private final Map<String, RecipeWorkSessionDTO> fallbackStore = new ConcurrentHashMap<>();
+    private final Map<String, StoredWorkSession> fallbackStore = new ConcurrentHashMap<>();
 
     public Optional<RecipeWorkSessionDTO> find(Long userId, Long chatSessionId) {
         if (userId == null || chatSessionId == null) {
@@ -31,11 +32,11 @@ public class RecipeWorkSessionService {
         try {
             String json = redisTemplate.opsForValue().get(key);
             if (json == null || json.isBlank()) {
-                return Optional.ofNullable(fallbackStore.get(key));
+                return findFallback(key);
             }
             return Optional.of(objectMapper.readValue(json, RecipeWorkSessionDTO.class));
         } catch (Exception e) {
-            return Optional.ofNullable(fallbackStore.get(key));
+            return findFallback(key);
         }
     }
 
@@ -79,7 +80,7 @@ public class RecipeWorkSessionService {
 
     private void save(RecipeWorkSessionDTO state) {
         String key = key(state.getUserId(), state.getChatSessionId());
-        fallbackStore.put(key, state);
+        fallbackStore.put(key, new StoredWorkSession(state, Instant.now().plus(TTL)));
         try {
             redisTemplate.opsForValue().set(key, objectMapper.writeValueAsString(state), TTL);
         } catch (JsonProcessingException ignored) {
@@ -87,7 +88,25 @@ public class RecipeWorkSessionService {
         }
     }
 
+    private Optional<RecipeWorkSessionDTO> findFallback(String key) {
+        StoredWorkSession stored = fallbackStore.get(key);
+        if (stored == null) {
+            return Optional.empty();
+        }
+        if (stored.isExpired()) {
+            fallbackStore.remove(key);
+            return Optional.empty();
+        }
+        return Optional.of(stored.state());
+    }
+
     private String key(Long userId, Long chatSessionId) {
         return "salus:recipe-session:" + userId + ":" + chatSessionId;
+    }
+
+    private record StoredWorkSession(RecipeWorkSessionDTO state, Instant expiresAt) {
+        private boolean isExpired() {
+            return Instant.now().isAfter(expiresAt);
+        }
     }
 }
