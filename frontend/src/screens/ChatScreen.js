@@ -148,7 +148,7 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
     );
 };
 
-export default function ChatScreen({ messages, setMessages, healthProfile, setMealData, isSidebarOpen, onToggleSidebar, onLoginPress }) {
+export default function ChatScreen({ messages, setMessages, healthProfile, setMealData, isSidebarOpen, onToggleSidebar, onLoginPress, webMode = false }) {
     const { isLoggedIn, user } = useAuth();
     const [inputText, setInputText] = useState('');
 
@@ -598,7 +598,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     return (
         <SafeAreaView style={styles.container}>
             {/* Header */}
-            <View style={styles.header}>
+            {!webMode && <View style={styles.header}>
                 <View style={styles.headerLeft}>
                     <TouchableOpacity onPress={onToggleSidebar} style={styles.menuButton}>
                         <Ionicons name="menu" size={24} color={colors.text} />
@@ -646,10 +646,10 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                         </TouchableOpacity>
                     )}
                 </View>
-            </View>
+            </View>}
 
             {isLoggedIn && (
-                <View style={styles.sessionBar}>
+                <View style={[styles.sessionBar, webMode && styles.webSessionBar]}>
                     <TouchableOpacity
                         style={[styles.sessionChip, !chatSessionId && styles.sessionChipActive]}
                         onPress={startNewChat}
@@ -706,9 +706,14 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
             {messages.length <= 1 ? (
                 // 콘텐츠 없을 때 입력창이 중앙에 위치
-                <View style={styles.centeredInputContainer}>
+                <View style={[styles.centeredInputContainer, webMode && styles.webCenteredInputContainer]}>
                     <View style={styles.emptyStateContent}>
-                        <Text style={styles.emptyTitle}>오늘은 어떤 요리를 해볼까요?</Text>
+                        <Text style={[styles.emptyTitle, webMode && styles.webEmptyTitle]}>무엇을 도와드릴까요?</Text>
+                        {webMode && (
+                            <Text style={styles.webEmptySubtitle}>
+                                가진 재료, 피하고 싶은 성분, 원하는 조리시간을 자연스럽게 말해보세요.
+                            </Text>
+                        )}
                         <View style={styles.suggestionChips}>
                             <TouchableOpacity
                                 style={styles.suggestionChip}
@@ -789,7 +794,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                         data={messages}
                         renderItem={renderItem}
                         keyExtractor={item => item.id.toString()}
-                        contentContainerStyle={styles.listContent}
+                        contentContainerStyle={[styles.listContent, webMode && styles.webListContent]}
                         style={styles.list}
                     />
 
@@ -985,6 +990,12 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#E5E7EB',
     },
+    webSessionBar: {
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        backgroundColor: '#FFFBF7',
+        borderBottomColor: '#FED7AA',
+    },
     sessionChip: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1033,6 +1044,10 @@ const styles = StyleSheet.create({
                 alignSelf: 'center',
             }
         })
+    },
+    webListContent: {
+        paddingTop: 28,
+        paddingBottom: 56,
     },
     messageBubble: { padding: 12, borderRadius: 16, marginBottom: 20, flexDirection: 'row', alignItems: 'flex-start' },
     userBubble: { backgroundColor: '#F4F4F5', alignSelf: 'flex-end', borderBottomRightRadius: 4, maxWidth: '85%', paddingHorizontal: 16, paddingVertical: 12 },
@@ -1144,6 +1159,10 @@ const styles = StyleSheet.create({
         paddingBottom: Platform.OS === 'ios' ? 24 : 16,
         ...Platform.select({ web: { paddingBottom: 40 } })
     },
+    webCenteredInputContainer: {
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 28,
+    },
     emptyStateContent: {
         alignItems: 'center',
         marginBottom: 32,
@@ -1151,6 +1170,37 @@ const styles = StyleSheet.create({
     },
     emptyStateContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
     emptyTitle: { fontSize: 28, fontWeight: 'bold', color: '#1F2937', marginBottom: 30 },
+    webEmptyTitle: {
+        fontSize: 32,
+        fontWeight: '500',
+        color: '#202124',
+        marginBottom: 14,
+    },
+    webHeroBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 999,
+        backgroundColor: '#FFF7ED',
+        borderWidth: 1,
+        borderColor: '#FED7AA',
+        marginBottom: 18,
+    },
+    webHeroBadgeText: {
+        color: colors.primary,
+        fontSize: 12,
+        fontWeight: '900',
+    },
+    webEmptySubtitle: {
+        maxWidth: 560,
+        textAlign: 'center',
+        color: '#6B7280',
+        fontSize: 14,
+        lineHeight: 22,
+        marginBottom: 28,
+    },
     suggestionChips: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', justifyContent: 'center' },
     suggestionChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: 'white' },
     suggestionText: { color: '#4B5563', fontSize: 14, fontWeight: '500' },
