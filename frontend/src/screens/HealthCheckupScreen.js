@@ -158,7 +158,7 @@ export default function HealthCheckupScreen({ onToggleSidebar, onNavigate }) {
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
                     <TouchableOpacity onPress={onToggleSidebar} style={styles.menuButton}>
-                        <Ionicons name="menu" size={24} color={colors.text} />
+                        <Ionicons name="menu" size={24} color={colors.primary} />
                     </TouchableOpacity>
                     <View>
                         <Text style={styles.headerTitle}>건강검진 연동 데모</Text>
@@ -258,17 +258,17 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        paddingTop: Platform.OS === 'android' ? 40 : 12,
-        backgroundColor: 'white',
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        paddingTop: Platform.OS === 'android' ? 40 : 14,
+        backgroundColor: '#FFF7ED',
         borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
+        borderBottomColor: '#FED7AA',
     },
     headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-    menuButton: { padding: 8, marginRight: 8 },
-    headerTitle: { fontSize: 18, fontWeight: '800', color: '#111827' },
-    headerSubtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+    menuButton: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', marginRight: 12, borderWidth: 1, borderColor: '#FED7AA' },
+    headerTitle: { fontSize: 20, fontWeight: '800', color: '#9A3412' },
+    headerSubtitle: { fontSize: 12, color: '#EA580C', marginTop: 2 },
     demoButton: {
         flexDirection: 'row',
         alignItems: 'center',
