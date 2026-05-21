@@ -59,7 +59,7 @@ const WEB_SCREEN_TITLES = {
 };
 
 const WEB_PATH_TO_SCREEN = {
-  '/': 'chat',
+  '/': 'about',
   '/chat': 'chat',
   '/community': 'community',
   '/fridge': 'fridge',
@@ -168,7 +168,7 @@ function WebAppShell({ children, currentScreen, onNavigate, isLoggedIn, user, on
 
 function AppContent() {
   // 내비게이션 상태
-  const [currentScreen, setCurrentScreen] = useState('chat'); // 기본 화면은 AI 채팅
+  const [currentScreen, setCurrentScreen] = useState(Platform.OS === 'web' ? 'about' : 'chat'); // 웹은 랜딩, 앱은 AI 채팅
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [selectedPost, setSelectedPost] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -341,6 +341,7 @@ function AppContent() {
           <CreatePostScreen
             onNavigate={handleNavigate}
             user={user}
+            webMode={Platform.OS === 'web'}
           />
         );
       case 'post-detail':
@@ -349,7 +350,8 @@ function AppContent() {
             post={selectedPost}
             user={user}
             onNavigate={handleNavigate}
-            onBack={() => setCurrentScreen('community')}
+            onBack={() => handleNavigate('community')}
+            webMode={Platform.OS === 'web'}
           />
         );
       case 'calendar':
@@ -359,6 +361,7 @@ function AppContent() {
             setMealData={setMealData}
             isSidebarOpen={isSidebarOpen}
             onToggleSidebar={() => setIsSidebarOpen(true)}
+            webMode={Platform.OS === 'web'}
           />
         );
       case 'health':
@@ -368,6 +371,7 @@ function AppContent() {
             setHealthProfile={setHealthProfile}
             isSidebarOpen={isSidebarOpen}
             onToggleSidebar={() => setIsSidebarOpen(true)}
+            webMode={Platform.OS === 'web'}
           />
         );
       case 'health-checkup':
@@ -375,6 +379,7 @@ function AppContent() {
           <HealthCheckupScreen
             onToggleSidebar={() => setIsSidebarOpen(true)}
             onNavigate={handleNavigate}
+            webMode={Platform.OS === 'web'}
           />
         );
       case 'account-settings':
@@ -382,6 +387,7 @@ function AppContent() {
           <AccountSettingsScreen
             onToggleSidebar={() => setIsSidebarOpen(true)}
             onNavigate={handleNavigate}
+            webMode={Platform.OS === 'web'}
           />
         );
       case 'fridge':
@@ -391,6 +397,7 @@ function AppContent() {
             setFridgeItems={setFridgeItems}
             isSidebarOpen={isSidebarOpen}
             onToggleSidebar={() => setIsSidebarOpen(true)}
+            webMode={Platform.OS === 'web'}
           />
         );
       case 'search':
@@ -399,6 +406,7 @@ function AppContent() {
             onBack={() => handleNavigate('community')}
             onNavigate={handleNavigate}
             user={user}
+            webMode={Platform.OS === 'web'}
           />
         );
       case 'dashboard':

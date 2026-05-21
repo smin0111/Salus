@@ -52,7 +52,7 @@ const SECTIONS = [
     }
 ];
 
-export default function HealthScreen({ healthProfile, setHealthProfile, isSidebarOpen, onToggleSidebar }) {
+export default function HealthScreen({ healthProfile, setHealthProfile, isSidebarOpen, onToggleSidebar, webMode = false }) {
     const [isEditing, setIsEditing] = useState(false);
     const [inputStates, setInputStates] = useState({}); // 섹션별 입력 상태
 
@@ -160,7 +160,7 @@ export default function HealthScreen({ healthProfile, setHealthProfile, isSideba
     return (
         <SafeAreaView style={styles.container}>
             {/* 헤더 */}
-            <View style={styles.header}>
+            {!webMode && <View style={styles.header}>
                 <View style={styles.headerLeft}>
                     <TouchableOpacity onPress={onToggleSidebar} style={styles.menuButton}>
                         <Ionicons name="menu" size={24} color={colors.primary} />
@@ -178,7 +178,24 @@ export default function HealthScreen({ healthProfile, setHealthProfile, isSideba
                         {isEditing ? '완료' : '수정'}
                     </Text>
                 </TouchableOpacity>
-            </View>
+            </View>}
+
+            {webMode && (
+                <View style={styles.webActionBar}>
+                    <View>
+                        <Text style={styles.webActionTitle}>건강 조건</Text>
+                        <Text style={styles.webActionSubtitle}>추천에 반영할 정보를 관리하세요</Text>
+                    </View>
+                    <TouchableOpacity
+                        style={[styles.editButton, isEditing ? styles.saveButton : styles.editButtonOutline]}
+                        onPress={() => setIsEditing(!isEditing)}
+                    >
+                        <Text style={[styles.editButtonText, isEditing && styles.saveButtonText]}>
+                            {isEditing ? '완료' : '수정'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            )}
 
             <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -269,6 +286,26 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         color: '#374151',
+    },
+    webActionBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 24,
+        paddingVertical: 14,
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#EEF0F3',
+    },
+    webActionTitle: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: '#202124',
+    },
+    webActionSubtitle: {
+        fontSize: 12,
+        color: '#5F6368',
+        marginTop: 2,
     },
     saveButtonText: {
         color: 'white',

@@ -19,7 +19,7 @@ import config from '../config';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export default function CreatePostScreen({ onNavigate, user }) {
+export default function CreatePostScreen({ onNavigate, user, webMode = false }) {
     const insets = useSafeAreaInsets();
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
@@ -147,7 +147,7 @@ export default function CreatePostScreen({ onNavigate, user }) {
     return (
         <View style={styles.container}>
             {/* 헤더 */}
-            <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 40 : 14) }]}>
+            {!webMode && <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 40 : 14) }]}>
                 <TouchableOpacity style={styles.headerIconButton} onPress={() => onNavigate && onNavigate('community')}>
                     <Ionicons name="close" size={24} color={colors.primary} />
                 </TouchableOpacity>
@@ -161,7 +161,24 @@ export default function CreatePostScreen({ onNavigate, user }) {
                         {submitting ? '작성 중...' : '완료'}
                     </Text>
                 </TouchableOpacity>
-            </View>
+            </View>}
+
+            {webMode && (
+                <View style={styles.webActionBar}>
+                    <TouchableOpacity style={styles.headerIconButton} onPress={() => onNavigate && onNavigate('community')}>
+                        <Ionicons name="close" size={22} color={colors.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={handleSubmit}
+                        disabled={submitting}
+                        style={styles.submitButton}
+                    >
+                        <Text style={[styles.submitText, submitting && styles.submitTextDisabled]}>
+                            {submitting ? '작성 중...' : '완료'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            )}
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
 
@@ -326,6 +343,16 @@ const styles = StyleSheet.create({
     },
     submitButton: {
         paddingHorizontal: 8,
+    },
+    webActionBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 24,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: '#EEF0F3',
+        backgroundColor: '#FFFFFF',
     },
     submitText: {
         fontSize: 16,

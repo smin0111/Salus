@@ -20,7 +20,7 @@ const SUMMARY_LABELS = [
     ['payments', '결제 기록'],
 ];
 
-export default function AccountSettingsScreen({ onToggleSidebar, onNavigate }) {
+export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, webMode = false }) {
     const { user, logout } = useAuth();
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -70,7 +70,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate }) {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
+            {!webMode && <View style={styles.header}>
                 <View style={styles.headerLeft}>
                     <TouchableOpacity onPress={onToggleSidebar} style={styles.menuButton}>
                         <Ionicons name="menu" size={24} color={colors.primary} />
@@ -80,7 +80,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate }) {
                         <Text style={styles.headerSubtitle}>{user?.email || '개인 데이터 관리'}</Text>
                     </View>
                 </View>
-            </View>
+            </View>}
 
             <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
                 <View style={styles.noticeBand}>

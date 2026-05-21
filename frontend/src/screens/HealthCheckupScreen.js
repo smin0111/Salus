@@ -49,7 +49,7 @@ const demoValues = {
     alt: '38',
 };
 
-export default function HealthCheckupScreen({ onToggleSidebar, onNavigate }) {
+export default function HealthCheckupScreen({ onToggleSidebar, onNavigate, webMode = false }) {
     const [form, setForm] = useState({ checkupDate: today() });
     const [latest, setLatest] = useState(null);
     const [analysis, setAnalysis] = useState(null);
@@ -155,7 +155,7 @@ export default function HealthCheckupScreen({ onToggleSidebar, onNavigate }) {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
+            {!webMode && <View style={styles.header}>
                 <View style={styles.headerLeft}>
                     <TouchableOpacity onPress={onToggleSidebar} style={styles.menuButton}>
                         <Ionicons name="menu" size={24} color={colors.primary} />
@@ -169,7 +169,20 @@ export default function HealthCheckupScreen({ onToggleSidebar, onNavigate }) {
                     <Ionicons name="flask-outline" size={16} color={colors.primary} />
                     <Text style={styles.demoButtonText}>데모값</Text>
                 </TouchableOpacity>
-            </View>
+            </View>}
+
+            {webMode && (
+                <View style={styles.webActionBar}>
+                    <View>
+                        <Text style={styles.webActionTitle}>검진 수치 입력</Text>
+                        <Text style={styles.webActionSubtitle}>수치를 입력하면 식단 리스크를 분석합니다</Text>
+                    </View>
+                    <TouchableOpacity style={styles.demoButton} onPress={() => setForm(demoValues)}>
+                        <Ionicons name="flask-outline" size={16} color={colors.primary} />
+                        <Text style={styles.demoButtonText}>데모값</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
 
             {loading ? (
                 <View style={styles.loadingBox}>
@@ -281,6 +294,26 @@ const styles = StyleSheet.create({
         borderColor: '#FED7AA',
     },
     demoButtonText: { color: colors.primary, fontWeight: '700', fontSize: 12 },
+    webActionBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 24,
+        paddingVertical: 14,
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#EEF0F3',
+    },
+    webActionTitle: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: '#202124',
+    },
+    webActionSubtitle: {
+        fontSize: 12,
+        color: '#5F6368',
+        marginTop: 2,
+    },
     loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     loadingText: { marginTop: 12, color: '#6B7280' },
     content: { flex: 1 },

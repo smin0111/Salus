@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 
 const WEEK_DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
-export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, onToggleSidebar }) {
+export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, onToggleSidebar, webMode = false }) {
     const { isLoggedIn, token } = useAuth();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(null);
@@ -267,7 +267,7 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
     return (
         <SafeAreaView style={styles.container}>
             {/* 헤더 */}
-            <View style={styles.header}>
+            {!webMode && <View style={styles.header}>
                 <View style={styles.headerLeft}>
                     <TouchableOpacity onPress={onToggleSidebar} style={styles.menuButton}>
                         <Ionicons name="menu" size={24} color={colors.primary} />
@@ -277,7 +277,7 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
                         <Text style={styles.headerSubtitle}>매일 먹은 음식을 기록하세요</Text>
                     </View>
                 </View>
-            </View>
+            </View>}
 
             {/* 달력 컨트롤 */}
             <View style={styles.calendarControls}>

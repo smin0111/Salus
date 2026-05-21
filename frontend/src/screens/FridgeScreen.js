@@ -10,7 +10,7 @@ import { useAuth } from '../context/AuthContext';
 
 const CATEGORIES = ['전체', '채소', '과일', '육류', '유제품', '달걀', '기타'];
 
-export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpen, onToggleSidebar }) {
+export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpen, onToggleSidebar, webMode = false }) {
     const { token } = useAuth();
     const [selectedCategory, setSelectedCategory] = useState('전체');
     const [modalVisible, setModalVisible] = useState(false);
@@ -333,7 +333,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
+            {!webMode && <View style={styles.header}>
                 <View style={styles.headerLeft}>
                     <TouchableOpacity onPress={onToggleSidebar} style={styles.menuButton}>
                         <Ionicons name="menu" size={24} color={colors.primary} />
@@ -369,7 +369,36 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
                         <Ionicons name="add" size={22} color="white" />
                     </TouchableOpacity>
                 </View>
-            </View>
+            </View>}
+
+            {webMode && (
+                <View style={styles.webActionBar}>
+                    <TouchableOpacity
+                        onPress={() => setHelpModalVisible(true)}
+                        style={styles.iconActionButton}
+                    >
+                        <Ionicons name="help-circle-outline" size={20} color="#4B5563" />
+                    </TouchableOpacity>
+                    <View style={styles.webActionButtons}>
+                        <TouchableOpacity
+                            style={styles.iconActionButton}
+                            onPress={handleScanReceipt}
+                            disabled={scanning}
+                        >
+                            <Ionicons name="scan-outline" size={22} color="#4B5563" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.primaryActionButton}
+                            onPress={() => {
+                                resetForm();
+                                setModalVisible(true);
+                            }}
+                        >
+                            <Ionicons name="add" size={22} color="white" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
 
             {/* 스캔 중 오버레이 */}
             {
@@ -614,6 +643,21 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     headerRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    webActionBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 24,
+        paddingVertical: 14,
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#EEF0F3',
+    },
+    webActionButtons: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,

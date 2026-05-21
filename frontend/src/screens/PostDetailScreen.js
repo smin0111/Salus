@@ -18,7 +18,7 @@ import config from '../config';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
+export default function PostDetailScreen({ post, user, onNavigate, onBack, webMode = false }) {
     const insets = useSafeAreaInsets();
     const [postData, setPostData] = useState(post);
     const [comments, setComments] = useState([]);
@@ -265,7 +265,7 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
     return (
         <View style={styles.container}>
             {/* 헤더 */}
-            <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 40 : 14) }]}>
+            {!webMode && <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 40 : 14) }]}>
                 <TouchableOpacity style={styles.headerIconButton} onPress={onBack}>
                     <Ionicons name="arrow-back" size={22} color={colors.primary} />
                 </TouchableOpacity>
@@ -287,7 +287,29 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
                     </TouchableOpacity>
                 )}
                 {!isAuthor && <View style={{ width: 22 }} />}
-            </View>
+            </View>}
+
+            {webMode && (
+                <View style={styles.webActionBar}>
+                    <TouchableOpacity style={styles.headerIconButton} onPress={onBack}>
+                        <Ionicons name="arrow-back" size={22} color={colors.primary} />
+                    </TouchableOpacity>
+                    {isAuthor ? (
+                        <TouchableOpacity onPress={async () => {
+                            try {
+                                await axios.delete(`${config.API_BASE_URL}/community/posts/${post.id}?userId=${user.id}`);
+                                onNavigate && onNavigate('community');
+                            } catch (error) {
+                                console.error('삭제 실패:', error);
+                            }
+                        }}>
+                            <Ionicons name="trash-outline" size={22} color={colors.error} />
+                        </TouchableOpacity>
+                    ) : (
+                        <View style={{ width: 22 }} />
+                    )}
+                </View>
+            )}
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
                 {/* 게시글 헤더 */}
@@ -481,6 +503,16 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: '800',
         color: '#9A3412',
+    },
+    webActionBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 24,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: '#EEF0F3',
+        backgroundColor: '#FFFFFF',
     },
     content: {
         flex: 1,
