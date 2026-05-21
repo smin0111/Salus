@@ -16,7 +16,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
     const [modalVisible, setModalVisible] = useState(false);
     const [scanning, setScanning] = useState(false);
 
-    // Expiry Date rules
+    // 유통기한 기본 규칙
     const EXPIRY_RULES = {
         '육류': 2,
         '채소': 5,
@@ -33,18 +33,18 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
         return date.toISOString().split('T')[0];
     };
 
-    // Add Modal State
+    // 추가 모달 상태
     const [newItemName, setNewItemName] = useState('');
     const [newItemQuantity, setNewItemQuantity] = useState('');
     const [newItemCategory, setNewItemCategory] = useState('기타');
     const [newItemExpiry, setNewItemExpiry] = useState('');
     const [helpModalVisible, setHelpModalVisible] = useState(false);
 
-    // Edit Modal State
+    // 수정 모달 상태
     const [isEditMode, setIsEditMode] = useState(false);
     const [editingItemId, setEditingItemId] = useState(null);
 
-    // Fetch initial data
+    // 초기 데이터 조회
     useEffect(() => {
         fetchFridgeItems();
     }, []);
@@ -107,7 +107,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
     };
 
     const handleAdjustQuantity = async (id, currentQty, delta) => {
-        // Simple regex to find the number in "2개", "500g" etc.
+        // "2개", "500g" 같은 수량에서 숫자와 단위를 분리
         const match = currentQty.match(/^(\d+)(.*)$/);
         if (!match) return;
 
@@ -171,9 +171,9 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
     };
 
     const getExpiryColor = (daysLeft) => {
-        if (daysLeft <= 2) return { text: '#DC2626', bg: '#FEF2F2', border: '#FECACA' }; // Red
-        if (daysLeft <= 5) return { text: '#EA580C', bg: '#FFF7ED', border: '#FED7AA' }; // Orange
-        return { text: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0' }; // Green
+        if (daysLeft <= 2) return { text: '#DC2626', bg: '#FEF2F2', border: '#FECACA' }; // 빨간색
+        if (daysLeft <= 5) return { text: '#EA580C', bg: '#FFF7ED', border: '#FED7AA' }; // 주황색
+        return { text: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0' }; // 초록색
     };
 
     const handleScanReceipt = async () => {
@@ -336,7 +336,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
                     <TouchableOpacity onPress={onToggleSidebar} style={styles.menuButton}>
-                        <Ionicons name="menu" size={28} color={colors.text} />
+                        <Ionicons name="menu" size={24} color={colors.primary} />
                     </TouchableOpacity>
                     <View>
                         <View style={styles.titleRow}>
@@ -371,7 +371,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
                 </View>
             </View>
 
-            {/* Scanning Overlay */}
+            {/* 스캔 중 오버레이 */}
             {
                 scanning && (
                     <View style={styles.scanningOverlay}>
@@ -381,7 +381,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
                 )
             }
 
-            {/* Category Filter */}
+            {/* 카테고리 필터 */}
             <View style={styles.categoryContainer}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryContent}>
                     {CATEGORIES.map((cat) => (
@@ -404,7 +404,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
                 </ScrollView>
             </View>
 
-            {/* Stats Cards */}
+            {/* 통계 카드 */}
             <ScrollView style={styles.content}>
                 <View style={styles.statsRow}>
                     <View style={styles.statCard}>
@@ -431,7 +431,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
                     </View>
                 </View>
 
-                {/* Item Grid */}
+                {/* 재료 그리드 */}
                 <View style={styles.grid}>
                     {filteredItems.map(item => <AnimatedItemCard key={item.id} item={item} />)}
                 </View>
@@ -444,7 +444,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
                 )}
             </ScrollView>
 
-            {/* Add/Edit Modal */}
+            {/* 추가/수정 모달 */}
             <Modal
                 visible={modalVisible}
                 transparent
@@ -504,7 +504,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
                 </View>
             </Modal>
 
-            {/* Help Modal */}
+            {/* 도움말 모달 */}
             <Modal
                 visible={helpModalVisible}
                 transparent
@@ -570,27 +570,35 @@ const styles = StyleSheet.create({
         backgroundColor: '#F9FAFB',
     },
     header: {
-        padding: 16,
-        backgroundColor: 'white',
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        backgroundColor: '#FFF7ED',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingTop: Platform.OS === 'android' ? 40 : 16,
+        paddingTop: Platform.OS === 'android' ? 40 : 14,
         borderBottomWidth: 1,
-        borderBottomColor: '#F3F4F6',
+        borderBottomColor: '#FED7AA',
     },
     headerLeft: {
         flexDirection: 'row',
         alignItems: 'center',
     },
     menuButton: {
-        padding: 8,
-        marginRight: 8,
+        width: 40,
+        height: 40,
+        borderRadius: 14,
+        backgroundColor: '#FFFFFF',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+        borderWidth: 1,
+        borderColor: '#FED7AA',
     },
     headerTitle: {
         fontSize: 20,
         fontWeight: '800',
-        color: '#111827',
+        color: '#9A3412',
     },
     titleRow: {
         flexDirection: 'row',
@@ -601,9 +609,9 @@ const styles = StyleSheet.create({
         padding: 2,
     },
     headerSubtitle: {
-        fontSize: 13,
-        color: '#9CA3AF',
-        marginTop: 1,
+        fontSize: 12,
+        color: '#EA580C',
+        marginTop: 2,
     },
     headerRight: {
         flexDirection: 'row',
@@ -614,11 +622,11 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: '#F3F4F6',
+        backgroundColor: '#FFFFFF',
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: '#FED7AA',
     },
     primaryActionButton: {
         width: 44,
@@ -634,7 +642,7 @@ const styles = StyleSheet.create({
         elevation: 4,
     },
     addButtonText: {
-        display: 'none', // Text removed for cleaner look
+        display: 'none', // 더 깔끔하게 보이도록 텍스트 숨김
     },
     categoryContainer: {
         backgroundColor: 'white',

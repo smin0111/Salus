@@ -131,7 +131,7 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
         console.log('Delete button clicked for comment:', commentId);
         console.log('User info:', { userId: user?.id, user });
 
-        // Web-compatible confirmation
+        // 웹 호환 확인창
         const confirmDelete = Platform.OS === 'web'
             ? window.confirm('댓글을 삭제하시겠습니까?')
             : await new Promise((resolve) => {
@@ -264,10 +264,10 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
 
     return (
         <View style={styles.container}>
-            {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 10 : 0) }]}>
-                <TouchableOpacity onPress={onBack}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text} />
+            {/* 헤더 */}
+            <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 40 : 14) }]}>
+                <TouchableOpacity style={styles.headerIconButton} onPress={onBack}>
+                    <Ionicons name="arrow-back" size={22} color={colors.primary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>게시글</Text>
                 {isAuthor && (
@@ -290,7 +290,7 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                {/* Post Header */}
+                {/* 게시글 헤더 */}
                 <View style={styles.postHeader}>
                     <View style={styles.avatar}>
                         <Ionicons name="person" size={24} color="white" />
@@ -301,7 +301,7 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
                     </View>
                 </View>
 
-                {/* Post Content */}
+                {/* 게시글 내용 */}
                 <View style={styles.postContent}>
                     <Text style={styles.postTitle}>{postData.title}</Text>
                     <Text style={styles.postText}>{postData.content}</Text>
@@ -310,7 +310,7 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
                         <Image source={{ uri: postData.imageUrl }} style={styles.postImage} />
                     )}
 
-                    {/* Ingredients */}
+                    {/* 재료 */}
                     {postData.ingredients && postData.ingredients.length > 0 && (
                         <View style={styles.section}>
                             <Text style={styles.sectionTitle}>재료</Text>
@@ -320,7 +320,7 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
                         </View>
                     )}
 
-                    {/* Steps */}
+                    {/* 조리 순서 */}
                     {postData.steps && postData.steps.length > 0 && (
                         <View style={styles.section}>
                             <Text style={styles.sectionTitle}>조리 순서</Text>
@@ -333,7 +333,7 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
                     )}
                 </View>
 
-                {/* Actions */}
+                {/* 액션 */}
                 <View style={styles.actions}>
                     <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
                         <Ionicons
@@ -351,13 +351,13 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
 
                 <View style={styles.divider} />
 
-                {/* Comments Section */}
+                {/* 댓글 영역 */}
                 <View style={styles.commentsSection}>
                     <Text style={styles.commentsTitle}>댓글 {comments.length}</Text>
 
                     {comments.filter(c => !c.parentId).map((comment) => (
                         <View key={comment.id}>
-                            {/* Main Comment */}
+                            {/* 메인 댓글 */}
                             <View style={styles.commentItem}>
                                 <View style={styles.commentHeader}>
                                     <View style={styles.commentUserInfo}>
@@ -386,7 +386,7 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
                                 <Text style={styles.commentText}>{comment.content}</Text>
                             </View>
 
-                            {/* Replies */}
+                            {/* 답글 */}
                             {comments.filter(reply => reply.parentId === comment.id).map(reply => (
                                 <View key={reply.id} style={styles.replyItem}>
                                     <View style={styles.replyHeader}>
@@ -414,7 +414,7 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
                 </View>
             </ScrollView>
 
-            {/* Reply Info */}
+            {/* 답글 정보 */}
             {replyingTo && (
                 <View style={styles.replyInfoContainer}>
                     <Text style={styles.replyInfoText}>
@@ -426,7 +426,7 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack }) {
                 </View>
             )}
 
-            {/* Comment Input */}
+            {/* 댓글 입력 */}
             <View style={styles.commentInputContainer}>
                 <TextInput
                     style={styles.commentInput}
@@ -461,16 +461,26 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingBottom: 12,
-        backgroundColor: colors.surface,
+        paddingHorizontal: 20,
+        paddingBottom: 14,
+        backgroundColor: '#FFF7ED',
         borderBottomWidth: 1,
-        borderBottomColor: colors.border,
+        borderBottomColor: '#FED7AA',
+    },
+    headerIconButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 14,
+        backgroundColor: '#FFFFFF',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#FED7AA',
     },
     headerTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: colors.text,
+        fontSize: 20,
+        fontWeight: '800',
+        color: '#9A3412',
     },
     content: {
         flex: 1,

@@ -146,10 +146,10 @@ export default function CreatePostScreen({ onNavigate, user }) {
 
     return (
         <View style={styles.container}>
-            {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 10 : 0) }]}>
-                <TouchableOpacity onPress={() => onNavigate && onNavigate('community')}>
-                    <Ionicons name="close" size={28} color={colors.text} />
+            {/* 헤더 */}
+            <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 40 : 14) }]}>
+                <TouchableOpacity style={styles.headerIconButton} onPress={() => onNavigate && onNavigate('community')}>
+                    <Ionicons name="close" size={24} color={colors.primary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>레시피 작성</Text>
                 <TouchableOpacity
@@ -165,7 +165,7 @@ export default function CreatePostScreen({ onNavigate, user }) {
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
 
-                {/* Title */}
+                {/* 제목 */}
                 <View style={styles.inputGroup}>
                     <Text style={styles.label}>제목 *</Text>
                     <TextInput
@@ -177,7 +177,7 @@ export default function CreatePostScreen({ onNavigate, user }) {
                     />
                 </View>
 
-                {/* Content */}
+                {/* 내용 */}
                 <View style={styles.inputGroup}>
                     <Text style={styles.label}>내용 *</Text>
                     <TextInput
@@ -192,7 +192,7 @@ export default function CreatePostScreen({ onNavigate, user }) {
                     />
                 </View>
 
-                {/* Ingredients */}
+                {/* 재료 */}
                 <View style={styles.inputGroup}>
                     <Text style={styles.label}>재료 (선택)</Text>
                     <Text style={styles.hint}>한 줄에 하나씩 입력해주세요</Text>
@@ -208,7 +208,7 @@ export default function CreatePostScreen({ onNavigate, user }) {
                     />
                 </View>
 
-                {/* Steps */}
+                {/* 조리 순서 */}
                 <View style={styles.inputGroup}>
                     <Text style={styles.label}>조리 순서 (선택)</Text>
                     <Text style={styles.hint}>한 줄에 한 단계씩 입력해주세요</Text>
@@ -224,7 +224,7 @@ export default function CreatePostScreen({ onNavigate, user }) {
                     />
                 </View>
 
-                {/* Image Selection */}
+                {/* 이미지 선택 */}
                 <View style={styles.inputGroup}>
                     <Text style={styles.label}>사진 (선택)</Text>
                     <View style={styles.imagePickerContainer}>
@@ -253,7 +253,7 @@ export default function CreatePostScreen({ onNavigate, user }) {
                     </View>
                 </View>
 
-                {/* Tags */}
+                {/* 태그 */}
                 <View style={styles.inputGroup}>
                     <Text style={styles.label}>태그 선택</Text>
                     <View style={styles.tagContainer}>
@@ -275,7 +275,7 @@ export default function CreatePostScreen({ onNavigate, user }) {
                     </View>
                 </View>
 
-                {/* Image URL fallback */}
+                {/* 이미지 URL 대체 입력 */}
                 <View style={styles.inputGroup}>
                     <Text style={styles.label}>이미지 URL 직접 입력 (선택)</Text>
                     <TextInput
@@ -303,16 +303,26 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingBottom: 12,
-        backgroundColor: colors.surface,
+        paddingHorizontal: 20,
+        paddingBottom: 14,
+        backgroundColor: '#FFF7ED',
         borderBottomWidth: 1,
-        borderBottomColor: colors.border,
+        borderBottomColor: '#FED7AA',
+    },
+    headerIconButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 14,
+        backgroundColor: '#FFFFFF',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#FED7AA',
     },
     headerTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: colors.text,
+        fontSize: 20,
+        fontWeight: '800',
+        color: '#9A3412',
     },
     submitButton: {
         paddingHorizontal: 8,
