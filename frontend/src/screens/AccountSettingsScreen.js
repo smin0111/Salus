@@ -83,6 +83,57 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
             </View>}
 
             <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+                {/* 나의 멤버십 섹션 */}
+                <View style={styles.membershipCard}>
+                    <View style={styles.membershipHeader}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.membershipLabel}>나의 멤버십 등급</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, flexWrap: 'wrap', gap: 6 }}>
+                                <Text style={styles.membershipGrade}>
+                                    {user?.grade === 'PLUS' ? 'Salus PLUS 프리미엄' : 'Salus BASIC 일반'}
+                                </Text>
+                                <View style={[
+                                    styles.gradeBadge, 
+                                    { backgroundColor: user?.grade === 'PLUS' ? colors.primary : '#E5E7EB' }
+                                ]}>
+                                    <Text style={[
+                                        styles.gradeBadgeText, 
+                                        { color: user?.grade === 'PLUS' ? 'white' : '#4B5563' }
+                                    ]}>
+                                        {user?.grade === 'PLUS' ? 'PLUS' : 'BASIC'}
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+                        <Ionicons 
+                            name={user?.grade === 'PLUS' ? "sparkles" : "shield-outline"} 
+                            size={28} 
+                            color={user?.grade === 'PLUS' ? colors.primary : '#9CA3AF'} 
+                        />
+                    </View>
+
+                    {user?.grade !== 'PLUS' ? (
+                        <View style={styles.upgradeSection}>
+                            <Text style={styles.upgradeDesc}>
+                                PLUS 멤버십을 구독하시면 무제한 음성 인식 AI 셰프 제안 및 고급 읽어주기 기능을 이용할 수 있습니다.
+                            </Text>
+                            <TouchableOpacity 
+                                style={styles.upgradeButton} 
+                                onPress={() => onNavigate('upgrade')}
+                            >
+                                <Ionicons name="sparkles-outline" size={16} color="white" style={{ marginRight: 6 }} />
+                                <Text style={styles.upgradeButtonText}>플러스 멤버십 업그레이드</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        <View style={styles.upgradeSection}>
+                            <Text style={styles.activePremiumText}>
+                                ✨ 현재 모든 프리미엄 기능(음성 인식 및 고급 TTS 등)을 무제한으로 사용하고 계십니다!
+                            </Text>
+                        </View>
+                    )}
+                </View>
+
                 <View style={styles.noticeBand}>
                     <View style={styles.noticeIcon}>
                         <Ionicons name="shield-checkmark-outline" size={22} color="white" />
@@ -230,4 +281,86 @@ const styles = StyleSheet.create({
     },
     disabledButton: { opacity: 0.7 },
     deleteButtonText: { color: '#DC2626', fontSize: 15, fontWeight: '800' },
+    membershipCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        padding: 20,
+        marginBottom: 14,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    membershipHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+        paddingBottom: 16,
+        marginBottom: 16,
+    },
+    membershipLabel: {
+        fontSize: 12,
+        color: '#6B7280',
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    membershipGrade: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: '#1F2937',
+    },
+    gradeBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    gradeBadgeText: {
+        fontSize: 10,
+        fontWeight: '900',
+    },
+    upgradeSection: {
+        backgroundColor: '#FAF5FF',
+        borderRadius: 12,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#F3E8FF',
+    },
+    upgradeDesc: {
+        fontSize: 13,
+        color: '#6B21A8',
+        lineHeight: 20,
+        marginBottom: 14,
+        fontWeight: '500',
+    },
+    upgradeButton: {
+        backgroundColor: colors.primary,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        borderRadius: 10,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    upgradeButtonText: {
+        color: 'white',
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    activePremiumText: {
+        fontSize: 13,
+        color: '#B45309',
+        fontWeight: '600',
+        lineHeight: 18,
+        textAlign: 'center',
+    },
 });

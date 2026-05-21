@@ -2,6 +2,7 @@ import React from 'react';
 import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
+import { useAuth } from '../context/AuthContext';
 
 const FEATURES = [
     {
@@ -25,6 +26,15 @@ const STEPS = ['건강정보 입력', '냉장고 재료 등록', 'AI에게 메�
 
 export default function LandingPageScreen({ onNavigate }) {
     const isWeb = Platform.OS === 'web';
+    const { isLoggedIn, user } = useAuth();
+
+    const handleStartAction = () => {
+        if (isLoggedIn) {
+            onNavigate('chat');
+        } else {
+            onNavigate('login');
+        }
+    };
 
     return (
         <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -36,12 +46,23 @@ export default function LandingPageScreen({ onNavigate }) {
                     <Text style={styles.brandText}>Salus</Text>
                 </View>
                 <View style={styles.navActions}>
-                    <TouchableOpacity style={styles.ghostButton} onPress={() => onNavigate('login')}>
-                        <Text style={styles.ghostButtonText}>로그인</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.darkButton} onPress={() => onNavigate('chat')}>
-                        <Text style={styles.darkButtonText}>시작하기</Text>
-                    </TouchableOpacity>
+                    {isLoggedIn ? (
+                        <>
+                            <Text style={styles.welcomeText}>{user?.name || '사용자'}님 환영합니다</Text>
+                            <TouchableOpacity style={styles.darkButton} onPress={() => onNavigate('chat')}>
+                                <Text style={styles.darkButtonText}>AI 채팅</Text>
+                            </TouchableOpacity>
+                        </>
+                    ) : (
+                        <>
+                            <TouchableOpacity style={styles.ghostButton} onPress={() => onNavigate('login')}>
+                                <Text style={styles.ghostButtonText}>로그인</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.darkButton} onPress={handleStartAction}>
+                                <Text style={styles.darkButtonText}>시작하기</Text>
+                            </TouchableOpacity>
+                        </>
+                    )}
                 </View>
             </View>
 
@@ -53,7 +74,7 @@ export default function LandingPageScreen({ onNavigate }) {
                         Salus는 오늘 가진 재료와 건강 조건을 함께 보고, 먹기 좋은 한 끼를 차분하게 제안하는 개인 식탁 도우미입니다.
                     </Text>
                     <View style={styles.heroActions}>
-                        <TouchableOpacity style={styles.darkButtonLarge} onPress={() => onNavigate('chat')}>
+                        <TouchableOpacity style={styles.darkButtonLarge} onPress={handleStartAction}>
                             <Text style={styles.darkButtonText}>AI 셰프에게 묻기</Text>
                             <Ionicons name="arrow-forward" size={17} color="white" />
                         </TouchableOpacity>
@@ -154,7 +175,13 @@ const styles = StyleSheet.create({
     navActions: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: 12,
+    },
+    welcomeText: {
+        color: '#5F6368',
+        fontSize: 14,
+        fontWeight: '500',
+        marginRight: 4,
     },
     ghostButton: {
         paddingHorizontal: 14,

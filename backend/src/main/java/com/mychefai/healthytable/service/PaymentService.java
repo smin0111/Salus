@@ -31,7 +31,7 @@ public class PaymentService {
     @Value("${iamport.api.secret:ekKoeW8RyKuT0zgaZsUtXXTLQ4AhPFW3ZGseDA6bkA5lamv9OqDMnxyeB9wqOsuO9W3Mx9YSJ4dTqJ3f}")
     private String iamportApiSecret;
 
-    private static final int SUBSCRIPTION_AMOUNT = 10000;
+    private static final int SUBSCRIPTION_AMOUNT = 9900;
 
     /**
      * 포트원 결제내역 단건조회 API를 호출하여 결제 금액의 위변조 여부를 검증하고, 유저 등급을 업그레이드합니다.

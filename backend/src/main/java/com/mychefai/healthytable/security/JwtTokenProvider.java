@@ -11,13 +11,17 @@ import java.util.Date;
 @Component
 public class JwtTokenProvider {
 
-    @Value("${jwt.secret:mychefaisecretkeymychefaisecretkeymychefaisecretkey}")
+    @Value("${jwt.secret}")
     private String secretKey;
 
     private final long VALIDITY_IN_MS = 3600000; // 1h
 
     private Key getSigningKey() {
-        return Keys.hmacShaKeyFor(secretKey.getBytes());
+        byte[] keyBytes = secretKey.getBytes();
+        if (keyBytes.length < 32) {
+            throw new IllegalArgumentException("JWT 시크릿 키는 보안을 위해 반드시 최소 32바이트(256비트) 이상이어야 합니다!");
+        }
+        return Keys.hmacShaKeyFor(keyBytes);
     }
 
     public String createToken(String userId) {
