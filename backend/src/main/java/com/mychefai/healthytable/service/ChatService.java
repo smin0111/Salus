@@ -4,7 +4,6 @@ import com.mychefai.healthytable.domain.FridgeItem;
 import com.mychefai.healthytable.domain.ChatMessage;
 import com.mychefai.healthytable.domain.ChatSession;
 import com.mychefai.healthytable.domain.HealthCheckup;
-import com.mychefai.healthytable.domain.HealthProfile;
 import com.mychefai.healthytable.domain.User;
 import com.mychefai.healthytable.dto.HealthCheckupAnalysisDTO;
 import com.mychefai.healthytable.dto.ChatDto;
@@ -34,7 +33,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ChatService {
 
-    private final GeminiService geminiService;
+    private final LlmService llmService; // GeminiService 대신 인터페이스 다형성 주입 적용
     private final FridgeItemRepository fridgeItemRepository;
     private final HealthProfileRepository healthProfileRepository;
     private final HealthCheckupRepository healthCheckupRepository;
@@ -189,7 +188,8 @@ public class ChatService {
         Long userIdForWork = authenticatedUserId.orElse(null);
         Long sessionIdForWork = chatSession != null ? chatSession.getId() : null;
 
-        return geminiService.getChatResponse(finalMessage, history)
+        // 다형성 LlmService 호출 적용
+        return llmService.getChatResponse(finalMessage, history)
                 .map(reply -> {
                     if (chatSession != null) {
                         saveChatMessage(chatSession, "model", reply);
