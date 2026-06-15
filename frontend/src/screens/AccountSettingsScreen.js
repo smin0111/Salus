@@ -21,19 +21,24 @@ const SUMMARY_LABELS = [
 ];
 
 export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, webMode = false }) {
-    const { user, logout } = useAuth();
+    const { user, token, logout } = useAuth();
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
-        fetchSummary();
-    }, []);
+        if (token) {
+            fetchSummary();
+        }
+    }, [token]);
 
     const fetchSummary = async () => {
+        if (!token) return;
         setLoading(true);
         try {
-            const response = await axios.get(`${config.API_BASE_URL}/users/me/data-summary`);
+            const response = await axios.get(`${config.API_BASE_URL}/users/me/data-summary`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             setSummary(response.data);
         } catch (error) {
             console.error('데이터 요약 조회 실패:', error);
@@ -54,9 +59,12 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
     };
 
     const deleteAccount = async () => {
+        if (!token) return;
         setDeleting(true);
         try {
-            await axios.delete(`${config.API_BASE_URL}/users/me`);
+            await axios.delete(`${config.API_BASE_URL}/users/me`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             await logout();
             Alert.alert('삭제 완료', '계정과 개인 데이터가 삭제되었습니다.');
             onNavigate('chat');

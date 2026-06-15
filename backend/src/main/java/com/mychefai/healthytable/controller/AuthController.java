@@ -4,6 +4,7 @@ import com.mychefai.healthytable.domain.User;
 import com.mychefai.healthytable.dto.LoginRequestDTO;
 import com.mychefai.healthytable.repository.UserRepository;
 import com.mychefai.healthytable.security.JwtTokenProvider;
+import com.mychefai.healthytable.dto.UserResponseDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,10 +23,10 @@ public class AuthController {
     @PostMapping("/api/auth/google")
     public ResponseEntity<?> loginGoogle(@RequestBody LoginRequestDTO request) {
         try {
-            // 1. Verify Token with Google
+            // 1. 구글을 통한 액세스 토큰 검증
             Map<String, Object> googleUser = oAuthService.verifyGoogleToken(request.getAccessToken());
 
-            // 2. Extract User Info
+            // 2. 사용자 정보 추출
             String email = (String) googleUser.get("email");
             String name = (String) googleUser.get("name");
 
@@ -39,10 +40,10 @@ public class AuthController {
     @SuppressWarnings("unchecked")
     public ResponseEntity<?> loginKakao(@RequestBody LoginRequestDTO request) {
         try {
-            // 1. Verify Token with Kakao
+            // 1. 카카오를 통한 액세스 토큰 검증
             Map<String, Object> kakaoUser = oAuthService.verifyKakaoToken(request.getAccessToken());
 
-            // 2. Extract User Info (Kakao structure is nested)
+            // 2. 사용자 정보 추출 (카카오 구조는 계층형으로 구성됨)
             Map<String, Object> kakaoAccount = (Map<String, Object>) kakaoUser.get("kakao_account");
             if (kakaoAccount == null) {
                 throw new RuntimeException("kakao_account is null");
@@ -111,7 +112,7 @@ public class AuthController {
             User user = userRepository.findById(userId).orElse(null);
             if (user == null)
                 return ResponseEntity.status(404).body("User not found");
-            return ResponseEntity.ok(user);
+            return ResponseEntity.ok(UserResponseDTO.from(user));
         } catch (Exception e) {
             return ResponseEntity.status(401).body("Invalid token");
         }
@@ -131,6 +132,6 @@ public class AuthController {
 
         return ResponseEntity.ok(Map.of(
                 "token", token,
-                "user", user));
+                "user", UserResponseDTO.from(user)));
     }
 }

@@ -30,7 +30,7 @@ export default function SearchScreen({ onBack, onNavigate, user, webMode = false
         setHasSearched(true);
         try {
             const response = await axios.get(
-                `${config.API_BASE_URL}/community/posts/search?keyword=${encodeURIComponent(searchQuery)}&currentUserId=${user?.id || ''}`
+                `${config.API_BASE_URL}/community/posts/search?keyword=${encodeURIComponent(searchQuery)}`
             );
             setResults(response.data);
         } catch (error) {

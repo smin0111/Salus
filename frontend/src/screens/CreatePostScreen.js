@@ -97,7 +97,6 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
                 .filter(item => item.length > 0);
 
             console.log('게시글 작성 요청:', {
-                userId: user?.id,
                 title: title.trim(),
                 content: content.trim(),
                 ingredients: ingredients.length > 0 ? ingredients : null,
@@ -107,7 +106,6 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
             });
 
             const response = await axios.post(`${config.API_BASE_URL}/community/posts`, {
-                userId: user?.id,
                 title: title.trim(),
                 content: content.trim(),
                 ingredients: ingredients.length > 0 ? ingredients : null,

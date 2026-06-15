@@ -18,7 +18,7 @@ public class OAuthService {
     @Value("${naver.client.secret:}")
     private String naverClientSecret;
 
-    // Google Token Verification
+    // 구글 토큰 유효성 검증
     @SuppressWarnings("unchecked")
     public Map<String, Object> verifyGoogleToken(String accessToken) {
         return webClientBuilder.build()
@@ -30,7 +30,7 @@ public class OAuthService {
                 .block();
     }
 
-    // Kakao Token Verification
+    // 카카오 토큰 유효성 검증
     @SuppressWarnings("unchecked")
     public Map<String, Object> verifyKakaoToken(String accessToken) {
         return webClientBuilder.build()

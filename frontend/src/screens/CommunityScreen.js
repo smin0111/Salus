@@ -5,8 +5,10 @@ import axios from 'axios';
 import { colors } from '../theme/colors';
 import config from '../config';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '../context/AuthContext';
 
 export default function CommunityScreen({ onToggleSidebar, onNavigate, user, webMode = false }) {
+    const { token } = useAuth();
     const insets = useSafeAreaInsets();
     const [activeTab, setActiveTab] = useState('recommendation'); // 'recommendation' or 'feed'
     const [aiRecommendations, setAiRecommendations] = useState([]);
@@ -36,10 +38,11 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user, web
 
     // AI 추천 목록 조회
     const fetchAIRecommendations = async () => {
-        if (!user?.id) return;
+        if (!user?.id || !token) return;
         try {
             const response = await axios.get(
-                `${config.API_BASE_URL}/community/recommendations?userId=${user.id}`
+                `${config.API_BASE_URL}/community/recommendations`,
+                { headers: { Authorization: `Bearer ${token}` } }
             );
             setAiRecommendations(response.data);
         } catch (error) {
@@ -51,7 +54,7 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user, web
     const fetchPopularPosts = async () => {
         try {
             const response = await axios.get(
-                `${config.API_BASE_URL}/community/posts/popular?currentUserId=${user?.id || ''}&limit=10&timeframe=${popularTimeframe}`
+                `${config.API_BASE_URL}/community/posts/popular?limit=10&timeframe=${popularTimeframe}`
             );
             setPopularPosts(response.data);
         } catch (error) {
@@ -63,7 +66,7 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user, web
     const fetchFeed = async () => {
         try {
             const response = await axios.get(
-                `${config.API_BASE_URL}/community/posts?currentUserId=${user?.id || ''}`
+                `${config.API_BASE_URL}/community/posts`
             );
             setFeedPosts(response.data);
         } catch (error) {

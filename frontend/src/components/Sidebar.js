@@ -25,7 +25,7 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
     const insets = useSafeAreaInsets();
     const { user, isLoggedIn, logout, refreshUser } = useAuth();
 
-    // Subscription Modal State
+    // 구독 멤버십 모달 상태
     const [subscriptionModalVisible, setSubscriptionModalVisible] = useState(false);
 
     return (
@@ -60,7 +60,7 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                                 style={[
                                     styles.menuItem,
                                     currentScreen === item.id && styles.menuItemSelected,
-                                    currentScreen === item.id && { backgroundColor: item.color + '15' } // 10% opacity
+                                    currentScreen === item.id && { backgroundColor: item.color + '15' } // 10% 투명도로 배경색 처리
                                 ]}
                                 onPress={() => {
                                     onNavigate(item.id);
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'white',
         height: '100%',
         padding: 20,
-        // Removed border radius for standard side drawer look
+        // 표준적인 슬라이드 메뉴 형태를 위해 테두리 둥글기 제거
         shadowColor: "#000",
         shadowOffset: { width: 2, height: 0 },
         shadowOpacity: 0.1,
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
         position: 'relative',
     },
     menuItemSelected: {
-        // bg handled inline
+        // 배경색(Background)은 인라인으로 처리함
     },
     iconBox: {
         width: 36,

@@ -18,6 +18,61 @@ const cleanAiResponse = (text) => {
         .trim();
 };
 
+const parseRecipeFromText = (text) => {
+    if (!text || !text.includes('[재료]') || !text.includes('[조리 순서]')) {
+        return null;
+    }
+
+    const title = (text.split('\n').find(line => line.trim()) || '')
+        .replace(' 레시피입니다.', '')
+        .trim();
+    const description = text
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .find(line => !line.includes('레시피입니다.') && !line.includes('조리 시간:') && !line.startsWith('[') && !line.startsWith('- ') && !/^\d+\./.test(line));
+    const summaryLine = text.split('\n').find(line => line.includes('조리 시간:') || line.includes('열량:') || line.includes('난이도:')) || '';
+    const ingredientsBlock = text.split('[재료]')[1]?.split('[조리 순서]')[0] || '';
+    const stepsBlock = text.split('[조리 순서]')[1]?.split('위 내용은')[0] || '';
+    const safetyBlock = text.includes('[건강 주의]')
+        ? text.split('[건강 주의]')[1]?.split('[재료]')[0] || ''
+        : '';
+
+    const ingredients = ingredientsBlock
+        .split('\n')
+        .map(line => line.replace(/^- /, '').trim())
+        .filter(Boolean);
+    const steps = stepsBlock
+        .split('\n')
+        .map(line => line.replace(/^\d+\.\s*/, '').trim())
+        .filter(Boolean);
+    const safetyNotes = safetyBlock
+        .split('\n')
+        .map(line => line.replace(/^- /, '').trim())
+        .filter(Boolean);
+
+    const calories = summaryLine.match(/열량:\s*(\d+)/)?.[1];
+    const cookingTime = summaryLine.match(/조리 시간:\s*(\d+)/)?.[1];
+    const difficulty = summaryLine.match(/난이도:\s*(\d+)/)?.[1];
+
+    return {
+        title,
+        description,
+        ingredients,
+        steps,
+        safetyNotes,
+        calories: calories ? Number(calories) : null,
+        cookingTime: cookingTime ? Number(cookingTime) : null,
+        difficulty: difficulty ? Number(difficulty) : null,
+    };
+};
+
+const initialGreeting = {
+    id: 1,
+    text: '안녕하세요! 건강한 식탁을 위한 Salus입니다.\n알레르기나 건강 정보를 알려주시면 더 안전한 레시피를 추천해드려요.',
+    sender: 'ai'
+};
+
 const Typewriter = ({ text, onComplete }) => {
     const [displayedText, setDisplayedText] = useState('');
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -34,10 +89,84 @@ const Typewriter = ({ text, onComplete }) => {
         }
     }, [currentIndex, text]);
 
-    return <Text style={styles.aiText}>{displayedText}</Text>;
+    return <Text style={[styles.messageText, styles.aiText]} selectable={true}>{displayedText}</Text>;
 };
 
-const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, openPlanModal, handleStreamingComplete }) => {
+const RecipeMessageCard = ({ recipe }) => {
+    if (!recipe) return null;
+
+    const metaItems = [
+        recipe.cookingTime ? `${recipe.cookingTime}분` : null,
+        recipe.calories ? `${recipe.calories}kcal` : null,
+        recipe.difficulty ? `난이도 ${recipe.difficulty}` : null,
+    ].filter(Boolean);
+
+    return (
+        <View style={styles.recipeMessageCard}>
+            <View style={styles.recipeCardHeader}>
+                <View style={styles.recipeTitleGroup}>
+                    <Text style={styles.recipeCardTitle}>{recipe.title || '레시피'}</Text>
+                    {!!recipe.description && <Text style={styles.recipeCardDescription}>{recipe.description}</Text>}
+                </View>
+                <Ionicons name="restaurant-outline" size={22} color={colors.primary} />
+            </View>
+
+            {metaItems.length > 0 && (
+                <View style={styles.recipeMetaRow}>
+                    {metaItems.map(item => (
+                        <View key={item} style={styles.recipeMetaChip}>
+                            <Text style={styles.recipeMetaText}>{item}</Text>
+                        </View>
+                    ))}
+                </View>
+            )}
+
+            {recipe.safetyNotes?.length > 0 && (
+                <View style={styles.recipeSafetyBox}>
+                    <View style={styles.recipeSectionTitleRow}>
+                        <Ionicons name="shield-checkmark-outline" size={16} color="#B45309" />
+                        <Text style={styles.recipeSafetyTitle}>건강 주의</Text>
+                    </View>
+                    {recipe.safetyNotes.map((note, index) => (
+                        <Text key={`${note}-${index}`} style={styles.recipeSafetyText}>- {note}</Text>
+                    ))}
+                </View>
+            )}
+
+            {recipe.ingredients?.length > 0 && (
+                <View style={styles.recipeSection}>
+                    <Text style={styles.recipeSectionTitle}>재료</Text>
+                    <View style={styles.ingredientGrid}>
+                        {recipe.ingredients.map((ingredient, index) => (
+                            <Text key={`${ingredient}-${index}`} style={styles.ingredientPill}>{ingredient}</Text>
+                        ))}
+                    </View>
+                </View>
+            )}
+
+            {recipe.steps?.length > 0 && (
+                <View style={styles.recipeSection}>
+                    <Text style={styles.recipeSectionTitle}>조리 순서</Text>
+                    {recipe.steps.map((step, index) => (
+                        <View key={`${index}-${step}`} style={styles.recipeStepRow}>
+                            <Text style={styles.recipeStepNumber}>{index + 1}</Text>
+                            <Text style={styles.recipeStepText}>{step}</Text>
+                        </View>
+                    ))}
+                </View>
+            )}
+        </View>
+    );
+};
+
+const RecipePreparing = () => (
+    <View style={styles.recipePreparingBox}>
+        <ActivityIndicator size="small" color={colors.primary} />
+        <Text style={styles.recipePreparingText}>레시피를 보기 좋게 정리하고 있어요...</Text>
+    </View>
+);
+
+const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, openPlanModal, handleStreamingComplete, copiedMessageId, setCopiedMessageId }) => {
     const scaleAnim = useRef(new Animated.Value(0.95)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
     const isHovered = useRef(new Animated.Value(1)).current;
@@ -78,6 +207,8 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
         }
     };
 
+    const recipe = item.sender === 'ai' && !item.isPreparingRecipe ? (item.recipe || parseRecipeFromText(item.text)) : null;
+
     return (
         <Animated.View
             style={[
@@ -93,7 +224,11 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
                 </View>
             )}
             <View style={{ flexShrink: 1 }}>
-                {item.sender === 'ai' && item.isTyping ? (
+                {item.isPreparingRecipe ? (
+                    <RecipePreparing />
+                ) : recipe ? (
+                    <RecipeMessageCard recipe={recipe} />
+                ) : item.sender === 'ai' && item.isTyping ? (
                     <Typewriter
                         text={item.text}
                         onComplete={() => handleStreamingComplete(item.id)}
@@ -112,6 +247,28 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
                 {/* AI Message Actions */}
                 {item.sender === 'ai' && !item.isTyping && (
                     <View style={styles.messageActions}>
+                        {/* Copy Button */}
+                        <TouchableOpacity
+                            style={styles.actionIconButton}
+                            onPress={() => {
+                                const textToCopy = item.text || '';
+                                if (Platform.OS === 'web') {
+                                    navigator.clipboard.writeText(textToCopy).then(() => {
+                                        setCopiedMessageId(item.id);
+                                        setTimeout(() => setCopiedMessageId(null), 2000);
+                                    }).catch(() => {});
+                                } else {
+                                    Alert.alert('복사 완료', '답변이 클립보드에 복사되었습니다.');
+                                }
+                            }}
+                        >
+                            <Ionicons
+                                name={copiedMessageId === item.id ? "checkmark-circle" : "copy-outline"}
+                                size={16}
+                                color={copiedMessageId === item.id ? "#10B981" : "#9CA3AF"}
+                            />
+                        </TouchableOpacity>
+
                         {/* TTS Button */}
                         <TouchableOpacity
                             style={styles.actionIconButton}
@@ -149,8 +306,15 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
 };
 
 export default function ChatScreen({ messages, setMessages, healthProfile, setMealData, isSidebarOpen, onToggleSidebar, onLoginPress, webMode = false }) {
-    const { isLoggedIn, user } = useAuth();
+    const { isLoggedIn, user, token } = useAuth();
     const [inputText, setInputText] = useState('');
+    const [inputHeight, setInputHeight] = useState(Platform.OS === 'web' ? 26 : 36);
+
+    useEffect(() => {
+        if (!inputText) {
+            setInputHeight(Platform.OS === 'web' ? 26 : 36);
+        }
+    }, [inputText]);
 
     const [loading, setLoading] = useState(false);
     const [useFridge, setUseFridge] = useState(true); // 기본값 ON
@@ -160,6 +324,8 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     const [editingSession, setEditingSession] = useState(null);
     const [editingSessionTitle, setEditingSessionTitle] = useState('');
     const flatListRef = useRef(null);
+    const authEpochRef = useRef(0);
+    const requestSeqRef = useRef(0);
 
     // 식단 추가 모달
     const [modalVisible, setModalVisible] = useState(false);
@@ -172,6 +338,9 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     // TTS 상태
     const [speakingMessageId, setSpeakingMessageId] = useState(null);
     const [bestVoice, setBestVoice] = useState(null);
+
+    // 복사 상태
+    const [copiedMessageId, setCopiedMessageId] = useState(null);
 
     // 요리 모드 상태
     const [isCookingMode, setIsCookingMode] = useState(false);
@@ -204,18 +373,49 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         findBestVoice();
     }, []);
 
+    // 로그인 상태 변경 시 전체 초기화 (사용자 전환 대응)
     useEffect(() => {
+        authEpochRef.current += 1;
+        requestSeqRef.current += 1;
+        setLoading(false);
+        setInputText('');
+        setChatSessionId(null);
+        setRenameModalVisible(false);
+        setEditingSession(null);
+        setEditingSessionTitle('');
+        setModalVisible(false);
+        setSelectedMessageId(null);
+        setSelectedRecipeToAdd(null);
+        setRecipeDetails({ title: '', fullText: '' });
+        setIsCookingMode(false);
+        setIsListening(false);
+        setSpeakingMessageId(null);
+        Speech.stop();
+
         if (isLoggedIn) {
-            fetchChatSessions();
+            setMessages([initialGreeting]);
+            if (token) {
+                fetchChatSessions();
+            }
         } else {
-            setChatSessionId(null);
             setChatSessions([]);
+            setMessages([initialGreeting]);
         }
-    }, [isLoggedIn]);
+    }, [isLoggedIn, user?.id, token]);
+
+    // 컴포넌트 마운트 및 토큰 준비 시 세션 목록 복원
+    useEffect(() => {
+        if (isLoggedIn && token) {
+            fetchChatSessions();
+        }
+    }, [isLoggedIn, token]);
 
     const fetchChatSessions = async () => {
+        if (!token) return;
         try {
-            const response = await axios.get(`${config.API_BASE_URL}/chat/sessions`);
+            const response = await axios.get(`${config.API_BASE_URL}/chat/sessions`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             setChatSessions(response.data || []);
         } catch (error) {
             console.log('Failed to fetch chat sessions:', error.message);
@@ -223,8 +423,11 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     };
 
     const loadChatSession = async (sessionId) => {
+        if (!token) return;
         try {
-            const response = await axios.get(`${config.API_BASE_URL}/chat/sessions/${sessionId}/messages`);
+            const response = await axios.get(`${config.API_BASE_URL}/chat/sessions/${sessionId}/messages`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             const loadedMessages = (response.data || []).map((msg, index) => ({
                 id: `${sessionId}-${index}-${Date.now()}`,
                 text: msg.content,
@@ -240,9 +443,15 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     };
 
     const startNewChat = () => {
+        requestSeqRef.current += 1;
         setChatSessionId(null);
-        setMessages([]);
+        setMessages([initialGreeting]);
         setInputText('');
+        setLoading(false);
+        // 새 대화 전환 시 이전 세션 목록을 최신 상태로 갱신
+        if (isLoggedIn) {
+            fetchChatSessions();
+        }
     };
 
     const getErrorMessage = (error, fallback) => {
@@ -263,7 +472,11 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
 
         try {
-            const response = await axios.patch(`${config.API_BASE_URL}/chat/sessions/${editingSession.id}`, { title });
+            const response = await axios.patch(
+                `${config.API_BASE_URL}/chat/sessions/${editingSession.id}`,
+                { title },
+                { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+            );
             const updatedSession = response.data;
             setChatSessions(prev => prev.map(session =>
                 session.id === updatedSession.id ? updatedSession : session
@@ -277,6 +490,14 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     };
 
     const confirmDeleteSession = (session) => {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const confirmed = window.confirm(`'${session.title || '대화'}' 대화를 삭제할까요?`);
+            if (confirmed) {
+                deleteSession(session);
+            }
+            return;
+        }
+
         Alert.alert(
             '대화 삭제',
             `'${session.title || '대화'}' 대화를 삭제할까요?`,
@@ -293,11 +514,15 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
     const deleteSession = async (session) => {
         try {
-            await axios.delete(`${config.API_BASE_URL}/chat/sessions/${session.id}`);
+            await axios.delete(`${config.API_BASE_URL}/chat/sessions/${session.id}`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
+            requestSeqRef.current += 1;
             setChatSessions(prev => prev.filter(item => item.id !== session.id));
             if (chatSessionId === session.id) {
                 startNewChat();
             }
+            await fetchChatSessions();
         } catch (error) {
             Alert.alert('오류', getErrorMessage(error, '대화를 삭제하지 못했습니다.'));
         }
@@ -372,6 +597,10 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         const messageText = typeof text === 'string' ? text : inputText;
         if (!messageText.trim()) return;
 
+        const requestEpoch = authEpochRef.current;
+        const requestSeq = requestSeqRef.current + 1;
+        requestSeqRef.current = requestSeq;
+
         const userMessage = { id: Date.now(), text: messageText, sender: 'user' };
         setMessages(prev => [...prev, userMessage]);
         setInputText('');
@@ -379,7 +608,11 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
         // AI 사용 활동 기록
         if (isLoggedIn) {
-            axios.post(`${config.API_BASE_URL}/activities/log`, { isAi: true }).catch(e => console.log("AI Activity log failed", e));
+            axios.post(
+                `${config.API_BASE_URL}/activities/log`,
+                { isAi: true },
+                { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+            ).catch(e => console.log("AI Activity log failed", e));
         }
 
         try {
@@ -391,14 +624,23 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
             console.log('[DEBUG] Sending to AI:', { useFridge, messageText });
 
-            const response = await axios.post(`${config.API_BASE_URL}/chat/message`, {
-                sessionId: chatSessionId,
-                message: messageText,
-                history: history,
-                useFridge: useFridge
-            });
+            const response = await axios.post(
+                `${config.API_BASE_URL}/chat/message`,
+                {
+                    sessionId: chatSessionId,
+                    message: messageText,
+                    history: history,
+                    useFridge: useFridge
+                },
+                { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+            );
 
             console.log('[DEBUG] AI Response received');
+
+            if (requestEpoch !== authEpochRef.current || requestSeq !== requestSeqRef.current) {
+                console.log('[DEBUG] Chat state changed during request. Discarding AI response.');
+                return;
+            }
 
             const rawAiText = response.data.reply;
             const cleanedText = cleanAiResponse(rawAiText);
@@ -409,8 +651,10 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             const aiMessage = {
                 id: Date.now() + 1,
                 text: cleanedText,
+                recipe: response.data.recipe,
                 sender: 'ai',
-                isTyping: true,
+                isTyping: !response.data.recipe,
+                isPreparingRecipe: Boolean(response.data.recipe),
                 isMealSaved: Boolean(response.data.mealSaved),
             };
 
@@ -418,7 +662,19 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 const nextMessages = response.data.mealSaved ? markLatestAiRecipeSaved(prev) : prev;
                 return [...nextMessages, aiMessage];
             });
-            fetchChatSessions();
+
+            if (response.data.recipe) {
+                setTimeout(() => {
+                    setMessages(prev => prev.map(message =>
+                        message.id === aiMessage.id
+                            ? { ...message, isPreparingRecipe: false }
+                            : message
+                    ));
+                }, 650);
+            }
+            if (isLoggedIn) {
+                fetchChatSessions();
+            }
 
             // 요리 모드에서는 AI 응답을 자동으로 읽어줌
             if (isCookingMode) {
@@ -434,10 +690,14 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             }
         } catch (error) {
             console.error(error);
-            const errorMessage = { id: Date.now() + 1, text: '죄송해요, 연결이 원활하지 않네요. 다시 말씀해 주시겠어요?', sender: 'ai' };
-            setMessages(prev => [...prev, errorMessage]);
+            if (requestEpoch === authEpochRef.current && requestSeq === requestSeqRef.current) {
+                const errorMessage = { id: Date.now() + 1, text: '죄송해요, 연결이 원활하지 않네요. 다시 말씀해 주시겠어요?', sender: 'ai' };
+                setMessages(prev => [...prev, errorMessage]);
+            }
         } finally {
-            setLoading(false);
+            if (requestEpoch === authEpochRef.current && requestSeq === requestSeqRef.current) {
+                setLoading(false);
+            }
         }
     };
 
@@ -556,7 +816,9 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 mealDetails: detailsPayload
             };
 
-            await axios.post(`${config.API_BASE_URL}/meallogs`, payload);
+            await axios.post(`${config.API_BASE_URL}/meallogs`, payload, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
 
             Alert.alert("저장 완료", "식단에 추가되었습니다.");
             setMessages(prev => prev.map(message =>
@@ -591,6 +853,8 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             isLoggedIn={isLoggedIn}
             openPlanModal={openPlanModal}
             handleStreamingComplete={handleStreamingComplete}
+            copiedMessageId={copiedMessageId}
+            setCopiedMessageId={setCopiedMessageId}
         />
     );
 
@@ -659,6 +923,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                     </TouchableOpacity>
                     <FlatList
                         horizontal
+                        style={{ flex: 1 }}
                         data={chatSessions}
                         keyExtractor={(item) => item.id.toString()}
                         showsHorizontalScrollIndicator={false}
@@ -704,163 +969,117 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 </View>
             )}
 
-            {messages.length <= 1 ? (
-                // 콘텐츠 없을 때 입력창이 중앙에 위치
-                <View style={[styles.centeredInputContainer, webMode && styles.webCenteredInputContainer]}>
-                    <View style={styles.emptyStateContent}>
-                        <Text style={[styles.emptyTitle, webMode && styles.webEmptyTitle]}>무엇을 도와드릴까요?</Text>
-                        {webMode && (
-                            <Text style={styles.webEmptySubtitle}>
-                                가진 재료, 피하고 싶은 성분, 원하는 조리시간을 자연스럽게 말해보세요.
-                            </Text>
-                        )}
-                        <View style={styles.suggestionChips}>
-                            <TouchableOpacity
-                                style={styles.suggestionChip}
-                                onPress={() => { setInputText('냉장고 재료로 만들 수 있는 요리'); }}
-                            >
-                                <Text style={styles.suggestionText}>냉장고 재료로 만들 수 있는 요리</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.suggestionChip}
-                                onPress={() => { setInputText('간단한 10분 컷 아침 식사'); }}
-                            >
-                                <Text style={styles.suggestionText}>간단한 10분 컷 아침 식사</Text>
-                            </TouchableOpacity>
+            {/* 메인 콘텐츠 영역: 대화가 없으면 중앙 환영 UI를 띄우고, 대화가 있으면 리스트를 띄움 */}
+            <View style={{ flex: 1 }}>
+                {messages.length <= 1 ? (
+                    <View style={[styles.centeredInputContainer, webMode && styles.webCenteredInputContainer]}>
+                        <View style={styles.emptyStateContent}>
+                            <Text style={[styles.emptyTitle, webMode && styles.webEmptyTitle]}>무엇을 도와드릴까요?</Text>
+                            {webMode && (
+                                <Text style={styles.webEmptySubtitle}>
+                                    가진 재료, 피하고 싶은 성분, 원하는 조리시간을 자연스럽게 말해보세요.
+                                </Text>
+                            )}
+                            <View style={styles.suggestionChips}>
+                                <TouchableOpacity
+                                    style={styles.suggestionChip}
+                                    onPress={() => { setInputText('냉장고 재료로 만들 수 있는 요리'); }}
+                                >
+                                    <Text style={styles.suggestionText}>냉장고 재료로 만들 수 있는 요리</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.suggestionChip}
+                                    onPress={() => { setInputText('간단한 10분 컷 아침 식사'); }}
+                                >
+                                    <Text style={styles.suggestionText}>간단한 10분 컷 아침 식사</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
+                ) : (
+                    <>
+                        <FlatList
+                            ref={flatListRef}
+                            data={messages}
+                            renderItem={renderItem}
+                            keyExtractor={item => item.id.toString()}
+                            contentContainerStyle={[styles.listContent, webMode && styles.webListContent]}
+                            style={styles.list}
+                        />
 
-                    {/* Centered Input */}
-                    <KeyboardAvoidingView
-                        behavior={Platform.OS === "ios" ? "padding" : "height"}
-                        keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
-                        style={{ width: '100%' }}
-                    >
-                        {isLoggedIn && (
-                            <View style={styles.optionsBar}>
-                                <TouchableOpacity
-                                    style={[styles.fridgeChip, useFridge && styles.fridgeChipActive]}
-                                    onPress={() => setUseFridge(!useFridge)}
-                                    activeOpacity={0.8}
-                                >
-                                    <View style={[styles.fridgeIndicator, { backgroundColor: useFridge ? '#10B981' : '#9CA3AF' }]} />
-                                    <Ionicons
-                                        name={useFridge ? "restaurant" : "restaurant-outline"}
-                                        size={14}
-                                        color={useFridge ? "white" : "#6B7280"}
-                                    />
-                                    <Text style={[styles.fridgeChipText, useFridge && styles.fridgeChipTextActive]}>
-                                        {useFridge ? "내 냉장고 기반 추천" : "일반 레시피 추천"}
-                                    </Text>
-                                    {useFridge && (
-                                        <View style={styles.activeBadge}>
-                                            <Text style={styles.activeBadgeText}>ON</Text>
-                                        </View>
-                                    )}
-                                </TouchableOpacity>
+                        {loading && (
+                            <View style={styles.loadingContainer}>
+                                <ActivityIndicator size="small" color={colors.secondary} />
+                                <Text style={styles.loadingText}>답변을 생각하고 있어요...</Text>
                             </View>
                         )}
-                        <View style={styles.inputFloatingContainer}>
-                            <View style={styles.inputWrapper}>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="무엇이든 물어보세요"
-                                    placeholderTextColor="#9CA3AF"
-                                    value={inputText}
-                                    onChangeText={setInputText}
-                                    onKeyPress={handleKeyPress}
-                                    multiline
-                                    numberOfLines={1}
+                    </>
+                )}
+            </View>
+
+            {/* 입력창 및 옵션 바: 단일 마운트 인스턴스로 유지하여 키보드 튕김 및 입력 포커스 유실 버그 완벽 방지 */}
+            <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+                style={styles.inputContainerWrapper}
+            >
+                <View style={styles.inputFloatingContainer}>
+                    <View style={styles.inputWrapper}>
+                        {isLoggedIn && (
+                            <TouchableOpacity
+                                style={[styles.fridgeToggleBtn, useFridge && styles.fridgeToggleBtnActive]}
+                                onPress={() => setUseFridge(!useFridge)}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons
+                                    name={useFridge ? "restaurant" : "restaurant-outline"}
+                                    size={20}
+                                    color={useFridge ? colors.primary : "#9CA3AF"}
                                 />
-                                <TouchableOpacity style={styles.micButton} onPress={() => Alert.alert("준비 중", "음성 인식 기능은 준비 중입니다.")}>
-                                    <Ionicons name="mic-outline" size={24} color="#4B5563" />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.sendButton, { backgroundColor: inputText.trim() ? colors.primary : '#E5E7EB' }]}
-                                    onPress={sendMessage}
-                                    disabled={loading || !inputText.trim()}
-                                >
-                                    <Ionicons name="arrow-up" size={18} color="white" />
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </KeyboardAvoidingView>
+                            </TouchableOpacity>
+                        )}
+                        <TextInput
+                            style={[
+                                styles.input,
+                                Platform.OS === 'web' ? {
+                                    height: inputHeight,
+                                    whiteSpace: 'pre-wrap',
+                                    wordBreak: 'break-all',
+                                    resize: 'none',
+                                    outlineStyle: 'none',
+                                    width: '100%',
+                                    minWidth: 0,
+                                } : {
+                                    height: inputHeight,
+                                }
+                            ]}
+                            placeholder="무엇이든 물어보세요"
+                            placeholderTextColor="#9CA3AF"
+                            value={inputText}
+                            onChangeText={setInputText}
+                            onKeyPress={handleKeyPress}
+                            multiline={true}
+                            numberOfLines={1}
+                            onContentSizeChange={(e) => {
+                                const height = e.nativeEvent.contentSize.height;
+                                const baseHeight = Platform.OS === 'web' ? 26 : 36;
+                                const targetHeight = Math.min(120, Math.max(baseHeight, height));
+                                setInputHeight(targetHeight);
+                            }}
+                        />
+                        <TouchableOpacity style={styles.micButton} onPress={() => Alert.alert("준비 중", "음성 인식 기능은 준비 중입니다.")}>
+                            <Ionicons name="mic-outline" size={22} color="#9CA3AF" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.sendButton, { backgroundColor: inputText.trim() ? colors.primary : '#E5E7EB' }]}
+                            onPress={sendMessage}
+                            disabled={loading || !inputText.trim()}
+                        >
+                            <Ionicons name="arrow-up" size={18} color="white" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
-            ) : (
-                // 회화 시작 후: FlatList + 하단 고정 입력창
-                <>
-                    <FlatList
-                        ref={flatListRef}
-                        data={messages}
-                        renderItem={renderItem}
-                        keyExtractor={item => item.id.toString()}
-                        contentContainerStyle={[styles.listContent, webMode && styles.webListContent]}
-                        style={styles.list}
-                    />
-
-                    {loading && (
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator size="small" color={colors.secondary} />
-                            <Text style={styles.loadingText}>답변을 생각하고 있어요...</Text>
-                        </View>
-                    )}
-
-                    <KeyboardAvoidingView
-                        behavior={Platform.OS === "ios" ? "padding" : "height"}
-                        keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
-                        style={styles.inputContainerWrapper}
-                    >
-                        {isLoggedIn && (
-                            <View style={styles.optionsBar}>
-                                <TouchableOpacity
-                                    style={[styles.fridgeChip, useFridge && styles.fridgeChipActive]}
-                                    onPress={() => setUseFridge(!useFridge)}
-                                    activeOpacity={0.8}
-                                >
-                                    <View style={[styles.fridgeIndicator, { backgroundColor: useFridge ? '#10B981' : '#9CA3AF' }]} />
-                                    <Ionicons
-                                        name={useFridge ? "restaurant" : "restaurant-outline"}
-                                        size={14}
-                                        color={useFridge ? "white" : "#6B7280"}
-                                    />
-                                    <Text style={[styles.fridgeChipText, useFridge && styles.fridgeChipTextActive]}>
-                                        {useFridge ? "내 냉장고 기반 추천" : "일반 레시피 추천"}
-                                    </Text>
-                                    {useFridge && (
-                                        <View style={styles.activeBadge}>
-                                            <Text style={styles.activeBadgeText}>ON</Text>
-                                        </View>
-                                    )}
-                                </TouchableOpacity>
-                            </View>
-                        )}
-                        <View style={styles.inputFloatingContainer}>
-                            <View style={styles.inputWrapper}>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="무엇이든 물어보세요"
-                                    placeholderTextColor="#9CA3AF"
-                                    value={inputText}
-                                    onChangeText={setInputText}
-                                    onKeyPress={handleKeyPress}
-                                    multiline
-                                    numberOfLines={1}
-                                />
-                                <TouchableOpacity style={styles.micButton} onPress={() => Alert.alert("준비 중", "음성 인식 기능은 준비 중입니다.")}>
-                                    <Ionicons name="mic-outline" size={24} color="#4B5563" />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.sendButton, { backgroundColor: inputText.trim() ? colors.primary : '#E5E7EB' }]}
-                                    onPress={sendMessage}
-                                    disabled={loading || !inputText.trim()}
-                                >
-                                    <Ionicons name="arrow-up" size={18} color="white" />
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </KeyboardAvoidingView>
-                </>
-            )}
+            </KeyboardAvoidingView>
 
             <Modal
                 animationType="slide"
@@ -1062,6 +1281,153 @@ const styles = StyleSheet.create({
     addToPlanText: { color: '#9CA3AF', fontSize: 12, fontWeight: '600', marginLeft: 4 },
     addToPlanTextSaved: { color: '#10B981' },
     actionIconButton: { padding: 4 },
+    recipePreparingBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 8,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        maxWidth: 360,
+    },
+    recipePreparingText: {
+        color: '#4B5563',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    recipeMessageCard: {
+        width: '100%',
+        maxWidth: 720,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 8,
+        padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06,
+        shadowRadius: 3,
+        elevation: 1,
+    },
+    recipeCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    recipeTitleGroup: {
+        flex: 1,
+        minWidth: 0,
+    },
+    recipeCardTitle: {
+        color: '#111827',
+        fontSize: 18,
+        fontWeight: '800',
+        lineHeight: 24,
+    },
+    recipeCardDescription: {
+        color: '#4B5563',
+        fontSize: 13,
+        lineHeight: 20,
+        marginTop: 6,
+    },
+    recipeMetaRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginTop: 12,
+    },
+    recipeMetaChip: {
+        backgroundColor: '#F3F4F6',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 8,
+        paddingHorizontal: 9,
+        paddingVertical: 5,
+    },
+    recipeMetaText: {
+        color: '#374151',
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    recipeSafetyBox: {
+        marginTop: 14,
+        backgroundColor: '#FFFBEB',
+        borderWidth: 1,
+        borderColor: '#FDE68A',
+        borderRadius: 8,
+        padding: 12,
+        gap: 6,
+    },
+    recipeSectionTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    recipeSafetyTitle: {
+        color: '#92400E',
+        fontSize: 13,
+        fontWeight: '800',
+    },
+    recipeSafetyText: {
+        color: '#78350F',
+        fontSize: 13,
+        lineHeight: 19,
+    },
+    recipeSection: {
+        marginTop: 16,
+    },
+    recipeSectionTitle: {
+        color: '#111827',
+        fontSize: 14,
+        fontWeight: '800',
+        marginBottom: 8,
+    },
+    ingredientGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    ingredientPill: {
+        color: '#374151',
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 8,
+        paddingHorizontal: 9,
+        paddingVertical: 6,
+        fontSize: 13,
+        lineHeight: 18,
+        maxWidth: '100%',
+    },
+    recipeStepRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 10,
+        marginBottom: 10,
+    },
+    recipeStepNumber: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: colors.primary,
+        color: '#FFFFFF',
+        textAlign: 'center',
+        lineHeight: 24,
+        fontSize: 12,
+        fontWeight: '800',
+        overflow: 'hidden',
+    },
+    recipeStepText: {
+        flex: 1,
+        minWidth: 0,
+        color: '#1F2937',
+        fontSize: 14,
+        lineHeight: 22,
+    },
     loadingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 20 },
     loadingText: { marginLeft: 10, color: '#6B7280', fontSize: 14 },
     gradeBadge: {
@@ -1093,63 +1459,67 @@ const styles = StyleSheet.create({
     // 플로팅 입력창 스타일
     inputContainerWrapper: {
         width: '100%',
-        paddingBottom: Platform.OS === 'ios' ? 24 : 16,
-        ...Platform.select({ web: { paddingBottom: 40 } })
+        paddingBottom: Platform.OS === 'ios' ? 16 : 10,
+        ...Platform.select({ web: { paddingBottom: 16 } })
     },
     inputFloatingContainer: {
         backgroundColor: '#FFFFFF',
         borderRadius: 26,
         borderWidth: 1,
-        borderColor: '#E8EAED',
+        borderColor: '#E0E0E0',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
-        elevation: 2,
+        shadowOpacity: 0.06,
+        shadowRadius: 3,
+        elevation: 1,
         marginHorizontal: 16,
         marginTop: 4,
         ...Platform.select({ web: { maxWidth: 800, width: '100%', alignSelf: 'center', marginHorizontal: 0 } })
     },
-    optionsBar: {
-        flexDirection: 'row',
-        paddingHorizontal: 16,
-        paddingBottom: 8,
-        ...Platform.select({ web: { maxWidth: 800, width: '100%', alignSelf: 'center', paddingHorizontal: 0 } })
-    },
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
+        paddingHorizontal: 12,
         paddingVertical: 6,
+        minHeight: Platform.OS === 'web' ? 44 : 48,
     },
-    micButton: { padding: 6, marginLeft: 4 },
+    fridgeToggleBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 2,
+    },
+    fridgeToggleBtnActive: {
+        backgroundColor: '#E8F5E9',
+    },
+    micButton: { padding: 6, marginLeft: 2 },
     input: {
         flex: 1,
+        minWidth: 0,
         backgroundColor: 'transparent',
-        paddingHorizontal: 4,
+        paddingHorizontal: 8,
         paddingVertical: 0,
-        fontSize: 15,
-        marginRight: 8,
-        maxHeight: 160,
-        color: '#202124', // 구글 텍스트 색상
+        fontSize: 16,
+        marginRight: 4,
+        maxHeight: 120,
+        color: '#202124',
         textAlignVertical: 'center',
         lineHeight: 22,
         ...Platform.select({
             web: {
-                outlineStyle: 'none',
-                overflowY: 'hidden',
-                resize: 'none',
                 lineHeight: '22px',
             }
         })
     },
     sendButton: {
-        borderRadius: 20,
-        width: 36,
-        height: 36,
+        borderRadius: 16,
+        width: 32,
+        height: 32,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#E8F0FE', // 구글 파란색 연한 버튼 기본값
+        backgroundColor: '#E8F0FE',
     },
 
     // 빈 상태 화면 스타일

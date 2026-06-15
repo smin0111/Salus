@@ -181,30 +181,19 @@ export default function AppNavigator() {
   const [selectedPost, setSelectedPost] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAppReady, setIsAppReady] = useState(false);
-  const { isLoggedIn, user, logout, loading: authLoading } = useAuth();
+  const { isLoggedIn, user, token, logout, loading: authLoading } = useAuth();
 
-  // 더미 데이터 상태들 (전체 화면 공용)
+  // 공용 상태 관리 (게스트 또는 API 동기화 기반)
   const [messages, setMessages] = useState([
-    { id: 1, text: '안녕하세요! 건강한 식탁을 위한 AI 셰프입니다.\n알레르기나 건강 정보를 알려주시면 더 안전한 레시피를 추천해드려요.', sender: 'ai' }
+    { id: 1, text: '안녕하세요! 건강한 식탁을 위한 Salus입니다.\n알레르기나 건강 정보를 알려주시면 더 안전한 레시피를 추천해드려요.', sender: 'ai' }
   ]);
   const [healthProfile, setHealthProfile] = useState({
-    allergies: ['땅콩', '새우', '우유'],
-    chronicConditions: ['당뇨병'],
-    dietaryRestrictions: ['저염식', '저당식'],
+    allergies: [],
+    chronicConditions: [],
+    dietaryRestrictions: [],
   });
-  const [mealData, setMealData] = useState({
-    '2026-01-15': {
-      breakfast: '오트밀 + 바나나',
-      lunch: '닭가슴살 샐러드',
-      dinner: '연어 구이 + 현미밥',
-      snacks: ['그릭요거트', '아몬드']
-    }
-  });
-  const [fridgeItems, setFridgeItems] = useState([
-    { id: '1', name: '우유', quantity: '1L', category: '유제품', expiryDate: '2026-01-20', daysLeft: 5 },
-    { id: '2', name: '계란', quantity: '10개', category: '달걀', expiryDate: '2026-01-25', daysLeft: 10 },
-    { id: '3', name: '양파', quantity: '3개', category: '채소', expiryDate: '2026-01-18', daysLeft: 3 },
-  ]);
+  const [mealData, setMealData] = useState({});
+  const [fridgeItems, setFridgeItems] = useState([]);
 
   // 진짜 로딩 관리: 앱 최초 마운트 상태
   useEffect(() => {
@@ -229,11 +218,11 @@ export default function AppNavigator() {
   }, []);
 
   useEffect(() => {
-    if (isLoggedIn && user?.token) {
+    if (isLoggedIn && token) {
       const logActivity = async () => {
         try {
           await axios.post(`${config.API_BASE_URL}/activities/log`, { isAi: false }, {
-            headers: { Authorization: `Bearer ${user.token}` }
+            headers: { Authorization: `Bearer ${token}` }
           });
         } catch (e) {
           console.log("Activity log failed", e);
@@ -241,7 +230,14 @@ export default function AppNavigator() {
       };
       logActivity();
     }
-  }, [isLoggedIn, user]);
+  }, [isLoggedIn, token]);
+
+  // 로그인 상태가 변동될 때(로그인 완료 또는 로그아웃 실행) 대화방 세션을 철저히 상호 분리하고 초기화
+  useEffect(() => {
+    setMessages([
+      { id: 1, text: '안녕하세요! 건강한 식탁을 위한 Salus입니다.\n알레르기나 건강 정보를 알려주시면 더 안전한 레시피를 추천해드려요.', sender: 'ai' }
+    ]);
+  }, [isLoggedIn]);
 
   const handleNavigate = (screen, data = null) => {
     const protectedScreens = ['community', 'fridge', 'calendar', 'health', 'health-checkup', 'account-settings', 'create-post'];
@@ -269,6 +265,10 @@ export default function AppNavigator() {
 
   const handleLogout = async () => {
     await logout();
+    // 로그아웃 시 이전 사용자의 대화 기록이 유출되지 않도록 완전 초기화 진행
+    setMessages([
+      { id: 1, text: '안녕하세요! 건강한 식탁을 위한 Salus입니다.\n알레르기나 건강 정보를 알려주시면 더 안전한 레시피를 추천해드려요.', sender: 'ai' }
+    ]);
     handleNavigate('chat');
   };
 

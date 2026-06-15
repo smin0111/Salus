@@ -17,15 +17,17 @@ import { colors } from '../theme/colors';
 import config from '../config';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '../context/AuthContext';
 
-export default function PostDetailScreen({ post, user, onNavigate, onBack, webMode = false }) {
+export default function PostDetailScreen({ post, user: propUser, onNavigate, onBack, webMode = false }) {
+    const { user, token } = useAuth();
     const insets = useSafeAreaInsets();
     const [postData, setPostData] = useState(post);
     const [comments, setComments] = useState([]);
     const [newComment, setNewComment] = useState('');
     const [loading, setLoading] = useState(false);
     const [submittingComment, setSubmittingComment] = useState(false);
-    const [replyingTo, setReplyingTo] = useState(null); // { id: Long, userName: String }
+    const [replyingTo, setReplyingTo] = useState(null); // { id: 식별값, userName: 사용자명 }
 
     useEffect(() => {
         loadPostDetails();
@@ -35,7 +37,8 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack, webMo
     const loadPostDetails = async () => {
         try {
             const response = await axios.get(
-                `${config.API_BASE_URL}/community/posts/${post.id}?currentUserId=${user?.id || ''}`
+                `${config.API_BASE_URL}/community/posts/${post.id}`,
+                { headers: token ? { Authorization: `Bearer ${token}` } : {} }
             );
             setPostData(response.data);
         } catch (error) {
@@ -46,7 +49,8 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack, webMo
     const loadComments = async () => {
         try {
             const response = await axios.get(
-                `${config.API_BASE_URL}/community/posts/${post.id}/comments`
+                `${config.API_BASE_URL}/community/posts/${post.id}/comments`,
+                { headers: token ? { Authorization: `Bearer ${token}` } : {} }
             );
             setComments(response.data);
         } catch (error) {
@@ -63,7 +67,8 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack, webMo
         try {
             const response = await axios.post(
                 `${config.API_BASE_URL}/community/posts/${post.id}/like`,
-                { userId: user.id }
+                {},
+                { headers: token ? { Authorization: `Bearer ${token}` } : {} }
             );
             setPostData({
                 ...postData,
@@ -93,7 +98,6 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack, webMo
         }
 
         console.log('Submitting comment with:', {
-            userId: user.id,
             content: newComment.trim(),
             parentId: replyingTo ? replyingTo.id : null
         });
@@ -103,10 +107,10 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack, webMo
             await axios.post(
                 `${config.API_BASE_URL}/community/posts/${post.id}/comments`,
                 {
-                    userId: user.id,
                     content: newComment.trim(),
                     parentId: replyingTo ? replyingTo.id : null
-                }
+                },
+                { headers: token ? { Authorization: `Bearer ${token}` } : {} }
             );
             setNewComment('');
             setReplyingTo(null);
@@ -117,7 +121,6 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack, webMo
             console.error('Error response:', error.response?.data);
             console.error('Error status:', error.response?.status);
             console.error('Request payload:', {
-                userId: user.id,
                 content: newComment.trim(),
                 parentId: replyingTo ? replyingTo.id : null
             });
@@ -160,10 +163,12 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack, webMo
 
         console.log('Delete confirmed, sending request...');
         try {
-            const deleteUrl = `${config.API_BASE_URL}/community/comments/${commentId}?userId=${user.id}`;
+            const deleteUrl = `${config.API_BASE_URL}/community/comments/${commentId}`;
             console.log('DELETE URL:', deleteUrl);
 
-            const response = await axios.delete(deleteUrl);
+            const response = await axios.delete(deleteUrl, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
             console.log('Delete successful:', response.data);
 
             await loadComments();
@@ -202,12 +207,12 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack, webMo
                         try {
                             console.log('게시글 삭제 요청:', {
                                 postId: post.id,
-                                userId: user.id,
-                                url: `${config.API_BASE_URL}/community/posts/${post.id}?userId=${user.id}`
+                                url: `${config.API_BASE_URL}/community/posts/${post.id}`
                             });
 
                             const response = await axios.delete(
-                                `${config.API_BASE_URL}/community/posts/${post.id}?userId=${user.id}`
+                                `${config.API_BASE_URL}/community/posts/${post.id}`,
+                                { headers: token ? { Authorization: `Bearer ${token}` } : {} }
                             );
 
                             console.log('게시글 삭제 성공:', response.data);
@@ -275,7 +280,8 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack, webMo
                         console.log('삭제 버튼 클릭됨 - 직접 삭제');
                         try {
                             const response = await axios.delete(
-                                `${config.API_BASE_URL}/community/posts/${post.id}?userId=${user.id}`
+                                `${config.API_BASE_URL}/community/posts/${post.id}`,
+                                { headers: token ? { Authorization: `Bearer ${token}` } : {} }
                             );
                             console.log('삭제 성공:', response.data);
                             onNavigate && onNavigate('community');
@@ -297,7 +303,9 @@ export default function PostDetailScreen({ post, user, onNavigate, onBack, webMo
                     {isAuthor ? (
                         <TouchableOpacity onPress={async () => {
                             try {
-                                await axios.delete(`${config.API_BASE_URL}/community/posts/${post.id}?userId=${user.id}`);
+                                await axios.delete(`${config.API_BASE_URL}/community/posts/${post.id}`, {
+                                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                                });
                                 onNavigate && onNavigate('community');
                             } catch (error) {
                                 console.error('삭제 실패:', error);

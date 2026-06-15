@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import config from '../config';
 import { colors } from '../theme/colors';
+import { useAuth } from '../context/AuthContext';
 
 const FIELD_GROUPS = [
     {
@@ -50,6 +51,7 @@ const demoValues = {
 };
 
 export default function HealthCheckupScreen({ onToggleSidebar, onNavigate, webMode = false }) {
+    const { token } = useAuth();
     const [form, setForm] = useState({ checkupDate: today() });
     const [latest, setLatest] = useState(null);
     const [analysis, setAnalysis] = useState(null);
@@ -57,15 +59,22 @@ export default function HealthCheckupScreen({ onToggleSidebar, onNavigate, webMo
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        fetchLatest();
-    }, []);
+        if (token) {
+            fetchLatest();
+        }
+    }, [token]);
 
     const fetchLatest = async () => {
+        if (!token) return;
         setLoading(true);
         try {
             const [latestResponse, analysisResponse] = await Promise.all([
-                axios.get(`${config.API_BASE_URL}/health-checkups/latest`),
-                axios.get(`${config.API_BASE_URL}/health-checkups/analysis`),
+                axios.get(`${config.API_BASE_URL}/health-checkups/latest`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                }),
+                axios.get(`${config.API_BASE_URL}/health-checkups/analysis`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                }),
             ]);
 
             if (latestResponse.status !== 204) {
@@ -123,7 +132,9 @@ export default function HealthCheckupScreen({ onToggleSidebar, onNavigate, webMo
 
         setSaving(true);
         try {
-            const response = await axios.post(`${config.API_BASE_URL}/health-checkups`, payload);
+            const response = await axios.post(`${config.API_BASE_URL}/health-checkups`, payload, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             setLatest(response.data);
             await fetchLatest();
             Alert.alert('저장 완료', '검진 결과가 AI 추천에 반영됩니다.');

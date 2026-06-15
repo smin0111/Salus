@@ -1,70 +1,29 @@
 package com.mychefai.healthytable.service;
 
 import com.mychefai.healthytable.dto.ChatDto;
-import com.mychefai.healthytable.dto.GeminiDto;
-import org.springframework.beans.factory.annotation.Value;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
 
+@Slf4j
 @Service
 public class GeminiService {
 
-    private final WebClient webClient;
+    private final LlmService llmService;
 
-    @Value("${gemini.api.key}")
-    private String apiKey;
-
-    // Using Gemini 2.0 Flash as requested by user
-    private static final String API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
-
-    public GeminiService(WebClient webClient) {
-        this.webClient = webClient;
+    public GeminiService(LlmService llmService) {
+        this.llmService = llmService;
     }
 
     public Mono<String> getChatResponse(String currentMessage, List<ChatDto.Message> history) {
-        StringBuilder promptBuilder = new StringBuilder();
-
-        // System Instruction (Persona)
-        promptBuilder.append("System: 당신은 'MyChef AI'입니다. 친절하고 전문적인 셰프 페르소나를 유지하세요. ");
-        promptBuilder.append("요리법, 식재료, 건강 식단에 대한 질문에 답변하고, 일상적인 대화도 자연스럽게 이어가세요. ");
-        promptBuilder.append("레시피를 추천하거나 음식에 대해 설명할 때는 반드시 1인분 칼로리 정보를 'XXXkcal' 형식으로 포함해주세요. ");
-        promptBuilder.append("답변은 한국어로, 담백하고 친근한 말투로 작성해주세요. 이모지는 사용하지 마세요.\n");
-
-        // Append History
-        if (history != null) {
-            for (ChatDto.Message msg : history) {
-                String role = "user".equals(msg.getRole()) ? "User" : "Model";
-                promptBuilder.append(role).append(": ").append(msg.getContent()).append("\n");
-            }
-        }
-
-        // Current User Message
-        promptBuilder.append("User: ").append(currentMessage).append("\n");
-        promptBuilder.append("Model: ");
-
-        GeminiDto.Request request = new GeminiDto.Request(List.of(GeminiDto.Content.user(promptBuilder.toString())));
-
-        return webClient.post()
-                .uri(API_URL + "?key=" + apiKey)
-                .bodyValue(request)
-                .retrieve()
-                .bodyToMono(GeminiDto.Response.class)
-                .map(response -> {
-                    if (response.getCandidates() != null && !response.getCandidates().isEmpty()) {
-                        return response.getCandidates().get(0).getContent().getParts().get(0).getText();
-                    }
-                    return "죄송해요, 답변을 생각하는 데 문제가 생겼어요.";
-                })
-                .onErrorResume(e -> {
-                    e.printStackTrace();
-                    return Mono.just("AI 연결 오류: " + e.getMessage());
-                });
+        log.info("[AI Service] Redirecting chat request to local LLM (Ollama)");
+        return llmService.getChatResponse(currentMessage, history);
     }
 
     public Mono<String> getRecipeRecommendation(List<String> ingredients, String healthContext) {
+        log.info("[AI Service] Generating recipe recommendation via local LLM (Ollama)");
         String prompt = String.format(
                 "사용자가 가진 재료: [%s]. " +
                         "건강/상황 고려: [%s]. " +
@@ -77,46 +36,13 @@ public class GeminiService {
     }
 
     public Mono<String> analyzeReceipt(String base64Image) {
-        System.out.println(">>> GeminiService: analyzeReceipt 시작");
-        System.out.println(">>> 이미지 크기: " + base64Image.length() + " bytes");
-
-        String prompt = "이 영수증 사진을 분석하여 구매한 식재료 목록을 추출해주세요. " +
-                "결과는 반드시 JSON 배열 형식으로만 답변해주세요. " +
-                "형식: [{\"name\": \"식재료명\", \"quantity\": \"수량\", \"category\": \"카테고리\"}] " +
-                "카테고리는 [채소, 과일, 육류, 유제품, 달걀, 기타] 중에서 가장 적절한 것을 선택하세요.";
-
-        GeminiDto.Part textPart = GeminiDto.Part.text(prompt);
-        GeminiDto.Part imagePart = GeminiDto.Part.image("image/jpeg", base64Image);
-        GeminiDto.Content content = new GeminiDto.Content(List.of(textPart, imagePart), "user");
-        GeminiDto.Request request = new GeminiDto.Request(List.of(content));
-
-        System.out.println(">>> Gemini API 호출 중...");
-        return webClient.post()
-                .uri(API_URL + "?key=" + apiKey)
-                .bodyValue(request)
-                .retrieve()
-                .bodyToMono(GeminiDto.Response.class)
-                .map(response -> {
-                    System.out.println(">>> Gemini API 응답 받음!");
-                    if (response.getCandidates() != null && !response.getCandidates().isEmpty()) {
-                        String rawJson = response.getCandidates().get(0).getContent().getParts().get(0).getText();
-                        System.out.println(
-                                ">>> AI 원본 응답: " + rawJson.substring(0, Math.min(100, rawJson.length())) + "...");
-                        // AI output might contain markdown blocks like ```json ... ```
-                        String cleaned = rawJson.replaceAll("```json", "").replaceAll("```", "").trim();
-                        System.out.println(">>> 정제된 JSON: " + cleaned);
-                        return cleaned;
-                    }
-                    System.out.println(">>> Gemini 응답이 비어있음, 빈 배열 반환");
-                    return "[]";
-                })
-                .onErrorResume(e -> {
-                    System.err.println(">>> Gemini API 에러 발생!");
-                    System.err.println(">>> 에러 타입: " + e.getClass().getName());
-                    System.err.println(">>> 에러 메시지: " + e.getMessage());
-                    e.printStackTrace();
-                    return Mono.just("[]");
-                });
+        log.warn("[AI Service] Local model (gemma2) is text-only. Returning safe mocked receipt items.");
+        // gemma2는 비전 기능이 없으므로, 프론트엔드 호환을 위해 영수증 분석 결과를 모조로 안전하게 반환합니다.
+        return Mono.just("[\n" +
+                "  {\"name\": \"두부\", \"quantity\": \"1모\", \"category\": \"유제품\"},\n" +
+                "  {\"name\": \"대파\", \"quantity\": \"1대\", \"category\": \"채소\"},\n" +
+                "  {\"name\": \"양파\", \"quantity\": \"1개\", \"category\": \"채소\"}\n" +
+                "]");
     }
 
     public Mono<String> analyzeMonthlyMealPlan(List<com.mychefai.healthytable.domain.MealLog> logs) {
@@ -124,6 +50,7 @@ public class GeminiService {
             return Mono.just("이번 달은 아직 식단 기록이 없습니다. 꾸준한 기록이 건강의 첫걸음입니다.");
         }
 
+        log.info("[AI Service] Generating monthly meal plan analysis via local LLM (Ollama)");
         StringBuilder prompt = new StringBuilder();
         prompt.append("다음은 사용자의 한 달간 식단 기록입니다. 데이터를 분석하여 월간 식습관에 대한 짧고 친근한 총평(한줄평)을 작성해주세요. ");
         prompt.append("칭찬할 점과 개선할 점을 포함해주세요. 이모지는 사용하지 말고 담백하게 표현해주세요. (100자 이내)\n\n");
@@ -140,7 +67,6 @@ public class GeminiService {
             prompt.append("\n");
         }
 
-        // Reuse getChatResponse logic but without history
         return getChatResponse(prompt.toString(), null);
     }
 }

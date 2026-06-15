@@ -25,11 +25,11 @@ public class PaymentController {
             @RequestHeader("Authorization") String token,
             @RequestBody PaymentRequestDto request) {
         try {
-            // Extract user ID from token
+            // 토큰에서 사용자 식별자(ID) 추출
             String jwt = token.substring(7);
             Long userId = Long.valueOf(jwtTokenProvider.getUserId(jwt));
 
-            // Verify payment
+            // 결제 정보 검증 및 처리
             Payment payment = paymentService.verifyAndSavePayment(request.getImpUid(), userId);
 
             log.info("Payment verified successfully for User ID: {}", userId);

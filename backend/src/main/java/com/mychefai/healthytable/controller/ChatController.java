@@ -8,10 +8,12 @@ import com.mychefai.healthytable.security.JwtTokenProvider;
 import com.mychefai.healthytable.service.ChatService;
 import com.mychefai.healthytable.service.RecipeWorkSessionService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
@@ -31,9 +33,13 @@ public class ChatController {
     private final ChatService chatService;
 
     @GetMapping("/sessions")
-    public List<ChatDto.SessionSummary> getSessions(@RequestHeader("Authorization") String authHeader) {
-        Long userId = getAuthenticatedUserId(authHeader)
-                .orElseThrow(() -> new IllegalArgumentException("로그인이 필요합니다."));
+    public List<ChatDto.SessionSummary> getSessions(
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        Optional<Long> authenticatedUserId = getAuthenticatedUserId(authHeader);
+        if (authenticatedUserId.isEmpty()) {
+            return List.of();
+        }
+        Long userId = authenticatedUserId.get();
 
         return chatSessionRepository.findByUserIdOrderByUpdatedAtDesc(userId).stream()
                 .map(session -> new ChatDto.SessionSummary(
@@ -46,13 +52,13 @@ public class ChatController {
 
     @GetMapping("/sessions/{sessionId}/messages")
     public List<ChatDto.Message> getMessages(
-            @RequestHeader("Authorization") String authHeader,
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
             @PathVariable Long sessionId) {
         Long userId = getAuthenticatedUserId(authHeader)
-                .orElseThrow(() -> new IllegalArgumentException("로그인이 필요합니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."));
 
         ChatSession session = chatSessionRepository.findByIdAndUserId(sessionId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("대화 세션을 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "대화 세션을 찾을 수 없습니다."));
 
         return chatMessageRepository.findBySessionOrderByCreatedAtAsc(session).stream()
                 .map(message -> new ChatDto.Message(message.getRole(), message.getContent()))
@@ -61,15 +67,15 @@ public class ChatController {
 
     @PatchMapping("/sessions/{sessionId}")
     public ChatDto.SessionSummary updateSessionTitle(
-            @RequestHeader("Authorization") String authHeader,
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
             @PathVariable Long sessionId,
             @RequestBody ChatDto.SessionUpdateRequest request) {
         Long userId = getAuthenticatedUserId(authHeader)
-                .orElseThrow(() -> new IllegalArgumentException("로그인이 필요합니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."));
 
         String title = normalizeSessionTitle(request != null ? request.getTitle() : null);
         ChatSession session = chatSessionRepository.findByIdAndUserId(sessionId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("대화 세션을 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "대화 세션을 찾을 수 없습니다."));
 
         session.setTitle(title);
         session.touch();
@@ -84,13 +90,13 @@ public class ChatController {
     @DeleteMapping("/sessions/{sessionId}")
     @Transactional
     public ResponseEntity<Map<String, String>> deleteSession(
-            @RequestHeader("Authorization") String authHeader,
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
             @PathVariable Long sessionId) {
         Long userId = getAuthenticatedUserId(authHeader)
-                .orElseThrow(() -> new IllegalArgumentException("로그인이 필요합니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."));
 
         ChatSession session = chatSessionRepository.findByIdAndUserId(sessionId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("대화 세션을 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "대화 세션을 찾을 수 없습니다."));
 
         recipeWorkSessionService.clear(userId, sessionId);
         chatMessageRepository.deleteBySession(session);
