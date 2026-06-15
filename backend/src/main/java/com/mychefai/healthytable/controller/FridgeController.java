@@ -5,7 +5,9 @@ import com.mychefai.healthytable.repository.FridgeRepository;
 import com.mychefai.healthytable.security.JwtTokenProvider;
 import com.mychefai.healthytable.service.GeminiService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
@@ -34,8 +36,14 @@ public class FridgeController {
     }
 
     @DeleteMapping("/{id}")
-    public void deleteFridgeItem(@PathVariable Long id) {
-        fridgeRepository.deleteById(id);
+    public void deleteFridgeItem(@PathVariable Long id, @RequestHeader("Authorization") String token) {
+        Long userId = Long.valueOf(jwtTokenProvider.getUserId(token.replace("Bearer ", "")));
+        FridgeItem item = fridgeRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "냉장고 항목을 찾을 수 없습니다."));
+        if (!item.getUserId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인의 냉장고 항목만 삭제할 수 있습니다.");
+        }
+        fridgeRepository.delete(item);
     }
 
     @PutMapping("/{id}")
@@ -80,7 +88,7 @@ public class FridgeController {
             return Mono.just("[]");
         }
 
-        // Return Mono directly - Spring WebFlux will handle async properly
+        // Spring WebFlux가 비동기 흐름을 올바르게 처리할 수 있도록 Mono 객체를 즉시 반환
         return geminiService.analyzeReceipt(base64Image);
     }
 }

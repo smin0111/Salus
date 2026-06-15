@@ -16,7 +16,7 @@ import axios from 'axios';
 import { colors } from '../theme/colors';
 import config from '../config';
 
-export default function SearchScreen({ onBack, onNavigate, user }) {
+export default function SearchScreen({ onBack, onNavigate, user, webMode = false }) {
     const insets = useSafeAreaInsets();
     const [searchQuery, setSearchQuery] = useState('');
     const [results, setResults] = useState([]);
@@ -30,7 +30,7 @@ export default function SearchScreen({ onBack, onNavigate, user }) {
         setHasSearched(true);
         try {
             const response = await axios.get(
-                `${config.API_BASE_URL}/community/posts/search?keyword=${encodeURIComponent(searchQuery)}&currentUserId=${user?.id || ''}`
+                `${config.API_BASE_URL}/community/posts/search?keyword=${encodeURIComponent(searchQuery)}`
             );
             setResults(response.data);
         } catch (error) {
@@ -81,7 +81,7 @@ export default function SearchScreen({ onBack, onNavigate, user }) {
     return (
         <View style={styles.container}>
             {/* 헤더 */}
-            <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 40 : 14) }]}>
+            <View style={[styles.header, webMode && styles.webHeader, { paddingTop: webMode ? 14 : insets.top + (Platform.OS === 'android' ? 40 : 14) }]}>
                 <TouchableOpacity style={styles.headerIconButton} onPress={onBack}>
                     <Ionicons name="arrow-back" size={22} color={colors.primary} />
                 </TouchableOpacity>
@@ -152,6 +152,11 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#FED7AA',
         gap: 12,
+    },
+    webHeader: {
+        backgroundColor: '#FFFFFF',
+        borderBottomColor: '#EEF0F3',
+        paddingHorizontal: 24,
     },
     headerIconButton: {
         width: 40,

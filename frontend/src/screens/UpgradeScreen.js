@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ScrollView, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
@@ -7,8 +7,35 @@ import config from '../config';
 import { useAuth } from '../context/AuthContext';
 
 export default function UpgradeScreen({ onBack, onSuccess }) {
-    const { user, isLoggedIn } = useAuth();
+    const { user, isLoggedIn, refreshUser } = useAuth();
     const [loading, setLoading] = useState(false);
+    const [sdkReady, setSdkReady] = useState(false);
+
+    // 웹 환경인 경우 PortOne 결제 SDK를 동적으로 주입
+    useEffect(() => {
+        if (Platform.OS === 'web') {
+            if (window.IMP) {
+                setSdkReady(true);
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = 'https://cdn.iamport.kr/v1/iamport.js';
+            script.type = 'text/javascript';
+            script.async = true;
+            script.onload = () => {
+                setSdkReady(true);
+                console.log('PortOne SDK loaded successfully.');
+            };
+            script.onerror = () => {
+                console.error('Failed to load PortOne SDK.');
+                Alert.alert('오류', '결제 모듈을 불러오지 못했습니다. 네트워크를 확인해 주세요.');
+            };
+            document.head.appendChild(script);
+        } else {
+            setSdkReady(true);
+        }
+    }, []);
 
     const handlePayment = () => {
         if (!isLoggedIn) {
@@ -21,8 +48,12 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
             return;
         }
 
-        // PortOne(구 아임포트) SDK 로드 확인 및 결제 요청
         const { IMP } = window;
+        if (!IMP) {
+            Alert.alert("알림", "결제 모듈이 아직 로드 중입니다. 잠시 후 다시 시도해 주세요.");
+            return;
+        }
+
         IMP.init('imp33061218'); // 테스트용 가맹점 식별코드
 
         const merchantUid = `mid_${new Date().getTime()}`;
@@ -40,19 +71,25 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
                 // 결제 성공 시 서버 검증 요청
                 try {
                     setLoading(true);
-                    const response = await axios.post(`${config.API_BASE_URL}/payments/validate?userId=${user.id}`, {
+                    const response = await axios.post(`${config.API_BASE_URL}/payments/verify`, {
                         impUid: rsp.imp_uid,
-                        merchantUid: rsp.merchant_uid,
-                        amount: 9900
+                        merchantUid: rsp.merchant_uid
+                    }, {
+                        headers: {
+                            Authorization: `Bearer ${user.token}`
+                        }
                     });
 
-                    if (response.status === 200) {
+                    if (response.data && response.data.success) {
+                        await refreshUser(); // 유저 등급 상태 갱신
                         Alert.alert("성공", "플러스 멤버십으로 업그레이드되었습니다.");
                         if (onSuccess) onSuccess();
+                    } else {
+                        Alert.alert("결제 실패", response.data.message || "결제 검증에 실패했습니다.");
                     }
                 } catch (error) {
                     console.error("Payment validation failed:", error);
-                    Alert.alert("오류", "결제 검증에 실패했습니다. 고객센터에 문의해주세요.");
+                    Alert.alert("오류", error.response?.data?.message || "결제 검증에 실패했습니다. 고객센터에 문의해주세요.");
                 } finally {
                     setLoading(false);
                 }

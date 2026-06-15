@@ -34,7 +34,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 if (isValid) {
                     String userId = tokenProvider.getUserId(jwt);
 
-                    // For simplicity, we create a simple authentication token with the user ID
+                    // 간단한 검증 처리를 위해 사용자 식별자(ID)를 기반으로 인증 객체 생성
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                             userId, null, Collections.emptyList());
 

@@ -5,6 +5,7 @@ import com.mychefai.healthytable.security.IpWhitelistFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -48,17 +49,15 @@ public class SecurityConfig {
                         .requestMatchers("/api/chat/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/recipes/**").permitAll() // 홈 화면용
-                        // 커뮤니티 엔드포인트
-                        .requestMatchers("/api/community/**").permitAll()
-                        // 냉장고 스캔 엔드포인트
-                        .requestMatchers("/api/fridge/scan").permitAll()
-                        // 어드민 대시보드
-                        .requestMatchers("/api/admin/**").permitAll()
+                        // 커뮤니티 읽기 엔드포인트는 공개, 작성/수정/삭제/좋아요는 인증 필요
+                        .requestMatchers(HttpMethod.GET, "/api/community/**").permitAll()
                         // 그 외 요청은 인증 필요
+                        .requestMatchers("/api/community/**").authenticated()
                         .requestMatchers("/api/fridge/**").authenticated()
                         .requestMatchers("/api/health-checkups/**").authenticated()
                         .requestMatchers("/api/users/**").authenticated()
-                        .anyRequest().permitAll() // 개발 편의를 위해 나머지 허용
+                        .requestMatchers("/api/admin/**").authenticated()
+                        .anyRequest().authenticated()
                 )
                 .addFilterBefore(coopHeaderFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(ipWhitelistFilter, UsernamePasswordAuthenticationFilter.class)
@@ -71,7 +70,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(allowedOrigins.split(",")));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
