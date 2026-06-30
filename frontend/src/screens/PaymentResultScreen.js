@@ -12,7 +12,7 @@ import { useAuth } from '../context/AuthContext';
 export default function PaymentResultScreen({ onNavigate }) {
     const [status, setStatus] = useState('loading'); // loading | success | fail
     const [message, setMessage] = useState('');
-    const { user, refreshUser } = useAuth();
+    const { token, refreshUser } = useAuth();
 
     useEffect(() => {
         if (Platform.OS !== 'web') return;
@@ -37,7 +37,7 @@ export default function PaymentResultScreen({ onNavigate }) {
                 impUid,
                 merchantUid,
             }, {
-                headers: user?.token ? { Authorization: `Bearer ${user.token}` } : {},
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
 
             if (response.data.success) {

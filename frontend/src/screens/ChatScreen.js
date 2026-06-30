@@ -3,7 +3,6 @@ import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, Keyboard
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import * as Speech from 'expo-speech'; // TTS
-import Voice from '@react-native-voice/voice'; // 음성 인식
 import { colors } from '../theme/colors';
 import config from '../config';
 import { useAuth } from '../context/AuthContext';
@@ -342,10 +341,6 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     // 복사 상태
     const [copiedMessageId, setCopiedMessageId] = useState(null);
 
-    // 요리 모드 상태
-    const [isCookingMode, setIsCookingMode] = useState(false);
-    const [isListening, setIsListening] = useState(false);
-
     useEffect(() => {
         const findBestVoice = async () => {
             try {
@@ -387,8 +382,6 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         setSelectedMessageId(null);
         setSelectedRecipeToAdd(null);
         setRecipeDetails({ title: '', fullText: '' });
-        setIsCookingMode(false);
-        setIsListening(false);
         setSpeakingMessageId(null);
         Speech.stop();
 
@@ -528,70 +521,10 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
-    // 음성 인식 설정
-    useEffect(() => {
-        Voice.onSpeechResults = onSpeechResults;
-        Voice.onSpeechError = onSpeechError;
-
-        return () => {
-            Voice.destroy().then(Voice.removeAllListeners);
-        };
-    }, []);
-
-    const onSpeechResults = (e) => {
-        if (e.value && e.value.length > 0) {
-            const recognizedText = e.value[0];
-            console.log('Recognized:', recognizedText);
-
-            // 인식된 문장을 바로 AI에게 전송
-            sendMessage(recognizedText);
-        }
+    const showCookingModeUnavailable = () => {
+        Alert.alert("준비 중", "요리 모드는 안정적인 음성 인식으로 교체한 뒤 제공할 예정입니다.");
     };
 
-    const onSpeechError = (e) => {
-        console.error('Speech error:', e);
-        setIsListening(false);
-    };
-
-    const toggleCookingMode = async () => {
-        if (!isLoggedIn) {
-            Alert.alert("회원 전용 기능", "요리 모드는 로그인 후 이용 가능합니다.");
-            return;
-        }
-
-        if (isCookingMode) {
-            // 요리 모드 종료
-            await Voice.stop();
-            setIsCookingMode(false);
-            setIsListening(false);
-            Speech.speak("요리 모드를 종료합니다.", { language: 'ko-KR' });
-        } else {
-            // 요리 모드 시작
-            setIsCookingMode(true);
-            Speech.speak("요리 모드를 시작합니다. 무엇을 도와드릴까요?", { language: 'ko-KR' });
-            startListening();
-        }
-    };
-
-    const startListening = async () => {
-        try {
-            setIsListening(true);
-            await Voice.start('ko-KR');
-        } catch (e) {
-            console.error(e);
-            setIsListening(false);
-        }
-    };
-
-    // 요리 모드에서는 AI 응답 후 음성 인식을 자동 재시작
-    useEffect(() => {
-        if (isCookingMode && !loading && !isListening) {
-            const timer = setTimeout(() => {
-                startListening();
-            }, 2000); // AI 응답 후 2초 뒤 다시 듣기 시작
-            return () => clearTimeout(timer);
-        }
-    }, [isCookingMode, loading, isListening]);
 
     const sendMessage = async (text = null) => {
         const messageText = typeof text === 'string' ? text : inputText;
@@ -676,18 +609,6 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 fetchChatSessions();
             }
 
-            // 요리 모드에서는 AI 응답을 자동으로 읽어줌
-            if (isCookingMode) {
-                // 타이핑 애니메이션이 어느 정도 진행된 뒤 읽기 시작
-                setTimeout(() => {
-                    const cleanText = cleanedText.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
-                    Speech.speak(cleanText, {
-                        language: 'ko-KR',
-                        rate: 0.9,
-                        onDone: () => setIsListening(false) // 자동 재시작 트리거
-                    });
-                }, 1000);
-            }
         } catch (error) {
             console.error(error);
             if (requestEpoch === authEpochRef.current && requestSeq === requestSeqRef.current) {
@@ -891,17 +812,14 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                     {/* Cooking Mode Toggle */}
                     {isLoggedIn && (
                         <TouchableOpacity
-                            style={[styles.cookingModeButton, isCookingMode && styles.cookingModeActive]}
-                            onPress={toggleCookingMode}
+                            style={styles.cookingModeButton}
+                            onPress={showCookingModeUnavailable}
                         >
                             <Ionicons
-                                name={isCookingMode ? "mic" : "mic-outline"}
+                                name="mic-outline"
                                 size={20}
-                                color={isCookingMode ? "white" : colors.primary}
+                                color={colors.primary}
                             />
-                            {isListening && (
-                                <View style={styles.listeningIndicator} />
-                            )}
                         </TouchableOpacity>
                     )}
                     {!isLoggedIn && (
@@ -1608,20 +1526,6 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: colors.primary,
         position: 'relative',
-    },
-    cookingModeActive: {
-        backgroundColor: colors.primary,
-    },
-    listeningIndicator: {
-        position: 'absolute',
-        top: -2,
-        right: -2,
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        backgroundColor: '#EF4444', // 빨간색
-        borderWidth: 2,
-        borderColor: 'white',
     },
     fridgeChip: {
         flexDirection: 'row',

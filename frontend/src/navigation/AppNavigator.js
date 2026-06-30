@@ -59,7 +59,7 @@ const WEB_SCREEN_TITLES = {
 };
 
 const WEB_PATH_TO_SCREEN = {
-  '/': 'about',
+  '/': 'chat',
   '/chat': 'chat',
   '/community': 'community',
   '/fridge': 'fridge',
@@ -176,7 +176,7 @@ function WebAppShell({ children, currentScreen, onNavigate, isLoggedIn, user, on
 }
 
 export default function AppNavigator() {
-  const [currentScreen, setCurrentScreen] = useState(Platform.OS === 'web' ? 'about' : 'chat');
+  const [currentScreen, setCurrentScreen] = useState('chat');
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [selectedPost, setSelectedPost] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);

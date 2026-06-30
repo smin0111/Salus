@@ -10,7 +10,7 @@ import {
     LogOut
 } from 'lucide-react';
 
-const Sidebar = () => {
+const Sidebar = ({ onLogout }) => {
     const menuItems = [
         { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/' },
         { icon: <Users size={20} />, label: 'User Management', path: '/users' },
@@ -82,7 +82,7 @@ const Sidebar = () => {
             </nav>
 
             <div style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: '1px solid #ffffff10' }}>
-                <button style={{
+                <button onClick={onLogout} style={{
                     width: '100%',
                     display: 'flex',
                     alignItems: 'center',

@@ -7,7 +7,7 @@ import config from '../config';
 import { useAuth } from '../context/AuthContext';
 
 export default function UpgradeScreen({ onBack, onSuccess }) {
-    const { user, isLoggedIn, refreshUser } = useAuth();
+    const { user, token, isLoggedIn, refreshUser } = useAuth();
     const [loading, setLoading] = useState(false);
     const [sdkReady, setSdkReady] = useState(false);
 
@@ -76,7 +76,7 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
                         merchantUid: rsp.merchant_uid
                     }, {
                         headers: {
-                            Authorization: `Bearer ${user.token}`
+                            Authorization: `Bearer ${token}`
                         }
                     });
 

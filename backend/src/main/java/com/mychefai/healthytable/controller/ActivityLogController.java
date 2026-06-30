@@ -2,12 +2,13 @@ package com.mychefai.healthytable.controller;
 
 import com.mychefai.healthytable.domain.User;
 import com.mychefai.healthytable.repository.UserRepository;
-import com.mychefai.healthytable.security.JwtTokenProvider;
+import com.mychefai.healthytable.security.AuthenticatedUserProvider;
 import com.mychefai.healthytable.service.ActivityLogService;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.util.Map;
 
@@ -17,34 +18,25 @@ import java.util.Map;
 public class ActivityLogController {
 
     private final ActivityLogService activityLogService;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final AuthenticatedUserProvider authenticatedUserProvider;
     private final UserRepository userRepository;
 
     @PostMapping("/log")
-    public ResponseEntity<?> logActivity(HttpServletRequest request, @RequestBody Map<String, Boolean> body) {
-        User user = getUserFromRequest(request);
-        if (user == null)
-            return ResponseEntity.status(401).body("Unauthorized");
-
+    public ResponseEntity<?> logActivity(@RequestBody Map<String, Boolean> body) {
+        User user = getCurrentUser();
         boolean isAi = body.getOrDefault("isAi", false);
         return ResponseEntity.ok(activityLogService.logActivity(user, isAi));
     }
 
     @GetMapping
-    public ResponseEntity<?> getActivityLogs(HttpServletRequest request) {
-        User user = getUserFromRequest(request);
-        if (user == null)
-            return ResponseEntity.status(401).body("Unauthorized");
-
+    public ResponseEntity<?> getActivityLogs() {
+        User user = getCurrentUser();
         return ResponseEntity.ok(activityLogService.getActivityLogs(user));
     }
 
-    private User getUserFromRequest(HttpServletRequest request) {
-        String token = jwtTokenProvider.resolveToken(request);
-        if (token != null && jwtTokenProvider.validateToken(token)) {
-            String userId = jwtTokenProvider.getUserId(token);
-            return userRepository.findById(Long.parseLong(userId)).orElse(null);
-        }
-        return null;
+    private User getCurrentUser() {
+        Long userId = authenticatedUserProvider.requireUserId();
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."));
     }
 }

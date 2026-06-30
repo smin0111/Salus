@@ -1,12 +1,12 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import { Bell, Search, LogIn } from 'lucide-react';
+import { Bell, Search } from 'lucide-react';
 
-const Layout = () => {
+const Layout = ({ onLogout }) => {
     return (
         <div className="admin-layout">
-            <Sidebar />
+            <Sidebar onLogout={onLogout} />
             <main className="main-content">
                 <header style={{
                     display: 'flex',
@@ -40,22 +40,6 @@ const Layout = () => {
 
                         <button style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
                             <Bell size={22} color="var(--text-secondary)" />
-                        </button>
-
-                        {/* 어드민 로그인을 알 수 있는 버튼 추가 */}
-                        <button
-                            className="btn-primary"
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                padding: '0.6rem 1.2rem',
-                                fontSize: '0.9rem'
-                            }}
-                            onClick={() => alert('Admin Login Flow will be implemented here')}
-                        >
-                            <LogIn size={18} />
-                            Admin Login
                         </button>
                     </div>
                 </header>

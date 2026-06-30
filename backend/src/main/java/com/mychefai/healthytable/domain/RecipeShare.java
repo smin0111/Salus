@@ -18,6 +18,8 @@ public class RecipeShare {
     private Long id;
     private Long userId; // Sender
     private Long recipeId;
+
+    @Column(length = 20)
     private String visibility; // PUBLIC, PRIVATE
     private String shareMessage;
     private LocalDateTime createdAt;

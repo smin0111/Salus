@@ -2,7 +2,7 @@ package com.mychefai.healthytable.controller;
 
 import com.mychefai.healthytable.domain.FridgeItem;
 import com.mychefai.healthytable.repository.FridgeRepository;
-import com.mychefai.healthytable.security.JwtTokenProvider;
+import com.mychefai.healthytable.security.AuthenticatedUserProvider;
 import com.mychefai.healthytable.service.GeminiService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -20,24 +20,24 @@ public class FridgeController {
 
     private final FridgeRepository fridgeRepository;
     private final GeminiService geminiService;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final AuthenticatedUserProvider authenticatedUserProvider;
 
     @GetMapping
-    public List<FridgeItem> getFridgeItems(@RequestHeader("Authorization") String token) {
-        Long userId = Long.valueOf(jwtTokenProvider.getUserId(token.replace("Bearer ", "")));
+    public List<FridgeItem> getFridgeItems() {
+        Long userId = authenticatedUserProvider.requireUserId();
         return fridgeRepository.findByUserIdOrderByExpiryDateAsc(userId);
     }
 
     @PostMapping
-    public FridgeItem addFridgeItem(@RequestHeader("Authorization") String token, @RequestBody FridgeItem item) {
-        Long userId = Long.valueOf(jwtTokenProvider.getUserId(token.replace("Bearer ", "")));
+    public FridgeItem addFridgeItem(@RequestBody FridgeItem item) {
+        Long userId = authenticatedUserProvider.requireUserId();
         item.setUserId(userId);
         return fridgeRepository.save(item);
     }
 
     @DeleteMapping("/{id}")
-    public void deleteFridgeItem(@PathVariable Long id, @RequestHeader("Authorization") String token) {
-        Long userId = Long.valueOf(jwtTokenProvider.getUserId(token.replace("Bearer ", "")));
+    public void deleteFridgeItem(@PathVariable Long id) {
+        Long userId = authenticatedUserProvider.requireUserId();
         FridgeItem item = fridgeRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "냉장고 항목을 찾을 수 없습니다."));
         if (!item.getUserId().equals(userId)) {
@@ -48,9 +48,8 @@ public class FridgeController {
 
     @PutMapping("/{id}")
     public FridgeItem updateFridgeItem(@PathVariable Long id,
-            @RequestHeader("Authorization") String token,
             @RequestBody FridgeItem item) {
-        Long userId = Long.valueOf(jwtTokenProvider.getUserId(token.replace("Bearer ", "")));
+        Long userId = authenticatedUserProvider.requireUserId();
 
         return fridgeRepository.findById(id)
                 .filter(existingItem -> existingItem.getUserId().equals(userId))
@@ -61,14 +60,13 @@ public class FridgeController {
                     existingItem.setExpiryDate(item.getExpiryDate());
                     return fridgeRepository.save(existingItem);
                 })
-                .orElseThrow(() -> new RuntimeException("Item not found or unauthorized"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "냉장고 항목을 찾을 수 없습니다."));
     }
 
     @PatchMapping("/{id}/quantity")
     public FridgeItem adjustQuantity(@PathVariable Long id,
-            @RequestHeader("Authorization") String token,
             @RequestBody Map<String, String> body) {
-        Long userId = Long.valueOf(jwtTokenProvider.getUserId(token.replace("Bearer ", "")));
+        Long userId = authenticatedUserProvider.requireUserId();
         String quantityStr = body.get("quantity");
 
         return fridgeRepository.findById(id)
@@ -77,12 +75,12 @@ public class FridgeController {
                     item.setQuantity(quantityStr);
                     return fridgeRepository.save(item);
                 })
-                .orElseThrow(() -> new RuntimeException("Item not found or unauthorized"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "냉장고 항목을 찾을 수 없습니다."));
     }
 
     @PostMapping("/scan")
-    public Mono<String> scanReceipt(@RequestHeader("Authorization") String token,
-            @RequestBody Map<String, String> body) {
+    public Mono<String> scanReceipt(@RequestBody Map<String, String> body) {
+        authenticatedUserProvider.requireUserId();
         String base64Image = body.get("image");
         if (base64Image == null || base64Image.isEmpty()) {
             return Mono.just("[]");

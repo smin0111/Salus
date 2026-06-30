@@ -346,6 +346,10 @@ public class ChatService {
                                     "오븐에서 마저 익히는 고기 요리는 팬에서 속까지 익히라고 쓰지 말고, 겉면만 노릇하게 굽는 시어링과 오븐 익힘을 구분하십시오.\n" +
                                     "영문 검색 근거의 pastry, puff pastry, pastry dough는 파스타가 아니라 '페이스트리 생지' 또는 '퍼프 페이스트리'로 번역하십시오.\n" +
                                     "dough는 문맥에 따라 '생지'로 번역하고, pasta와 혼동하지 마십시오.\n" +
+                                    "조리 순서에는 [재료] 목록에 없는 선택 재료를 새로 넣지 마십시오. 필요하면 먼저 [재료] 목록에 정확한 양을 추가하십시오.\n" +
+                                    "조리 순서는 초보자가 그대로 따라할 수 있게 각 단계마다 무엇을 할지, 불 세기, 몇 분, 어떤 상태가 되면 다음 단계인지, 실패했을 때 복구 방법 중 최소 3가지를 포함하십시오.\n" +
+                                    "'볶습니다', '끓입니다', '익힙니다'처럼 짧게 끝내지 말고 한 단계당 35자 이상으로 쓰십시오.\n" +
+                                    "마지막 완성 단계도 '불을 끄고 완성합니다'로만 끝내지 말고 맛 확인과 간 조절 기준을 포함하십시오.\n" +
                                     "반드시 아래 형식을 그대로 지키십시오. 인사말, 자기소개, 사과문, 검색 결과 설명을 쓰지 마십시오.\n" +
                                     normalizedTitle + " 레시피입니다.\n\n" +
                                     "요리 설명 한 문장\n\n" +
@@ -353,7 +357,7 @@ public class ChatService {
                                     "[재료]\n" +
                                     "- 재료명 양\n\n" +
                                     "[조리 순서]\n" +
-                                    "1. 조리 단계\n" +
+                                    "1. 무엇을 할지 + 불 세기 + 시간 + 다음 단계로 넘어갈 상태 + 초보자 실수 방지 팁이 들어간 조리 단계\n" +
                                     "=========================================\n";
                             return Mono.just(new RAGData(SearchEngine.SearchStatus.SUCCESS, systemContextSnippet, rawSearchContext, searchResponse.source()));
                         }
@@ -410,12 +414,14 @@ public class ChatService {
                                         log.warn("[RAG Pipeline] Generated recipe failed validation for query: '{}'. Reasons: {}",
                                                 normalizedTitle, valResult.reasons());
                                         responseReply = buildRecipeValidationFailureReply(normalizedTitle, ragData.status());
-                                    } else if (!valResult.dataQualityLow()) {
-                                        saveToRecipeDbSafely(parsedRecipe);
-                                        responseRecipe = parsedRecipe;
                                     } else {
-                                        log.info("[RAG Pipeline] Generated recipe served but not promoted due to data quality warnings. Query: '{}', Warnings: {}",
-                                                normalizedTitle, valResult.dataQualityWarnings());
+                                        responseReply = buildGeneratedRecipeReply(parsedRecipe);
+                                        if (!valResult.dataQualityLow()) {
+                                            saveToRecipeDbSafely(parsedRecipe);
+                                        } else {
+                                            log.info("[RAG Pipeline] Generated recipe served but not promoted due to data quality warnings. Query: '{}', Warnings: {}",
+                                                    normalizedTitle, valResult.dataQualityWarnings());
+                                        }
                                         responseRecipe = parsedRecipe;
                                     }
                                 } else {
@@ -907,7 +913,7 @@ public class ChatService {
                 systemContext.append("요리명: ").append(nullToBlank(recipe.getTitle())).append("\n");
                 appendRecipeField(systemContext, "설명", recipe.getDescription());
                 appendRecipeField(systemContext, "재료", joinRecipeList(recipe.getIngredients()));
-                appendRecipeField(systemContext, "조리 순서", joinNumberedRecipeList(recipe.getSteps()));
+                appendRecipeField(systemContext, "조리 순서", joinNumberedRecipeList(beginnerFriendlySteps(recipe)));
                 if (recipe.getCalories() != null) {
                     systemContext.append("열량: ").append(recipe.getCalories()).append(" kcal\n");
                 }
@@ -1046,7 +1052,7 @@ public class ChatService {
             reply.append("\n");
         }
 
-        List<String> steps = cleanRecipeValues(recipe.getSteps());
+        List<String> steps = beginnerFriendlySteps(recipe);
         if (!steps.isEmpty()) {
             reply.append("[조리 순서]\n");
             for (int i = 0; i < steps.size(); i++) {
@@ -1089,7 +1095,7 @@ public class ChatService {
             reply.append("\n");
         }
 
-        List<String> steps = cleanRecipeValues(recipe.getSteps());
+        List<String> steps = beginnerFriendlySteps(recipe);
         if (!steps.isEmpty()) {
             reply.append("[조리 순서]\n");
             for (int i = 0; i < steps.size(); i++) {
@@ -1106,7 +1112,7 @@ public class ChatService {
                 recipe.getTitle(),
                 sanitizeRecipeDescription(recipe),
                 cleanRecipeValues(recipe.getIngredients()),
-                cleanRecipeValues(recipe.getSteps()),
+                beginnerFriendlySteps(recipe),
                 recipe.getCalories(),
                 recipe.getDifficulty(),
                 recipe.getCookingTime(),
@@ -1219,6 +1225,138 @@ public class ChatService {
                 .filter(value -> value != null && !value.isBlank())
                 .map(String::trim)
                 .toList();
+    }
+
+    private List<String> beginnerFriendlySteps(Recipe recipe) {
+        if (recipe == null) {
+            return List.of();
+        }
+        List<String> steps = cleanRecipeValues(recipe.getSteps());
+        if (steps.isEmpty()) {
+            return steps;
+        }
+        String ingredientText = String.join(" ", cleanRecipeValues(recipe.getIngredients()));
+        return steps.stream()
+                .map(step -> removeUnlistedOptionalIngredientSuggestions(step, ingredientText))
+                .map(this::enrichBeginnerStep)
+                .toList();
+    }
+
+    private String removeUnlistedOptionalIngredientSuggestions(String step, String ingredientText) {
+        String trimmed = nullToBlank(step).trim();
+        if (trimmed.isBlank()) {
+            return trimmed;
+        }
+        String normalizedIngredients = nullToBlank(ingredientText).toLowerCase();
+        List<String> kept = new ArrayList<>();
+        String[] sentences = trimmed.split("(?<=[.!?])\\s+");
+        for (String sentence : sentences) {
+            String compact = sentence.replaceAll("\\s+", "");
+            boolean optionalSuggestion = compact.contains("원한다면")
+                    || compact.contains("취향에따라")
+                    || compact.contains("추가해도")
+                    || compact.contains("넣어도좋");
+            boolean mentionsUnlistedOptional = optionalSuggestion
+                    && containsUnlistedIngredient(sentence, normalizedIngredients,
+                    "청양고추", "고추", "고춧가루", "참기름", "깨", "치즈", "버터", "크림", "설탕");
+            if (!mentionsUnlistedOptional) {
+                kept.add(sentence.trim());
+            }
+        }
+        String cleaned = String.join(" ", kept).trim();
+        return cleaned.isBlank() ? trimmed : cleaned;
+    }
+
+    private boolean containsUnlistedIngredient(String sentence, String normalizedIngredients, String... ingredientNames) {
+        for (String ingredientName : ingredientNames) {
+            if (sentence.contains(ingredientName) && !normalizedIngredients.contains(ingredientName.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String enrichBeginnerStep(String step) {
+        String trimmed = nullToBlank(step).trim();
+        if (trimmed.isBlank() || isBeginnerDetailedStep(trimmed)) {
+            return trimmed;
+        }
+
+        String tip = beginnerTipForStep(trimmed);
+        if (tip.isBlank() || trimmed.contains(tip)) {
+            return trimmed;
+        }
+        return ensureSentence(trimmed) + " " + tip;
+    }
+
+    private boolean isBeginnerDetailedStep(String step) {
+        boolean hasHeat = containsTextAny(step, "센불", "강불", "중불", "중약불", "약불", "불을");
+        boolean hasTime = step.matches(".*\\d+\\s*(분|초|시간).*")
+                || containsTextAny(step, "잠시", "충분히", "노릇", "투명", "자작");
+        boolean hasState = containsTextAny(step, "때까지", "상태", "익으면", "끓으면", "줄이고", "노릇", "투명", "자작");
+        boolean hasRecovery = containsTextAny(step, "타", "눌어", "싱거", "짜면", "조절");
+        int detailScore = 0;
+        if (hasHeat) {
+            detailScore++;
+        }
+        if (hasTime) {
+            detailScore++;
+        }
+        if (hasState) {
+            detailScore++;
+        }
+        if (hasRecovery) {
+            detailScore++;
+        }
+        return step.length() >= 45 && detailScore >= 2;
+    }
+
+    private String beginnerTipForStep(String step) {
+        if (containsTextAny(step, "완성", "불을 끄")) {
+            return "마지막에 한 숟가락 맛보고 싱거우면 양념을 아주 조금만 더하고, 짜면 물을 2~3큰술 넣어 중약불에서 1분 더 끓여 조절하세요.";
+        }
+        if (containsTextAny(step, "약불", "졸", "더 끓", "마무리")) {
+            return "뚜껑을 살짝 덮고 약불을 유지하되 5분마다 바닥을 저어 눌어붙지 않게 하세요. 국물이 자작하게 남으면 완성입니다.";
+        }
+        if (containsTextAny(step, "끓", "국물", "물")) {
+            return "처음엔 센불로 올리고 큰 거품이 올라오면 중약불로 낮추세요. 국물이 너무 졸면 물을 2~3큰술씩 보충하면 됩니다.";
+        }
+        if (containsTextAny(step, "돼지고기", "고기") && containsTextAny(step, "볶", "익", "굽")) {
+            return "중불에서 4~5분간 뒤집어가며 익히고, 겉면의 붉은 기가 거의 사라지면 다음 단계로 넘어가세요. 바닥이 타기 시작하면 물을 1~2큰술 넣고 불을 낮추세요.";
+        }
+        if (containsTextAny(step, "양파", "대파", "파", "채소", "야채") && containsTextAny(step, "볶", "익")) {
+            return "중불에서 2~3분간 저어가며 익히고, 양파 가장자리가 살짝 투명해지면 다음 단계로 넘어가세요.";
+        }
+        if (containsTextAny(step, "김치") && containsTextAny(step, "준비", "자르", "썰")) {
+            return "김치가 길면 가위로 3~4cm 길이로 잘라 한 숟가락에 들어오게 맞추세요. 국물이 튈 수 있으니 도마보다 그릇 안에서 자르면 편합니다.";
+        }
+        if (containsTextAny(step, "준비", "자르", "썰", "손질")) {
+            return "크기는 한입에 먹기 좋은 3cm 정도로 맞추고, 물기가 많으면 키친타월로 살짝 눌러 기름 튐을 줄이세요.";
+        }
+        if (containsTextAny(step, "볶")) {
+            return "중불에서 2~3분간 계속 저어가며 볶고, 재료 가장자리에 윤기가 돌면 다음 단계로 넘어가세요.";
+        }
+        if (containsTextAny(step, "간", "양념", "소금", "간장", "고추장", "된장")) {
+            return "간은 한 번에 많이 넣지 말고 1/2큰술씩 넣은 뒤 맛을 보세요. 짜면 물을 2~3큰술 넣어 조절하세요.";
+        }
+        return "불은 중불부터 시작하고, 타는 냄새가 나면 바로 약불로 낮춘 뒤 바닥을 긁듯이 저어주세요.";
+    }
+
+    private String ensureSentence(String value) {
+        if (value.endsWith(".") || value.endsWith("!") || value.endsWith("?")) {
+            return value;
+        }
+        return value + ".";
+    }
+
+    private boolean containsTextAny(String value, String... keywords) {
+        String normalized = nullToBlank(value).toLowerCase();
+        for (String keyword : keywords) {
+            if (normalized.contains(keyword.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<String> extractExcludedIngredients(String message) {

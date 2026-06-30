@@ -65,8 +65,6 @@ export const AuthProvider = ({ children }) => {
                 scheme: 'mychefai',
                 preferLocalhost: true,
             }),
-            ios: 'http://localhost:8081', // Placeholder if not needed, but actually use the reverse client ID if available
-            // Wait, let's use the exact string from the git diff
             ios: 'com.googleusercontent.apps.1016750907889-ijfnf8k0pkksfupfshb8dugrjbeshglc:/oauthredirect',
             default: AuthSession.makeRedirectUri({
                 scheme: 'mychefai',

@@ -1,15 +1,46 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Shield, Lock, User, ChefHat } from 'lucide-react';
+import { AlertTriangle, ChefHat, KeyRound, Shield } from 'lucide-react';
+import config from '../config';
 
 const Login = ({ onLogin }) => {
-    const [email, setEmail] = useState('admin@mychefai.com');
-    const [password, setPassword] = useState('admin1234');
+    const [token, setToken] = useState('');
+    const [error, setError] = useState('');
+    const [submitting, setSubmitting] = useState(false);
 
-    const handleSubmit = (e) => {
+    const normalizedToken = token.trim();
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        // Logic for login simulation
-        onLogin();
+        if (!normalizedToken || submitting) {
+            return;
+        }
+
+        setSubmitting(true);
+        setError('');
+        try {
+            const response = await fetch(`${config.API_BASE_URL}/admin/dashboard/stats`, {
+                headers: {
+                    Authorization: `Bearer ${normalizedToken}`,
+                },
+            });
+
+            if (response.status === 401 || response.status === 403) {
+                setError('관리자 권한이 있는 토큰만 사용할 수 있습니다.');
+                return;
+            }
+
+            if (!response.ok) {
+                setError('관리자 API에 연결하지 못했습니다.');
+                return;
+            }
+
+            onLogin(normalizedToken);
+        } catch (err) {
+            setError('백엔드 서버에 연결하지 못했습니다.');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -49,12 +80,13 @@ const Login = ({ onLogin }) => {
 
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                     <div style={{ position: 'relative' }}>
-                        <User size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#A8A29E' }} />
+                        <KeyRound size={18} style={{ position: 'absolute', left: '12px', top: '18px', color: '#A8A29E' }} />
                         <input
-                            type="email"
-                            placeholder="Admin Email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
+                            type="password"
+                            placeholder="Admin access token"
+                            value={token}
+                            onChange={(e) => setToken(e.target.value)}
+                            autoComplete="off"
                             style={{
                                 width: '100%',
                                 padding: '0.85rem 0.85rem 0.85rem 40px',
@@ -67,26 +99,25 @@ const Login = ({ onLogin }) => {
                         />
                     </div>
 
-                    <div style={{ position: 'relative' }}>
-                        <Lock size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#A8A29E' }} />
-                        <input
-                            type="password"
-                            placeholder="Password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            style={{
-                                width: '100%',
-                                padding: '0.85rem 0.85rem 0.85rem 40px',
-                                borderRadius: '12px',
-                                border: '1px solid #E7E5E4',
-                                fontSize: '1rem',
-                                outline: 'none'
-                            }}
-                        />
-                    </div>
+                    {error && (
+                        <div style={{
+                            display: 'flex',
+                            gap: '8px',
+                            alignItems: 'center',
+                            color: '#B91C1C',
+                            background: '#FEF2F2',
+                            border: '1px solid #FECACA',
+                            padding: '0.75rem',
+                            borderRadius: '8px',
+                            fontSize: '0.9rem'
+                        }}>
+                            <AlertTriangle size={16} />
+                            <span>{error}</span>
+                        </div>
+                    )}
 
-                    <button type="submit" className="btn-primary" style={{ marginTop: '0.5rem' }}>
-                        Enter Command Center
+                    <button type="submit" className="btn-primary" style={{ marginTop: '0.5rem' }} disabled={!normalizedToken || submitting}>
+                        {submitting ? 'Verifying...' : 'Enter Command Center'}
                     </button>
                 </form>
 

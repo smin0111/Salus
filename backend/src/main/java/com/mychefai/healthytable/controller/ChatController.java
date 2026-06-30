@@ -4,7 +4,7 @@ import com.mychefai.healthytable.domain.ChatSession;
 import com.mychefai.healthytable.dto.ChatDto;
 import com.mychefai.healthytable.repository.ChatMessageRepository;
 import com.mychefai.healthytable.repository.ChatSessionRepository;
-import com.mychefai.healthytable.security.JwtTokenProvider;
+import com.mychefai.healthytable.security.AuthenticatedUserProvider;
 import com.mychefai.healthytable.service.ChatService;
 import com.mychefai.healthytable.service.RecipeWorkSessionService;
 import lombok.RequiredArgsConstructor;
@@ -23,19 +23,17 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/chat")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class ChatController {
 
-    private final JwtTokenProvider jwtTokenProvider;
+    private final AuthenticatedUserProvider authenticatedUserProvider;
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final RecipeWorkSessionService recipeWorkSessionService;
     private final ChatService chatService;
 
     @GetMapping("/sessions")
-    public List<ChatDto.SessionSummary> getSessions(
-            @RequestHeader(value = "Authorization", required = false) String authHeader) {
-        Optional<Long> authenticatedUserId = getAuthenticatedUserId(authHeader);
+    public List<ChatDto.SessionSummary> getSessions() {
+        Optional<Long> authenticatedUserId = authenticatedUserProvider.getCurrentUserId();
         if (authenticatedUserId.isEmpty()) {
             return List.of();
         }
@@ -51,11 +49,8 @@ public class ChatController {
     }
 
     @GetMapping("/sessions/{sessionId}/messages")
-    public List<ChatDto.Message> getMessages(
-            @RequestHeader(value = "Authorization", required = false) String authHeader,
-            @PathVariable Long sessionId) {
-        Long userId = getAuthenticatedUserId(authHeader)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."));
+    public List<ChatDto.Message> getMessages(@PathVariable Long sessionId) {
+        Long userId = authenticatedUserProvider.requireUserId();
 
         ChatSession session = chatSessionRepository.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "대화 세션을 찾을 수 없습니다."));
@@ -67,11 +62,9 @@ public class ChatController {
 
     @PatchMapping("/sessions/{sessionId}")
     public ChatDto.SessionSummary updateSessionTitle(
-            @RequestHeader(value = "Authorization", required = false) String authHeader,
             @PathVariable Long sessionId,
             @RequestBody ChatDto.SessionUpdateRequest request) {
-        Long userId = getAuthenticatedUserId(authHeader)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."));
+        Long userId = authenticatedUserProvider.requireUserId();
 
         String title = normalizeSessionTitle(request != null ? request.getTitle() : null);
         ChatSession session = chatSessionRepository.findByIdAndUserId(sessionId, userId)
@@ -89,11 +82,8 @@ public class ChatController {
 
     @DeleteMapping("/sessions/{sessionId}")
     @Transactional
-    public ResponseEntity<Map<String, String>> deleteSession(
-            @RequestHeader(value = "Authorization", required = false) String authHeader,
-            @PathVariable Long sessionId) {
-        Long userId = getAuthenticatedUserId(authHeader)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."));
+    public ResponseEntity<Map<String, String>> deleteSession(@PathVariable Long sessionId) {
+        Long userId = authenticatedUserProvider.requireUserId();
 
         ChatSession session = chatSessionRepository.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "대화 세션을 찾을 수 없습니다."));
@@ -105,27 +95,14 @@ public class ChatController {
     }
 
     @PostMapping("/message")
-    public Mono<ChatDto.Response> chat(
-            @RequestHeader(value = "Authorization", required = false) String authHeader,
-            @RequestBody ChatDto.Request request) {
-        Optional<Long> authenticatedUserId = getAuthenticatedUserId(authHeader);
+    public Mono<ChatDto.Response> chat(@RequestBody ChatDto.Request request) {
+        Optional<Long> authenticatedUserId = authenticatedUserProvider.getCurrentUserId();
         return chatService.processChat(authenticatedUserId, request);
     }
 
     @PostMapping("/stt")
     public Mono<Map<String, String>> speechToText(@RequestParam("audio") MultipartFile audioFile) {
         return Mono.just(Map.of("text", "음성 인식 기능은 아직 서버 키 설정이 필요합니다. (Mock Response)"));
-    }
-
-    private Optional<Long> getAuthenticatedUserId(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            return Optional.empty();
-        }
-        String token = authHeader.substring(7);
-        if (!jwtTokenProvider.validateToken(token)) {
-            return Optional.empty();
-        }
-        return Optional.of(Long.parseLong(jwtTokenProvider.getUserId(token)));
     }
 
     private String normalizeSessionTitle(String title) {

@@ -4,7 +4,7 @@ import com.mychefai.healthytable.domain.HealthCheckup;
 import com.mychefai.healthytable.dto.HealthCheckupAnalysisDTO;
 import com.mychefai.healthytable.dto.HealthCheckupDTO;
 import com.mychefai.healthytable.repository.HealthCheckupRepository;
-import com.mychefai.healthytable.security.JwtTokenProvider;
+import com.mychefai.healthytable.security.AuthenticatedUserProvider;
 import com.mychefai.healthytable.service.HealthCheckupAnalysisService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -13,18 +13,15 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/health-checkups")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class HealthCheckupController {
 
     private final HealthCheckupRepository healthCheckupRepository;
     private final HealthCheckupAnalysisService analysisService;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final AuthenticatedUserProvider authenticatedUserProvider;
 
     @PostMapping
-    public ResponseEntity<HealthCheckup> saveCheckup(
-            @RequestHeader("Authorization") String token,
-            @RequestBody HealthCheckupDTO dto) {
-        Long userId = getUserId(token);
+    public ResponseEntity<HealthCheckup> saveCheckup(@RequestBody HealthCheckupDTO dto) {
+        Long userId = authenticatedUserProvider.requireUserId();
 
         HealthCheckup checkup = new HealthCheckup();
         checkup.setUserId(userId);
@@ -46,24 +43,20 @@ public class HealthCheckupController {
     }
 
     @GetMapping("/latest")
-    public ResponseEntity<HealthCheckup> getLatestCheckup(@RequestHeader("Authorization") String token) {
-        Long userId = getUserId(token);
+    public ResponseEntity<HealthCheckup> getLatestCheckup() {
+        Long userId = authenticatedUserProvider.requireUserId();
         return healthCheckupRepository.findTopByUserIdOrderByCheckupDateDescIdDesc(userId)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
     @GetMapping("/analysis")
-    public ResponseEntity<HealthCheckupAnalysisDTO> getLatestAnalysis(@RequestHeader("Authorization") String token) {
-        Long userId = getUserId(token);
+    public ResponseEntity<HealthCheckupAnalysisDTO> getLatestAnalysis() {
+        Long userId = authenticatedUserProvider.requireUserId();
         HealthCheckupAnalysisDTO analysis = healthCheckupRepository.findTopByUserIdOrderByCheckupDateDescIdDesc(userId)
                 .map(analysisService::analyze)
                 .orElseGet(analysisService::emptyAnalysis);
         return ResponseEntity.ok(analysis);
-    }
-
-    private Long getUserId(String token) {
-        return Long.valueOf(jwtTokenProvider.getUserId(token.replace("Bearer ", "")));
     }
 
     private Double resolveBmi(HealthCheckupDTO dto) {

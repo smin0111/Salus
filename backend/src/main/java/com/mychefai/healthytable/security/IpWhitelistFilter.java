@@ -33,12 +33,6 @@ public class IpWhitelistFilter extends OncePerRequestFilter {
         if (path.startsWith("/api/admin/")) {
             String remoteAddr = request.getRemoteAddr();
 
-            // 프록시나 로드 밸런서를 거치는 경우 X-Forwarded-For 헤더 확인
-            String xff = request.getHeader("X-Forwarded-For");
-            if (xff != null && !xff.isEmpty()) {
-                remoteAddr = xff.split(",")[0].trim();
-            }
-
             if (!ALLOWED_IPS.contains(remoteAddr)) {
                 response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                 response.getWriter().write("Access Denied: IP not whitelisted (" + remoteAddr + ")");

@@ -23,7 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) {
     const insets = useSafeAreaInsets();
-    const { user, isLoggedIn, logout, refreshUser } = useAuth();
+    const { user, token, isLoggedIn, logout, refreshUser } = useAuth();
 
     // 구독 멤버십 모달 상태
     const [subscriptionModalVisible, setSubscriptionModalVisible] = useState(false);
@@ -139,7 +139,7 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                             impUid: impUid,
                             merchantUid: merchantUid
                         }, {
-                            headers: { Authorization: `Bearer ${user.token}` }
+                            headers: { Authorization: `Bearer ${token}` }
                         });
 
                         if (response.data.success) {

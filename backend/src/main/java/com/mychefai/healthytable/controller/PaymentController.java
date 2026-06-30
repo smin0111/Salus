@@ -2,7 +2,7 @@ package com.mychefai.healthytable.controller;
 
 import com.mychefai.healthytable.domain.Payment;
 import com.mychefai.healthytable.dto.PaymentRequestDto;
-import com.mychefai.healthytable.security.JwtTokenProvider;
+import com.mychefai.healthytable.security.AuthenticatedUserProvider;
 import com.mychefai.healthytable.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,19 +18,15 @@ import java.util.Map;
 public class PaymentController {
 
     private final PaymentService paymentService;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final AuthenticatedUserProvider authenticatedUserProvider;
 
     @PostMapping("/verify")
-    public ResponseEntity<?> verifyPayment(
-            @RequestHeader("Authorization") String token,
-            @RequestBody PaymentRequestDto request) {
+    public ResponseEntity<?> verifyPayment(@RequestBody PaymentRequestDto request) {
         try {
-            // 토큰에서 사용자 식별자(ID) 추출
-            String jwt = token.substring(7);
-            Long userId = Long.valueOf(jwtTokenProvider.getUserId(jwt));
+            Long userId = authenticatedUserProvider.requireUserId();
 
             // 결제 정보 검증 및 처리
-            Payment payment = paymentService.verifyAndSavePayment(request.getImpUid(), userId);
+            Payment payment = paymentService.verifyAndSavePayment(request.getImpUid(), request.getMerchantUid(), userId);
 
             log.info("Payment verified successfully for User ID: {}", userId);
             return ResponseEntity.ok(Map.of(

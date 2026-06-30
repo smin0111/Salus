@@ -2,6 +2,7 @@ package com.mychefai.healthytable.dto;
 
 import com.mychefai.healthytable.domain.User;
 import com.mychefai.healthytable.domain.UserGrade;
+import com.mychefai.healthytable.domain.UserRole;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -19,6 +20,7 @@ public class UserResponseDTO {
     private String name;
     private LocalDateTime createdAt;
     private UserGrade grade;
+    private UserRole role;
 
     public static UserResponseDTO from(User user) {
         if (user == null) {
@@ -30,6 +32,7 @@ public class UserResponseDTO {
                 .name(user.getName())
                 .createdAt(user.getCreatedAt())
                 .grade(user.getGrade())
+                .role(user.getRole())
                 .build();
     }
 }
