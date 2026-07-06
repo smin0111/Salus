@@ -107,7 +107,7 @@
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-jackson</artifactId>
-            <version>0.11.5</version>
+            <version>0.13.0</version>
             <scope>runtime</scope>
         </dependency>
         <!-- HTML 파싱을 통한 외부 웹 검색 구현용 Jsoup -->
