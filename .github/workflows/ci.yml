@@ -10,6 +10,13 @@ on:
       - "feature/**"
       - "codex/**"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend-test:
     name: 백엔드 테스트
@@ -85,3 +92,40 @@ jobs:
 
       - name: 웹 번들 생성
         run: npx expo export --platform web --output-dir dist
+
+  docker-build:
+    name: Docker 이미지 빌드 확인
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: 운영 Docker Compose 설정 검증
+        run: docker compose --env-file .env.example -f docker-compose.prod.yml config
+
+      - name: 백엔드 이미지 빌드
+        run: docker build -t salus-backend:ci ./backend
+
+      - name: 백엔드 컨테이너 non-root 확인
+        run: docker run --rm --entrypoint sh salus-backend:ci -c 'test "$(id -u)" = "10001"'
+
+      - name: 어드민 이미지 빌드
+        run: docker build --build-arg VITE_API_BASE_URL=/api -t salus-admin:ci ./admin
+
+      - name: 어드민 컨테이너 non-root 확인
+        run: docker run --rm --entrypoint sh salus-admin:ci -c 'test "$(id -u)" != "0"'
+
+      - name: 어드민 정적 페이지 응답 확인
+        run: |
+          docker run -d --name salus-admin-ci-check -p 18081:8080 salus-admin:ci
+          for i in $(seq 1 10); do
+            if curl -fsS http://localhost:18081/ >/tmp/salus-admin-index.html 2>/tmp/salus-admin-curl.log; then
+              docker rm -f salus-admin-ci-check
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/salus-admin-curl.log
+          docker logs salus-admin-ci-check
+          docker rm -f salus-admin-ci-check
+          exit 1

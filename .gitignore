@@ -6,6 +6,8 @@ backend/scratch_data_importer.py
 backend/scratch_seed_importer.py
 *.env
 *.env.local
+.env.*
+!.env.example
 
 # Node modules
 node_modules/
@@ -18,6 +20,8 @@ frontend/.expo/
 frontend/dist/
 frontend/build/
 frontend/web-build/
+admin/dist/
+admin/build/
 
 # Backend build artifacts
 backend/target/
@@ -46,3 +50,8 @@ logs/
 # Temporary files
 *.tmp
 *.temp
+
+# Personal review/working notes
+BEGINNER_CODE_REVIEW_NOTES.md
+GITHUB_MANAGEMENT_GUIDE.md
+SERVICE_READINESS_REVIEW.md
