@@ -2,10 +2,12 @@ package com.mychefai.healthytable.security;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 @Component
@@ -15,13 +17,35 @@ public class JwtTokenProvider {
     private String secretKey;
 
     private final long VALIDITY_IN_MS = 3600000; // 1h
+    private static final int MIN_SECRET_BYTES = 32;
+
+    @PostConstruct
+    void validateSecretOnStartup() {
+        validateSecretKey(secretKey);
+    }
 
     private Key getSigningKey() {
-        byte[] keyBytes = secretKey.getBytes();
-        if (keyBytes.length < 32) {
-            throw new IllegalArgumentException("JWT 시크릿 키는 보안을 위해 반드시 최소 32바이트(256비트) 이상이어야 합니다!");
-        }
+        validateSecretKey(secretKey);
+        byte[] keyBytes = secretKey.getBytes(StandardCharsets.UTF_8);
         return Keys.hmacShaKeyFor(keyBytes);
+    }
+
+    private void validateSecretKey(String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("JWT_SECRET 또는 jwt.secret 설정이 비어 있습니다.");
+        }
+
+        String normalized = value.toLowerCase();
+        if (normalized.contains("replace-with")
+                || normalized.contains("change-me")
+                || normalized.contains("your-secret")
+                || normalized.contains("example")) {
+            throw new IllegalArgumentException("JWT_SECRET에 예시값이 들어 있습니다. 운영 또는 로컬 전용 난수 값으로 바꿔야 합니다.");
+        }
+
+        if (value.getBytes(StandardCharsets.UTF_8).length < MIN_SECRET_BYTES) {
+            throw new IllegalArgumentException("JWT 시크릿 키는 보안을 위해 반드시 최소 32바이트(256비트) 이상이어야 합니다.");
+        }
     }
 
     public String createToken(String userId) {

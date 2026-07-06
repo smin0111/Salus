@@ -10,14 +10,16 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 
 /**
- * Cross-Origin-Opener-Policy 헤더를 완화하여 Google OAuth 팝업이
- * 정상적으로 토큰을 전달할 수 있도록 하는 필터.
+ * OAuth 로그인 API에서만 Cross-Origin-Opener-Policy 헤더를 완화하여
+ * 브라우저 팝업 기반 로그인 흐름과 충돌하지 않도록 하는 필터.
  *
- * COOP 기본값(same-origin)은 구글 OAuth 팝업의 window.close/window.closed 접근을 차단함.
- * unsafe-none으로 설정해야 OAuth 흐름이 정상 작동함.
+ * 일반 API 응답까지 전부 완화하면 보안 헤더의 의미가 약해지므로
+ * /api/auth/** 요청에만 예외적으로 적용한다.
  */
 @Component
 public class CoopHeaderFilter extends OncePerRequestFilter {
+
+    private static final String AUTH_API_PREFIX = "/api/auth/";
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -25,10 +27,22 @@ public class CoopHeaderFilter extends OncePerRequestFilter {
             FilterChain filterChain)
             throws ServletException, IOException {
 
-        // COOP와 COEP를 OAuth 팝업 호환 값으로 설정
-        response.setHeader("Cross-Origin-Opener-Policy", "unsafe-none");
-        response.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
+        if (isAuthApiRequest(request)) {
+            response.setHeader("Cross-Origin-Opener-Policy", "unsafe-none");
+            response.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
+        }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean isAuthApiRequest(HttpServletRequest request) {
+        String requestUri = request.getRequestURI();
+        String contextPath = request.getContextPath();
+
+        if (contextPath != null && !contextPath.isBlank() && requestUri.startsWith(contextPath)) {
+            requestUri = requestUri.substring(contextPath.length());
+        }
+
+        return requestUri.startsWith(AUTH_API_PREFIX);
     }
 }

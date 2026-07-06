@@ -38,27 +38,45 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 if (isValid) {
                     String userId = tokenProvider.getUserId(jwt);
-                    Optional<User> user = userRepository.findById(Long.parseLong(userId));
+                    Optional<Long> parsedUserId = parseUserId(userId);
 
-                    if (user.isPresent()) {
-                        String role = user.get().getRole() != null ? user.get().getRole().name() : "USER";
-                        List<SimpleGrantedAuthority> authorities = List.of(
-                                new SimpleGrantedAuthority("ROLE_" + role));
+                    if (parsedUserId.isPresent()) {
+                        Optional<User> user = userRepository.findById(parsedUserId.get());
 
-                        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                                userId, null, authorities);
+                        if (user.isPresent()) {
+                            String role = user.get().getRole() != null ? user.get().getRole().name() : "USER";
+                            List<SimpleGrantedAuthority> authorities = List.of(
+                                    new SimpleGrantedAuthority("ROLE_" + role));
 
-                        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                                    String.valueOf(parsedUserId.get()), null, authorities);
 
-                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                            SecurityContextHolder.getContext().setAuthentication(authentication);
+                        }
                     }
                 }
             }
         } catch (Exception ex) {
-            logger.error("Could not set user authentication in security context", ex);
+            logger.warn("JWT authentication was skipped: " + ex.getMessage());
+            if (logger.isDebugEnabled()) {
+                logger.debug("JWT authentication failure details", ex);
+            }
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private Optional<Long> parseUserId(String userId) {
+        try {
+            return Optional.of(Long.parseLong(userId));
+        } catch (NumberFormatException ex) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("JWT subject is not a numeric user id: " + userId);
+            }
+            return Optional.empty();
+        }
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {
