@@ -1,8 +1,7 @@
 package com.mychefai.healthytable.controller;
 
-import com.mychefai.healthytable.domain.Payment;
 import com.mychefai.healthytable.dto.PaymentRequestDto;
-import com.mychefai.healthytable.security.JwtTokenProvider;
+import com.mychefai.healthytable.security.AuthenticatedUserProvider;
 import com.mychefai.healthytable.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,32 +17,23 @@ import java.util.Map;
 public class PaymentController {
 
     private final PaymentService paymentService;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final AuthenticatedUserProvider authenticatedUserProvider;
 
     @PostMapping("/verify")
-    public ResponseEntity<?> verifyPayment(
-            @RequestHeader("Authorization") String token,
-            @RequestBody PaymentRequestDto request) {
-        try {
-            // 토큰에서 사용자 식별자(ID) 추출
-            String jwt = token.substring(7);
-            Long userId = Long.valueOf(jwtTokenProvider.getUserId(jwt));
-
-            // 결제 정보 검증 및 처리
-            Payment payment = paymentService.verifyAndSavePayment(request.getImpUid(), userId);
-
-            log.info("Payment verified successfully for User ID: {}", userId);
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "message", "결제가 완료되었습니다. 프리미엄 혜택을 이용해보세요!",
-                    "grade", "PREMIUM"));
-        } catch (IllegalArgumentException e) {
-            log.warn("Payment verification failed: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
-        } catch (Exception e) {
-            log.error("Internal error during payment verification", e);
-            return ResponseEntity.internalServerError()
-                    .body(Map.of("success", false, "message", "결제 처리 중 서버 오류가 발생했습니다."));
+    public ResponseEntity<?> verifyPayment(@RequestBody PaymentRequestDto request) {
+        if (request == null) {
+            throw new IllegalArgumentException("결제 요청 정보가 누락되었습니다.");
         }
+
+        Long userId = authenticatedUserProvider.requireUserId();
+
+        // 결제 정보 검증 및 처리
+        paymentService.verifyAndSavePayment(request.getImpUid(), request.getMerchantUid(), userId);
+
+        log.info("Payment verified successfully. userId={}", userId);
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "결제가 완료되었습니다. 프리미엄 혜택을 이용해보세요!",
+                "grade", "PLUS"));
     }
 }

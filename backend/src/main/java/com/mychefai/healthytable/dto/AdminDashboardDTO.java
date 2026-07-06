@@ -31,9 +31,6 @@ public class AdminDashboardDTO {
     private long monthPaymentAmount; // 이번 달 매출 합계 (원)
     private List<DailyPaymentStat> dailyPaymentStats; // 최근 7일 일별 결제 통계
 
-    // 신규: 에러 로그
-    private List<String> errorLogs; // 최신 에러 메시지 1~2건 (없으면 빈 리스트)
-
     @Data
     @Builder
     @NoArgsConstructor

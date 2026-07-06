@@ -1,0 +1,7 @@
+target/
+.mvn/
+mvnw
+mvnw.cmd
+__pycache__/
+*.pyc
+src/main/resources/application-secret.properties

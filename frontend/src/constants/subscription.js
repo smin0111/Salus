@@ -1,0 +1,3 @@
+export const SUBSCRIPTION_AMOUNT = 9900;
+export const SUBSCRIPTION_PRICE_LABEL = '₩9,900';
+export const PORTONE_IMP_CODE = 'imp33061218';

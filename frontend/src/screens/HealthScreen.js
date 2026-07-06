@@ -1,8 +1,35 @@
 
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Modal, SafeAreaView, Platform, KeyboardAvoidingView, Animated } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Modal, SafeAreaView, Platform, KeyboardAvoidingView, Animated, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import axios from 'axios';
 import { colors } from '../theme/colors';
+import config from '../config';
+import { useAuth } from '../context/AuthContext';
+import { debugLog } from '../utils/logger';
+import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
+
+const PROFILE_KEYS = ['allergies', 'chronicConditions', 'dietaryRestrictions', 'medications', 'goals'];
+const MAX_PROFILE_ITEMS = 30;
+const MAX_PROFILE_ITEM_LENGTH = 80;
+
+const compactStringList = (values) => {
+    if (!Array.isArray(values)) return [];
+    const seen = new Set();
+    return values
+        .map(value => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : ''))
+        .filter(Boolean)
+        .filter(value => {
+            if (seen.has(value)) return false;
+            seen.add(value);
+            return true;
+        });
+};
+
+const normalizeHealthProfile = (profile = {}) => PROFILE_KEYS.reduce((nextProfile, key) => {
+    nextProfile[key] = compactStringList(profile[key]);
+    return nextProfile;
+}, {});
 
 const SECTIONS = [
     {
@@ -52,109 +79,190 @@ const SECTIONS = [
     }
 ];
 
-export default function HealthScreen({ healthProfile, setHealthProfile, isSidebarOpen, onToggleSidebar, webMode = false }) {
-    const [isEditing, setIsEditing] = useState(false);
-    const [inputStates, setInputStates] = useState({}); // 섹션별 입력 상태
+function HealthSectionCard({
+    section,
+    items,
+    isEditing,
+    onAddItem,
+    onRemoveItem,
+}) {
+    const [draftValue, setDraftValue] = useState('');
+    const hoverAnim = React.useRef(new Animated.Value(1)).current;
 
-    const handleAddItem = (sectionKey) => {
-        const text = inputStates[sectionKey];
-        if (text && text.trim()) {
-            setHealthProfile(prev => ({
-                ...prev,
-                [sectionKey]: [...(prev[sectionKey] || []), text.trim()]
-            }));
-            setInputStates(prev => ({ ...prev, [sectionKey]: '' }));
+    const handleAddItem = () => {
+        const added = onAddItem(section.key, draftValue);
+        if (added) {
+            setDraftValue('');
         }
     };
 
-    const handleRemoveItem = (sectionKey, itemToRemove) => {
-        setHealthProfile(prev => ({
-            ...prev,
-            [sectionKey]: prev[sectionKey].filter(item => item !== itemToRemove)
-        }));
+    const handleMouseEnter = () => {
+        if (Platform.OS === 'web') {
+            Animated.spring(hoverAnim, { toValue: 1.02, friction: 6, useNativeDriver: true }).start();
+        }
     };
 
-    const setInputText = (sectionKey, text) => {
-        setInputStates(prev => ({ ...prev, [sectionKey]: text }));
+    const handleMouseLeave = () => {
+        if (Platform.OS === 'web') {
+            Animated.spring(hoverAnim, { toValue: 1, friction: 6, useNativeDriver: true }).start();
+        }
     };
 
-    const AnimatedSectionCard = ({ section, items }) => {
-        const hoverAnim = React.useRef(new Animated.Value(1)).current;
-
-        const handleMouseEnter = () => {
-            if (Platform.OS === 'web') {
-                Animated.spring(hoverAnim, { toValue: 1.02, friction: 6, useNativeDriver: true }).start();
-            }
-        };
-
-        const handleMouseLeave = () => {
-            if (Platform.OS === 'web') {
-                Animated.spring(hoverAnim, { toValue: 1, friction: 6, useNativeDriver: true }).start();
-            }
-        };
-
-        return (
-            <Animated.View
-                style={[styles.card, { borderColor: section.borderColor, transform: [{ scale: hoverAnim }] }]}
-                {...(Platform.OS === 'web' ? { onMouseEnter: handleMouseEnter, onMouseLeave: handleMouseLeave } : {})}
-            >
-                {/* 섹션 헤더 */}
-                <View style={[styles.sectionHeader, { backgroundColor: section.bgColor }]}>
-                    <View style={styles.headerIconContainer}>
-                        <Ionicons name={section.icon} size={24} color={section.color} />
-                    </View>
-                    <View style={styles.headerTextContainer}>
-                        <Text style={[styles.sectionTitle, { color: section.color }]}>{section.title}</Text>
-                        <Text style={styles.sectionDescription}>{section.description}</Text>
-                    </View>
+    return (
+        <Animated.View
+            style={[styles.card, { borderColor: section.borderColor, transform: [{ scale: hoverAnim }] }]}
+            {...(Platform.OS === 'web' ? { onMouseEnter: handleMouseEnter, onMouseLeave: handleMouseLeave } : {})}
+        >
+            <View style={[styles.sectionHeader, { backgroundColor: section.bgColor }]}>
+                <View style={styles.headerIconContainer}>
+                    <Ionicons name={section.icon} size={24} color={section.color} />
                 </View>
+                <View style={styles.headerTextContainer}>
+                    <Text style={[styles.sectionTitle, { color: section.color }]}>{section.title}</Text>
+                    <Text style={styles.sectionDescription}>{section.description}</Text>
+                </View>
+            </View>
 
-                {/* 항목 목록 */}
-                <View style={styles.sectionBody}>
-                    <View style={styles.tagsContainer}>
-                        {items.length === 0 ? (
-                            <Text style={styles.emptyText}>등록된 정보가 없습니다</Text>
-                        ) : (
-                            items.map((item, index) => (
-                                <View key={index} style={[styles.tag, { backgroundColor: section.bgColor, borderColor: section.borderColor }]}>
-                                    <Text style={[styles.tagText, { color: section.color }]}>{item}</Text>
-                                    {isEditing && (
-                                        <TouchableOpacity onPress={() => handleRemoveItem(section.key, item)} style={styles.removeButton}>
-                                            <Ionicons name="close-circle" size={18} color={section.color} />
-                                        </TouchableOpacity>
-                                    )}
-                                </View>
-                            ))
-                        )}
-                    </View>
-
-                    {/* 수정 중일 때 보이는 항목 추가 입력창 */}
-                    {isEditing && (
-                        <View style={styles.inputContainer}>
-                            <TextInput
-                                style={styles.input}
-                                placeholder={`${section.title} 추가...`}
-                                value={inputStates[section.key] || ''}
-                                onChangeText={(text) => setInputText(section.key, text)}
-                                onSubmitEditing={() => handleAddItem(section.key)}
-                                returnKeyType="done"
-                            />
-                            <TouchableOpacity
-                                style={[styles.addButton, { backgroundColor: section.color }]}
-                                onPress={() => handleAddItem(section.key)}
-                            >
-                                <Ionicons name="add" size={20} color="white" />
-                            </TouchableOpacity>
-                        </View>
+            <View style={styles.sectionBody}>
+                <View style={styles.tagsContainer}>
+                    {items.length === 0 ? (
+                        <Text style={styles.emptyText}>등록된 정보가 없습니다</Text>
+                    ) : (
+                        items.map((item, index) => (
+                            <View key={`${item}-${index}`} style={[styles.tag, { backgroundColor: section.bgColor, borderColor: section.borderColor }]}>
+                                <Text style={[styles.tagText, { color: section.color }]}>{item}</Text>
+                                {isEditing && (
+                                    <TouchableOpacity onPress={() => onRemoveItem(section.key, item)} style={styles.removeButton}>
+                                        <Ionicons name="close-circle" size={18} color={section.color} />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        ))
                     )}
                 </View>
-            </Animated.View>
-        );
+
+                {isEditing && (
+                    <View style={styles.inputContainer}>
+                        <TextInput
+                            style={styles.input}
+                            placeholder={`${section.title} 추가...`}
+                            placeholderTextColor="#9CA3AF"
+                            value={draftValue}
+                            onChangeText={setDraftValue}
+                            onSubmitEditing={Platform.OS === 'web' ? undefined : handleAddItem}
+                            returnKeyType="done"
+                            blurOnSubmit={false}
+                        />
+                        <TouchableOpacity
+                            style={[styles.addButton, { backgroundColor: section.color }]}
+                            onPress={handleAddItem}
+                        >
+                            <Ionicons name="add" size={20} color="white" />
+                        </TouchableOpacity>
+                    </View>
+                )}
+            </View>
+        </Animated.View>
+    );
+}
+
+export default function HealthScreen({ healthProfile, setHealthProfile, isSidebarOpen, onToggleSidebar, webMode = false }) {
+    const [isEditing, setIsEditing] = useState(false);
+    const { isLoggedIn, token } = useAuth();
+
+    useEffect(() => {
+        let active = true;
+
+        const loadHealthProfile = async () => {
+            if (!isLoggedIn || !token) {
+                return;
+            }
+
+            try {
+                const response = await axios.get(`${config.API_BASE_URL}/users/me/health-profile`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (active) {
+                    setHealthProfile(normalizeHealthProfile(response.data));
+                }
+            } catch (error) {
+                if (isAuthError(error)) return;
+                debugLog('Failed to load health profile:', error?.message);
+            }
+        };
+
+        loadHealthProfile();
+        return () => {
+            active = false;
+        };
+    }, [isLoggedIn, token, setHealthProfile]);
+
+    const saveHealthProfile = async (nextProfile) => {
+        if (!isLoggedIn || !token) {
+            return true;
+        }
+
+        try {
+            await axios.put(
+                `${config.API_BASE_URL}/users/me/health-profile`,
+                normalizeHealthProfile(nextProfile),
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            return true;
+        } catch (error) {
+            if (isAuthError(error)) return false;
+            debugLog('Failed to save health profile:', error?.message);
+            Alert.alert('저장 실패', getErrorMessage(error, '건강 정보를 저장하지 못했습니다.'));
+            return false;
+        }
+    };
+
+    const handleAddItem = (sectionKey, text) => {
+        const section = SECTIONS.find(item => item.key === sectionKey);
+        const label = section?.title || '건강 정보';
+        const normalizedText = typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : '';
+        if (normalizedText) {
+            const currentItems = compactStringList(healthProfile[sectionKey]);
+            if (normalizedText.length > MAX_PROFILE_ITEM_LENGTH) {
+                Alert.alert('입력 확인', `${label} 항목은 ${MAX_PROFILE_ITEM_LENGTH}자 이하로 입력해 주세요.`);
+                return false;
+            }
+            if (!currentItems.includes(normalizedText) && currentItems.length >= MAX_PROFILE_ITEMS) {
+                Alert.alert('입력 확인', `${label}는 ${MAX_PROFILE_ITEMS}개 이하로 입력해 주세요.`);
+                return false;
+            }
+            const nextProfile = normalizeHealthProfile({
+                ...healthProfile,
+                [sectionKey]: [...currentItems, normalizedText]
+            });
+            setHealthProfile(nextProfile);
+            saveHealthProfile(nextProfile);
+            return true;
+        }
+        return false;
+    };
+
+    const handleRemoveItem = (sectionKey, itemToRemove) => {
+        const nextProfile = normalizeHealthProfile({
+            ...healthProfile,
+            [sectionKey]: (healthProfile[sectionKey] || []).filter(item => item !== itemToRemove)
+        });
+        setHealthProfile(nextProfile);
+        saveHealthProfile(nextProfile);
     };
 
     const renderSection = (section) => {
         const items = healthProfile[section.key] || [];
-        return <AnimatedSectionCard key={section.key} section={section} items={items} />;
+        return (
+            <HealthSectionCard
+                key={section.key}
+                section={section}
+                items={items}
+                isEditing={isEditing}
+                onAddItem={handleAddItem}
+                onRemoveItem={handleRemoveItem}
+            />
+        );
     };
 
     return (
@@ -319,7 +427,7 @@ const styles = StyleSheet.create({
     },
     infoCard: {
         flexDirection: 'row',
-        alignItems: 'start',
+        alignItems: 'flex-start',
         backgroundColor: '#F43F5E', // 로즈 500
         borderRadius: 16,
         padding: 20,

@@ -6,18 +6,39 @@ import axios from 'axios';
 import { colors } from '../theme/colors';
 import config from '../config';
 import { useAuth } from '../context/AuthContext';
+import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
 export default function RecipeDetailScreen({ recipe, onBack }) {
-    const { token } = useAuth();
+    const { token, isLoggedIn } = useAuth();
     const [shareModalVisible, setShareModalVisible] = useState(false);
     const [shareMessage, setShareMessage] = useState('');
     const [sharing, setSharing] = useState(false);
 
     // Parse ingredients/steps if they are JSON strings (from MySQL)
-    const ingredients = typeof recipe.ingredients === 'string' ? JSON.parse(recipe.ingredients) : recipe.ingredients || [];
-    const steps = typeof recipe.steps === 'string' ? JSON.parse(recipe.steps) : recipe.steps || [];
+    const ingredients = toStringList(recipe.ingredients);
+    const steps = toStringList(recipe.steps);
+    const canShareRecipe = recipe.shareable !== false && Boolean(recipe.id);
+
+    const openShareModal = () => {
+        if (!canShareRecipe) {
+            Alert.alert('공유 불가', '이 레시피는 홈 화면 예시라서 커뮤니티에 공유할 수 없습니다.');
+            return;
+        }
+
+        if (!isLoggedIn || !token) {
+            Alert.alert('로그인 필요', '레시피 공유는 로그인 후 사용할 수 있습니다.');
+            return;
+        }
+
+        setShareModalVisible(true);
+    };
 
     const handleShare = async () => {
+        if (!isLoggedIn || !token) {
+            Alert.alert('로그인 필요', '레시피 공유는 로그인 후 사용할 수 있습니다.');
+            return;
+        }
+
         if (!shareMessage.trim()) {
             Alert.alert('알림', '공유 메시지를 입력해주세요.');
             return;
@@ -30,14 +51,15 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
                 message: shareMessage,
                 visibility: 'PUBLIC'
             }, {
-                headers: token ? { Authorization: `Bearer ${token}` } : {}
+                headers: { Authorization: `Bearer ${token}` }
             });
             Alert.alert('성공', '레시피가 공유되었습니다!');
             setShareModalVisible(false);
             setShareMessage('');
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('Share error:', error);
-            Alert.alert('오류', '공유에 실패했습니다.');
+            Alert.alert('오류', getErrorMessage(error, '공유에 실패했습니다.'));
         } finally {
             setSharing(false);
         }
@@ -50,7 +72,7 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
                 <TouchableOpacity onPress={onBack} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color="white" />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => setShareModalVisible(true)} style={styles.shareButton}>
+                <TouchableOpacity onPress={openShareModal} style={styles.shareButton}>
                     <Ionicons name="share-social-outline" size={24} color="white" />
                 </TouchableOpacity>
             </View>
@@ -151,6 +173,23 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
         </View>
     );
 }
+
+const toStringList = (value) => {
+    if (Array.isArray(value)) {
+        return value;
+    }
+
+    if (typeof value !== 'string' || !value.trim()) {
+        return [];
+    }
+
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [value];
+    } catch {
+        return [value];
+    }
+};
 
 const styles = StyleSheet.create({
     container: {

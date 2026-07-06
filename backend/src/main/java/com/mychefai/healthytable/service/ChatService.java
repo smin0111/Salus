@@ -29,15 +29,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -63,6 +66,7 @@ public class ChatService {
     private final RecipeValidator recipeValidator;
     private final SearchCacheRepository searchCacheRepository;
     private final GeneratedRecipeRepository generatedRecipeRepository;
+    private final Clock clock;
 
     @Value("${rag.negative-cache-days:7}")
     private int negativeCacheDays;
@@ -128,9 +132,32 @@ public class ChatService {
                 .map(userId -> resolveSession(userId, request))
                 .orElse(null);
 
+        SafetyContext safetyContext = buildSafetyContext(authenticatedUserId, request);
+
+        if (isRecipeRequestIntent) {
+            Optional<String> allergyBlockedReply = buildAllergyConflictReply(
+                    normalizedTitle,
+                    trustedRecipes,
+                    safetyContext,
+                    request.getMessage());
+            if (allergyBlockedReply.isPresent()) {
+                if (chatSession != null) {
+                    saveChatMessage(chatSession, "user", request.getMessage());
+                    saveChatMessage(chatSession, "model", allergyBlockedReply.get());
+                }
+                return Mono.just(new ChatDto.Response(
+                        chatSession != null ? chatSession.getId() : null,
+                        allergyBlockedReply.get(),
+                        false,
+                        false));
+            }
+        }
+
         if (hasTrustedRecipe) {
             appendTrustedRecipeContext(systemContext, trustedRecipes);
         }
+
+        appendSafetyContext(systemContext, safetyContext);
 
         if (authenticatedUserId.isPresent()) {
             try {
@@ -147,7 +174,7 @@ public class ChatService {
                 }
 
                 if (isAlternativeExclusionRecipeRequest(request.getMessage())) {
-                    Optional<ChatDto.Response> alternativeResponse = buildAlternativeRecipeExcludingIngredients(userIdLong, chatSession, request);
+                    Optional<ChatDto.Response> alternativeResponse = buildAlternativeRecipeExcludingIngredients(userIdLong, chatSession, request, safetyContext);
                     if (alternativeResponse.isPresent()) {
                         saveChatMessage(chatSession, "model", alternativeResponse.get().getReply());
                         return Mono.just(alternativeResponse.get());
@@ -164,7 +191,7 @@ public class ChatService {
 
                 if (hasTrustedRecipe && !isRevisionOrQuestion(request.getMessage())) {
                     Recipe selectedRecipe = trustedRecipes.get(0);
-                    List<String> safetyNotes = buildRecipeSafetyNotes(Optional.of(userIdLong), selectedRecipe);
+                    List<String> safetyNotes = buildRecipeSafetyNotes(Optional.of(userIdLong), safetyContext, selectedRecipe);
                     String reply = buildTrustedRecipeReply(selectedRecipe, safetyNotes);
                     saveChatMessage(chatSession, "model", reply);
                     if (chatSession != null) {
@@ -175,30 +202,7 @@ public class ChatService {
                     return Mono.just(response);
                 }
 
-                // 1. 건강 프로필
-                healthProfileRepository.findByUserId(userIdLong).ifPresent(profile -> {
-                    systemContext.append("\n\n=== 중요: 사용자 건강 정보 (반드시 준수) ===\n");
-                    if (profile.getAllergies() != null && !profile.getAllergies().isEmpty()) {
-                        systemContext.append("알레르기: ").append(String.join(", ", profile.getAllergies())).append("\n");
-                        systemContext.append("이 재료들은 절대 사용하지 마세요.\n");
-                    }
-                    if (profile.getChronicConditions() != null && !profile.getChronicConditions().isEmpty()) {
-                        systemContext.append("만성질환: ").append(String.join(", ", profile.getChronicConditions())).append("\n");
-                    }
-                    if (profile.getDietaryRestrictions() != null && !profile.getDietaryRestrictions().isEmpty()) {
-                        systemContext.append("식단 제한: ").append(String.join(", ", profile.getDietaryRestrictions())).append("\n");
-                    }
-                    if (profile.getMedications() != null && !profile.getMedications().isEmpty()) {
-                        systemContext.append("복용 약물: ").append(String.join(", ", profile.getMedications())).append("\n");
-                        systemContext.append("약물과 상호작용할 수 있는 음식을 피해주세요.\n");
-                    }
-                    if (profile.getGoals() != null && !profile.getGoals().isEmpty()) {
-                        systemContext.append("건강 목표: ").append(String.join(", ", profile.getGoals())).append("\n");
-                    }
-                    systemContext.append("=====================================\n");
-                });
-
-                // 2. 건강검진 분석
+                // 1. 건강검진 분석
                 healthCheckupRepository.findTopByUserIdOrderByCheckupDateDescIdDesc(userIdLong).ifPresent(checkup -> {
                     HealthCheckupAnalysisDTO analysis = healthCheckupAnalysisService.analyze(checkup);
                     systemContext.append("\n=== 최신 건강검진 기반 식단 정책 ===\n");
@@ -220,7 +224,7 @@ public class ChatService {
                     systemContext.append("====================================\n");
                 });
 
-                // 3. 작업 세션
+                // 2. 작업 세션
                 recipeWorkSessionService.find(userIdLong, chatSession.getId()).ifPresent(workSession -> {
                     systemContext.append("\n=== 현재 수정 중인 추천 결과 ===\n");
                     systemContext.append(workSession.getLastRecommendation()).append("\n");
@@ -235,7 +239,7 @@ public class ChatService {
                     recipeWorkSessionService.addModifier(userIdLong, chatSession.getId(), request.getMessage());
                 }
 
-                // 4. 냉장고 재료: 내부 DB 레시피가 있으면 환각 방지를 위해 냉장고 재료를 섞지 않는다.
+                // 3. 냉장고 재료: 내부 DB 레시피가 있으면 환각 방지를 위해 냉장고 재료를 섞지 않는다.
                 List<FridgeItem> fridgeItems = isRecipeRequestIntent
                         ? fridgeItemRepository.findByUserIdOrderByExpiryDate(userIdLong)
                         : List.of();
@@ -283,7 +287,7 @@ public class ChatService {
 
         if (hasTrustedRecipe && !isRevisionOrQuestion(request.getMessage())) {
             Recipe selectedRecipe = trustedRecipes.get(0);
-            List<String> safetyNotes = buildRecipeSafetyNotes(Optional.empty(), selectedRecipe);
+            List<String> safetyNotes = buildRecipeSafetyNotes(Optional.empty(), safetyContext, selectedRecipe);
             String reply = buildTrustedRecipeReply(selectedRecipe, safetyNotes);
             ChatDto.Response response = new ChatDto.Response(null, reply, true, false);
             response.setRecipe(buildRecipeCard(selectedRecipe, safetyNotes));
@@ -298,7 +302,7 @@ public class ChatService {
             Optional<SearchCache> cache = searchCacheRepository.findByQuery(normalizedTitle);
             if (cache.isPresent() && !cache.get().isFound()) {
                 LocalDateTime createdAt = cache.get().getCreatedAt();
-                long ageDays = createdAt == null ? negativeCacheDays : Duration.between(createdAt, LocalDateTime.now()).toDays();
+                long ageDays = createdAt == null ? negativeCacheDays : Duration.between(createdAt, LocalDateTime.now(clock)).toDays();
                 if (ageDays < negativeCacheDays) {
                     log.info("[RAG Pipeline] Negative Cache hit for query: '{}' (Age: {} days). Rejecting request.", normalizedTitle, ageDays);
                     String rejectReply = "죄송합니다. 신뢰할 수 있는 레시피 정보를 찾지 못했습니다. 다른 음식이나 정통 레시피를 물어봐 주세요.";
@@ -346,6 +350,10 @@ public class ChatService {
                                     "오븐에서 마저 익히는 고기 요리는 팬에서 속까지 익히라고 쓰지 말고, 겉면만 노릇하게 굽는 시어링과 오븐 익힘을 구분하십시오.\n" +
                                     "영문 검색 근거의 pastry, puff pastry, pastry dough는 파스타가 아니라 '페이스트리 생지' 또는 '퍼프 페이스트리'로 번역하십시오.\n" +
                                     "dough는 문맥에 따라 '생지'로 번역하고, pasta와 혼동하지 마십시오.\n" +
+                                    "조리 순서에는 [재료] 목록에 없는 선택 재료를 새로 넣지 마십시오. 필요하면 먼저 [재료] 목록에 정확한 양을 추가하십시오.\n" +
+                                    "조리 순서는 초보자가 그대로 따라할 수 있게 각 단계마다 무엇을 할지, 불 세기, 몇 분, 어떤 상태가 되면 다음 단계인지, 실패했을 때 복구 방법 중 최소 3가지를 포함하십시오.\n" +
+                                    "'볶습니다', '끓입니다', '익힙니다'처럼 짧게 끝내지 말고 한 단계당 35자 이상으로 쓰십시오.\n" +
+                                    "마지막 완성 단계도 '불을 끄고 완성합니다'로만 끝내지 말고 맛 확인과 간 조절 기준을 포함하십시오.\n" +
                                     "반드시 아래 형식을 그대로 지키십시오. 인사말, 자기소개, 사과문, 검색 결과 설명을 쓰지 마십시오.\n" +
                                     normalizedTitle + " 레시피입니다.\n\n" +
                                     "요리 설명 한 문장\n\n" +
@@ -353,7 +361,7 @@ public class ChatService {
                                     "[재료]\n" +
                                     "- 재료명 양\n\n" +
                                     "[조리 순서]\n" +
-                                    "1. 조리 단계\n" +
+                                    "1. 무엇을 할지 + 불 세기 + 시간 + 다음 단계로 넘어갈 상태 + 초보자 실수 방지 팁이 들어간 조리 단계\n" +
                                     "=========================================\n";
                             return Mono.just(new RAGData(SearchEngine.SearchStatus.SUCCESS, systemContextSnippet, rawSearchContext, searchResponse.source()));
                         }
@@ -402,21 +410,34 @@ public class ChatService {
                                 responseReply = applyRecipeQualityGuards(responseReply, normalizedTitle);
                                 Recipe parsedRecipe = parseRecipeFromReply(normalizedTitle, responseReply);
                                 if (parsedRecipe != null) {
-                                    RecipeValidator.ValidationResult valResult = recipeValidator.validate(
-                                            parsedRecipe, ragData.rawSearchContext(), responseReply);
-                                    saveGeneratedRecipeAudit(normalizedTitle, parsedRecipe, ragData.rawSearchContext(), ragData.source(), responseReply, valResult);
-
-                                    if (!valResult.valid()) {
-                                        log.warn("[RAG Pipeline] Generated recipe failed validation for query: '{}'. Reasons: {}",
-                                                normalizedTitle, valResult.reasons());
-                                        responseReply = buildRecipeValidationFailureReply(normalizedTitle, ragData.status());
-                                    } else if (!valResult.dataQualityLow()) {
-                                        saveToRecipeDbSafely(parsedRecipe);
-                                        responseRecipe = parsedRecipe;
+                                    List<String> allergyConflicts = findAllergyConflicts(
+                                            safetyContext,
+                                            parsedRecipe.getTitle(),
+                                            parsedRecipe,
+                                            request.getMessage());
+                                    if (!allergyConflicts.isEmpty()) {
+                                        log.warn("[Safety Guard] Generated recipe blocked for allergies. Query: '{}', Conflicts: {}",
+                                                normalizedTitle, allergyConflicts);
+                                        responseReply = buildAllergyBlockedReply(normalizedTitle, allergyConflicts);
                                     } else {
-                                        log.info("[RAG Pipeline] Generated recipe served but not promoted due to data quality warnings. Query: '{}', Warnings: {}",
-                                                normalizedTitle, valResult.dataQualityWarnings());
-                                        responseRecipe = parsedRecipe;
+                                        RecipeValidator.ValidationResult valResult = recipeValidator.validate(
+                                                parsedRecipe, ragData.rawSearchContext(), responseReply);
+                                        saveGeneratedRecipeAudit(normalizedTitle, parsedRecipe, ragData.rawSearchContext(), ragData.source(), responseReply, valResult);
+
+                                        if (!valResult.valid()) {
+                                            log.warn("[RAG Pipeline] Generated recipe failed validation for query: '{}'. Reasons: {}",
+                                                    normalizedTitle, valResult.reasons());
+                                            responseReply = buildRecipeValidationFailureReply(normalizedTitle, ragData.status());
+                                        } else {
+                                            responseReply = buildGeneratedRecipeReply(parsedRecipe);
+                                            if (!valResult.dataQualityLow()) {
+                                                saveToRecipeDbSafely(parsedRecipe);
+                                            } else {
+                                                log.info("[RAG Pipeline] Generated recipe served but not promoted due to data quality warnings. Query: '{}', Warnings: {}",
+                                                        normalizedTitle, valResult.dataQualityWarnings());
+                                            }
+                                            responseRecipe = parsedRecipe;
+                                        }
                                     }
                                 } else {
                                     log.warn("[RAG Pipeline] Generated recipe-like reply could not be parsed for validation. Query: '{}', Reply: {}",
@@ -438,7 +459,7 @@ public class ChatService {
                         }
                         ChatDto.Response response = new ChatDto.Response(sessionIdForWork, responseReply, active, false);
                         if (responseRecipe != null && looksLikeRecipeResponse(responseReply)) {
-                            response.setRecipe(buildRecipeCard(responseRecipe, buildRecipeSafetyNotes(authenticatedUserId, responseRecipe)));
+                            response.setRecipe(buildRecipeCard(responseRecipe, buildRecipeSafetyNotes(authenticatedUserId, safetyContext, responseRecipe)));
                         }
                         return response;
                     });
@@ -460,6 +481,264 @@ public class ChatService {
         return persisted.stream()
                 .map(message -> new ChatDto.Message(message.getRole(), message.getContent()))
                 .toList();
+    }
+
+    private SafetyContext buildSafetyContext(Optional<Long> authenticatedUserId, ChatDto.Request request) {
+        Set<String> allergies = new LinkedHashSet<>();
+        Set<String> chronicConditions = new LinkedHashSet<>();
+        Set<String> dietaryRestrictions = new LinkedHashSet<>();
+        Set<String> medications = new LinkedHashSet<>();
+        Set<String> goals = new LinkedHashSet<>();
+
+        appendRequestHealthProfileValues(request, allergies, chronicConditions, dietaryRestrictions, medications, goals);
+        appendAllergyMentionsFromText(allergies, request.getMessage());
+
+        if (request.getHistory() != null) {
+            request.getHistory().stream()
+                    .filter(message -> message != null && "user".equals(message.getRole()))
+                    .forEach(message -> appendAllergyMentionsFromText(allergies, message.getContent()));
+        }
+
+        authenticatedUserId.ifPresent(userId -> {
+            try {
+                healthProfileRepository.findByUserId(userId).ifPresent(profile -> {
+                    appendNormalizedValues(allergies, profile.getAllergies(), true);
+                    appendNormalizedValues(chronicConditions, profile.getChronicConditions(), false);
+                    appendNormalizedValues(dietaryRestrictions, profile.getDietaryRestrictions(), false);
+                    appendNormalizedValues(medications, profile.getMedications(), false);
+                    appendNormalizedValues(goals, profile.getGoals(), false);
+                });
+            } catch (Exception e) {
+                log.warn("건강 정보 안전 컨텍스트 구성 중 오류 발생: {}", e.getMessage());
+            }
+        });
+
+        return new SafetyContext(
+                new ArrayList<>(allergies),
+                new ArrayList<>(chronicConditions),
+                new ArrayList<>(dietaryRestrictions),
+                new ArrayList<>(medications),
+                new ArrayList<>(goals));
+    }
+
+    private void appendRequestHealthProfileValues(
+            ChatDto.Request request,
+            Set<String> allergies,
+            Set<String> chronicConditions,
+            Set<String> dietaryRestrictions,
+            Set<String> medications,
+            Set<String> goals) {
+        if (request == null || request.getHealthProfile() == null) {
+            return;
+        }
+        ChatDto.HealthProfileContext profile = request.getHealthProfile();
+        appendNormalizedValues(allergies, profile.getAllergies(), true);
+        appendNormalizedValues(chronicConditions, profile.getChronicConditions(), false);
+        appendNormalizedValues(dietaryRestrictions, profile.getDietaryRestrictions(), false);
+        appendNormalizedValues(medications, profile.getMedications(), false);
+        appendNormalizedValues(goals, profile.getGoals(), false);
+    }
+
+    private void appendSafetyContext(StringBuilder systemContext, SafetyContext safetyContext) {
+        if (safetyContext == null || !safetyContext.hasAny()) {
+            return;
+        }
+
+        systemContext.append("\n\n=== 중요: 사용자 건강 정보 (반드시 준수) ===\n");
+        if (!safetyContext.allergies().isEmpty()) {
+            systemContext.append("알레르기: ").append(String.join(", ", safetyContext.allergies())).append("\n");
+            systemContext.append("이 재료들은 절대 사용하지 마세요. 요청한 음식명 자체가 알레르기 재료를 포함하면 레시피를 만들지 말고 안전한 대체 방향만 제안하세요.\n");
+        }
+        if (!safetyContext.chronicConditions().isEmpty()) {
+            systemContext.append("만성질환: ").append(String.join(", ", safetyContext.chronicConditions())).append("\n");
+        }
+        if (!safetyContext.dietaryRestrictions().isEmpty()) {
+            systemContext.append("식단 제한: ").append(String.join(", ", safetyContext.dietaryRestrictions())).append("\n");
+        }
+        if (!safetyContext.medications().isEmpty()) {
+            systemContext.append("복용 약물: ").append(String.join(", ", safetyContext.medications())).append("\n");
+            systemContext.append("약물과 상호작용할 수 있는 음식을 피해주세요.\n");
+        }
+        if (!safetyContext.goals().isEmpty()) {
+            systemContext.append("건강 목표: ").append(String.join(", ", safetyContext.goals())).append("\n");
+        }
+        systemContext.append("=====================================\n");
+    }
+
+    private Optional<String> buildAllergyConflictReply(
+            String requestedTitle,
+            List<Recipe> trustedRecipes,
+            SafetyContext safetyContext,
+            String requestMessage) {
+        List<String> conflicts = findAllergyConflicts(safetyContext, requestedTitle, null, requestMessage);
+        if (conflicts.isEmpty() && trustedRecipes != null) {
+            conflicts = trustedRecipes.stream()
+                    .flatMap(recipe -> findAllergyConflicts(safetyContext, recipe.getTitle(), recipe, requestMessage).stream())
+                    .distinct()
+                    .toList();
+        }
+        if (conflicts.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(buildAllergyBlockedReply(requestedTitle, conflicts));
+    }
+
+    private String buildAllergyBlockedReply(String requestedTitle, List<String> conflicts) {
+        String foodName = nullToBlank(requestedTitle).isBlank() ? "요청하신 메뉴" : requestedTitle.trim();
+        String conflictText = conflicts == null || conflicts.isEmpty()
+                ? "알레르기 재료"
+                : String.join(", ", conflicts);
+
+        return "확인된 알레르기 정보상 '" + conflictText + "' 알레르기가 있어 '" + foodName + "' 레시피는 추천할 수 없습니다.\n\n"
+                + "알레르기 재료를 제외한 안전한 메뉴로 바꿔야 합니다. 먹을 수 있는 과일이나 재료를 알려주시면 그 범위 안에서 대체 레시피를 만들어드릴게요.";
+    }
+
+    private List<String> findAllergyConflicts(
+            SafetyContext safetyContext,
+            String title,
+            Recipe recipe,
+            String requestMessage) {
+        if (safetyContext == null || safetyContext.allergies().isEmpty()) {
+            return List.of();
+        }
+
+        Set<String> conflicts = new LinkedHashSet<>();
+        for (String allergy : safetyContext.allergies()) {
+            String normalizedAllergy = normalizeIngredientForMatching(allergy);
+            if (normalizedAllergy.length() < 2) {
+                continue;
+            }
+
+            if (containsAllergyTerm(title, allergy, requestMessage)) {
+                conflicts.add(allergy);
+                continue;
+            }
+
+            if (recipe == null) {
+                continue;
+            }
+
+            boolean ingredientConflict = cleanRecipeValues(recipe.getIngredients()).stream()
+                    .anyMatch(ingredient -> containsAllergyTerm(ingredient, allergy, requestMessage));
+            boolean stepConflict = cleanRecipeValues(recipe.getSteps()).stream()
+                    .anyMatch(step -> containsAllergyTerm(step, allergy, requestMessage));
+            if (ingredientConflict || stepConflict) {
+                conflicts.add(allergy);
+            }
+        }
+        return new ArrayList<>(conflicts);
+    }
+
+    private boolean containsAllergyTerm(String text, String allergy, String requestMessage) {
+        String normalizedText = normalizeIngredientForMatching(text);
+        String normalizedAllergy = normalizeIngredientForMatching(allergy);
+        if (normalizedText.isBlank() || normalizedAllergy.isBlank() || !normalizedText.contains(normalizedAllergy)) {
+            return false;
+        }
+        return !isIngredientExplicitlyExcluded(text, allergy)
+                && !isIngredientExplicitlyExcluded(requestMessage, allergy);
+    }
+
+    private boolean isIngredientExplicitlyExcluded(String text, String allergy) {
+        String normalizedText = normalizeIngredientForMatching(text);
+        String normalizedAllergy = normalizeIngredientForMatching(allergy);
+        if (normalizedText.isBlank() || normalizedAllergy.isBlank()) {
+            return false;
+        }
+        return normalizedText.contains(normalizedAllergy + "없는")
+                || normalizedText.contains(normalizedAllergy + "없이")
+                || normalizedText.contains(normalizedAllergy + "빼고")
+                || normalizedText.contains(normalizedAllergy + "제외")
+                || normalizedText.contains(normalizedAllergy + "말고")
+                || normalizedText.contains(normalizedAllergy + "안들어간");
+    }
+
+    private void appendAllergyMentionsFromText(Set<String> allergies, String text) {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+
+        String normalized = text.replace("알러지", "알레르기")
+                .replaceAll("[,，.?!]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+
+        List<java.util.regex.Pattern> patterns = List.of(
+                java.util.regex.Pattern.compile("(?:나는|저는|제가|내가|나|저)?\\s*([가-힣a-zA-Z0-9·/+\\s]{1,30})(?:에|에대한|은|는|이|가|을|를)?\\s*알레르기"),
+                java.util.regex.Pattern.compile("알레르기\\s*(?:가|는|은)?\\s*[:：]?\\s*([가-힣a-zA-Z0-9·/+,\\s]{1,40})"),
+                java.util.regex.Pattern.compile("(?:나는|저는|제가|내가|나|저)?\\s*([가-힣a-zA-Z0-9]{1,20})(?:을|를|은|는)?\\s*(?:못\\s*먹|먹으면\\s*안|피해야|안\\s*먹)")
+        );
+
+        for (java.util.regex.Pattern pattern : patterns) {
+            java.util.regex.Matcher matcher = pattern.matcher(normalized);
+            while (matcher.find()) {
+                appendNormalizedValue(allergies, matcher.group(1), true);
+            }
+        }
+    }
+
+    private void appendNormalizedValues(Set<String> target, List<String> values, boolean allergyValue) {
+        if (values == null || values.isEmpty()) {
+            return;
+        }
+        values.forEach(value -> appendNormalizedValue(target, value, allergyValue));
+    }
+
+    private void appendNormalizedValue(Set<String> target, String value, boolean allergyValue) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+
+        String[] tokens = value.split("[,/·，\\n]");
+        for (String token : tokens) {
+            String normalized = allergyValue ? normalizeAllergyTerm(token) : normalizeHealthProfileTerm(token);
+            if (allergyValue && !isLikelyAllergyName(normalized)) {
+                continue;
+            }
+            if (!normalized.isBlank()) {
+                target.add(normalized);
+            }
+        }
+    }
+
+    private String normalizeAllergyTerm(String value) {
+        return normalizeHealthProfileTerm(value)
+                .replace("알레르기", " ")
+                .replace("알러지", " ")
+                .replace("있습니다", " ")
+                .replace("있어요", " ")
+                .replace("있어", " ")
+                .replace("있음", " ")
+                .replace("주의", " ")
+                .replace("금지", " ")
+                .replace("못먹음", " ")
+                .replaceAll("(으로|로|을|를|이|가|은|는|에|의|도|만)$", "")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    private String normalizeHealthProfileTerm(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value
+                .replaceAll("[^가-힣a-zA-Z0-9\\s]", " ")
+                .replaceAll("\\b(나는|저는|제가|내가|나|저|혹시)\\b", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    private boolean isLikelyAllergyName(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        String compact = value.replaceAll("\\s+", "");
+        return compact.length() >= 2
+                && compact.length() <= 20
+                && !compact.contains("없음")
+                && !compact.contains("없어요")
+                && !compact.contains("건강정보")
+                && !compact.contains("알려주");
     }
 
     private Optional<ChatDto.Response> buildDetailedRecipeFollowUp(Long userId, ChatSession chatSession, ChatDto.Request request) {
@@ -506,7 +785,11 @@ public class ChatService {
                 .block());
     }
 
-    private Optional<ChatDto.Response> buildAlternativeRecipeExcludingIngredients(Long userId, ChatSession chatSession, ChatDto.Request request) {
+    private Optional<ChatDto.Response> buildAlternativeRecipeExcludingIngredients(
+            Long userId,
+            ChatSession chatSession,
+            ChatDto.Request request,
+            SafetyContext safetyContext) {
         if (chatSession == null) {
             return Optional.empty();
         }
@@ -544,7 +827,7 @@ public class ChatService {
         recipeWorkSessionService.saveRecommendation(userId, chatSession.getId(), reply);
 
         ChatDto.Response response = new ChatDto.Response(chatSession.getId(), reply, true, false);
-        response.setRecipe(buildRecipeCard(variant, buildRecipeSafetyNotes(Optional.of(userId), variant)));
+        response.setRecipe(buildRecipeCard(variant, buildRecipeSafetyNotes(Optional.of(userId), safetyContext, variant)));
         return Optional.of(response);
     }
 
@@ -710,6 +993,8 @@ public class ChatService {
                 })
                 .collect(Collectors.joining("\n"))
                 .replaceAll("\\n{3,}", "\n\n")
+                .replace("适量", "적당량")
+                .replace("適量", "적당량")
                 .trim();
     }
 
@@ -907,7 +1192,7 @@ public class ChatService {
                 systemContext.append("요리명: ").append(nullToBlank(recipe.getTitle())).append("\n");
                 appendRecipeField(systemContext, "설명", recipe.getDescription());
                 appendRecipeField(systemContext, "재료", joinRecipeList(recipe.getIngredients()));
-                appendRecipeField(systemContext, "조리 순서", joinNumberedRecipeList(recipe.getSteps()));
+                appendRecipeField(systemContext, "조리 순서", joinNumberedRecipeList(beginnerFriendlySteps(recipe)));
                 if (recipe.getCalories() != null) {
                     systemContext.append("열량: ").append(recipe.getCalories()).append(" kcal\n");
                 }
@@ -1046,7 +1331,7 @@ public class ChatService {
             reply.append("\n");
         }
 
-        List<String> steps = cleanRecipeValues(recipe.getSteps());
+        List<String> steps = beginnerFriendlySteps(recipe);
         if (!steps.isEmpty()) {
             reply.append("[조리 순서]\n");
             for (int i = 0; i < steps.size(); i++) {
@@ -1089,7 +1374,7 @@ public class ChatService {
             reply.append("\n");
         }
 
-        List<String> steps = cleanRecipeValues(recipe.getSteps());
+        List<String> steps = beginnerFriendlySteps(recipe);
         if (!steps.isEmpty()) {
             reply.append("[조리 순서]\n");
             for (int i = 0; i < steps.size(); i++) {
@@ -1106,7 +1391,7 @@ public class ChatService {
                 recipe.getTitle(),
                 sanitizeRecipeDescription(recipe),
                 cleanRecipeValues(recipe.getIngredients()),
-                cleanRecipeValues(recipe.getSteps()),
+                beginnerFriendlySteps(recipe),
                 recipe.getCalories(),
                 recipe.getDifficulty(),
                 recipe.getCookingTime(),
@@ -1114,43 +1399,37 @@ public class ChatService {
                 safetyNotes == null ? List.of() : safetyNotes);
     }
 
-    private List<String> buildRecipeSafetyNotes(Optional<Long> authenticatedUserId, Recipe recipe) {
-        if (authenticatedUserId.isEmpty()) {
-            return List.of();
-        }
-
+    private List<String> buildRecipeSafetyNotes(Optional<Long> authenticatedUserId, SafetyContext safetyContext, Recipe recipe) {
         List<String> notes = new ArrayList<>();
         String ingredientText = String.join(" ", cleanRecipeValues(recipe.getIngredients())).toLowerCase();
-        Long userId = authenticatedUserId.get();
 
-        healthProfileRepository.findByUserId(userId).ifPresent(profile ->
-                appendHealthProfileSafetyNotes(notes, profile, ingredientText));
+        appendHealthProfileSafetyNotes(notes, safetyContext, ingredientText);
 
-        healthCheckupRepository.findTopByUserIdOrderByCheckupDateDescIdDesc(userId).ifPresent(checkup ->
-                appendCheckupSafetyNotes(notes, checkup, ingredientText));
+        authenticatedUserId.ifPresent(userId ->
+                healthCheckupRepository.findTopByUserIdOrderByCheckupDateDescIdDesc(userId).ifPresent(checkup ->
+                        appendCheckupSafetyNotes(notes, checkup, ingredientText)));
 
         return notes.stream().distinct().toList();
     }
 
-    private void appendHealthProfileSafetyNotes(List<String> notes, HealthProfile profile, String ingredientText) {
-        if (profile.getAllergies() != null) {
-            for (String allergy : profile.getAllergies()) {
-                if (allergy != null && !allergy.isBlank() && ingredientText.contains(allergy.trim().toLowerCase())) {
-                    notes.add("등록된 알레르기 재료인 '" + allergy.trim() + "'가 포함되어 있습니다. 이 재료는 반드시 제외하거나 안전한 대체 재료를 사용하세요.");
-                }
+    private void appendHealthProfileSafetyNotes(List<String> notes, SafetyContext safetyContext, String ingredientText) {
+        for (String allergy : safetyContext.allergies()) {
+            if (allergy != null && !allergy.isBlank()
+                    && normalizeIngredientForMatching(ingredientText).contains(normalizeIngredientForMatching(allergy))) {
+                notes.add("확인된 알레르기 재료인 '" + allergy.trim() + "'가 포함되어 있습니다. 이 재료는 반드시 제외하거나 안전한 대체 재료를 사용하세요.");
             }
         }
 
-        if (containsAny(profile.getChronicConditions(), "고혈압", "혈압")) {
+        if (containsAny(safetyContext.chronicConditions(), "고혈압", "혈압")) {
             appendHighBloodPressureNote(notes, ingredientText);
         }
-        if (containsAny(profile.getChronicConditions(), "당뇨", "혈당")) {
+        if (containsAny(safetyContext.chronicConditions(), "당뇨", "혈당")) {
             appendDiabetesNote(notes, ingredientText);
         }
-        if (containsAny(profile.getChronicConditions(), "고지혈", "콜레스테롤", "지질", "중성지방")) {
+        if (containsAny(safetyContext.chronicConditions(), "고지혈", "콜레스테롤", "지질", "중성지방")) {
             appendLipidNote(notes, ingredientText);
         }
-        if (containsAny(profile.getDietaryRestrictions(), "채식", "비건", "육류 제외")) {
+        if (containsAny(safetyContext.dietaryRestrictions(), "채식", "비건", "육류 제외")) {
             if (containsIngredientAny(ingredientText, "돼지고기", "소고기", "쇠고기", "닭고기", "생선", "오징어", "새우")) {
                 notes.add("식단 제한에 채식 또는 육류 제한이 있습니다. 고기와 해산물 재료는 두부, 버섯, 콩류 등으로 바꾸는 것이 좋습니다.");
             }
@@ -1217,8 +1496,194 @@ public class ChatService {
         }
         return values.stream()
                 .filter(value -> value != null && !value.isBlank())
-                .map(String::trim)
+                .map(value -> value.trim()
+                        .replace("适量", "적당량")
+                        .replace("適量", "적당량"))
                 .toList();
+    }
+
+    private List<String> beginnerFriendlySteps(Recipe recipe) {
+        if (recipe == null) {
+            return List.of();
+        }
+        List<String> steps = cleanRecipeValues(recipe.getSteps());
+        if (steps.isEmpty()) {
+            return steps;
+        }
+        String ingredientText = String.join(" ", cleanRecipeValues(recipe.getIngredients()));
+        boolean noHeatRecipe = isNoHeatRecipe(recipe);
+        return steps.stream()
+                .map(step -> removeUnlistedOptionalIngredientSuggestions(step, ingredientText))
+                .map(step -> removeInappropriateHeatTipsForNoHeatRecipe(step, noHeatRecipe))
+                .map(step -> enrichBeginnerStep(step, noHeatRecipe))
+                .toList();
+    }
+
+    private boolean isNoHeatRecipe(Recipe recipe) {
+        String title = nullToBlank(recipe.getTitle()).replaceAll("\\s+", "");
+        if (containsTextAny(title, "화채", "스무디", "요거트", "샐러드", "빙수", "주스", "에이드", "파르페")) {
+            return true;
+        }
+
+        String stepText = String.join(" ", cleanRecipeValues(recipe.getSteps()));
+        boolean hasHeatAction = containsTextAny(stepText,
+                "볶", "끓", "삶", "데치", "굽", "구워", "튀", "졸", "조려",
+                "오븐", "에어프라이", "중불", "약불", "센불", "강불", "불을", "팬", "냄비");
+        boolean hasColdPreparation = containsTextAny(stepText, "섞", "버무", "담", "차갑", "냉장", "얼음");
+        return hasColdPreparation && !hasHeatAction;
+    }
+
+    private String removeInappropriateHeatTipsForNoHeatRecipe(String step, boolean noHeatRecipe) {
+        String cleaned = nullToBlank(step).trim();
+        if (!noHeatRecipe || cleaned.isBlank()) {
+            return cleaned;
+        }
+        return cleaned
+                .replace("처음엔 센불로 올리고 큰 거품이 올라오면 중약불로 낮추세요. 국물이 너무 졸면 물을 2~3큰술씩 보충하면 됩니다.", "")
+                .replace("불은 중불부터 시작하고, 타는 냄새가 나면 바로 약불로 낮춘 뒤 바닥을 긁듯이 저어주세요.", "")
+                .replace("뚜껑을 살짝 덮고 약불을 유지하되 5분마다 바닥을 저어 눌어붙지 않게 하세요. 국물이 자작하게 남으면 완성입니다.", "")
+                .replaceAll("\\s{2,}", " ")
+                .trim();
+    }
+
+    private String removeUnlistedOptionalIngredientSuggestions(String step, String ingredientText) {
+        String trimmed = nullToBlank(step).trim();
+        if (trimmed.isBlank()) {
+            return trimmed;
+        }
+        String normalizedIngredients = nullToBlank(ingredientText).toLowerCase();
+        List<String> kept = new ArrayList<>();
+        String[] sentences = trimmed.split("(?<=[.!?])\\s+");
+        for (String sentence : sentences) {
+            String compact = sentence.replaceAll("\\s+", "");
+            boolean optionalSuggestion = compact.contains("원한다면")
+                    || compact.contains("취향에따라")
+                    || compact.contains("추가해도")
+                    || compact.contains("넣어도좋");
+            boolean mentionsUnlistedOptional = optionalSuggestion
+                    && containsUnlistedIngredient(sentence, normalizedIngredients,
+                    "청양고추", "고추", "고춧가루", "참기름", "깨", "치즈", "버터", "크림", "설탕");
+            if (!mentionsUnlistedOptional) {
+                kept.add(sentence.trim());
+            }
+        }
+        String cleaned = String.join(" ", kept).trim();
+        return cleaned.isBlank() ? trimmed : cleaned;
+    }
+
+    private boolean containsUnlistedIngredient(String sentence, String normalizedIngredients, String... ingredientNames) {
+        for (String ingredientName : ingredientNames) {
+            if (sentence.contains(ingredientName) && !normalizedIngredients.contains(ingredientName.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String enrichBeginnerStep(String step, boolean noHeatRecipe) {
+        String trimmed = nullToBlank(step).trim();
+        if (trimmed.isBlank() || isBeginnerDetailedStep(trimmed, noHeatRecipe)) {
+            return trimmed;
+        }
+
+        String tip = beginnerTipForStep(trimmed, noHeatRecipe);
+        if (tip.isBlank() || trimmed.contains(tip)) {
+            return trimmed;
+        }
+        return ensureSentence(trimmed) + " " + tip;
+    }
+
+    private boolean isBeginnerDetailedStep(String step, boolean noHeatRecipe) {
+        if (noHeatRecipe) {
+            boolean hasPrepDetail = containsTextAny(step, "한입", "먹기 좋은", "물기", "차갑", "냉장", "얼음", "으깨지");
+            boolean hasTimeOrState = step.matches(".*\\d+\\s*(분|초|시간).*")
+                    || containsTextAny(step, "직전", "충분히", "고르게", "살짝", "상태");
+            return step.length() >= 45 && hasPrepDetail && hasTimeOrState;
+        }
+
+        boolean hasHeat = containsTextAny(step, "센불", "강불", "중불", "중약불", "약불", "불을");
+        boolean hasTime = step.matches(".*\\d+\\s*(분|초|시간).*")
+                || containsTextAny(step, "잠시", "충분히", "노릇", "투명", "자작");
+        boolean hasState = containsTextAny(step, "때까지", "상태", "익으면", "끓으면", "줄이고", "노릇", "투명", "자작");
+        boolean hasRecovery = containsTextAny(step, "타", "눌어", "싱거", "짜면", "조절");
+        int detailScore = 0;
+        if (hasHeat) {
+            detailScore++;
+        }
+        if (hasTime) {
+            detailScore++;
+        }
+        if (hasState) {
+            detailScore++;
+        }
+        if (hasRecovery) {
+            detailScore++;
+        }
+        return step.length() >= 45 && detailScore >= 2;
+    }
+
+    private String beginnerTipForStep(String step, boolean noHeatRecipe) {
+        if (noHeatRecipe) {
+            if (containsTextAny(step, "완성", "마무리")) {
+                return "먹기 직전에 한 번만 가볍게 섞고, 과일 물이 많이 생겼으면 차가운 음료 베이스를 조금만 보충하세요.";
+            }
+            if (containsTextAny(step, "얼음", "차갑", "냉장")) {
+                return "얼음은 먹기 직전에 넣어야 녹아서 맛이 묽어지는 것을 줄일 수 있습니다.";
+            }
+            if (containsTextAny(step, "섞", "담", "버무")) {
+                return "재료가 으깨지지 않도록 큰 숟가락으로 아래에서 위로 가볍게 뒤집어 섞으세요.";
+            }
+            if (containsTextAny(step, "준비", "자르", "썰", "손질")) {
+                return "과일 크기는 한입 크기로 맞추고, 물기가 많으면 키친타월로 살짝 눌러 맛이 묽어지지 않게 하세요.";
+            }
+            return "차갑게 먹는 메뉴라 불은 사용하지 않습니다. 완성 후 냉장고에 10분 정도 두면 더 시원합니다.";
+        }
+
+        if (containsTextAny(step, "완성", "불을 끄")) {
+            return "마지막에 한 숟가락 맛보고 싱거우면 양념을 아주 조금만 더하고, 짜면 물을 2~3큰술 넣어 중약불에서 1분 더 끓여 조절하세요.";
+        }
+        if (containsTextAny(step, "약불", "졸", "더 끓", "마무리")) {
+            return "뚜껑을 살짝 덮고 약불을 유지하되 5분마다 바닥을 저어 눌어붙지 않게 하세요. 국물이 자작하게 남으면 완성입니다.";
+        }
+        if (containsTextAny(step, "끓", "국물", "물")) {
+            return "처음엔 센불로 올리고 큰 거품이 올라오면 중약불로 낮추세요. 국물이 너무 졸면 물을 2~3큰술씩 보충하면 됩니다.";
+        }
+        if (containsTextAny(step, "돼지고기", "고기") && containsTextAny(step, "볶", "익", "굽")) {
+            return "중불에서 4~5분간 뒤집어가며 익히고, 겉면의 붉은 기가 거의 사라지면 다음 단계로 넘어가세요. 바닥이 타기 시작하면 물을 1~2큰술 넣고 불을 낮추세요.";
+        }
+        if (containsTextAny(step, "양파", "대파", "파", "채소", "야채") && containsTextAny(step, "볶", "익")) {
+            return "중불에서 2~3분간 저어가며 익히고, 양파 가장자리가 살짝 투명해지면 다음 단계로 넘어가세요.";
+        }
+        if (containsTextAny(step, "김치") && containsTextAny(step, "준비", "자르", "썰")) {
+            return "김치가 길면 가위로 3~4cm 길이로 잘라 한 숟가락에 들어오게 맞추세요. 국물이 튈 수 있으니 도마보다 그릇 안에서 자르면 편합니다.";
+        }
+        if (containsTextAny(step, "준비", "자르", "썰", "손질")) {
+            return "크기는 한입에 먹기 좋은 3cm 정도로 맞추고, 물기가 많으면 키친타월로 살짝 눌러 기름 튐을 줄이세요.";
+        }
+        if (containsTextAny(step, "볶")) {
+            return "중불에서 2~3분간 계속 저어가며 볶고, 재료 가장자리에 윤기가 돌면 다음 단계로 넘어가세요.";
+        }
+        if (containsTextAny(step, "간", "양념", "소금", "간장", "고추장", "된장")) {
+            return "간은 한 번에 많이 넣지 말고 1/2큰술씩 넣은 뒤 맛을 보세요. 짜면 물을 2~3큰술 넣어 조절하세요.";
+        }
+        return "불은 중불부터 시작하고, 타는 냄새가 나면 바로 약불로 낮춘 뒤 바닥을 긁듯이 저어주세요.";
+    }
+
+    private String ensureSentence(String value) {
+        if (value.endsWith(".") || value.endsWith("!") || value.endsWith("?")) {
+            return value;
+        }
+        return value + ".";
+    }
+
+    private boolean containsTextAny(String value, String... keywords) {
+        String normalized = nullToBlank(value).toLowerCase();
+        for (String keyword : keywords) {
+            if (normalized.contains(keyword.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<String> extractExcludedIngredients(String message) {
@@ -1512,9 +1977,9 @@ public class ChatService {
 
     private LocalDate resolveTargetDate(String text) {
         if (text != null && text.contains("내일")) {
-            return LocalDate.now().plusDays(1);
+            return LocalDate.now(clock).plusDays(1);
         }
-        return LocalDate.now();
+        return LocalDate.now(clock);
     }
 
     private MealSlot resolveMealSlot(String text) {
@@ -1668,6 +2133,22 @@ public class ChatService {
     }
 
     private record MealSlot(String fieldName, String koreanName) {
+    }
+
+    private record SafetyContext(
+            List<String> allergies,
+            List<String> chronicConditions,
+            List<String> dietaryRestrictions,
+            List<String> medications,
+            List<String> goals) {
+
+        private boolean hasAny() {
+            return !allergies.isEmpty()
+                    || !chronicConditions.isEmpty()
+                    || !dietaryRestrictions.isEmpty()
+                    || !medications.isEmpty()
+                    || !goals.isEmpty();
+        }
     }
 
     private record RAGData(SearchEngine.SearchStatus status, String systemContextSnippet, String rawSearchContext, String source) {
@@ -1867,7 +2348,7 @@ public class ChatService {
 
             if (!exists) {
                 parsedRecipe.setAverageRating(0.0);
-                parsedRecipe.setCreatedAt(java.time.LocalDateTime.now());
+                parsedRecipe.setCreatedAt(LocalDateTime.now(clock));
                 recipeRepository.save(parsedRecipe);
                 log.info("[Self-growing KB] Successfully promoted new recipe to DB: {}", parsedRecipe.getTitle());
             } else {

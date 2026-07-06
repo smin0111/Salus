@@ -5,9 +5,12 @@ import { colors } from '../theme/colors';
 import axios from 'axios';
 import config from '../config';
 import { useAuth } from '../context/AuthContext';
+import { debugLog } from '../utils/logger';
+import { PORTONE_IMP_CODE, SUBSCRIPTION_AMOUNT, SUBSCRIPTION_PRICE_LABEL } from '../constants/subscription';
+import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
 export default function UpgradeScreen({ onBack, onSuccess }) {
-    const { user, isLoggedIn, refreshUser } = useAuth();
+    const { user, token, isLoggedIn, refreshUser } = useAuth();
     const [loading, setLoading] = useState(false);
     const [sdkReady, setSdkReady] = useState(false);
 
@@ -25,7 +28,7 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
             script.async = true;
             script.onload = () => {
                 setSdkReady(true);
-                console.log('PortOne SDK loaded successfully.');
+                debugLog('PortOne SDK loaded successfully.');
             };
             script.onerror = () => {
                 console.error('Failed to load PortOne SDK.');
@@ -38,7 +41,7 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
     }, []);
 
     const handlePayment = () => {
-        if (!isLoggedIn) {
+        if (!isLoggedIn || !token) {
             Alert.alert("로그인 필요", "멤버십 업그레이드는 로그인 후 가능합니다.");
             return;
         }
@@ -54,7 +57,7 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
             return;
         }
 
-        IMP.init('imp33061218'); // 테스트용 가맹점 식별코드
+        IMP.init(PORTONE_IMP_CODE);
 
         const merchantUid = `mid_${new Date().getTime()}`;
 
@@ -63,7 +66,7 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
             pay_method: 'card',
             merchant_uid: merchantUid,
             name: '내 셰프 AI 플러스 멤버십',
-            amount: 9900,
+            amount: SUBSCRIPTION_AMOUNT,
             buyer_email: user?.email || 'test@example.com',
             buyer_name: user?.name || '테스트유저',
         }, async (rsp) => {
@@ -76,7 +79,7 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
                         merchantUid: rsp.merchant_uid
                     }, {
                         headers: {
-                            Authorization: `Bearer ${user.token}`
+                            Authorization: `Bearer ${token}`
                         }
                     });
 
@@ -88,8 +91,9 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
                         Alert.alert("결제 실패", response.data.message || "결제 검증에 실패했습니다.");
                     }
                 } catch (error) {
+                    if (isAuthError(error)) return;
                     console.error("Payment validation failed:", error);
-                    Alert.alert("오류", error.response?.data?.message || "결제 검증에 실패했습니다. 고객센터에 문의해주세요.");
+                    Alert.alert("오류", getErrorMessage(error, "결제 검증에 실패했습니다. 고객센터에 문의해주세요."));
                 } finally {
                     setLoading(false);
                 }
@@ -153,16 +157,16 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
                 <View style={styles.priceCard}>
                     <Text style={styles.priceLabel}>월 구독료</Text>
                     <View style={styles.priceRow}>
-                        <Text style={styles.priceValue}>₩9,900</Text>
+                        <Text style={styles.priceValue}>{SUBSCRIPTION_PRICE_LABEL}</Text>
                         <Text style={styles.priceUnit}> / 월</Text>
                     </View>
                     <TouchableOpacity
                         style={[styles.payButton, loading && { opacity: 0.7 }]}
                         onPress={handlePayment}
-                        disabled={loading}
+                        disabled={loading || !sdkReady}
                     >
                         <Text style={styles.payButtonText}>
-                            {loading ? "처리 중..." : "플러스로 시작하기"}
+                            {loading ? "처리 중..." : !sdkReady ? "결제 모듈 준비 중..." : "플러스로 시작하기"}
                         </Text>
                     </TouchableOpacity>
                     <Text style={styles.footerNote}>언제든지 해지할 수 있습니다.</Text>
@@ -189,7 +193,7 @@ const styles = StyleSheet.create({
     benefitText: { flex: 1 },
     benefitTitle: { fontSize: 17, fontWeight: 'bold', color: '#1F2937', marginBottom: 4 },
     benefitDesc: { fontSize: 14, color: '#6B7280' },
-    priceCard: { width: '100%', backgroundColor: '#F9FAFB', padding: 24, borderRadius: 24, borderWeight: 1, borderColor: '#F3F4F6' },
+    priceCard: { width: '100%', backgroundColor: '#F9FAFB', padding: 24, borderRadius: 24, borderWidth: 1, borderColor: '#F3F4F6' },
     priceLabel: { fontSize: 14, color: '#6B7280', marginBottom: 8 },
     priceRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 24 },
     priceValue: { fontSize: 32, fontWeight: 'bold', color: '#111827' },

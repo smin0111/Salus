@@ -3,10 +3,11 @@ import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, Keyboard
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import * as Speech from 'expo-speech'; // TTS
-import Voice from '@react-native-voice/voice'; // 음성 인식
 import { colors } from '../theme/colors';
 import config from '../config';
 import { useAuth } from '../context/AuthContext';
+import { debugLog } from '../utils/logger';
+import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
 // 마크다운 표시 문법 정리
 const cleanAiResponse = (text) => {
@@ -66,6 +67,21 @@ const parseRecipeFromText = (text) => {
         difficulty: difficulty ? Number(difficulty) : null,
     };
 };
+
+const compactStringList = (values) => {
+    if (!Array.isArray(values)) return [];
+    return values
+        .map(value => (typeof value === 'string' ? value.trim() : ''))
+        .filter(Boolean);
+};
+
+const buildHealthProfilePayload = (profile = {}) => ({
+    allergies: compactStringList(profile.allergies),
+    chronicConditions: compactStringList(profile.chronicConditions),
+    dietaryRestrictions: compactStringList(profile.dietaryRestrictions),
+    medications: compactStringList(profile.medications),
+    goals: compactStringList(profile.goals),
+});
 
 const initialGreeting = {
     id: 1,
@@ -190,7 +206,7 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
     const handleMouseEnter = () => {
         if (Platform.OS === 'web') {
             Animated.spring(isHovered, {
-                toValue: 1.02,
+                toValue: 1,
                 friction: 5,
                 useNativeDriver: true,
             }).start();
@@ -208,6 +224,7 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
     };
 
     const recipe = item.sender === 'ai' && !item.isPreparingRecipe ? (item.recipe || parseRecipeFromText(item.text)) : null;
+    const isAiRecipeLayout = item.sender === 'ai' && (recipe || item.isPreparingRecipe);
 
     return (
         <Animated.View
@@ -220,10 +237,14 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
         >
             {item.sender === 'ai' && (
                 <View style={styles.aiAvatar}>
-                    <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 10 }}>AI</Text>
+                    <Ionicons name="sparkles-outline" size={16} color="#111827" />
                 </View>
             )}
-            <View style={{ flexShrink: 1 }}>
+            <View style={[
+                styles.messageContent,
+                item.sender === 'ai' && styles.aiMessageContent,
+                isAiRecipeLayout && styles.aiRecipeMessageContent,
+            ]}>
                 {item.isPreparingRecipe ? (
                     <RecipePreparing />
                 ) : recipe ? (
@@ -342,10 +363,6 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     // 복사 상태
     const [copiedMessageId, setCopiedMessageId] = useState(null);
 
-    // 요리 모드 상태
-    const [isCookingMode, setIsCookingMode] = useState(false);
-    const [isListening, setIsListening] = useState(false);
-
     useEffect(() => {
         const findBestVoice = async () => {
             try {
@@ -366,7 +383,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                     }
                 }
             } catch (e) {
-                console.log("Voice fetch failed", e);
+                debugLog("Voice fetch failed", e);
             }
         };
 
@@ -387,8 +404,6 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         setSelectedMessageId(null);
         setSelectedRecipeToAdd(null);
         setRecipeDetails({ title: '', fullText: '' });
-        setIsCookingMode(false);
-        setIsListening(false);
         setSpeakingMessageId(null);
         Speech.stop();
 
@@ -418,7 +433,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             });
             setChatSessions(response.data || []);
         } catch (error) {
-            console.log('Failed to fetch chat sessions:', error.message);
+            debugLog('Failed to fetch chat sessions:', error.message);
         }
     };
 
@@ -437,7 +452,8 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             setChatSessionId(sessionId);
             setMessages(loadedMessages);
         } catch (error) {
-            console.log('Failed to load chat session:', error.message);
+            if (isAuthError(error)) return;
+            debugLog('Failed to load chat session:', error.message);
             Alert.alert('오류', '대화를 불러오지 못했습니다.');
         }
     };
@@ -452,10 +468,6 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         if (isLoggedIn) {
             fetchChatSessions();
         }
-    };
-
-    const getErrorMessage = (error, fallback) => {
-        return error?.response?.data?.message || error?.message || fallback;
     };
 
     const openRenameSession = (session) => {
@@ -485,6 +497,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             setEditingSession(null);
             setEditingSessionTitle('');
         } catch (error) {
+            if (isAuthError(error)) return;
             Alert.alert('오류', getErrorMessage(error, '대화 제목을 수정하지 못했습니다.'));
         }
     };
@@ -524,74 +537,15 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             }
             await fetchChatSessions();
         } catch (error) {
+            if (isAuthError(error)) return;
             Alert.alert('오류', getErrorMessage(error, '대화를 삭제하지 못했습니다.'));
         }
     };
 
-    // 음성 인식 설정
-    useEffect(() => {
-        Voice.onSpeechResults = onSpeechResults;
-        Voice.onSpeechError = onSpeechError;
-
-        return () => {
-            Voice.destroy().then(Voice.removeAllListeners);
-        };
-    }, []);
-
-    const onSpeechResults = (e) => {
-        if (e.value && e.value.length > 0) {
-            const recognizedText = e.value[0];
-            console.log('Recognized:', recognizedText);
-
-            // 인식된 문장을 바로 AI에게 전송
-            sendMessage(recognizedText);
-        }
+    const showCookingModeUnavailable = () => {
+        Alert.alert("준비 중", "요리 모드는 안정적인 음성 인식으로 교체한 뒤 제공할 예정입니다.");
     };
 
-    const onSpeechError = (e) => {
-        console.error('Speech error:', e);
-        setIsListening(false);
-    };
-
-    const toggleCookingMode = async () => {
-        if (!isLoggedIn) {
-            Alert.alert("회원 전용 기능", "요리 모드는 로그인 후 이용 가능합니다.");
-            return;
-        }
-
-        if (isCookingMode) {
-            // 요리 모드 종료
-            await Voice.stop();
-            setIsCookingMode(false);
-            setIsListening(false);
-            Speech.speak("요리 모드를 종료합니다.", { language: 'ko-KR' });
-        } else {
-            // 요리 모드 시작
-            setIsCookingMode(true);
-            Speech.speak("요리 모드를 시작합니다. 무엇을 도와드릴까요?", { language: 'ko-KR' });
-            startListening();
-        }
-    };
-
-    const startListening = async () => {
-        try {
-            setIsListening(true);
-            await Voice.start('ko-KR');
-        } catch (e) {
-            console.error(e);
-            setIsListening(false);
-        }
-    };
-
-    // 요리 모드에서는 AI 응답 후 음성 인식을 자동 재시작
-    useEffect(() => {
-        if (isCookingMode && !loading && !isListening) {
-            const timer = setTimeout(() => {
-                startListening();
-            }, 2000); // AI 응답 후 2초 뒤 다시 듣기 시작
-            return () => clearTimeout(timer);
-        }
-    }, [isCookingMode, loading, isListening]);
 
     const sendMessage = async (text = null) => {
         const messageText = typeof text === 'string' ? text : inputText;
@@ -612,7 +566,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 `${config.API_BASE_URL}/activities/log`,
                 { isAi: true },
                 { headers: token ? { Authorization: `Bearer ${token}` } : {} }
-            ).catch(e => console.log("AI Activity log failed", e));
+            ).catch(e => debugLog("AI Activity log failed", e));
         }
 
         try {
@@ -621,8 +575,13 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 role: msg.sender === 'user' ? 'user' : 'model',
                 content: msg.text
             }));
+            const healthProfilePayload = buildHealthProfilePayload(healthProfile);
 
-            console.log('[DEBUG] Sending to AI:', { useFridge, messageText });
+            debugLog('[DEBUG] Sending to AI:', {
+                useFridge,
+                messageLength: messageText.trim().length,
+                healthProfileIncluded: Object.values(healthProfilePayload).some(values => values.length > 0)
+            });
 
             const response = await axios.post(
                 `${config.API_BASE_URL}/chat/message`,
@@ -630,15 +589,16 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                     sessionId: chatSessionId,
                     message: messageText,
                     history: history,
-                    useFridge: useFridge
+                    useFridge: useFridge,
+                    healthProfile: healthProfilePayload
                 },
                 { headers: token ? { Authorization: `Bearer ${token}` } : {} }
             );
 
-            console.log('[DEBUG] AI Response received');
+            debugLog('[DEBUG] AI Response received');
 
             if (requestEpoch !== authEpochRef.current || requestSeq !== requestSeqRef.current) {
-                console.log('[DEBUG] Chat state changed during request. Discarding AI response.');
+                debugLog('[DEBUG] Chat state changed during request. Discarding AI response.');
                 return;
             }
 
@@ -676,22 +636,14 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 fetchChatSessions();
             }
 
-            // 요리 모드에서는 AI 응답을 자동으로 읽어줌
-            if (isCookingMode) {
-                // 타이핑 애니메이션이 어느 정도 진행된 뒤 읽기 시작
-                setTimeout(() => {
-                    const cleanText = cleanedText.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
-                    Speech.speak(cleanText, {
-                        language: 'ko-KR',
-                        rate: 0.9,
-                        onDone: () => setIsListening(false) // 자동 재시작 트리거
-                    });
-                }, 1000);
-            }
         } catch (error) {
             console.error(error);
             if (requestEpoch === authEpochRef.current && requestSeq === requestSeqRef.current) {
-                const errorMessage = { id: Date.now() + 1, text: '죄송해요, 연결이 원활하지 않네요. 다시 말씀해 주시겠어요?', sender: 'ai' };
+                const errorMessage = {
+                    id: Date.now() + 1,
+                    text: getErrorMessage(error, '죄송해요, 연결이 원활하지 않네요. 다시 말씀해 주시겠어요?'),
+                    sender: 'ai'
+                };
                 setMessages(prev => [...prev, errorMessage]);
             }
         } finally {
@@ -840,6 +792,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             setSelectedMessageId(null);
 
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('Failed to save meal log:', error);
             Alert.alert("오류", "저장 실패: " + getErrorMessage(error, error.message));
         }
@@ -891,17 +844,14 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                     {/* Cooking Mode Toggle */}
                     {isLoggedIn && (
                         <TouchableOpacity
-                            style={[styles.cookingModeButton, isCookingMode && styles.cookingModeActive]}
-                            onPress={toggleCookingMode}
+                            style={styles.cookingModeButton}
+                            onPress={showCookingModeUnavailable}
                         >
                             <Ionicons
-                                name={isCookingMode ? "mic" : "mic-outline"}
+                                name="mic-outline"
                                 size={20}
-                                color={isCookingMode ? "white" : colors.primary}
+                                color={colors.primary}
                             />
-                            {isListening && (
-                                <View style={styles.listeningIndicator} />
-                            )}
                         </TouchableOpacity>
                     )}
                     {!isLoggedIn && (
@@ -1193,7 +1143,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F3F4F6' },
+    container: { flex: 1, backgroundColor: '#FFFFFF' },
     header: { padding: 16, backgroundColor: 'white', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'android' ? 40 : 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
     headerLeft: { flexDirection: 'row', alignItems: 'center' },
     menuButton: { padding: 8, marginRight: 8 },
@@ -1254,7 +1204,8 @@ const styles = StyleSheet.create({
     loginButtonText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
     list: { flex: 1 },
     listContent: {
-        padding: 16,
+        paddingHorizontal: 18,
+        paddingTop: 20,
         paddingBottom: 40,
         ...Platform.select({
             web: {
@@ -1268,19 +1219,62 @@ const styles = StyleSheet.create({
         paddingTop: 28,
         paddingBottom: 56,
     },
-    messageBubble: { padding: 12, borderRadius: 16, marginBottom: 20, flexDirection: 'row', alignItems: 'flex-start' },
-    userBubble: { backgroundColor: '#F4F4F5', alignSelf: 'flex-end', borderBottomRightRadius: 4, maxWidth: '85%', paddingHorizontal: 16, paddingVertical: 12 },
+    messageBubble: { marginBottom: 22, flexDirection: 'row', alignItems: 'flex-start' },
+    userBubble: {
+        backgroundColor: '#F4F4F5',
+        alignSelf: 'flex-end',
+        borderRadius: 18,
+        maxWidth: '78%',
+        paddingHorizontal: 15,
+        paddingVertical: 11,
+    },
     aiBubble: { backgroundColor: 'transparent', alignSelf: 'flex-start', width: '100%' },
-    aiAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', marginRight: 16, marginTop: 2 },
-    messageText: { fontSize: 16, lineHeight: 26 },
+    aiAvatar: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: '#F4F4F5',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 13,
+        marginTop: 1,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    messageContent: { flexShrink: 1, minWidth: 0 },
+    aiMessageContent: {
+        flex: 1,
+        maxWidth: 720,
+        backgroundColor: 'transparent',
+        borderWidth: 0,
+        paddingHorizontal: 0,
+        paddingVertical: 2,
+    },
+    aiRecipeMessageContent: {
+        flex: 1,
+        minWidth: 0,
+        maxWidth: 720,
+        backgroundColor: 'transparent',
+        borderWidth: 0,
+        paddingHorizontal: 0,
+        paddingVertical: 0,
+    },
+    messageText: { fontSize: 15, lineHeight: 25 },
     userText: { color: '#1F2937' },
     aiText: { color: '#1F2937' },
-    messageActions: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 12 },
+    messageActions: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
     addToPlanButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8 },
     addToPlanButtonSaved: { backgroundColor: '#ECFDF5' },
     addToPlanText: { color: '#9CA3AF', fontSize: 12, fontWeight: '600', marginLeft: 4 },
     addToPlanTextSaved: { color: '#10B981' },
-    actionIconButton: { padding: 4 },
+    actionIconButton: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#F9FAFB',
+    },
     recipePreparingBox: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1608,20 +1602,6 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: colors.primary,
         position: 'relative',
-    },
-    cookingModeActive: {
-        backgroundColor: colors.primary,
-    },
-    listeningIndicator: {
-        position: 'absolute',
-        top: -2,
-        right: -2,
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        backgroundColor: '#EF4444', // 빨간색
-        borderWidth: 2,
-        borderColor: 'white',
     },
     fridgeChip: {
         flexDirection: 'row',

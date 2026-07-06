@@ -1,12 +1,26 @@
 ---
-name: Feature
-about: Suggest an idea for this project
-title: "[FEATURE]"
-labels: ''
+name: 기능 제안
+about: 사용자 또는 관리자 기능을 제안합니다
+title: "[기능] "
+labels: enhancement
 assignees: ''
 
 ---
 
-<h3>✔개발할 기능<h3/>
+## 목표
 
-<h3>📄개발 상세 내용<h3/>
+## 사용자 이야기
+
+나는 ...
+...하고 싶다.
+왜냐하면 ...
+
+## 완료 기준
+
+- [ ]
+- [ ]
+- [ ]
+
+## 참고 사항
+
+## 화면 또는 참고 자료

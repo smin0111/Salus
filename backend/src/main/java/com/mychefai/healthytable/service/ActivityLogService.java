@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -16,6 +17,7 @@ import java.util.Optional;
 public class ActivityLogService {
 
     private final ActivityLogRepository activityLogRepository;
+    private final Clock clock;
 
     public List<ActivityLog> getActivityLogs(User user) {
         return activityLogRepository.findByUser(user);
@@ -23,7 +25,7 @@ public class ActivityLogService {
 
     @Transactional
     public ActivityLog logActivity(User user, boolean isAiInteraction) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         Optional<ActivityLog> existing = activityLogRepository.findByUserAndActivityDate(user, today);
 
         ActivityLog log;

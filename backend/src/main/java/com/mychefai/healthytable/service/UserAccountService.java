@@ -5,8 +5,10 @@ import com.mychefai.healthytable.domain.User;
 import com.mychefai.healthytable.dto.UserDataSummaryDTO;
 import com.mychefai.healthytable.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -26,6 +28,7 @@ public class UserAccountService {
     private final PostLikeRepository postLikeRepository;
     private final RecipeShareRepository recipeShareRepository;
     private final PaymentRepository paymentRepository;
+    private final ChatMessageRepository chatMessageRepository;
     private final ChatSessionRepository chatSessionRepository;
 
     @Transactional(readOnly = true)
@@ -45,6 +48,7 @@ public class UserAccountService {
                 .recipeShares(recipeShareRepository.countByUserId(userId))
                 .payments(paymentRepository.countByUser(user))
                 .chatSessions(chatSessionRepository.countByUserId(userId))
+                .chatMessages(chatMessageRepository.countBySession_UserId(userId))
                 .build();
     }
 
@@ -70,6 +74,7 @@ public class UserAccountService {
         healthProfileRepository.deleteByUserId(userId);
         mealLogRepository.deleteByUser(user);
         activityLogRepository.deleteByUser(user);
+        chatMessageRepository.deleteBySession_UserId(userId);
         chatSessionRepository.deleteByUserId(userId);
         paymentRepository.anonymizeByUser(user);
         userRepository.delete(user);
@@ -77,6 +82,6 @@ public class UserAccountService {
 
     private User getUser(Long userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
     }
 }

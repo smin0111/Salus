@@ -1,6 +1,5 @@
 import { Platform } from 'react-native';
-
-const memoryStorage = {};
+import * as SecureStore from 'expo-secure-store';
 
 const webStorage = {
     getItem(key) {
@@ -28,21 +27,21 @@ const SafeStorage = {
         if (Platform.OS === 'web') {
             return webStorage.getItem(key);
         }
-        return memoryStorage[key] || null;
+        return SecureStore.getItemAsync(key);
     },
     async setItem(key, value) {
         if (Platform.OS === 'web') {
             webStorage.setItem(key, value);
             return;
         }
-        memoryStorage[key] = value;
+        await SecureStore.setItemAsync(key, value);
     },
     async removeItem(key) {
         if (Platform.OS === 'web') {
             webStorage.removeItem(key);
             return;
         }
-        delete memoryStorage[key];
+        await SecureStore.deleteItemAsync(key);
     }
 };
 

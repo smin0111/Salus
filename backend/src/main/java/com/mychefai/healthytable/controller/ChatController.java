@@ -4,9 +4,11 @@ import com.mychefai.healthytable.domain.ChatSession;
 import com.mychefai.healthytable.dto.ChatDto;
 import com.mychefai.healthytable.repository.ChatMessageRepository;
 import com.mychefai.healthytable.repository.ChatSessionRepository;
-import com.mychefai.healthytable.security.JwtTokenProvider;
+import com.mychefai.healthytable.security.AuthenticatedUserProvider;
+import com.mychefai.healthytable.service.ChatRateLimitService;
 import com.mychefai.healthytable.service.ChatService;
 import com.mychefai.healthytable.service.RecipeWorkSessionService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,25 +19,28 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/chat")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class ChatController {
 
-    private final JwtTokenProvider jwtTokenProvider;
+    private static final int MAX_CHAT_MESSAGE_LENGTH = 4000;
+    private static final long MAX_AUDIO_FILE_SIZE_BYTES = 10L * 1024L * 1024L;
+
+    private final AuthenticatedUserProvider authenticatedUserProvider;
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final RecipeWorkSessionService recipeWorkSessionService;
     private final ChatService chatService;
+    private final ChatRateLimitService chatRateLimitService;
 
     @GetMapping("/sessions")
-    public List<ChatDto.SessionSummary> getSessions(
-            @RequestHeader(value = "Authorization", required = false) String authHeader) {
-        Optional<Long> authenticatedUserId = getAuthenticatedUserId(authHeader);
+    public List<ChatDto.SessionSummary> getSessions() {
+        Optional<Long> authenticatedUserId = authenticatedUserProvider.getCurrentUserId();
         if (authenticatedUserId.isEmpty()) {
             return List.of();
         }
@@ -51,11 +56,8 @@ public class ChatController {
     }
 
     @GetMapping("/sessions/{sessionId}/messages")
-    public List<ChatDto.Message> getMessages(
-            @RequestHeader(value = "Authorization", required = false) String authHeader,
-            @PathVariable Long sessionId) {
-        Long userId = getAuthenticatedUserId(authHeader)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."));
+    public List<ChatDto.Message> getMessages(@PathVariable Long sessionId) {
+        Long userId = authenticatedUserProvider.requireUserId();
 
         ChatSession session = chatSessionRepository.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "대화 세션을 찾을 수 없습니다."));
@@ -67,11 +69,9 @@ public class ChatController {
 
     @PatchMapping("/sessions/{sessionId}")
     public ChatDto.SessionSummary updateSessionTitle(
-            @RequestHeader(value = "Authorization", required = false) String authHeader,
             @PathVariable Long sessionId,
             @RequestBody ChatDto.SessionUpdateRequest request) {
-        Long userId = getAuthenticatedUserId(authHeader)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."));
+        Long userId = authenticatedUserProvider.requireUserId();
 
         String title = normalizeSessionTitle(request != null ? request.getTitle() : null);
         ChatSession session = chatSessionRepository.findByIdAndUserId(sessionId, userId)
@@ -89,11 +89,8 @@ public class ChatController {
 
     @DeleteMapping("/sessions/{sessionId}")
     @Transactional
-    public ResponseEntity<Map<String, String>> deleteSession(
-            @RequestHeader(value = "Authorization", required = false) String authHeader,
-            @PathVariable Long sessionId) {
-        Long userId = getAuthenticatedUserId(authHeader)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."));
+    public ResponseEntity<Map<String, String>> deleteSession(@PathVariable Long sessionId) {
+        Long userId = authenticatedUserProvider.requireUserId();
 
         ChatSession session = chatSessionRepository.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "대화 세션을 찾을 수 없습니다."));
@@ -105,27 +102,18 @@ public class ChatController {
     }
 
     @PostMapping("/message")
-    public Mono<ChatDto.Response> chat(
-            @RequestHeader(value = "Authorization", required = false) String authHeader,
-            @RequestBody ChatDto.Request request) {
-        Optional<Long> authenticatedUserId = getAuthenticatedUserId(authHeader);
+    public Mono<ChatDto.Response> chat(@RequestBody ChatDto.Request request, HttpServletRequest servletRequest) {
+        validateChatRequest(request);
+        Optional<Long> authenticatedUserId = authenticatedUserProvider.getCurrentUserId();
+        chatRateLimitService.checkAllowed(authenticatedUserId, servletRequest);
         return chatService.processChat(authenticatedUserId, request);
     }
 
     @PostMapping("/stt")
     public Mono<Map<String, String>> speechToText(@RequestParam("audio") MultipartFile audioFile) {
+        authenticatedUserProvider.requireUserId();
+        validateAudioFile(audioFile);
         return Mono.just(Map.of("text", "음성 인식 기능은 아직 서버 키 설정이 필요합니다. (Mock Response)"));
-    }
-
-    private Optional<Long> getAuthenticatedUserId(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            return Optional.empty();
-        }
-        String token = authHeader.substring(7);
-        if (!jwtTokenProvider.validateToken(token)) {
-            return Optional.empty();
-        }
-        return Optional.of(Long.parseLong(jwtTokenProvider.getUserId(token)));
     }
 
     private String normalizeSessionTitle(String title) {
@@ -137,5 +125,30 @@ public class ChatController {
             throw new IllegalArgumentException("대화 제목은 120자 이하로 입력해 주세요.");
         }
         return normalized;
+    }
+
+    private void validateChatRequest(ChatDto.Request request) {
+        if (request == null || request.getMessage() == null || request.getMessage().isBlank()) {
+            throw new IllegalArgumentException("메시지를 입력해 주세요.");
+        }
+
+        String message = request.getMessage().trim();
+        if (message.length() > MAX_CHAT_MESSAGE_LENGTH) {
+            throw new IllegalArgumentException("메시지는 4000자 이하로 입력해 주세요.");
+        }
+        request.setMessage(message);
+    }
+
+    private void validateAudioFile(MultipartFile audioFile) {
+        if (audioFile == null || audioFile.isEmpty()) {
+            throw new IllegalArgumentException("음성 파일을 업로드해 주세요.");
+        }
+        if (audioFile.getSize() > MAX_AUDIO_FILE_SIZE_BYTES) {
+            throw new IllegalArgumentException("음성 파일은 10MB 이하로 업로드해 주세요.");
+        }
+        String contentType = audioFile.getContentType();
+        if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("audio/")) {
+            throw new IllegalArgumentException("오디오 파일만 업로드할 수 있습니다.");
+        }
     }
 }

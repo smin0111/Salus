@@ -5,6 +5,8 @@ import { colors } from '../theme/colors';
 import axios from 'axios';
 import config from '../config';
 import { useAuth } from '../context/AuthContext';
+import { debugLog } from '../utils/logger';
+import { isAuthError } from '../utils/apiError';
 
 const WEEK_DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -37,7 +39,8 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
             });
             setMonthlyAnalysis(response.data);
         } catch (error) {
-            console.log('Monthly analysis failed or empty');
+            if (isAuthError(error)) return;
+            debugLog('Monthly analysis failed or empty');
             setMonthlyAnalysis('');
         }
     };
@@ -57,6 +60,7 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
             });
             setActivityData(transformed);
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('Failed to fetch activity logs:', error);
         }
     };
@@ -102,6 +106,7 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
 
             setMealData(transformedData);
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('Failed to fetch meal logs:', error);
         } finally {
             setLoading(false);

@@ -5,7 +5,8 @@ CREATE TABLE users (
   password    VARCHAR(255) NOT NULL,
   name        VARCHAR(100) NOT NULL,
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  grade       VARCHAR(20) DEFAULT 'BASIC'
+  grade       VARCHAR(20) DEFAULT 'BASIC',
+  role        VARCHAR(20) NOT NULL DEFAULT 'USER'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
@@ -71,19 +72,6 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   UNIQUE KEY uk_activity_user_date (user_id, activity_date),
   INDEX idx_activity_user (user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-
--- 13) PAYMENTS (멤버십 결제 내역)
-CREATE TABLE IF NOT EXISTS payments (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    merchant_uid VARCHAR(255) UNIQUE NOT NULL,
-    imp_uid VARCHAR(255),
-    amount INT NOT NULL,
-    status VARCHAR(50) NOT NULL,
-    user_id BIGINT,
-    paid_at TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
@@ -242,11 +230,13 @@ CREATE TABLE post_likes (
 -- 13) PAYMENTS (멤버십 결제 내역)
 CREATE TABLE payments (
     id           BIGINT AUTO_INCREMENT PRIMARY KEY,
-    merchant_uid VARCHAR(100) UNIQUE NOT NULL,
-    imp_uid      VARCHAR(100),
+    merchant_uid VARCHAR(255) NOT NULL,
+    imp_uid      VARCHAR(255),
     amount       INT NOT NULL,
-    status       VARCHAR(20),
+    status       VARCHAR(50) NOT NULL,
     user_id      BIGINT,
     paid_at      DATETIME,
-    CONSTRAINT fk_payment_user FOREIGN KEY (user_id) REFERENCES users(id)
+    UNIQUE KEY uk_payments_merchant_uid (merchant_uid),
+    UNIQUE KEY uk_payments_imp_uid (imp_uid),
+    CONSTRAINT fk_payment_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

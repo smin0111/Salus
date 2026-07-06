@@ -25,6 +25,18 @@ public class ChatDto {
         private String message;
         private List<Message> history;
         private boolean useFridge = true; // 기본값은 true
+        private HealthProfileContext healthProfile;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class HealthProfileContext {
+        private List<String> allergies;
+        private List<String> chronicConditions;
+        private List<String> dietaryRestrictions;
+        private List<String> medications;
+        private List<String> goals;
     }
 
     @Data

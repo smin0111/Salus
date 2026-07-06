@@ -6,10 +6,14 @@ import com.mychefai.healthytable.repository.ActivityLogRepository;
 import com.mychefai.healthytable.repository.PaymentRepository;
 import com.mychefai.healthytable.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.actuate.health.HealthComponent;
+import org.springframework.boot.actuate.health.HealthEndpoint;
+import org.springframework.boot.actuate.health.Status;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -23,15 +27,21 @@ public class AdminDashboardController {
     private final UserRepository userRepository;
     private final ActivityLogRepository activityLogRepository;
     private final PaymentRepository paymentRepository;
+    private final HealthEndpoint healthEndpoint;
+    private final Clock clock;
+
+    @GetMapping("/auth-check")
+    public Map<String, Object> checkAdminAuth() {
+        return Map.of("authenticated", true);
+    }
 
     @GetMapping("/stats")
     public AdminDashboardDTO getStats() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         LocalDateTime todayStart = today.atStartOfDay();
         LocalDateTime todayEnd = today.plusDays(1).atStartOfDay();
 
         LocalDate yesterday = today.minusDays(1);
-        LocalDateTime yesterdayStart = yesterday.atStartOfDay();
 
         // ─── 사용자 통계 ───
         long totalUsers = userRepository.count();
@@ -60,26 +70,20 @@ public class AdminDashboardController {
         // 최근 7일 일별 통계
         LocalDateTime sevenDaysAgo = today.minusDays(6).atStartOfDay();
         List<Object[]> rawStats = paymentRepository.findDailyPaymentStats(sevenDaysAgo);
-        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MM-dd");
         List<AdminDashboardDTO.DailyPaymentStat> dailyStats = new ArrayList<>();
-        for (Object[] row : rawStats) {
+        for (Object[] row : safeRows(rawStats)) {
             dailyStats.add(AdminDashboardDTO.DailyPaymentStat.builder()
-                    .date(row[0] != null ? row[0].toString().substring(5) : "??-??") // yyyy-MM-dd → MM-dd
-                    .count(row[1] != null ? ((Number) row[1]).longValue() : 0)
-                    .amount(row[2] != null ? ((Number) row[2]).longValue() : 0)
+                    .date(formatDailyStatDate(valueAt(row, 0)))
+                    .count(toLong(valueAt(row, 1)))
+                    .amount(toLong(valueAt(row, 2)))
                     .build());
         }
 
         // ─── 서버 상태 ───
-        Map<String, String> serverStatus = new HashMap<>();
+        Map<String, String> serverStatus = new LinkedHashMap<>();
+        serverStatus.put("application", readApplicationHealthStatus());
         serverStatus.put("auth", "healthy");
-        serverStatus.put("chat", "healthy");
-        serverStatus.put("recipe", "healthy");
         serverStatus.put("db", "healthy");
-        serverStatus.put("payment", "healthy");
-
-        // ─── 에러 로그 (현재는 빈 리스트, 에러 발생 시 여기에 추가) ───
-        List<String> errorLogs = new ArrayList<>();
 
         return AdminDashboardDTO.builder()
                 .totalUsers(totalUsers)
@@ -94,7 +98,45 @@ public class AdminDashboardController {
                 .monthPaymentCount(monthPaymentCount)
                 .monthPaymentAmount(monthPaymentAmount)
                 .dailyPaymentStats(dailyStats)
-                .errorLogs(errorLogs)
                 .build();
+    }
+
+    private List<Object[]> safeRows(List<Object[]> rows) {
+        return rows == null ? List.of() : rows;
+    }
+
+    private Object valueAt(Object[] row, int index) {
+        if (row == null || row.length <= index) {
+            return null;
+        }
+        return row[index];
+    }
+
+    private long toLong(Object value) {
+        return value instanceof Number number ? number.longValue() : 0;
+    }
+
+    private String readApplicationHealthStatus() {
+        try {
+            HealthComponent health = healthEndpoint.health();
+            if (health == null || health.getStatus() == null) {
+                return "unknown";
+            }
+            return Status.UP.equals(health.getStatus()) ? "healthy" : "unhealthy";
+        } catch (RuntimeException ex) {
+            return "unknown";
+        }
+    }
+
+    private String formatDailyStatDate(Object value) {
+        if (value instanceof LocalDate date) {
+            return date.format(DateTimeFormatter.ofPattern("MM-dd"));
+        }
+        if (value == null) {
+            return "??-??";
+        }
+
+        String text = value.toString();
+        return text.length() >= 10 ? text.substring(5, 10) : text;
     }
 }
