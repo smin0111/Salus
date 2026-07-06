@@ -5,8 +5,10 @@ import com.mychefai.healthytable.dto.ChatDto;
 import com.mychefai.healthytable.repository.ChatMessageRepository;
 import com.mychefai.healthytable.repository.ChatSessionRepository;
 import com.mychefai.healthytable.security.AuthenticatedUserProvider;
+import com.mychefai.healthytable.service.ChatRateLimitService;
 import com.mychefai.healthytable.service.ChatService;
 import com.mychefai.healthytable.service.RecipeWorkSessionService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -25,11 +28,15 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ChatController {
 
+    private static final int MAX_CHAT_MESSAGE_LENGTH = 4000;
+    private static final long MAX_AUDIO_FILE_SIZE_BYTES = 10L * 1024L * 1024L;
+
     private final AuthenticatedUserProvider authenticatedUserProvider;
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final RecipeWorkSessionService recipeWorkSessionService;
     private final ChatService chatService;
+    private final ChatRateLimitService chatRateLimitService;
 
     @GetMapping("/sessions")
     public List<ChatDto.SessionSummary> getSessions() {
@@ -95,13 +102,17 @@ public class ChatController {
     }
 
     @PostMapping("/message")
-    public Mono<ChatDto.Response> chat(@RequestBody ChatDto.Request request) {
+    public Mono<ChatDto.Response> chat(@RequestBody ChatDto.Request request, HttpServletRequest servletRequest) {
+        validateChatRequest(request);
         Optional<Long> authenticatedUserId = authenticatedUserProvider.getCurrentUserId();
+        chatRateLimitService.checkAllowed(authenticatedUserId, servletRequest);
         return chatService.processChat(authenticatedUserId, request);
     }
 
     @PostMapping("/stt")
     public Mono<Map<String, String>> speechToText(@RequestParam("audio") MultipartFile audioFile) {
+        authenticatedUserProvider.requireUserId();
+        validateAudioFile(audioFile);
         return Mono.just(Map.of("text", "음성 인식 기능은 아직 서버 키 설정이 필요합니다. (Mock Response)"));
     }
 
@@ -114,5 +125,30 @@ public class ChatController {
             throw new IllegalArgumentException("대화 제목은 120자 이하로 입력해 주세요.");
         }
         return normalized;
+    }
+
+    private void validateChatRequest(ChatDto.Request request) {
+        if (request == null || request.getMessage() == null || request.getMessage().isBlank()) {
+            throw new IllegalArgumentException("메시지를 입력해 주세요.");
+        }
+
+        String message = request.getMessage().trim();
+        if (message.length() > MAX_CHAT_MESSAGE_LENGTH) {
+            throw new IllegalArgumentException("메시지는 4000자 이하로 입력해 주세요.");
+        }
+        request.setMessage(message);
+    }
+
+    private void validateAudioFile(MultipartFile audioFile) {
+        if (audioFile == null || audioFile.isEmpty()) {
+            throw new IllegalArgumentException("음성 파일을 업로드해 주세요.");
+        }
+        if (audioFile.getSize() > MAX_AUDIO_FILE_SIZE_BYTES) {
+            throw new IllegalArgumentException("음성 파일은 10MB 이하로 업로드해 주세요.");
+        }
+        String contentType = audioFile.getContentType();
+        if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("audio/")) {
+            throw new IllegalArgumentException("오디오 파일만 업로드할 수 있습니다.");
+        }
     }
 }

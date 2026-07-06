@@ -8,8 +8,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.mychefai.healthytable.dto.RecommendationDTO;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -26,6 +30,8 @@ public class RecommendationService {
      */
     @Transactional
     public List<Recommendation> generateRecommendations(Long userId) {
+        validateUserId(userId);
+
         // 1. 데이터 준비
         List<Recipe> allRecipes = recipeRepository.findAll();
         List<FridgeItem> fridgeItems = fridgeItemRepository.findByUserId(userId);
@@ -33,10 +39,10 @@ public class RecommendationService {
 
         List<String> fridgeItemNames = fridgeItems.stream()
                 .map(FridgeItem::getName)
-                .collect(Collectors.toList());
+                .collect(Collectors.collectingAndThen(Collectors.toList(), this::normalizeValues));
 
         List<String> allergies = (healthProfile != null && healthProfile.getAllergies() != null)
-                ? healthProfile.getAllergies()
+                ? normalizeValues(healthProfile.getAllergies())
                 : new ArrayList<>();
 
         // 기존 추천 삭제
@@ -62,16 +68,16 @@ public class RecommendationService {
 
     private double calculateScore(Recipe recipe, List<String> userIngredients, List<String> allergies) {
         double score = 0;
-        List<String> recipeIngredients = recipe.getIngredients();
+        List<String> recipeIngredients = normalizeValues(recipe.getIngredients());
 
-        if (recipeIngredients == null)
+        if (recipeIngredients.isEmpty())
             return 0;
 
         // 알러지 필터링
         for (String allergy : allergies) {
             for (String ri : recipeIngredients) {
-                if (ri.contains(allergy)) {
-                    return -100; // 알러지 유발 음시는 배제
+                if (containsIgnoreCase(ri, allergy)) {
+                    return -100; // 알러지 유발 음식은 배제
                 }
             }
         }
@@ -79,7 +85,7 @@ public class RecommendationService {
         // 재료 매칭 점수 (개당 10점)
         for (String recipeIng : recipeIngredients) {
             for (String userIng : userIngredients) {
-                if (recipeIng.contains(userIng) || userIng.contains(recipeIng)) {
+                if (containsIgnoreCase(recipeIng, userIng) || containsIgnoreCase(userIng, recipeIng)) {
                     score += 10;
                 }
             }
@@ -89,16 +95,14 @@ public class RecommendationService {
     }
 
     private String generateReason(Recipe recipe, List<String> userIngredients) {
-        List<String> matched = new ArrayList<>();
-        List<String> recipeIngredients = recipe.getIngredients();
+        Set<String> matched = new LinkedHashSet<>();
+        List<String> recipeIngredients = normalizeValues(recipe.getIngredients());
 
-        if (recipeIngredients != null) {
-            for (String recipeIng : recipeIngredients) {
-                for (String userIng : userIngredients) {
-                    if (recipeIng.contains(userIng) || userIng.contains(recipeIng)) {
-                        matched.add(userIng);
-                        break;
-                    }
+        for (String recipeIng : recipeIngredients) {
+            for (String userIng : userIngredients) {
+                if (containsIgnoreCase(recipeIng, userIng) || containsIgnoreCase(userIng, recipeIng)) {
+                    matched.add(userIng);
+                    break;
                 }
             }
         }
@@ -111,6 +115,8 @@ public class RecommendationService {
     }
 
     public List<RecommendationDTO> getRecommendations(Long userId) {
+        validateUserId(userId);
+
         List<Recommendation> results = recommendationRepository.findByUserIdOrderByScoreDesc(userId);
         if (results.isEmpty()) {
             generateRecommendations(userId);
@@ -135,5 +141,32 @@ public class RecommendationService {
                     reco.getScore(),
                     reco.getReason());
         }).collect(Collectors.toList());
+    }
+
+    private void validateUserId(Long userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("사용자 정보가 필요합니다.");
+        }
+    }
+
+    private List<String> normalizeValues(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+
+        return values.stream()
+                .filter(Objects::nonNull)
+                .map(value -> value.replaceAll("\\s+", " ").trim())
+                .filter(value -> !value.isBlank())
+                .collect(Collectors.collectingAndThen(
+                        Collectors.toCollection(LinkedHashSet::new),
+                        List::copyOf));
+    }
+
+    private boolean containsIgnoreCase(String source, String keyword) {
+        if (source == null || keyword == null || source.isBlank() || keyword.isBlank()) {
+            return false;
+        }
+        return source.toLowerCase(Locale.ROOT).contains(keyword.toLowerCase(Locale.ROOT));
     }
 }
