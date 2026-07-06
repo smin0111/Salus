@@ -1,44 +1,53 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, ActivityIndicator, RefreshControl, Platform, Animated } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, ActivityIndicator, RefreshControl, Platform, Animated, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { colors } from '../theme/colors';
 import config from '../config';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
+import { isAuthError } from '../utils/apiError';
 
 export default function CommunityScreen({ onToggleSidebar, onNavigate, user, webMode = false }) {
     const { token } = useAuth();
     const insets = useSafeAreaInsets();
     const [activeTab, setActiveTab] = useState('recommendation'); // 'recommendation' or 'feed'
+    const [publicRecipes, setPublicRecipes] = useState([]);
     const [aiRecommendations, setAiRecommendations] = useState([]);
     const [popularPosts, setPopularPosts] = useState([]);
     const [popularTimeframe, setPopularTimeframe] = useState('weekly');
     const [feedPosts, setFeedPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const hasRecommendationSession = Boolean(user?.id && token);
+    const aiRecommendationEmptyText = hasRecommendationSession
+        ? '냉장고 재료를 추가해보세요!'
+        : '로그인하면 내 냉장고와 건강정보에 맞춘 추천을 볼 수 있어요.';
 
-    // 추천 탭 임시 데이터
-    const featuredRecipe = {
-        id: 101,
-        title: "트러플 버섯 리조또",
-        description: "풍미 가득한 트러플 오일과 신선한 버섯의 조화",
-        calories: 450,
-        time: 30,
-        rating: 4.8,
-        image: "https://images.unsplash.com/photo-1476124369491-e7addf5db371?w=800&q=80",
-        reason: "버섯을 좋아하시는 사용자님을 위한 맞춤 추천!"
+    const mapRecipeForCard = (recipe) => ({
+        ...recipe,
+        time: recipe.cookingTime,
+        rating: recipe.averageRating,
+        image: recipe.imageUrl,
+        shareable: true,
+    });
+
+    // 공개 레시피 목록 조회
+    const fetchPublicRecipes = async () => {
+        try {
+            const response = await axios.get(`${config.API_BASE_URL}/recipes?limit=10`);
+            setPublicRecipes((response.data || []).map(mapRecipeForCard));
+        } catch (error) {
+            console.error('공개 레시피 로딩 실패:', error);
+        }
     };
-
-    const recommendedRecipes = [
-        { id: 1, title: "아보카도 명란 덮밥", rating: 4.7, time: 10, image: "https://images.unsplash.com/photo-1511994298241-608e28f14fde?w=400&q=80" },
-        { id: 2, title: "닭가슴살 콥 샐러드", rating: 4.9, time: 15, image: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&q=80" },
-        { id: 3, title: "연어 포케", rating: 4.6, time: 20, image: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&q=80" },
-    ];
 
     // AI 추천 목록 조회
     const fetchAIRecommendations = async () => {
-        if (!user?.id || !token) return;
+        if (!hasRecommendationSession) {
+            setAiRecommendations([]);
+            return;
+        }
         try {
             const response = await axios.get(
                 `${config.API_BASE_URL}/community/recommendations`,
@@ -46,15 +55,19 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user, web
             );
             setAiRecommendations(response.data);
         } catch (error) {
+            if (isAuthError(error)) {
+                setAiRecommendations([]);
+                return;
+            }
             console.error('AI 추천 로딩 실패:', error);
         }
     };
 
     // 기간 기준 인기 게시글 조회
-    const fetchPopularPosts = async () => {
+    const fetchPopularPosts = async (timeframe = popularTimeframe) => {
         try {
             const response = await axios.get(
-                `${config.API_BASE_URL}/community/posts/popular?limit=10&timeframe=${popularTimeframe}`
+                `${config.API_BASE_URL}/community/posts/popular?limit=10&timeframe=${timeframe}`
             );
             setPopularPosts(response.data);
         } catch (error) {
@@ -71,22 +84,31 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user, web
             setFeedPosts(response.data);
         } catch (error) {
             console.error('피드 로딩 실패:', error);
+        }
+    };
+
+    const fetchAll = async () => {
+        setLoading(true);
+        try {
+            await Promise.all([fetchPublicRecipes(), fetchAIRecommendations(), fetchPopularPosts(), fetchFeed()]);
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
     };
 
-    const fetchAll = async () => {
-        setLoading(true);
-        await Promise.all([fetchAIRecommendations(), fetchPopularPosts(), fetchFeed()]);
-        setLoading(false);
-        setRefreshing(false);
-    };
-
     useEffect(() => {
         fetchAll();
-    }, []);
+    }, [token, user?.id, popularTimeframe]);
+
+    const handleCreatePostPress = () => {
+        if (!token) {
+            Alert.alert('로그인 필요', '게시글 작성은 로그인 후 사용할 수 있습니다.');
+            return;
+        }
+
+        onNavigate && onNavigate('create-post');
+    };
 
     const onRefresh = () => {
         setRefreshing(true);
@@ -296,6 +318,38 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user, web
                                 </TouchableOpacity>
                             </View>
                         )}
+                        {/* 공개 레시피 영역 */}
+                        <View style={styles.section}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>공개 레시피</Text>
+                            </View>
+                            {webMode ? (
+                                <View style={styles.webRecipeGrid}>
+                                    {publicRecipes.length > 0 ? (
+                                        publicRecipes.slice(0, 6).map(recipe => (
+                                            <AnimatedRecipeCard key={recipe.id} item={recipe} />
+                                        ))
+                                    ) : (
+                                        <View style={styles.webEmptySmall}>
+                                            <Text style={styles.emptyText}>등록된 공개 레시피가 없습니다.</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            ) : (
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
+                                {publicRecipes.length > 0 ? (
+                                    publicRecipes.map(recipe => (
+                                        <AnimatedRecipeCard key={recipe.id} item={recipe} />
+                                    ))
+                                ) : (
+                                    <View style={styles.emptySmall}>
+                                        <Text style={styles.emptyText}>등록된 공개 레시피가 없습니다.</Text>
+                                    </View>
+                                )}
+                                </ScrollView>
+                            )}
+                        </View>
+
                         {/* AI 추천 영역 */}
                         <View style={styles.section}>
                             <View style={styles.sectionHeader}>
@@ -309,7 +363,7 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user, web
                                         ))
                                     ) : (
                                         <View style={styles.webEmptySmall}>
-                                            <Text style={styles.emptyText}>냉장고 재료를 추가해보세요!</Text>
+                                            <Text style={styles.emptyText}>{aiRecommendationEmptyText}</Text>
                                         </View>
                                     )}
                                 </View>
@@ -321,7 +375,7 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user, web
                                     ))
                                 ) : (
                                     <View style={styles.emptySmall}>
-                                        <Text style={styles.emptyText}>냉장고 재료를 추가해보세요!</Text>
+                                        <Text style={styles.emptyText}>{aiRecommendationEmptyText}</Text>
                                     </View>
                                 )}
                                 </ScrollView>
@@ -336,7 +390,7 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user, web
                                     {['daily', 'weekly', 'monthly'].map(tf => (
                                         <TouchableOpacity
                                             key={tf}
-                                            onPress={() => { setPopularTimeframe(tf); fetchPopularPosts(); }}
+                                            onPress={() => setPopularTimeframe(tf)}
                                             style={[styles.tfButton, popularTimeframe === tf && styles.tfButtonActive]}
                                         >
                                             <Text style={[styles.tfText, popularTimeframe === tf && styles.tfTextActive]}>
@@ -376,7 +430,7 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user, web
                         <View style={styles.createPostContainer}>
                             <TouchableOpacity
                                 style={styles.createPostButton}
-                                onPress={() => onNavigate && onNavigate('create-post')}
+                                onPress={handleCreatePostPress}
                             >
                                 <View style={styles.fakeInput}>
                                     <Text style={styles.fakeInputText}>나만의 레시피를 공유해보세요!</Text>

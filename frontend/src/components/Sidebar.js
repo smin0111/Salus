@@ -20,6 +20,7 @@ const MENU_ITEMS = [
 import { useAuth } from '../context/AuthContext';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
 export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) {
     const insets = useSafeAreaInsets();
@@ -134,6 +135,11 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                 user={user}
                 onSubscribe={async (impUid, merchantUid) => {
                     setSubscriptionModalVisible(false);
+                    if (!token) {
+                        Alert.alert("로그인 필요", "결제 확인을 위해 다시 로그인해 주세요.");
+                        return;
+                    }
+
                     try {
                         const response = await axios.post(`${config.API_BASE_URL}/payments/verify`, {
                             impUid: impUid,
@@ -150,8 +156,9 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                             Alert.alert("결제 실패", response.data.message || "결제 처리에 실패했습니다.");
                         }
                     } catch (error) {
+                        if (isAuthError(error)) return;
                         console.error('Payment verification failed:', error);
-                        Alert.alert("검증 에러", error.response?.data?.message || "서버 통신 중 문제가 발생했습니다.");
+                        Alert.alert("검증 에러", getErrorMessage(error, "서버 통신 중 문제가 발생했습니다."));
                     }
                 }}
             />

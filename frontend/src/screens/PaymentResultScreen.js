@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import config from '../config';
 import { useAuth } from '../context/AuthContext';
+import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
 /**
  * 카카오페이 결제 완료 후 m_redirect_url로 리다이렉트되는 결제 결과 화면
@@ -12,24 +13,31 @@ import { useAuth } from '../context/AuthContext';
 export default function PaymentResultScreen({ onNavigate }) {
     const [status, setStatus] = useState('loading'); // loading | success | fail
     const [message, setMessage] = useState('');
-    const { token, refreshUser } = useAuth();
+    const { token, refreshUser, loading: authLoading } = useAuth();
 
     useEffect(() => {
         if (Platform.OS !== 'web') return;
+        if (authLoading) return;
+
+        if (!token) {
+            setStatus('fail');
+            setMessage('로그인 상태를 확인할 수 없습니다. 다시 로그인한 뒤 결제를 확인해 주세요.');
+            return;
+        }
 
         const params = new URLSearchParams(window.location.search);
         const impUid = params.get('imp_uid');
         const merchantUid = params.get('merchant_uid');
         const impSuccess = params.get('imp_success');
 
-        if (!impUid || impSuccess === 'false') {
+        if (!impUid || !merchantUid || impSuccess === 'false') {
             setStatus('fail');
             setMessage('결제가 취소되었거나 실패했습니다.');
             return;
         }
 
         verifyPayment(impUid, merchantUid);
-    }, []);
+    }, [authLoading, token]);
 
     const verifyPayment = async (impUid, merchantUid) => {
         try {
@@ -49,8 +57,13 @@ export default function PaymentResultScreen({ onNavigate }) {
                 setMessage(response.data.message || '결제 검증에 실패했습니다.');
             }
         } catch (e) {
+            if (isAuthError(e)) {
+                setStatus('fail');
+                setMessage('로그인이 만료되었습니다. 다시 로그인한 뒤 결제를 확인해 주세요.');
+                return;
+            }
             setStatus('fail');
-            setMessage(e.response?.data?.message || '서버 통신에 실패했습니다.');
+            setMessage(getErrorMessage(e, '서버 통신에 실패했습니다.'));
         }
     };
 

@@ -4,6 +4,7 @@ import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import config from '../config';
+import { debugLog } from '../utils/logger';
 
 import ChatScreen from '../screens/ChatScreen';
 import CalendarScreen from '../screens/CalendarScreen';
@@ -12,7 +13,6 @@ import HealthCheckupScreen from '../screens/HealthCheckupScreen';
 import FridgeScreen from '../screens/FridgeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import LandingPageScreen from '../screens/LandingPageScreen';
-import DashboardScreen from '../screens/DashboardScreen';
 import RecipeDetailScreen from '../screens/RecipeDetailScreen';
 import CommunityScreen from '../screens/CommunityScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
@@ -28,11 +28,12 @@ import { useAuth } from '../context/AuthContext';
 
 const WEB_SHELL_EXCLUDED_SCREENS = [
   'login',
-  'dashboard',
   'about',
   'payment-result',
   'upgrade',
 ];
+
+const PROTECTED_SCREENS = ['community', 'fridge', 'calendar', 'health', 'health-checkup', 'account-settings', 'create-post'];
 
 const WEB_NAV_ITEMS = [
   { id: 'chat', label: 'AI 셰프', caption: '맞춤 레시피 상담', icon: 'sparkles', color: '#EA580C', path: '/chat' },
@@ -68,7 +69,6 @@ const WEB_PATH_TO_SCREEN = {
   '/health-checkup': 'health-checkup',
   '/account': 'account-settings',
   '/search': 'search',
-  '/dashboard': 'dashboard',
   '/login': 'login',
   '/about': 'about',
   '/payment-result': 'payment-result',
@@ -82,7 +82,6 @@ const getWebPathForScreen = (screen) => {
   const map = {
     'account-settings': '/account',
     search: '/search',
-    dashboard: '/dashboard',
     login: '/login',
     about: '/about',
     'payment-result': '/payment-result',
@@ -91,6 +90,8 @@ const getWebPathForScreen = (screen) => {
 
   return map[screen] || `/${screen}`;
 };
+
+const isProtectedScreen = (screen) => PROTECTED_SCREENS.includes(screen);
 
 function WebAppShell({ children, currentScreen, onNavigate, isLoggedIn, user, onLogout }) {
   const [title, subtitle] = WEB_SCREEN_TITLES[currentScreen] || WEB_SCREEN_TITLES.chat;
@@ -107,7 +108,7 @@ function WebAppShell({ children, currentScreen, onNavigate, isLoggedIn, user, on
 
         <ScrollView style={styles.webNav} showsVerticalScrollIndicator={false}>
           {WEB_NAV_ITEMS.map(item => {
-            const isActive = currentScreen === item.id || (item.id === 'community' && currentScreen === 'home');
+            const isActive = currentScreen === item.id;
             return (
               <TouchableOpacity
                 key={item.id}
@@ -182,6 +183,7 @@ export default function AppNavigator() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAppReady, setIsAppReady] = useState(false);
   const { isLoggedIn, user, token, logout, loading: authLoading } = useAuth();
+  const hasSession = isLoggedIn && Boolean(token);
 
   // 공용 상태 관리 (게스트 또는 API 동기화 기반)
   const [messages, setMessages] = useState([
@@ -191,6 +193,8 @@ export default function AppNavigator() {
     allergies: [],
     chronicConditions: [],
     dietaryRestrictions: [],
+    medications: [],
+    goals: [],
   });
   const [mealData, setMealData] = useState({});
   const [fridgeItems, setFridgeItems] = useState([]);
@@ -206,7 +210,7 @@ export default function AppNavigator() {
         const path = window.location.pathname;
         const nextScreen = WEB_PATH_TO_SCREEN[path] || 'chat';
         setCurrentScreen(nextScreen);
-        if (nextScreen === 'dashboard' || nextScreen === 'payment-result') {
+        if (nextScreen === 'payment-result') {
           setIsAppReady(true);
         }
       };
@@ -218,6 +222,17 @@ export default function AppNavigator() {
   }, []);
 
   useEffect(() => {
+    if (authLoading || hasSession || !isProtectedScreen(currentScreen)) {
+      return;
+    }
+
+    setCurrentScreen('login');
+    if (Platform.OS === 'web') {
+      window.history.replaceState({}, '', getWebPathForScreen('login'));
+    }
+  }, [authLoading, currentScreen, hasSession]);
+
+  useEffect(() => {
     if (isLoggedIn && token) {
       const logActivity = async () => {
         try {
@@ -225,7 +240,7 @@ export default function AppNavigator() {
             headers: { Authorization: `Bearer ${token}` }
           });
         } catch (e) {
-          console.log("Activity log failed", e);
+          debugLog("Activity log failed", e);
         }
       };
       logActivity();
@@ -240,8 +255,7 @@ export default function AppNavigator() {
   }, [isLoggedIn]);
 
   const handleNavigate = (screen, data = null) => {
-    const protectedScreens = ['community', 'fridge', 'calendar', 'health', 'health-checkup', 'account-settings', 'create-post'];
-    if (protectedScreens.includes(screen) && !isLoggedIn) {
+    if (isProtectedScreen(screen) && !hasSession) {
       alert('로그인이 필요한 기능입니다.');
       setCurrentScreen('login');
       if (Platform.OS === 'web') {
@@ -256,10 +270,9 @@ export default function AppNavigator() {
     if (screen === 'post-detail') {
       setSelectedPost(data);
     }
-    const nextScreen = screen === 'home' ? 'community' : screen;
-    setCurrentScreen(nextScreen);
+    setCurrentScreen(screen);
     if (Platform.OS === 'web') {
-      window.history.pushState({}, '', getWebPathForScreen(nextScreen));
+      window.history.pushState({}, '', getWebPathForScreen(screen));
     }
   };
 
@@ -311,8 +324,6 @@ export default function AppNavigator() {
         return <FridgeScreen fridgeItems={fridgeItems} setFridgeItems={setFridgeItems} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} webMode={Platform.OS === 'web'} />;
       case 'search':
         return <SearchScreen onBack={() => handleNavigate('community')} onNavigate={handleNavigate} user={user} webMode={Platform.OS === 'web'} />;
-      case 'dashboard':
-        return <DashboardScreen />;
       case 'login':
         return <LoginScreen onLogin={() => handleNavigate('chat')} onGuest={() => handleNavigate('chat')} />;
       case 'upgrade':
@@ -328,7 +339,7 @@ export default function AppNavigator() {
   };
 
   // 진짜 로딩 조건: 앱 마운트 준비가 안 되었거나, 백엔드 세션 복구(자동로그인) 연산이 활발하게 돌고 있을 때만 로드
-  const shouldShowLoading = !isAppReady || (authLoading && currentScreen !== 'dashboard');
+  const shouldShowLoading = !isAppReady || authLoading;
 
   if (shouldShowLoading) {
     return <LoadingScreen />;

@@ -16,11 +16,18 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { colors } from '../theme/colors';
 import config from '../config';
+import { debugLog } from '../utils/logger';
+import { useAuth } from '../context/AuthContext';
+import { getApiErrorMessage, isAuthError } from '../utils/apiError';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+const MAX_POST_TITLE_LENGTH = 200;
+const MAX_POST_CONTENT_LENGTH = 10000;
+
 export default function CreatePostScreen({ onNavigate, user, webMode = false }) {
     const insets = useSafeAreaInsets();
+    const { token } = useAuth();
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [ingredientsText, setIngredientsText] = useState('');
@@ -34,7 +41,7 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
     const pickImage = async (useCamera = false) => {
         let result;
         const options = {
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             allowsEditing: true,
             aspect: [4, 3],
             quality: 0.8,
@@ -75,12 +82,28 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
     };
 
     const handleSubmit = async () => {
-        if (!title.trim()) {
+        if (!token) {
+            Alert.alert('로그인 필요', '게시글 작성은 로그인 후 사용할 수 있습니다.');
+            return;
+        }
+
+        const normalizedTitle = title.replace(/\s+/g, ' ').trim();
+        const normalizedContent = content.trim();
+
+        if (!normalizedTitle) {
             Alert.alert('알림', '제목을 입력해주세요.');
             return;
         }
-        if (!content.trim()) {
+        if (normalizedTitle.length > MAX_POST_TITLE_LENGTH) {
+            Alert.alert('알림', `제목은 ${MAX_POST_TITLE_LENGTH}자 이하로 입력해 주세요.`);
+            return;
+        }
+        if (!normalizedContent) {
             Alert.alert('알림', '내용을 입력해주세요.');
+            return;
+        }
+        if (normalizedContent.length > MAX_POST_CONTENT_LENGTH) {
+            Alert.alert('알림', `내용은 ${MAX_POST_CONTENT_LENGTH}자 이하로 입력해 주세요.`);
             return;
         }
 
@@ -96,47 +119,42 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
                 .map(item => item.trim())
                 .filter(item => item.length > 0);
 
-            console.log('게시글 작성 요청:', {
-                title: title.trim(),
-                content: content.trim(),
-                ingredients: ingredients.length > 0 ? ingredients : null,
-                steps: steps.length > 0 ? steps : null,
-                tags: selectedTags,
-                imageUrl: imageUrl.trim() || null
+            debugLog('게시글 작성 요청:', {
+                titleLength: normalizedTitle.length,
+                contentLength: normalizedContent.length,
+                ingredientCount: ingredients.length,
+                stepCount: steps.length,
+                tagCount: selectedTags.length,
+                hasImage: Boolean(imageUrl.trim())
             });
 
             const response = await axios.post(`${config.API_BASE_URL}/community/posts`, {
-                title: title.trim(),
-                content: content.trim(),
+                title: normalizedTitle,
+                content: normalizedContent,
                 ingredients: ingredients.length > 0 ? ingredients : null,
                 steps: steps.length > 0 ? steps : null,
                 tags: selectedTags,
                 imageUrl: imageUrl.trim() || null
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
             });
 
-            console.log('게시글 작성 성공:', response.data);
+            debugLog('게시글 작성 성공:', response.data);
 
             Alert.alert('성공', '게시글이 작성되었습니다.', [
                 { text: '확인', onPress: () => onNavigate && onNavigate('community') }
             ]);
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('게시글 작성 실패:', error);
             console.error('에러 응답:', error.response?.data);
             console.error('에러 상태:', error.response?.status);
 
-            let errorMessage = '게시글 작성에 실패했습니다.';
-            if (error.response) {
-                // 서버 응답이 있는 경우
-                errorMessage = `서버 오류 (${error.response.status}): ${error.response.data || '알 수 없는 오류'}`;
-            } else if (error.request) {
-                // 요청은 보냈지만 응답이 없는 경우
-                errorMessage = '서버에 연결할 수 없습니다. 백엔드 서버가 실행 중인지 확인해주세요.';
-            } else {
-                // 요청 설정 중 오류 발생
-                errorMessage = `오류: ${error.message}`;
-            }
-
-            Alert.alert('오류', errorMessage);
+            Alert.alert('오류', getApiErrorMessage(error, '게시글 작성에 실패했습니다.', {
+                includeStatus: true,
+                networkMessage: '서버에 연결할 수 없습니다. 백엔드 서버가 실행 중인지 확인해주세요.',
+                prefixRequestError: true,
+            }));
         } finally {
             setSubmitting(false);
         }
@@ -189,6 +207,7 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
                         placeholderTextColor={colors.textTertiary}
                         value={title}
                         onChangeText={setTitle}
+                        maxLength={MAX_POST_TITLE_LENGTH}
                     />
                 </View>
 
@@ -204,6 +223,7 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
                         multiline
                         numberOfLines={4}
                         textAlignVertical="top"
+                        maxLength={MAX_POST_CONTENT_LENGTH}
                     />
                 </View>
 

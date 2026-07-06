@@ -5,6 +5,7 @@ import axios from 'axios';
 import config from '../config';
 import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
+import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
 const FIELD_GROUPS = [
     {
@@ -83,6 +84,7 @@ export default function HealthCheckupScreen({ onToggleSidebar, onNavigate, webMo
             }
             setAnalysis(analysisResponse.data);
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('건강검진 조회 실패:', error);
         } finally {
             setLoading(false);
@@ -139,8 +141,9 @@ export default function HealthCheckupScreen({ onToggleSidebar, onNavigate, webMo
             await fetchLatest();
             Alert.alert('저장 완료', '검진 결과가 AI 추천에 반영됩니다.');
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('건강검진 저장 실패:', error);
-            Alert.alert('저장 실패', '검진 결과를 저장하지 못했습니다.');
+            Alert.alert('저장 실패', getErrorMessage(error, '검진 결과를 저장하지 못했습니다.'));
         } finally {
             setSaving(false);
         }

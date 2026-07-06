@@ -1,37 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView, TextInput, Modal, Platform, ActivityIndicator, Animated } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView, TextInput, Modal, Platform, ActivityIndicator, Animated, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import axios from 'axios';
 import config from '../config';
 import { useAuth } from '../context/AuthContext';
+import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
 const CATEGORIES = ['전체', '채소', '과일', '육류', '유제품', '달걀', '기타'];
+const DAY_MS = 24 * 60 * 60 * 1000;
+const SERVICE_TIME_ZONE_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+const parseDateOnlyToDayNumber = (dateString) => {
+    if (!dateString || typeof dateString !== 'string') return null;
+    const [year, month, day] = dateString.split('-').map(Number);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+    return Date.UTC(year, month - 1, day) / DAY_MS;
+};
+
+const getServiceTodayDayNumber = () => {
+    const serviceNow = new Date(Date.now() + SERVICE_TIME_ZONE_OFFSET_MS);
+    return Date.UTC(serviceNow.getUTCFullYear(), serviceNow.getUTCMonth(), serviceNow.getUTCDate()) / DAY_MS;
+};
+
+const getDaysUntilExpiry = (expiryDate) => {
+    const expiryDay = parseDateOnlyToDayNumber(expiryDate);
+    return expiryDay == null ? null : expiryDay - getServiceTodayDayNumber();
+};
 
 export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpen, onToggleSidebar, webMode = false }) {
-    const { token } = useAuth();
+    const { token, loading: authLoading } = useAuth();
     const [selectedCategory, setSelectedCategory] = useState('전체');
     const [modalVisible, setModalVisible] = useState(false);
     const [scanning, setScanning] = useState(false);
-
-    // 유통기한 기본 규칙
-    const EXPIRY_RULES = {
-        '육류': 2,
-        '채소': 5,
-        '과일': 7,
-        '유제품': 10,
-        '달걀': 21,
-        '기타': 7
-    };
-
-    const calculateExpiryDate = (category) => {
-        const days = EXPIRY_RULES[category] || 7;
-        const date = new Date();
-        date.setDate(date.getDate() + days);
-        return date.toISOString().split('T')[0];
-    };
 
     // 추가 모달 상태
     const [newItemName, setNewItemName] = useState('');
@@ -46,45 +48,67 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
 
     // 초기 데이터 조회
     useEffect(() => {
+        if (authLoading) return;
+        if (!token) {
+            setFridgeItems([]);
+            return;
+        }
         fetchFridgeItems();
-    }, []);
+    }, [authLoading, token]);
+
+    const requireAuthHeaders = () => {
+        if (!token) {
+            Alert.alert('로그인 필요', '냉장고 기능은 로그인 후 사용할 수 있습니다.');
+            return null;
+        }
+
+        return { Authorization: `Bearer ${token}` };
+    };
 
     const fetchFridgeItems = async () => {
+        if (!token) return;
+
         try {
             const response = await axios.get(`${config.API_BASE_URL}/fridge`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setFridgeItems(response.data);
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('냉장고 조회 실패:', error);
         }
     };
 
     const handleAddItem = async () => {
         if (!newItemName.trim()) return;
+        const headers = requireAuthHeaders();
+        if (!headers) return;
 
         const newItem = {
             name: newItemName,
             quantity: newItemQuantity || '1개',
             category: newItemCategory,
-            expiryDate: newItemExpiry || calculateExpiryDate(newItemCategory),
+            expiryDate: newItemExpiry.trim() || null,
         };
 
         try {
             const response = await axios.post(`${config.API_BASE_URL}/fridge`, newItem, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers
             });
             setFridgeItems(prev => [...prev, response.data]);
             setModalVisible(false);
             resetForm();
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('재료 추가 실패:', error);
-            alert('재료 추가에 실패했습니다.');
+            Alert.alert('오류', getErrorMessage(error, '재료 추가에 실패했습니다.'));
         }
     };
 
     const handleUpdateItem = async () => {
         if (!newItemName.trim() || !editingItemId) return;
+        const headers = requireAuthHeaders();
+        if (!headers) return;
 
         const updatedItem = {
             name: newItemName,
@@ -95,18 +119,22 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
 
         try {
             const response = await axios.put(`${config.API_BASE_URL}/fridge/${editingItemId}`, updatedItem, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers
             });
             setFridgeItems(prev => prev.map(item => item.id === editingItemId ? response.data : item));
             setModalVisible(false);
             resetForm();
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('재료 수정 실패:', error);
-            alert('재료 수정에 실패했습니다.');
+            Alert.alert('오류', getErrorMessage(error, '재료 수정에 실패했습니다.'));
         }
     };
 
     const handleAdjustQuantity = async (id, currentQty, delta) => {
+        const headers = requireAuthHeaders();
+        if (!headers) return;
+
         // "2개", "500g" 같은 수량에서 숫자와 단위를 분리
         const match = currentQty.match(/^(\d+)(.*)$/);
         if (!match) return;
@@ -131,10 +159,11 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
         try {
             const response = await axios.patch(`${config.API_BASE_URL}/fridge/${id}/quantity`,
                 { quantity: newQty },
-                { headers: { Authorization: `Bearer ${token}` } }
+                { headers }
             );
             setFridgeItems(prev => prev.map(item => item.id === id ? response.data : item));
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('수량 조절 실패:', error);
         }
     };
@@ -159,32 +188,30 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
     };
 
     const handleDeleteItem = async (id) => {
+        const headers = requireAuthHeaders();
+        if (!headers) return;
+
         try {
             await axios.delete(`${config.API_BASE_URL}/fridge/${id}`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers
             });
             setFridgeItems(prev => prev.filter(item => item.id !== id));
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('재료 삭제 실패:', error);
-            alert('재료 삭제에 실패했습니다.');
+            Alert.alert('오류', getErrorMessage(error, '재료 삭제에 실패했습니다.'));
         }
     };
 
     const getExpiryColor = (daysLeft) => {
+        if (daysLeft == null) return { text: '#6B7280', bg: '#F9FAFB', border: '#E5E7EB' };
         if (daysLeft <= 2) return { text: '#DC2626', bg: '#FEF2F2', border: '#FECACA' }; // 빨간색
         if (daysLeft <= 5) return { text: '#EA580C', bg: '#FFF7ED', border: '#FED7AA' }; // 주황색
         return { text: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0' }; // 초록색
     };
 
     const handleScanReceipt = async () => {
-        const options = [
-            { text: '사진 촬영하기', icon: 'camera' },
-            { text: '앨범에서 가져오기', icon: 'images' },
-            { text: '취소', style: 'cancel' }
-        ];
-
         if (Platform.OS === 'ios' || Platform.OS === 'android') {
-            const { Alert } = require('react-native');
             Alert.alert(
                 '영수증 스캔',
                 '어떤 방식으로 영수증을 올리시겠어요?',
@@ -220,35 +247,38 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
         }
 
         if (!result.canceled && result.assets[0].base64) {
+            const headers = requireAuthHeaders();
+            if (!headers) return;
+
             setScanning(true);
             try {
                 const response = await axios.post(`${config.API_BASE_URL}/fridge/scan`, {
                     image: result.assets[0].base64
                 }, {
-                    headers: { Authorization: `Bearer ${token}` }
+                    headers
                 });
 
-                const scannedItems = response.data;
+                const scannedItems = Array.isArray(response.data)
+                    ? response.data
+                    : JSON.parse(response.data || '[]');
 
                 if (scannedItems.length === 0) {
                     alert('영수증에서 식재료를 찾지 못했습니다.');
                 } else {
                     for (const item of scannedItems) {
-                        const expiryDate = calculateExpiryDate(item.category || '기타');
-
                         await axios.post(`${config.API_BASE_URL}/fridge`, {
-                            ...item,
-                            expiryDate: expiryDate
+                            ...item
                         }, {
-                            headers: { Authorization: `Bearer ${token}` }
+                            headers
                         });
                     }
                     await fetchFridgeItems();
                     alert(`${scannedItems.length}개의 재료가 자동으로 등록되었습니다.`);
                 }
             } catch (error) {
+                if (isAuthError(error)) return;
                 console.error('영수증 스캔 실패:', error);
-                alert('영수증 분석 중 오류가 발생했습니다.');
+                Alert.alert('오류', getErrorMessage(error, '영수증 분석 중 오류가 발생했습니다.'));
             } finally {
                 setScanning(false);
             }
@@ -261,7 +291,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
 
     const AnimatedItemCard = ({ item }) => {
         const hoverAnim = React.useRef(new Animated.Value(1)).current;
-        const daysLeft = Math.ceil((new Date(item.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
+        const daysLeft = getDaysUntilExpiry(item.expiryDate);
         const expiryColors = getExpiryColor(daysLeft);
 
         const handleMouseEnter = () => {
@@ -319,9 +349,9 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
                 <View style={[styles.expiryTag, { backgroundColor: expiryColors.bg, borderColor: expiryColors.border }]}>
                     <Ionicons name="time-outline" size={14} color={expiryColors.text} />
                     <Text style={[styles.expiryText, { color: expiryColors.text }]}>
-                        {daysLeft < 0 ? '기한 만료' : daysLeft === 0 ? '오늘 만료' : `${daysLeft}일 남음`}
+                        {daysLeft == null ? '기한 미설정' : daysLeft < 0 ? '기한 만료' : daysLeft === 0 ? '오늘 만료' : `${daysLeft}일 남음`}
                     </Text>
-                    {daysLeft <= 1 && daysLeft >= 0 && (
+                    {daysLeft != null && daysLeft <= 1 && daysLeft >= 0 && (
                         <View style={styles.alertBadge}>
                             <Text style={styles.alertBadgeText}>임박</Text>
                         </View>
@@ -444,8 +474,8 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
                         <Text style={[styles.statLabel, { color: '#C2410C' }]}>유통기한 임박</Text>
                         <Text style={[styles.statValue, { color: '#EA580C' }]}>
                             {fridgeItems.filter(i => {
-                                const diff = Math.ceil((new Date(i.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
-                                return diff <= 5;
+                                const diff = getDaysUntilExpiry(i.expiryDate);
+                                return diff != null && diff <= 5;
                             }).length}
                         </Text>
                     </View>
@@ -453,8 +483,8 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, isSidebarOpe
                         <Text style={[styles.statLabel, { color: '#15803D' }]}>신선한 재료</Text>
                         <Text style={[styles.statValue, { color: '#16A34A' }]}>
                             {fridgeItems.filter(i => {
-                                const diff = Math.ceil((new Date(i.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
-                                return diff > 5;
+                                const diff = getDaysUntilExpiry(i.expiryDate);
+                                return diff != null && diff > 5;
                             }).length}
                         </Text>
                     </View>

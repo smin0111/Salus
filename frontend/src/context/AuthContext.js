@@ -3,8 +3,9 @@ import axios from 'axios';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AuthSession from 'expo-auth-session';
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import SafeStorage from '../utils/storage';
+import { debugLog } from '../utils/logger';
 import config from '../config';
 
 import { KAKAO_APP_KEY, GOOGLE_CLIENT_IDS, NAVER_CLIENT_ID } from '../secrets';
@@ -22,6 +23,7 @@ export const AuthProvider = ({ children }) => {
     const [token, setToken] = useState(null);
     const [loading, setLoading] = useState(true); // Loading true by default for restoration
     const processedResponse = useRef(null); // Track processed auth responses to avoid loops
+    const sessionExpiredNotified = useRef(false);
     const naverRedirectUri = AuthSession.makeRedirectUri({
         scheme: 'mychefai',
         preferLocalhost: true,
@@ -29,7 +31,7 @@ export const AuthProvider = ({ children }) => {
 
     // Restore Auth State on Mount
     useEffect(() => {
-        console.log('[AUTH_TRACE] AuthProvider Mounted');
+        debugLog('[AUTH_TRACE] AuthProvider Mounted');
         const timer = setTimeout(() => {
             loadAuthState();
         }, 1000); // 1s delay for runtime readiness
@@ -45,9 +47,9 @@ export const AuthProvider = ({ children }) => {
                 setToken(storedToken);
                 setUser(JSON.parse(storedUser));
                 setIsLoggedIn(true);
-                console.log('[AUTH_TRACE] Restored auth session from storage');
+                debugLog('[AUTH_TRACE] Restored auth session from storage');
             } else {
-                console.log('[AUTH_TRACE] No session found in storage');
+                debugLog('[AUTH_TRACE] No session found in storage');
             }
         } catch (e) {
             console.error('Failed to load auth state:', e);
@@ -86,13 +88,13 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         if (googleRequest) {
-            console.log('Google Redirect URI:', googleRequest.redirectUri);
+            debugLog('Google Redirect URI:', googleRequest.redirectUri);
         }
     }, [googleRequest]);
 
     useEffect(() => {
         if (naverRequest) {
-            console.log('Naver Redirect URI:', naverRedirectUri);
+            debugLog('Naver Redirect URI:', naverRedirectUri);
         }
     }, [naverRequest, naverRedirectUri]);
 
@@ -100,11 +102,11 @@ export const AuthProvider = ({ children }) => {
     // Handle Google Response
     useEffect(() => {
         if (googleResponse) {
-            console.log('[AUTH_TRACE] Google Response:', googleResponse.type);
+            debugLog('[AUTH_TRACE] Google Response:', googleResponse.type);
         }
         if (googleResponse?.type === 'success' && processedResponse.current !== googleResponse.authentication?.accessToken) {
             const { authentication } = googleResponse;
-            console.log('[AUTH_TRACE] Processing Google success response');
+            debugLog('[AUTH_TRACE] Processing Google success response');
             processedResponse.current = authentication.accessToken; // Mark as processed
             handleBackendAuthentication('google', authentication.accessToken, true);
         }
@@ -125,7 +127,7 @@ export const AuthProvider = ({ children }) => {
     const handleBackendAuthentication = async (provider, accessToken, keepLoggedIn = true) => {
         setLoading(true);
         try {
-            console.log(`Verifying ${provider} token with backend... (KeepLoggedIn: ${keepLoggedIn})`);
+            debugLog(`Verifying ${provider} token with backend... (KeepLoggedIn: ${keepLoggedIn})`);
             const response = await axios.post(`${config.API_BASE_URL}/auth/${provider}`, {
                 accessToken: accessToken
             });
@@ -135,17 +137,18 @@ export const AuthProvider = ({ children }) => {
             setToken(jwtToken);
             setUser(userData);
             setIsLoggedIn(true);
+            sessionExpiredNotified.current = false;
 
             // Save to Storage ONLY if requested
             if (keepLoggedIn) {
                 await SafeStorage.setItem('user_token', jwtToken);
                 await SafeStorage.setItem('user_data', JSON.stringify(userData));
-                console.log('Session saved for auto-login');
+                debugLog('Session saved for auto-login');
             } else {
-                console.log('Session NOT saved (One-time login)');
+                debugLog('Session NOT saved (One-time login)');
             }
 
-            console.log('Login successful:', userData.name);
+            debugLog('Login successful:', { userId: userData.id, grade: userData.grade });
             return true;
         } catch (error) {
             console.error('Backend authentication failed:', error);
@@ -170,6 +173,7 @@ export const AuthProvider = ({ children }) => {
             setToken(jwtToken);
             setUser(userData);
             setIsLoggedIn(true);
+            sessionExpiredNotified.current = false;
 
             if (keepLoggedIn) {
                 await SafeStorage.setItem('user_token', jwtToken);
@@ -211,7 +215,7 @@ export const AuthProvider = ({ children }) => {
                 const tokenResult = await login();
 
                 if (tokenResult && tokenResult.accessToken) {
-                    console.log('Kakao Native Login Success');
+                    debugLog('Kakao Native Login Success');
                     return await handleBackendAuthentication('kakao', tokenResult.accessToken, keepLoggedIn);
                 }
                 return false;
@@ -223,14 +227,19 @@ export const AuthProvider = ({ children }) => {
         return false;
     };
 
+    const clearAuthState = async () => {
+        await SafeStorage.removeItem('user_token');
+        await SafeStorage.removeItem('user_data');
+        setToken(null);
+        setUser(null);
+        setIsLoggedIn(false);
+    };
+
     // Logout
     const logout = async () => {
         try {
-            await SafeStorage.removeItem('user_token');
-            await SafeStorage.removeItem('user_data');
-            setToken(null);
-            setUser(null);
-            setIsLoggedIn(false);
+            sessionExpiredNotified.current = false;
+            await clearAuthState();
         } catch (e) {
             console.error('Logout error:', e);
         }
@@ -244,7 +253,7 @@ export const AuthProvider = ({ children }) => {
             const userData = response.data;
             setUser(userData);
             await SafeStorage.setItem('user_data', JSON.stringify(userData));
-            console.log('User data refreshed:', userData.grade);
+            debugLog('User data refreshed:', userData.grade);
         } catch (e) {
             console.error('Failed to refresh user data:', e);
         }
@@ -264,6 +273,35 @@ export const AuthProvider = ({ children }) => {
         return () => axios.interceptors.request.eject(interceptor);
     }, [token]);
 
+    // Axios interceptor for expired JWT sessions.
+    useEffect(() => {
+        const interceptor = axios.interceptors.response.use(
+            (response) => response,
+            async (error) => {
+                const status = error?.response?.status;
+                const requestUrl = error?.config?.url || '';
+                const sentAuthorization = Boolean(error?.config?.headers?.Authorization);
+
+                if (status === 401 && sentAuthorization && !isAuthRequest(requestUrl)) {
+                    try {
+                        await clearAuthState();
+                    } catch (storageError) {
+                        console.error('Failed to clear expired auth state:', storageError);
+                    }
+
+                    if (!sessionExpiredNotified.current) {
+                        sessionExpiredNotified.current = true;
+                        Alert.alert('로그인 만료', '다시 로그인해 주세요.');
+                    }
+                }
+
+                return Promise.reject(error);
+            }
+        );
+
+        return () => axios.interceptors.response.eject(interceptor);
+    }, []);
+
     return (
         <AuthContext.Provider value={{ isLoggedIn, user, token, login, logout, refreshUser, loading }}>
             {children}
@@ -272,3 +310,11 @@ export const AuthProvider = ({ children }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
+
+const isAuthRequest = (requestUrl) => {
+    if (typeof requestUrl !== 'string') {
+        return false;
+    }
+
+    return requestUrl.includes('/auth/');
+};

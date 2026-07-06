@@ -5,6 +5,7 @@ import axios from 'axios';
 import config from '../config';
 import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
+import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
 const SUMMARY_LABELS = [
     ['healthProfiles', '건강정보'],
@@ -18,6 +19,8 @@ const SUMMARY_LABELS = [
     ['likes', '좋아요'],
     ['recipeShares', '공유 레시피'],
     ['payments', '결제 기록'],
+    ['chatSessions', '대화 세션'],
+    ['chatMessages', '대화 메시지'],
 ];
 
 export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, webMode = false }) {
@@ -41,6 +44,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
             });
             setSummary(response.data);
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('데이터 요약 조회 실패:', error);
         } finally {
             setLoading(false);
@@ -50,7 +54,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
     const confirmDeleteAccount = () => {
         Alert.alert(
             '계정 삭제',
-            '계정과 건강정보, 검진 결과, 냉장고, 식단 기록 등 개인 데이터가 삭제됩니다. 계속할까요?',
+            '계정과 건강정보, 검진 결과, 냉장고, 식단 기록, 대화 기록 등 개인 데이터가 삭제됩니다. 계속할까요?',
             [
                 { text: '취소', style: 'cancel' },
                 { text: '삭제', style: 'destructive', onPress: deleteAccount },
@@ -69,8 +73,9 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
             Alert.alert('삭제 완료', '계정과 개인 데이터가 삭제되었습니다.');
             onNavigate('chat');
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('계정 삭제 실패:', error);
-            Alert.alert('삭제 실패', '계정 삭제 중 문제가 발생했습니다.');
+            Alert.alert('삭제 실패', getErrorMessage(error, '계정 삭제 중 문제가 발생했습니다.'));
         } finally {
             setDeleting(false);
         }

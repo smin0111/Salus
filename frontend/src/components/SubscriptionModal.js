@@ -2,13 +2,19 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
+import { PORTONE_IMP_CODE, SUBSCRIPTION_AMOUNT, SUBSCRIPTION_PRICE_LABEL } from '../constants/subscription';
 
 const SubscriptionModal = ({ visible, onClose, onSubscribe, user }) => {
 
     // 포트원 스크립트 로드 (웹 환경 전용)
     useEffect(() => {
         if (Platform.OS === 'web') {
+            if (window.IMP || document.getElementById('portone-sdk')) {
+                return;
+            }
+
             const script = document.createElement('script');
+            script.id = 'portone-sdk';
             script.src = 'https://cdn.iamport.kr/v1/iamport.js';
             script.async = true;
             document.head.appendChild(script);
@@ -26,8 +32,7 @@ const SubscriptionModal = ({ visible, onClose, onSubscribe, user }) => {
             // 모달을 먼저 닫아 결제창이 가려지지 않게 함
             onClose();
 
-            // 가맹점 식별코드 (테스트용)
-            IMP.init("imp81514410");
+            IMP.init(PORTONE_IMP_CODE);
 
             const merchantUid = `mid_${new Date().getTime()}`;
 
@@ -36,7 +41,7 @@ const SubscriptionModal = ({ visible, onClose, onSubscribe, user }) => {
                 pay_method: "card",
                 merchant_uid: merchantUid,
                 name: "Salus Plus 구독",
-                amount: 10000,
+                amount: SUBSCRIPTION_AMOUNT,
                 buyer_email: user?.email || "",
                 buyer_name: user?.name || "사용자",
                 m_redirect_url: window.location.origin + "/payment-result",
@@ -95,7 +100,7 @@ const SubscriptionModal = ({ visible, onClose, onSubscribe, user }) => {
                     </View>
 
                     <View style={styles.priceContainer}>
-                        <Text style={styles.priceText}>₩10,000<Text style={styles.monthText}> / 월</Text></Text>
+                        <Text style={styles.priceText}>{SUBSCRIPTION_PRICE_LABEL}<Text style={styles.monthText}> / 월</Text></Text>
                         <Text style={styles.taxDescText}>VAT 포함 (언제든지 취소 가능)</Text>
                     </View>
 

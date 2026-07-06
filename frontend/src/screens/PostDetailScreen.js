@@ -18,6 +18,22 @@ import config from '../config';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
+import { debugLog } from '../utils/logger';
+import { getApiErrorMessage, isAuthError } from '../utils/apiError';
+
+const getPostErrorMessage = (error, fallback) => getApiErrorMessage(error, fallback, {
+    includeStatus: true,
+    networkMessage: '서버에 연결할 수 없습니다.',
+    prefixRequestError: true,
+});
+
+const showError = (message) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert(message);
+        return;
+    }
+    Alert.alert('오류', message);
+};
 
 export default function PostDetailScreen({ post, user: propUser, onNavigate, onBack, webMode = false }) {
     const { user, token } = useAuth();
@@ -34,6 +50,15 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
         loadComments();
     }, [post.id]);
 
+    const requireAuthHeaders = () => {
+        if (!user || !token) {
+            Alert.alert('알림', '로그인이 필요합니다.');
+            return null;
+        }
+
+        return { Authorization: `Bearer ${token}` };
+    };
+
     const loadPostDetails = async () => {
         try {
             const response = await axios.get(
@@ -42,6 +67,7 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
             );
             setPostData(response.data);
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('게시글 로딩 실패:', error);
         }
     };
@@ -54,21 +80,20 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
             );
             setComments(response.data);
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('댓글 로딩 실패:', error);
         }
     };
 
     const handleLike = async () => {
-        if (!user) {
-            Alert.alert('알림', '로그인이 필요합니다.');
-            return;
-        }
+        const headers = requireAuthHeaders();
+        if (!headers) return;
 
         try {
             const response = await axios.post(
                 `${config.API_BASE_URL}/community/posts/${post.id}/like`,
                 {},
-                { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+                { headers }
             );
             setPostData({
                 ...postData,
@@ -76,16 +101,14 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
                 likeCount: response.data.likeCount
             });
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('좋아요 실패:', error);
         }
     };
 
     const handleAddComment = async () => {
-        if (!user) {
-            Alert.alert('알림', '로그인이 필요합니다.');
-            return;
-        }
-
+        const headers = requireAuthHeaders();
+        if (!headers) return;
 
         if (!newComment.trim()) {
             Alert.alert('알림', '댓글 내용을 입력해주세요.');
@@ -97,9 +120,9 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
             return;
         }
 
-        console.log('Submitting comment with:', {
-            content: newComment.trim(),
-            parentId: replyingTo ? replyingTo.id : null
+        debugLog('댓글 작성 요청:', {
+            contentLength: newComment.trim().length,
+            hasParent: Boolean(replyingTo)
         });
 
         setSubmittingComment(true);
@@ -110,29 +133,33 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
                     content: newComment.trim(),
                     parentId: replyingTo ? replyingTo.id : null
                 },
-                { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+                { headers }
             );
             setNewComment('');
             setReplyingTo(null);
             await loadComments();
             await loadPostDetails();
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('댓글 작성 실패:', error);
             console.error('Error response:', error.response?.data);
             console.error('Error status:', error.response?.status);
             console.error('Request payload:', {
-                content: newComment.trim(),
-                parentId: replyingTo ? replyingTo.id : null
+                contentLength: newComment.trim().length,
+                hasParent: Boolean(replyingTo)
             });
-            Alert.alert('오류', error.response?.data || '댓글 작성에 실패했습니다.');
+            Alert.alert('오류', getPostErrorMessage(error, '댓글 작성에 실패했습니다.'));
         } finally {
             setSubmittingComment(false);
         }
     };
 
     const handleDeleteComment = async (commentId) => {
-        console.log('Delete button clicked for comment:', commentId);
-        console.log('User info:', { userId: user?.id, user });
+        const headers = requireAuthHeaders();
+        if (!headers) return;
+
+        debugLog('Delete button clicked for comment:', commentId);
+        debugLog('User info:', { userId: user?.id });
 
         // 웹 호환 확인창
         const confirmDelete = Platform.OS === 'web'
@@ -157,39 +184,38 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
             });
 
         if (!confirmDelete) {
-            console.log('Delete cancelled');
+            debugLog('Delete cancelled');
             return;
         }
 
-        console.log('Delete confirmed, sending request...');
+        debugLog('Delete confirmed, sending request...');
         try {
             const deleteUrl = `${config.API_BASE_URL}/community/comments/${commentId}`;
-            console.log('DELETE URL:', deleteUrl);
+            debugLog('DELETE URL:', deleteUrl);
 
             const response = await axios.delete(deleteUrl, {
-                headers: token ? { Authorization: `Bearer ${token}` } : {}
+                headers
             });
-            console.log('Delete successful:', response.data);
+            debugLog('Delete successful:', response.data);
 
             await loadComments();
             await loadPostDetails();
-            console.log('Comments reloaded');
+            debugLog('Comments reloaded');
         } catch (error) {
+            if (isAuthError(error)) return;
             console.error('댓글 삭제 실패:', error);
             console.error('Error response:', error.response?.data);
             console.error('Error status:', error.response?.status);
-
-            if (Platform.OS === 'web') {
-                window.alert(error.response?.data || '댓글 삭제에 실패했습니다.');
-            } else {
-                Alert.alert('오류', error.response?.data || '댓글 삭제에 실패했습니다.');
-            }
+            showError(getPostErrorMessage(error, '댓글 삭제에 실패했습니다.'));
         }
     };
 
     const handleDeletePost = async () => {
-        console.log('handleDeletePost 함수 실행됨');
-        console.log('Alert.alert 호출 직전');
+        const headers = requireAuthHeaders();
+        if (!headers) return;
+
+        debugLog('handleDeletePost 함수 실행됨');
+        debugLog('Alert.alert 호출 직전');
         Alert.alert(
             '게시글 삭제',
             '게시글을 삭제하시겠습니까?',
@@ -197,48 +223,41 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
                 {
                     text: '취소',
                     style: 'cancel',
-                    onPress: () => console.log('취소 버튼 클릭됨')
+                    onPress: () => debugLog('취소 버튼 클릭됨')
                 },
                 {
                     text: '삭제',
                     style: 'destructive',
                     onPress: async () => {
-                        console.log('삭제 확인 버튼 클릭됨');
+                        debugLog('삭제 확인 버튼 클릭됨');
                         try {
-                            console.log('게시글 삭제 요청:', {
+                            debugLog('게시글 삭제 요청:', {
                                 postId: post.id,
                                 url: `${config.API_BASE_URL}/community/posts/${post.id}`
                             });
 
                             const response = await axios.delete(
                                 `${config.API_BASE_URL}/community/posts/${post.id}`,
-                                { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+                                { headers }
                             );
 
-                            console.log('게시글 삭제 성공:', response.data);
+                            debugLog('게시글 삭제 성공:', response.data);
 
                             Alert.alert('성공', '게시글이 삭제되었습니다.', [
                                 { text: '확인', onPress: () => onNavigate && onNavigate('community') }
                             ]);
                         } catch (error) {
+                            if (isAuthError(error)) return;
                             console.error('게시글 삭제 실패:', error);
                             console.error('에러 응답:', error.response?.data);
                             console.error('에러 상태:', error.response?.status);
-
-                            let errorMessage = '게시글 삭제에 실패했습니다.';
-                            if (error.response) {
-                                errorMessage = `서버 오류 (${error.response.status}): ${error.response.data || '알 수 없는 오류'}`;
-                            } else if (error.request) {
-                                errorMessage = '서버에 연결할 수 없습니다.';
-                            }
-
-                            Alert.alert('오류', errorMessage);
+                            Alert.alert('오류', getPostErrorMessage(error, '게시글 삭제에 실패했습니다.'));
                         }
                     }
                 }
             ]
         );
-        console.log('Alert.alert 호출 완료 (다이얼로그 표시되어야 함)');
+        debugLog('Alert.alert 호출 완료 (다이얼로그 표시되어야 함)');
     };
 
     const getTimeAgo = (dateString) => {
@@ -259,8 +278,7 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
     const isAuthor = user && postData && user.id === postData.userId;
 
     // 디버깅 로그
-    console.log('PostDetailScreen 디버깅:', {
-        'user 객체': user,
+    debugLog('PostDetailScreen 디버깅:', {
         'user.id': user?.id,
         'postData.userId': postData?.userId,
         'isAuthor': isAuthor,
@@ -277,15 +295,19 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
                 <Text style={styles.headerTitle}>게시글</Text>
                 {isAuthor && (
                     <TouchableOpacity onPress={async () => {
-                        console.log('삭제 버튼 클릭됨 - 직접 삭제');
+                        const headers = requireAuthHeaders();
+                        if (!headers) return;
+
+                        debugLog('삭제 버튼 클릭됨 - 직접 삭제');
                         try {
                             const response = await axios.delete(
                                 `${config.API_BASE_URL}/community/posts/${post.id}`,
-                                { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+                                { headers }
                             );
-                            console.log('삭제 성공:', response.data);
+                            debugLog('삭제 성공:', response.data);
                             onNavigate && onNavigate('community');
                         } catch (error) {
+                            if (isAuthError(error)) return;
                             console.error('삭제 실패:', error);
                         }
                     }}>
@@ -302,12 +324,16 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
                     </TouchableOpacity>
                     {isAuthor ? (
                         <TouchableOpacity onPress={async () => {
+                            const headers = requireAuthHeaders();
+                            if (!headers) return;
+
                             try {
                                 await axios.delete(`${config.API_BASE_URL}/community/posts/${post.id}`, {
-                                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                                    headers
                                 });
                                 onNavigate && onNavigate('community');
                             } catch (error) {
+                                if (isAuthError(error)) return;
                                 console.error('삭제 실패:', error);
                             }
                         }}>
