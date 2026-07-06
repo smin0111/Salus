@@ -2,21 +2,13 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
     LayoutDashboard,
-    Users,
-    BookOpen,
-    Settings,
-    BarChart3,
     ChefHat,
     LogOut
 } from 'lucide-react';
 
 const Sidebar = ({ onLogout }) => {
     const menuItems = [
-        { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/' },
-        { icon: <Users size={20} />, label: 'User Management', path: '/users' },
-        { icon: <BookOpen size={20} />, label: 'Recipes & Content', path: '/recipes' },
-        { icon: <BarChart3 size={20} />, label: 'Analytics', path: '/stats' },
-        { icon: <Settings size={20} />, label: 'System Settings', path: '/settings' },
+        { icon: <LayoutDashboard size={20} />, label: '대시보드', path: '/' },
     ];
 
     return (
@@ -53,7 +45,7 @@ const Sidebar = ({ onLogout }) => {
                     fontFamily: 'Outfit',
                     letterSpacing: '-0.5px'
                 }}>
-                    Chef AI <span style={{ color: 'var(--primary)', fontSize: '0.7rem', verticalAlign: 'top' }}>ADMIN</span>
+                    Salus <span style={{ color: 'var(--primary)', fontSize: '0.7rem', verticalAlign: 'top' }}>ADMIN</span>
                 </span>
             </div>
 
@@ -96,7 +88,7 @@ const Sidebar = ({ onLogout }) => {
                     fontWeight: '600'
                 }}>
                     <LogOut size={20} />
-                    <span>Logout Session</span>
+                    <span>세션 종료</span>
                 </button>
             </div>
         </div>

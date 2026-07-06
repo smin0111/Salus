@@ -1,7 +1,6 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import { Bell, Search } from 'lucide-react';
 
 const Layout = ({ onLogout }) => {
     return (
@@ -17,30 +16,8 @@ const Layout = ({ onLogout }) => {
                     borderBottom: '1px solid var(--border)'
                 }}>
                     <div>
-                        <h2 style={{ fontSize: '1.5rem' }}>Admin Workspace</h2>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Chef AI Management Console (Collaborative View)</p>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                        <div style={{ position: 'relative' }}>
-                            <Search size={20} color="var(--text-secondary)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                            <input
-                                type="text"
-                                placeholder="Search..."
-                                style={{
-                                    padding: '0.6rem 1rem 0.6rem 40px',
-                                    borderRadius: '10px',
-                                    border: '1px solid var(--border)',
-                                    backgroundColor: 'white',
-                                    width: '200px',
-                                    outline: 'none'
-                                }}
-                            />
-                        </div>
-
-                        <button style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
-                            <Bell size={22} color="var(--text-secondary)" />
-                        </button>
+                        <h2 style={{ fontSize: '1.5rem' }}>운영 워크스페이스</h2>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Salus 관리자 콘솔</p>
                     </div>
                 </header>
 

@@ -15,8 +15,10 @@ const Dashboard = ({ adminToken, onAuthError }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
-    const loadStats = async () => {
-        setLoading(true);
+    const loadStats = async ({ silent = false } = {}) => {
+        if (!silent) {
+            setLoading(true);
+        }
         setError('');
         try {
             const response = await fetch(`${config.API_BASE_URL}/admin/dashboard/stats`, {
@@ -39,12 +41,19 @@ const Dashboard = ({ adminToken, onAuthError }) => {
         } catch (err) {
             setError('백엔드 서버에 연결하지 못했습니다.');
         } finally {
-            setLoading(false);
+            if (!silent) {
+                setLoading(false);
+            }
         }
     };
 
     useEffect(() => {
         loadStats();
+        const refreshTimer = window.setInterval(() => {
+            loadStats({ silent: true });
+        }, 60000);
+
+        return () => window.clearInterval(refreshTimer);
     }, [adminToken]);
 
     const maxDailyAmount = useMemo(() => {
@@ -55,28 +64,28 @@ const Dashboard = ({ adminToken, onAuthError }) => {
     }, [stats]);
 
     if (loading && !stats) {
-        return <PanelState icon={<RefreshCcw size={24} />} title="Loading dashboard" />;
+        return <PanelState icon={<RefreshCcw size={24} />} title="대시보드를 불러오는 중입니다" />;
     }
 
     if (error && !stats) {
-        return <PanelState icon={<AlertTriangle size={24} />} title={error} action={loadStats} />;
+        return <PanelState icon={<AlertTriangle size={24} />} title={error} action={() => loadStats()} />;
     }
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
                 <div>
-                    <h1 style={{ fontSize: '1.8rem', marginBottom: '0.25rem' }}>Dashboard</h1>
+                    <h1 style={{ fontSize: '1.8rem', marginBottom: '0.25rem' }}>대시보드</h1>
                     <p style={{ color: 'var(--text-secondary)' }}>사용자, 활동, 결제 상태를 확인합니다.</p>
                 </div>
                 <button
                     className="btn-primary"
-                    onClick={loadStats}
+                    onClick={() => loadStats()}
                     disabled={loading}
                     style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                 >
                     <RefreshCcw size={16} />
-                    Refresh
+                    새로고침
                 </button>
             </div>
 
@@ -101,12 +110,12 @@ const Dashboard = ({ adminToken, onAuthError }) => {
                 gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
                 gap: '1rem'
             }}>
-                <MetricCard icon={<Users size={20} />} label="Total Users" value={numberFormatter.format(stats.totalUsers)} />
-                <MetricCard icon={<Users size={20} />} label="PLUS Users" value={numberFormatter.format(stats.plusUsers)} />
-                <MetricCard icon={<Activity size={20} />} label="DAU" value={numberFormatter.format(stats.dau)} helper={`${stats.dauTrend}% vs yesterday`} />
-                <MetricCard icon={<CreditCard size={20} />} label="Today Revenue" value={currencyFormatter.format(stats.todayPaymentAmount)} helper={`${stats.todayPaymentCount} payments`} />
-                <MetricCard icon={<CreditCard size={20} />} label="Month Revenue" value={currencyFormatter.format(stats.monthPaymentAmount)} helper={`${stats.monthPaymentCount} payments`} />
-                <MetricCard icon={<Server size={20} />} label="AI Cost" value={currencyFormatter.format(stats.apiCost)} />
+                <MetricCard icon={<Users size={20} />} label="전체 사용자" value={numberFormatter.format(stats.totalUsers)} />
+                <MetricCard icon={<Users size={20} />} label="PLUS 사용자" value={numberFormatter.format(stats.plusUsers)} />
+                <MetricCard icon={<Activity size={20} />} label="DAU" value={numberFormatter.format(stats.dau)} helper={`전일 대비 ${stats.dauTrend}%`} />
+                <MetricCard icon={<CreditCard size={20} />} label="오늘 매출" value={currencyFormatter.format(stats.todayPaymentAmount)} helper={`${stats.todayPaymentCount}건 결제`} />
+                <MetricCard icon={<CreditCard size={20} />} label="이번 달 매출" value={currencyFormatter.format(stats.monthPaymentAmount)} helper={`${stats.monthPaymentCount}건 결제`} />
+                <MetricCard icon={<Server size={20} />} label="AI 예상 비용" value={currencyFormatter.format(stats.apiCost)} />
             </section>
 
             <section style={{
@@ -115,7 +124,7 @@ const Dashboard = ({ adminToken, onAuthError }) => {
                 gap: '1rem'
             }}>
                 <div style={panelStyle}>
-                    <h2 style={panelTitleStyle}>Daily Payments</h2>
+                    <h2 style={panelTitleStyle}>일별 결제</h2>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                         {(stats.dailyPaymentStats || []).map((item) => {
                             const width = maxDailyAmount > 0 ? Math.max(8, Math.round((item.amount / maxDailyAmount) * 100)) : 0;
@@ -136,7 +145,7 @@ const Dashboard = ({ adminToken, onAuthError }) => {
                 </div>
 
                 <div style={panelStyle}>
-                    <h2 style={panelTitleStyle}>Server Status</h2>
+                    <h2 style={panelTitleStyle}>서버 상태</h2>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                         {Object.entries(stats.serverStatus || {}).map(([name, status]) => (
                             <div key={name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -181,7 +190,7 @@ const PanelState = ({ icon, title, action }) => (
         <strong>{title}</strong>
         {action && (
             <button className="btn-primary" onClick={action} style={{ marginLeft: 'auto' }}>
-                Retry
+                다시 시도
             </button>
         )}
     </div>
