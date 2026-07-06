@@ -7,8 +7,10 @@ import com.mychefai.healthytable.repository.UserRepository;
 import com.mychefai.healthytable.security.AuthenticatedUserProvider;
 import com.mychefai.healthytable.service.MealLogService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -24,7 +26,7 @@ public class MealLogController {
     private User getCurrentUser() {
         Long userId = authenticatedUserProvider.requireUserId();
         return userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
     }
 
     @GetMapping

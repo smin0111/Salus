@@ -24,7 +24,7 @@ public class ActivityLogController {
     @PostMapping("/log")
     public ResponseEntity<?> logActivity(@RequestBody Map<String, Boolean> body) {
         User user = getCurrentUser();
-        boolean isAi = body.getOrDefault("isAi", false);
+        boolean isAi = body != null && Boolean.TRUE.equals(body.get("isAi"));
         return ResponseEntity.ok(activityLogService.logActivity(user, isAi));
     }
 
@@ -37,6 +37,6 @@ public class ActivityLogController {
     private User getCurrentUser() {
         Long userId = authenticatedUserProvider.requireUserId();
         return userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
     }
 }

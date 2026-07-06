@@ -1,6 +1,8 @@
 package com.mychefai.healthytable.util;
 
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 
 /**
  * 식재료 카테고리별 유통기한을 계산하는 유틸리티 클래스
@@ -35,8 +37,12 @@ public class ExpiryDateCalculator {
      * @return 유통기한 날짜 (오늘 + 카테고리별 일수)
      */
     public static LocalDate calculateExpiryDate(String category) {
+        return calculateExpiryDate(category, Clock.systemDefaultZone());
+    }
+
+    public static LocalDate calculateExpiryDate(String category, Clock clock) {
         int days = getDaysForCategory(category);
-        return LocalDate.now().plusDays(days);
+        return LocalDate.now(requireClock(clock)).plusDays(days);
     }
 
     /**
@@ -46,6 +52,14 @@ public class ExpiryDateCalculator {
      * @return 남은 일수 (음수면 이미 만료)
      */
     public static long getDaysUntilExpiry(LocalDate expiryDate) {
-        return java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), expiryDate);
+        return getDaysUntilExpiry(expiryDate, Clock.systemDefaultZone());
+    }
+
+    public static long getDaysUntilExpiry(LocalDate expiryDate, Clock clock) {
+        return ChronoUnit.DAYS.between(LocalDate.now(requireClock(clock)), expiryDate);
+    }
+
+    private static Clock requireClock(Clock clock) {
+        return clock == null ? Clock.systemDefaultZone() : clock;
     }
 }
