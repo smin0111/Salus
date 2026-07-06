@@ -11,9 +11,13 @@ import com.mychefai.healthytable.repository.PostCommentRepository;
 import com.mychefai.healthytable.repository.PostLikeRepository;
 import com.mychefai.healthytable.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -25,6 +29,7 @@ public class CommunityPostService {
     private final PostLikeRepository likeRepository;
     private final PostCommentRepository commentRepository;
     private final UserRepository userRepository;
+    private final Clock clock;
 
     /**
      * 전체 게시글 조회 (좋아요 수, 댓글 수 포함)
@@ -39,14 +44,14 @@ public class CommunityPostService {
      */
     public List<CommunityPostDTO> getPopularPosts(Long currentUserId, int limit, String timeframe) {
         List<CommunityPost> posts;
-        java.time.LocalDateTime since;
+        LocalDateTime since;
 
         if ("daily".equalsIgnoreCase(timeframe)) {
-            since = java.time.LocalDateTime.now().minusDays(1);
+            since = LocalDateTime.now(clock).minusDays(1);
         } else if ("weekly".equalsIgnoreCase(timeframe)) {
-            since = java.time.LocalDateTime.now().minusWeeks(1);
+            since = LocalDateTime.now(clock).minusWeeks(1);
         } else if ("monthly".equalsIgnoreCase(timeframe)) {
-            since = java.time.LocalDateTime.now().minusMonths(1);
+            since = LocalDateTime.now(clock).minusMonths(1);
         } else {
             // 기본값: 전체 기간 (최근 1년 정도나 전체 최신순)
             return getPopularPosts(currentUserId, limit);
@@ -79,7 +84,7 @@ public class CommunityPostService {
      */
     public CommunityPostDTO getPostById(Long postId, Long currentUserId) {
         CommunityPost post = postRepository.findById(postId)
-                .orElseThrow(() -> new RuntimeException("게시글을 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다."));
 
         List<CommunityPostDTO> dtos = convertToDTO(Collections.singletonList(post), currentUserId);
         return dtos.isEmpty() ? null : dtos.get(0);
@@ -108,11 +113,11 @@ public class CommunityPostService {
     @Transactional
     public CommunityPost updatePost(Long postId, Long userId, UpdatePostRequestDTO request) {
         CommunityPost post = postRepository.findById(postId)
-                .orElseThrow(() -> new RuntimeException("게시글을 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다."));
 
         // 권한 확인
         if (!post.getUserId().equals(userId)) {
-            throw new RuntimeException("본인의 게시글만 수정할 수 있습니다.");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인의 게시글만 수정할 수 있습니다.");
         }
 
         post.setTitle(request.getTitle());
@@ -131,11 +136,11 @@ public class CommunityPostService {
     @Transactional
     public void deletePost(Long postId, Long userId) {
         CommunityPost post = postRepository.findById(postId)
-                .orElseThrow(() -> new RuntimeException("게시글을 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다."));
 
         // 권한 확인
         if (!post.getUserId().equals(userId)) {
-            throw new RuntimeException("본인의 게시글만 삭제할 수 있습니다.");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인의 게시글만 삭제할 수 있습니다.");
         }
 
         postRepository.delete(post);
@@ -148,7 +153,7 @@ public class CommunityPostService {
     public Map<String, Object> toggleLike(Long postId, Long userId) {
         // 게시글 존재 확인
         if (!postRepository.existsById(postId)) {
-            throw new RuntimeException("게시글을 찾을 수 없습니다.");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다.");
         }
 
         Optional<PostLike> existingLike = likeRepository.findByPostIdAndUserId(postId, userId);
@@ -183,6 +188,10 @@ public class CommunityPostService {
             return Collections.emptyList();
         }
 
+        List<Long> postIds = posts.stream()
+                .map(CommunityPost::getId)
+                .collect(Collectors.toList());
+
         // 사용자 정보 일괄 조회
         List<Long> userIds = posts.stream()
                 .map(CommunityPost::getUserId)
@@ -191,12 +200,30 @@ public class CommunityPostService {
         Map<Long, User> userMap = userRepository.findByIdIn(userIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
 
+        // 좋아요 수 일괄 조회
+        Map<Long, Long> likeCountMap = likeRepository.countLikesByPostIds(postIds).stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (Long) row[1]
+                ));
+
+        // 댓글 수 일괄 조회
+        Map<Long, Long> commentCountMap = commentRepository.countCommentsByPostIds(postIds).stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (Long) row[1]
+                ));
+
+        // 현재 사용자가 좋아요 한 포스트 ID 목록 일괄 조회
+        Set<Long> likedPostIds = currentUserId != null ?
+                new HashSet<>(likeRepository.findLikedPostIdsByPostIdsAndUserId(postIds, currentUserId)) :
+                Collections.emptySet();
+
         return posts.stream().map(post -> {
             User user = userMap.get(post.getUserId());
-            long likeCount = likeRepository.countByPostId(post.getId());
-            long commentCount = commentRepository.countByPostId(post.getId());
-            boolean isLiked = currentUserId != null &&
-                    likeRepository.existsByPostIdAndUserId(post.getId(), currentUserId);
+            long likeCount = likeCountMap.getOrDefault(post.getId(), 0L);
+            long commentCount = commentCountMap.getOrDefault(post.getId(), 0L);
+            boolean isLiked = likedPostIds.contains(post.getId());
 
             return new CommunityPostDTO(
                     post.getId(),

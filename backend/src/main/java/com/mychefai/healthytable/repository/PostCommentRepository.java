@@ -2,6 +2,8 @@ package com.mychefai.healthytable.repository;
 
 import com.mychefai.healthytable.domain.PostComment;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -23,4 +25,7 @@ public interface PostCommentRepository extends JpaRepository<PostComment, Long> 
     void deleteByUserId(Long userId);
 
     void deleteByPostIdIn(List<Long> postIds);
+
+    @Query("SELECT c.postId, COUNT(c) FROM PostComment c WHERE c.postId IN :postIds GROUP BY c.postId")
+    List<Object[]> countCommentsByPostIds(@Param("postIds") List<Long> postIds);
 }

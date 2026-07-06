@@ -2,8 +2,11 @@ package com.mychefai.healthytable.repository;
 
 import com.mychefai.healthytable.domain.PostLike;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -26,4 +29,10 @@ public interface PostLikeRepository extends JpaRepository<PostLike, Long> {
     void deleteByUserId(Long userId);
 
     void deleteByPostIdIn(java.util.List<Long> postIds);
+
+    @Query("SELECT l.postId, COUNT(l) FROM PostLike l WHERE l.postId IN :postIds GROUP BY l.postId")
+    List<Object[]> countLikesByPostIds(@Param("postIds") List<Long> postIds);
+
+    @Query("SELECT l.postId FROM PostLike l WHERE l.postId IN :postIds AND l.userId = :userId")
+    List<Long> findLikedPostIdsByPostIdsAndUserId(@Param("postIds") List<Long> postIds, @Param("userId") Long userId);
 }
