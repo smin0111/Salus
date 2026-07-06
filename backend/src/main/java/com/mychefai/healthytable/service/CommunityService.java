@@ -10,6 +10,8 @@ import com.mychefai.healthytable.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -21,6 +23,7 @@ public class CommunityService {
         private final RecipeShareRepository recipeShareRepository;
         private final RecipeRepository recipeRepository;
         private final UserRepository userRepository;
+        private final Clock clock;
 
         public List<CommunityFeedItemDTO> getPublicFeed() {
                 // 1. Public으로 공유된 레시피 share 가져오기
@@ -65,7 +68,7 @@ public class CommunityService {
                 share.setRecipeId(recipeId);
                 share.setShareMessage(message);
                 share.setVisibility(visibility);
-                share.setCreatedAt(java.time.LocalDateTime.now());
+                share.setCreatedAt(LocalDateTime.now(clock));
 
                 return recipeShareRepository.save(share);
         }

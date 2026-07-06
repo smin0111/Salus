@@ -8,9 +8,13 @@ import com.mychefai.healthytable.repository.CommunityPostRepository;
 import com.mychefai.healthytable.repository.PostCommentRepository;
 import com.mychefai.healthytable.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +27,7 @@ public class PostCommentService {
     private final PostCommentRepository commentRepository;
     private final CommunityPostRepository postRepository;
     private final UserRepository userRepository;
+    private final Clock clock;
 
     /**
      * 특정 게시글의 댓글 조회
@@ -63,7 +68,7 @@ public class PostCommentService {
     public PostComment createComment(Long postId, CreateCommentRequestDTO request) {
         // 게시글 존재 확인
         if (!postRepository.existsById(postId)) {
-            throw new RuntimeException("게시글을 찾을 수 없습니다.");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다.");
         }
 
         PostComment comment = new PostComment();
@@ -71,6 +76,9 @@ public class PostCommentService {
         comment.setUserId(request.getUserId());
         comment.setParentId(request.getParentId());
         comment.setContent(request.getContent());
+        LocalDateTime now = LocalDateTime.now(clock);
+        comment.setCreatedAt(now);
+        comment.setUpdatedAt(now);
 
         return commentRepository.save(comment);
     }
@@ -81,14 +89,15 @@ public class PostCommentService {
     @Transactional
     public PostComment updateComment(Long commentId, Long userId, String content) {
         PostComment comment = commentRepository.findById(commentId)
-                .orElseThrow(() -> new RuntimeException("댓글을 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다."));
 
         // 권한 확인
         if (!comment.getUserId().equals(userId)) {
-            throw new RuntimeException("본인의 댓글만 수정할 수 있습니다.");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인의 댓글만 수정할 수 있습니다.");
         }
 
         comment.setContent(content);
+        comment.setUpdatedAt(LocalDateTime.now(clock));
         return commentRepository.save(comment);
     }
 
@@ -98,11 +107,11 @@ public class PostCommentService {
     @Transactional
     public void deleteComment(Long commentId, Long userId) {
         PostComment comment = commentRepository.findById(commentId)
-                .orElseThrow(() -> new RuntimeException("댓글을 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다."));
 
         // 권한 확인
         if (!comment.getUserId().equals(userId)) {
-            throw new RuntimeException("본인의 댓글만 삭제할 수 있습니다.");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인의 댓글만 삭제할 수 있습니다.");
         }
 
         commentRepository.delete(comment);
