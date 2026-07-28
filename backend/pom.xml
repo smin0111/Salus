@@ -11,7 +11,7 @@
         <relativePath/>
     </parent>
     
-    <groupId>com.mychefai</groupId>
+    <groupId>com.salus</groupId>
     <artifactId>salus-backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>Salus</name>
