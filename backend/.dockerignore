@@ -4,4 +4,11 @@ mvnw
 mvnw.cmd
 __pycache__/
 *.pyc
+.env
+.env.*
+*.keystore
+*.jks
+*.p12
+*.pem
+*.key
 src/main/resources/application-secret.properties
