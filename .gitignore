@@ -55,3 +55,16 @@ logs/
 BEGINNER_CODE_REVIEW_NOTES.md
 GITHUB_MANAGEMENT_GUIDE.md
 SERVICE_READINESS_REVIEW.md
+
+# Temporarily excluded repository-root files
+/.env.example
+/ERD.md
+/README.md
+/SECURITY.md
+/add_columns.sql
+/add_rag_system_tables.sql
+/docker-compose.prod.yml
+/docker-compose.yml
+/init_db.sql
+/schema.sql
+/test_data.sql
