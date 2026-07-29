@@ -584,6 +584,26 @@ class RecipeAgentPersonalizationTest {
         assertThat((List<?>) context.get("explicitlyExcludedIngredients")).isEmpty();
     }
 
+    @Test
+    void recipeAgentAndModelSettingsKeepSafeDefaultsAndEnvironmentOverrides() throws Exception {
+        String properties = java.nio.file.Files.readString(
+                java.nio.file.Path.of("src/main/resources/application.properties"));
+
+        assertThat(properties).contains(
+                "ollama.chat-model=${OLLAMA_CHAT_MODEL:${OLLAMA_MODEL:gemma2}}",
+                "ollama.recipe-model=${OLLAMA_RECIPE_MODEL:${OLLAMA_MODEL:gemma2}}",
+                "ollama.recipe-timeout-seconds=${OLLAMA_RECIPE_TIMEOUT_SECONDS:${OLLAMA_TIMEOUT_SECONDS:180}}",
+                "recipe.agent.enabled=${RECIPE_AGENT_ENABLED:false}",
+                "recipe.agent.source-discovery-enabled=${RECIPE_AGENT_SOURCE_DISCOVERY_ENABLED:false}",
+                "recipe.agent.web-source-enabled=${RECIPE_AGENT_WEB_SOURCE_ENABLED:false}",
+                "recipe.agent.youtube-source-enabled=${RECIPE_AGENT_YOUTUBE_SOURCE_ENABLED:false}",
+                "recipe.agent.youtube-api-key=${YOUTUBE_API_KEY:}",
+                "recipe.agent.youtube-max-search-results=${RECIPE_AGENT_YOUTUBE_MAX_RESULTS:5}",
+                "recipe.agent.youtube-max-search-requests=${RECIPE_AGENT_YOUTUBE_MAX_SEARCH_REQUESTS:2}",
+                "recipe.agent.youtube-transcript-enabled=${RECIPE_AGENT_YOUTUBE_TRANSCRIPT_ENABLED:false}",
+                "recipe.agent.personalization-enabled=${RECIPE_AGENT_PERSONALIZATION_ENABLED:true}");
+    }
+
 
     private RecipePersonalizationPolicyEngine engine(MedicationFoodInteractionPort interactionPort) {
         return new RecipePersonalizationPolicyEngine(List.of(
