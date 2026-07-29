@@ -161,6 +161,14 @@ class RecipeResponseComposer {
         if (decision.conflicts().stream().anyMatch(conflict -> conflict.type() == RecipeConflictType.CHRONIC_CONDITION)) {
             reply.append("- 섭취 가능 여부와 적정량은 개인 상태에 따라 다를 수 있습니다.\n");
         }
+        if (hasMedicationEvidence(decision)) {
+            reply.append("\n[복용약 반영]\n");
+            reply.append("- 아래 내용은 확인된 일부 약의 공식 정보 기준 결과만 표시합니다.\n");
+            decision.conflicts().stream()
+                    .filter(conflict -> conflict.type() == RecipeConflictType.MEDICATION_INTERACTION)
+                    .forEach(conflict -> reply.append("- 확인된 근거: ").append(conflict.reason()).append("\n"));
+            reply.append("- 복용 중단이나 복용량 변경을 의미하지 않습니다. 정확한 복용 방법은 의사 또는 약사에게 확인해 주세요.\n");
+        }
         reply.append("\n[변경 또는 제외된 재료]\n");
         if (decision.modifications().isEmpty()) {
             reply.append("- 없음\n");
@@ -226,4 +234,8 @@ class RecipeResponseComposer {
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    private boolean hasMedicationEvidence(RecipePersonalizationDecision decision) {
+        return decision.conflicts().stream().anyMatch(conflict -> conflict.type() == RecipeConflictType.MEDICATION_INTERACTION)
+                || decision.userNotices().stream().anyMatch(notice -> notice.contains("복용약") || notice.contains("복약정보") || notice.contains("약 이름"));
+    }
 }

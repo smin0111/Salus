@@ -111,6 +111,7 @@ enum RecipeConflictType {
     ALLERGY,
     CHRONIC_CONDITION,
     DIETARY_RESTRICTION,
+    MEDICATION_INTERACTION,
     USER_EXCLUSION,
     MISSING_CORE_INGREDIENT
 }
@@ -444,6 +445,145 @@ interface UserRecipeContextLoader {
     }
 }
 
+interface MedicationFoodInteractionPort {
+
+    MedicationInteractionResult check(List<String> medications, List<String> recipeIngredients);
+}
+
+record MedicationInteractionResult(
+        InteractionStatus status,
+        List<RecipeConflict> conflicts,
+        List<String> notices,
+        List<MedicationFoodEvidence> evidences,
+        List<MedicationPerDrugResult> perDrugResults,
+        MedicationResultSummary summary
+) {
+    MedicationInteractionResult(InteractionStatus status, List<RecipeConflict> conflicts, List<String> notices) {
+        this(status, conflicts, notices, List.of(), List.of(), MedicationResultSummary.empty());
+    }
+
+    MedicationInteractionResult(
+            InteractionStatus status,
+            List<RecipeConflict> conflicts,
+            List<String> notices,
+            List<MedicationFoodEvidence> evidences) {
+        this(status, conflicts, notices, evidences, List.of(), MedicationResultSummary.empty());
+    }
+
+    MedicationInteractionResult {
+        conflicts = conflicts == null ? List.of() : List.copyOf(conflicts);
+        notices = notices == null ? List.of() : List.copyOf(notices);
+        evidences = evidences == null ? List.of() : List.copyOf(evidences);
+        perDrugResults = perDrugResults == null ? List.of() : List.copyOf(perDrugResults);
+        summary = summary == null ? MedicationResultSummary.from(perDrugResults) : summary;
+    }
+
+    static MedicationInteractionResult unknown(List<String> medications) {
+        if (medications == null || medications.isEmpty()) {
+            return new MedicationInteractionResult(InteractionStatus.NO_MATCHING_INTERACTION_FOUND, List.of(), List.of(), List.of(), List.of(), MedicationResultSummary.empty());
+        }
+        List<MedicationPerDrugResult> perDrug = medications.stream()
+                .map(medication -> MedicationPerDrugResult.unknown(maskedMedicationId(medication)))
+                .toList();
+        return new MedicationInteractionResult(
+                InteractionStatus.UNKNOWN,
+                List.of(),
+                List.of(
+                        "확인된 공식 음식 상호작용 근거를 찾지 못했습니다.",
+                        "상호작용이 없다는 의미는 아닙니다.",
+                        "약 복용 방식은 의사 또는 약사에게 확인하세요."),
+                List.of(),
+                perDrug,
+                MedicationResultSummary.from(perDrug));
+    }
+
+    private static String maskedMedicationId(String medication) {
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest((medication == null ? "" : medication.trim()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(digest).substring(0, 12);
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
+}
+
+record MedicationPerDrugResult(
+        String maskedMedicationId,
+        MedicationNormalizationStatus identificationStatus,
+        MedicationResearchStatus evidenceStatus,
+        InteractionStatus interactionStatus,
+        List<String> matchedFoodConcepts,
+        List<MedicationEvidenceSource> sources,
+        String failureReason
+) {
+    MedicationPerDrugResult {
+        maskedMedicationId = maskedMedicationId == null ? "" : maskedMedicationId;
+        identificationStatus = identificationStatus == null ? MedicationNormalizationStatus.NOT_FOUND : identificationStatus;
+        evidenceStatus = evidenceStatus == null ? MedicationResearchStatus.MEDICATION_NOT_IDENTIFIED : evidenceStatus;
+        interactionStatus = interactionStatus == null ? InteractionStatus.UNKNOWN : interactionStatus;
+        matchedFoodConcepts = matchedFoodConcepts == null ? List.of() : List.copyOf(matchedFoodConcepts);
+        sources = sources == null ? List.of() : List.copyOf(sources);
+        failureReason = failureReason == null ? "" : failureReason;
+    }
+
+    static MedicationPerDrugResult unknown(String maskedMedicationId) {
+        return new MedicationPerDrugResult(
+                maskedMedicationId,
+                MedicationNormalizationStatus.NOT_FOUND,
+                MedicationResearchStatus.MEDICATION_NOT_IDENTIFIED,
+                InteractionStatus.UNKNOWN,
+                List.of(),
+                List.of(),
+                "MEDICATION_EVIDENCE_UNKNOWN");
+    }
+}
+
+record MedicationResultSummary(
+        int identifiedCount,
+        int unidentifiedCount,
+        int apiFailedCount,
+        int multipleMatchesCount,
+        int confirmedConflictCount,
+        int withoutFoodEvidenceCount
+) {
+    static MedicationResultSummary empty() {
+        return new MedicationResultSummary(0, 0, 0, 0, 0, 0);
+    }
+
+    static MedicationResultSummary from(List<MedicationPerDrugResult> results) {
+        List<MedicationPerDrugResult> values = results == null ? List.of() : results;
+        return new MedicationResultSummary(
+                (int) values.stream().filter(result -> result.identificationStatus() != MedicationNormalizationStatus.NOT_FOUND
+                        && result.identificationStatus() != MedicationNormalizationStatus.API_FAILED
+                        && result.identificationStatus() != MedicationNormalizationStatus.MULTIPLE_MATCHES).count(),
+                (int) values.stream().filter(result -> result.interactionStatus() == InteractionStatus.MEDICATION_NOT_IDENTIFIED
+                        || result.interactionStatus() == InteractionStatus.UNKNOWN).count(),
+                (int) values.stream().filter(result -> result.interactionStatus() == InteractionStatus.API_FAILED).count(),
+                (int) values.stream().filter(result -> result.interactionStatus() == InteractionStatus.MULTIPLE_MEDICATION_MATCHES).count(),
+                (int) values.stream().filter(result -> result.interactionStatus() == InteractionStatus.CONFIRMED_CONFLICT).count(),
+                (int) values.stream().filter(result -> result.interactionStatus() == InteractionStatus.NO_MATCHING_INTERACTION_FOUND
+                        || result.interactionStatus() == InteractionStatus.EVIDENCE_INSUFFICIENT).count());
+    }
+}
+
+enum InteractionStatus {
+    SAFE,
+    CONFIRMED_CONFLICT,
+    CAUTION,
+    TIMING_CONDITION,
+    FOOD_INTAKE_CONDITION,
+    NO_MATCHING_INTERACTION_FOUND,
+    MEDICATION_NOT_IDENTIFIED,
+    MULTIPLE_MEDICATION_MATCHES,
+    EVIDENCE_INSUFFICIENT,
+    API_DISABLED,
+    API_FAILED,
+    EVIDENCE_CONFLICT,
+    CONFLICT,
+    UNKNOWN
+}
+
 record RecipeValidationResult(boolean valid, List<String> reasons) {
 }
 
@@ -513,4 +653,37 @@ final class AgentText {
         return List.copyOf(result);
     }
 
+    static List<MedicationFoodEvidence> distinctMedicationEvidences(List<MedicationFoodEvidence> evidences) {
+        if (evidences == null || evidences.isEmpty()) {
+            return List.of();
+        }
+        Set<String> keys = new LinkedHashSet<>();
+        List<MedicationFoodEvidence> result = new ArrayList<>();
+        for (MedicationFoodEvidence evidence : evidences) {
+            String medication = evidence.medication() == null ? "" : evidence.medication().originalName();
+            String source = evidence.source() == null ? "" : evidence.source().sourceType() + ":" + evidence.source().sourceId();
+            String key = medication + "|" + evidence.foodOrNutrient() + "|" + evidence.effectType() + "|" + source + "|" + evidence.originalEvidenceText();
+            if (keys.add(key)) {
+                result.add(evidence);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    static List<MatchedMedicationFoodEvidence> distinctMatchedMedicationEvidences(List<MatchedMedicationFoodEvidence> matches) {
+        if (matches == null || matches.isEmpty()) {
+            return List.of();
+        }
+        Set<String> keys = new LinkedHashSet<>();
+        List<MatchedMedicationFoodEvidence> result = new ArrayList<>();
+        for (MatchedMedicationFoodEvidence match : matches) {
+            MedicationFoodEvidence evidence = match.evidence();
+            String source = evidence.source() == null ? "" : evidence.source().sourceType() + ":" + evidence.source().sourceId();
+            String key = match.matchedIngredient() + "|" + evidence.foodOrNutrient() + "|" + evidence.effectType() + "|" + source;
+            if (keys.add(key)) {
+                result.add(match);
+            }
+        }
+        return List.copyOf(result);
+    }
 }

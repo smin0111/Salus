@@ -13,6 +13,15 @@ import java.util.LinkedHashSet;
 import java.util.List;
 
 @Service
+class UnknownMedicationFoodInteractionAdapter implements MedicationFoodInteractionPort {
+
+    @Override
+    public MedicationInteractionResult check(List<String> medications, List<String> recipeIngredients) {
+        return MedicationInteractionResult.unknown(medications);
+    }
+}
+
+@Service
 @RequiredArgsConstructor
 class DefaultRecipeRequestPlanner {
 

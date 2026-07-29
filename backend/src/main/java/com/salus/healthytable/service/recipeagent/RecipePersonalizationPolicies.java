@@ -56,6 +56,12 @@ class RecipePersonalizationPolicyEngine {
         if (blockingAllergy) {
             return RecipeDecisionType.BLOCK;
         }
+        boolean trustedMedicationConflict = conflicts.stream()
+                .anyMatch(conflict -> conflict.type() == RecipeConflictType.MEDICATION_INTERACTION
+                        && conflict.severity() == ConflictSeverity.BLOCKING);
+        if (trustedMedicationConflict) {
+            return RecipeDecisionType.BLOCK;
+        }
         boolean highChronicRisk = conflicts.stream()
                 .anyMatch(conflict -> conflict.type() == RecipeConflictType.CHRONIC_CONDITION
                         && conflict.severity() == ConflictSeverity.HIGH);
@@ -116,6 +122,51 @@ class AllergyPolicy implements RecipePersonalizationPolicy {
                     + allergy + " 알레르기 때문에 제외했습니다.");
         }
         return new PolicyEvaluation(conflicts, modifications, notices, List.of(), List.of());
+    }
+}
+
+@Component
+@Order(20)
+@RequiredArgsConstructor
+class MedicationInteractionPolicy implements RecipePersonalizationPolicy {
+
+    private final MedicationFoodInteractionPort interactionPort;
+
+    @Override
+    public PolicyEvaluation evaluate(RecipeCandidate recipe, UserRecipeContext userContext) {
+        if (userContext == null || userContext.medications().isEmpty()) {
+            return PolicyEvaluation.empty();
+        }
+        MedicationInteractionResult result = interactionPort.check(userContext.medications(), recipe.ingredients());
+        if (result.status() == InteractionStatus.CONFLICT || result.status() == InteractionStatus.CONFIRMED_CONFLICT) {
+            return new PolicyEvaluation(result.conflicts(), medicationModifications(result.conflicts()), result.notices(), List.of(), List.of());
+        }
+        if (result.status() == InteractionStatus.CAUTION) {
+            return new PolicyEvaluation(result.conflicts(), List.of(), result.notices(), List.of(), List.of());
+        }
+        if (result.status() == InteractionStatus.TIMING_CONDITION
+                || result.status() == InteractionStatus.FOOD_INTAKE_CONDITION
+                || result.status() == InteractionStatus.MEDICATION_NOT_IDENTIFIED
+                || result.status() == InteractionStatus.MULTIPLE_MEDICATION_MATCHES
+                || result.status() == InteractionStatus.EVIDENCE_INSUFFICIENT
+                || result.status() == InteractionStatus.NO_MATCHING_INTERACTION_FOUND
+                || result.status() == InteractionStatus.API_DISABLED
+                || result.status() == InteractionStatus.API_FAILED
+                || result.status() == InteractionStatus.EVIDENCE_CONFLICT
+                || result.status() == InteractionStatus.UNKNOWN) {
+            return new PolicyEvaluation(List.of(), List.of(), result.notices(), List.of(), List.of());
+        }
+        return PolicyEvaluation.empty();
+    }
+
+    private List<RecipeModification> medicationModifications(List<RecipeConflict> conflicts) {
+        if (conflicts == null || conflicts.isEmpty()) {
+            return List.of();
+        }
+        return conflicts.stream()
+                .filter(conflict -> conflict.type() == RecipeConflictType.MEDICATION_INTERACTION)
+                .map(conflict -> new RecipeModification(conflict.ingredient(), "REMOVE", null, "공식 복약정보의 음식 상호작용 근거 때문에 제외"))
+                .toList();
     }
 }
 
