@@ -1,4 +1,4 @@
-package com.mychefai.healthytable
+package com.salus.healthytable
 
 import android.os.Build
 import android.os.Bundle

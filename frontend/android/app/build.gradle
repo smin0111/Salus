@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.mychefai.healthytable'
+    namespace 'com.salus.healthytable'
     defaultConfig {
-        applicationId 'com.mychefai.healthytable'
+        applicationId 'com.salus.healthytable'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
