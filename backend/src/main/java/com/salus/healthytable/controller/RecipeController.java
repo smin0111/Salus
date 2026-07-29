@@ -7,6 +7,10 @@ import com.salus.healthytable.security.AuthenticatedUserProvider;
 import com.salus.healthytable.service.GeminiService;
 import com.salus.healthytable.service.ChatRateLimitService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -54,9 +58,23 @@ public class RecipeController {
     }
 
     @PostMapping("/recommend")
-    public Mono<String> recommendRecipe(@RequestBody RecommendationRequest request, HttpServletRequest servletRequest) {
-        List<String> ingredients = normalizeIngredients(request);
-        String healthContext = normalizeHealthContext(request.getHealthContext());
+    public Mono<String> recommendRecipe(@Valid @RequestBody RecommendationRequest request, HttpServletRequest servletRequest) {
+        // Validation을 거치면서 기본적인 null, 리스트 크기 및 데이터 길이 유효성이 모두 통과되었습니다.
+        // 남은 작업은 AI 프롬프트에 들어갈 재료 목록의 중복 제거(distinct) 및 앞뒤 공백 정제(trim)입니다.
+        List<String> ingredients = request.getIngredients().stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(ingredient -> !ingredient.isBlank())
+                .distinct()
+                .toList();
+
+        // AI 프롬프트에 들어갈 건강 참고 맥락 정보 정제
+        String healthContext = request.getHealthContext() == null || request.getHealthContext().isBlank()
+                ? "None"
+                : request.getHealthContext().trim();
+
+        // 추천 API도 AI 호출을 만들 수 있으므로 채팅과 같은 Rate Limit 정책을 공유합니다.
+        // 로그인 사용자는 userId 기준, 게스트는 IP 기준으로 제한해 비용 폭증을 줄입니다.
         chatRateLimitService.checkAllowed(authenticatedUserProvider.getCurrentUserId(), servletRequest);
         return geminiService.getRecipeRecommendation(ingredients, healthContext);
     }
@@ -87,51 +105,14 @@ public class RecipeController {
         return values == null ? List.of() : values;
     }
 
-    private List<String> normalizeIngredients(RecommendationRequest request) {
-        if (request == null) {
-            throw new IllegalArgumentException("추천에 사용할 재료를 입력해 주세요.");
-        }
-        if (request.getIngredients() == null) {
-            throw new IllegalArgumentException("추천에 사용할 재료를 1개 이상 입력해 주세요.");
-        }
-
-        List<String> ingredients = request.getIngredients().stream()
-                .filter(Objects::nonNull)
-                .map(String::trim)
-                .filter(ingredient -> !ingredient.isBlank())
-                .distinct()
-                .toList();
-
-        if (ingredients.isEmpty()) {
-            throw new IllegalArgumentException("추천에 사용할 재료를 1개 이상 입력해 주세요.");
-        }
-        if (ingredients.size() > MAX_INGREDIENTS) {
-            throw new IllegalArgumentException("재료는 최대 20개까지 입력할 수 있습니다.");
-        }
-        for (String ingredient : ingredients) {
-            if (ingredient.length() > MAX_INGREDIENT_LENGTH) {
-                throw new IllegalArgumentException("재료 이름은 80자 이하로 입력해 주세요.");
-            }
-        }
-
-        return ingredients;
-    }
-
-    private String normalizeHealthContext(String healthContext) {
-        if (healthContext == null || healthContext.isBlank()) {
-            return "None";
-        }
-
-        String normalized = healthContext.trim();
-        if (normalized.length() > MAX_HEALTH_CONTEXT_LENGTH) {
-            throw new IllegalArgumentException("건강 참고 내용은 1000자 이하로 입력해 주세요.");
-        }
-        return normalized;
-    }
-
     @Data
     public static class RecommendationRequest {
-        private List<String> ingredients;
+        @NotNull(message = "추천에 사용할 재료를 1개 이상 입력해 주세요.")
+        @Size(min = 1, message = "추천에 사용할 재료를 1개 이상 입력해 주세요.")
+        @Size(max = 20, message = "재료는 최대 20개까지 입력할 수 있습니다.")
+        private List<@NotBlank(message = "추천에 사용할 재료를 1개 이상 입력해 주세요.") @Size(max = 80, message = "재료 이름은 80자 이하로 입력해 주세요.") String> ingredients;
+
+        @Size(max = 1000, message = "건강 참고 내용은 1000자 이하로 입력해 주세요.")
         private String healthContext;
     }
 }

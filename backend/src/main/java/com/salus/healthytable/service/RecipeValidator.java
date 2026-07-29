@@ -31,6 +31,22 @@ public class RecipeValidator {
             "다진마늘", "마늘", "대파", "파", "양파", "맛술", "청주", "미림", "고춧가루"
     );
 
+    private static final Set<String> PANTRY_STAPLES = Set.of(
+            "물", "식용유", "참기름", "올리브유", "다진마늘", "마늘", "대파", "파"
+    );
+
+    private static final Set<String> SEASONINGS = Set.of(
+            "소금", "후추", "간장", "국간장", "고춧가루", "고추장", "된장", "맛술", "청주", "미림"
+    );
+
+    private static final Set<String> OPTIONAL_INGREDIENTS = Set.of(
+            "깨", "통깨", "멸치", "육수용멸치", "다시마", "육수"
+    );
+
+    private static final Set<String> RESULT_CHANGING_INGREDIENTS = Set.of(
+            "생크림", "크림", "치즈", "우유", "버터", "설탕", "견과류", "과일"
+    );
+
     private static final Set<String> GENERIC_INGREDIENT_WORDS = Set.of(
             "재료", "주재료", "부재료", "양념", "소스", "약간", "적당량", "기호", "분량", "기본", "선택",
             "레시피", "조리", "요리", "만드는법", "만들기", "준비", "손질", "완성", "접시", "그릇",
@@ -121,7 +137,8 @@ public class RecipeValidator {
                 : (double) matchedEvidenceIngredients / totalEvidenceIngredients;
 
         List<String> unsupportedIngredients = generated.ingredients().stream()
-                .filter(ingredient -> !COMMON_SEASONINGS.contains(ingredient))
+                .filter(ingredient -> ingredientRole(ingredient) == IngredientRole.CORE_INGREDIENT
+                        || ingredientRole(ingredient) == IngredientRole.UNKNOWN)
                 .filter(ingredient -> !evidenceContainsIngredient(context, ingredient))
                 .toList();
         if (!unsupportedIngredients.isEmpty()) {
@@ -288,7 +305,10 @@ public class RecipeValidator {
     private Set<String> selectImportantIngredients(String context, Set<String> evidenceIngredients, Set<String> generatedIngredients) {
         Map<String, Integer> scored = new LinkedHashMap<>();
         for (String ingredient : evidenceIngredients) {
-            if (COMMON_SEASONINGS.contains(ingredient)) {
+            IngredientRole role = ingredientRole(ingredient);
+            if (role == IngredientRole.PANTRY_STAPLE
+                    || role == IngredientRole.SEASONING
+                    || role == IngredientRole.OPTIONAL_INGREDIENT) {
                 continue;
             }
             int count = countOccurrences(context, ingredient);
@@ -296,7 +316,10 @@ public class RecipeValidator {
         }
         if (scored.isEmpty()) {
             for (String ingredient : generatedIngredients) {
-                if (COMMON_SEASONINGS.contains(ingredient)) {
+                IngredientRole role = ingredientRole(ingredient);
+                if (role == IngredientRole.PANTRY_STAPLE
+                        || role == IngredientRole.SEASONING
+                        || role == IngredientRole.OPTIONAL_INGREDIENT) {
                     continue;
                 }
                 scored.put(ingredient, evidenceContainsIngredient(context, ingredient) ? 1 : 0);
@@ -469,6 +492,23 @@ public class RecipeValidator {
         return aliases;
     }
 
+    private IngredientRole ingredientRole(String ingredient) {
+        String compact = compact(ingredient);
+        if (PANTRY_STAPLES.contains(compact)) {
+            return IngredientRole.PANTRY_STAPLE;
+        }
+        if (SEASONINGS.contains(compact)) {
+            return IngredientRole.SEASONING;
+        }
+        if (OPTIONAL_INGREDIENTS.contains(compact)) {
+            return IngredientRole.OPTIONAL_INGREDIENT;
+        }
+        if (RESULT_CHANGING_INGREDIENTS.contains(compact)) {
+            return IngredientRole.CORE_INGREDIENT;
+        }
+        return IngredientRole.UNKNOWN;
+    }
+
     private String compact(String value) {
         return normalize(value).replaceAll("\\s+", "");
     }
@@ -513,4 +553,12 @@ public class RecipeValidator {
             Set<String> ingredients,
             Set<String> verbGroups
     ) {}
+
+    private enum IngredientRole {
+        CORE_INGREDIENT,
+        OPTIONAL_INGREDIENT,
+        PANTRY_STAPLE,
+        SEASONING,
+        UNKNOWN
+    }
 }
