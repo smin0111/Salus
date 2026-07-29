@@ -10,7 +10,8 @@ public class ChatIntentClassifier {
     };
 
     private static final String[] RECIPE_KEYWORDS = {
-            "레시피", "만드는법", "만드는방법", "조리법", "어떻게만들어", "끓이는법", "굽는법"
+            "레시피", "만드는법", "만드는방법", "조리법", "어떻게만들어", "끓이는법", "굽는법",
+            "에이드", "주스", "스무디", "화채", "빙수"
     };
 
     public enum ChatIntent {

@@ -18,12 +18,12 @@ public class GeminiService {
     }
 
     public Mono<String> getChatResponse(String currentMessage, List<ChatDto.Message> history) {
-        log.info("[AI Service] Redirecting chat request to local LLM (Ollama)");
+        log.info("[AI Service] Redirecting chat request to configured LLM service.");
         return llmService.getChatResponse(currentMessage, history);
     }
 
     public Mono<String> getRecipeRecommendation(List<String> ingredients, String healthContext) {
-        log.info("[AI Service] Generating recipe recommendation via local LLM (Ollama)");
+        log.info("[AI Service] Generating recipe recommendation via configured LLM service.");
         String prompt = String.format(
                 "사용자가 가진 재료: [%s]. " +
                         "건강/상황 고려: [%s]. " +
@@ -36,13 +36,10 @@ public class GeminiService {
     }
 
     public Mono<String> analyzeReceipt(String base64Image) {
-        log.warn("[AI Service] Local model (gemma2) is text-only. Returning safe mocked receipt items.");
-        // gemma2는 비전 기능이 없으므로, 프론트엔드 호환을 위해 영수증 분석 결과를 모조로 안전하게 반환합니다.
-        return Mono.just("[\n" +
-                "  {\"name\": \"두부\", \"quantity\": \"1모\", \"category\": \"유제품\"},\n" +
-                "  {\"name\": \"대파\", \"quantity\": \"1대\", \"category\": \"채소\"},\n" +
-                "  {\"name\": \"양파\", \"quantity\": \"1개\", \"category\": \"채소\"}\n" +
-                "]");
+        log.warn("[AI Service] Receipt image analysis is not connected yet. Returning empty scan result.");
+        // 실제 비전/OCR 모델이 연결되기 전까지는 가짜 재료를 만들지 않습니다.
+        // 빈 배열을 반환하면 프론트엔드가 사용자에게 분석 결과 없음으로 안내할 수 있습니다.
+        return Mono.just("[]");
     }
 
     public Mono<String> analyzeMonthlyMealPlan(List<com.salus.healthytable.domain.MealLog> logs) {
@@ -50,7 +47,7 @@ public class GeminiService {
             return Mono.just("이번 달은 아직 식단 기록이 없습니다. 꾸준한 기록이 건강의 첫걸음입니다.");
         }
 
-        log.info("[AI Service] Generating monthly meal plan analysis via local LLM (Ollama)");
+        log.info("[AI Service] Generating monthly meal plan analysis via configured LLM service.");
         StringBuilder prompt = new StringBuilder();
         prompt.append("다음은 사용자의 한 달간 식단 기록입니다. 데이터를 분석하여 월간 식습관에 대한 짧고 친근한 총평(한줄평)을 작성해주세요. ");
         prompt.append("칭찬할 점과 개선할 점을 포함해주세요. 이모지는 사용하지 말고 담백하게 표현해주세요. (100자 이내)\n\n");
