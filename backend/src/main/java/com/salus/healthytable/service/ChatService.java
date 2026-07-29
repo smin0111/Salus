@@ -25,17 +25,21 @@ import com.salus.healthytable.repository.SearchCacheRepository;
 import com.salus.healthytable.service.recipeagent.RecipeAgentOrchestrator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -213,6 +217,15 @@ public class ChatService {
                     }
                 }
 
+                if (isIngredientSubstitutionFollowUp(request.getMessage())) {
+                    Optional<ChatDto.Response> substitutionResponse = buildRecipeSubstitutionFollowUp(
+                            userIdLong, chatSession, request, safetyContext);
+                    if (substitutionResponse.isPresent()) {
+                        saveChatMessage(chatSession, "model", substitutionResponse.get().getReply());
+                        return Mono.just(substitutionResponse.get());
+                    }
+                }
+
                 if (isDetailFollowUp) {
                     Optional<ChatDto.Response> detailedResponse = buildDetailedRecipeFollowUp(userIdLong, chatSession, request);
                     if (detailedResponse.isPresent()) {
@@ -313,7 +326,7 @@ public class ChatService {
                 }
 
             } catch (Exception e) {
-                log.error("개인화 컨텍스트 구성 중 오류 발생", e);
+                logRequestFailure(intent.name(), request.getMessage(), "PERSONALIZATION_CONTEXT_FAILED", e);
             }
         }
 
@@ -336,12 +349,12 @@ public class ChatService {
                 LocalDateTime createdAt = cache.get().getCreatedAt();
                 long ageDays = createdAt == null ? negativeCacheDays : Duration.between(createdAt, LocalDateTime.now(clock)).toDays();
                 if (ageDays < negativeCacheDays) {
-                    log.info("[RAG Pipeline] Negative Cache hit for query: '{}' (Age: {} days). Rejecting request.", normalizedTitle, ageDays);
+                    logRequestFailure(intent.name(), request.getMessage(), "NEGATIVE_CACHE_HIT", null);
                     String rejectReply = "죄송합니다. 신뢰할 수 있는 레시피 정보를 찾지 못했습니다. 다른 음식이나 정통 레시피를 물어봐 주세요.";
                     saveChatMessage(chatSession, "model", rejectReply);
                     return Mono.just(new ChatDto.Response(chatSession != null ? chatSession.getId() : null, rejectReply, false, false));
                 } else {
-                    log.info("[RAG Pipeline] Negative Cache expired for query: '{}'. Deleting cache entry.", normalizedTitle);
+                    logRequestFailure(intent.name(), request.getMessage(), "NEGATIVE_CACHE_EXPIRED", null);
                     searchCacheRepository.deleteByQuery(normalizedTitle);
                 }
             }
@@ -350,10 +363,10 @@ public class ChatService {
             ragDataMono = searchEngine.search(normalizedTitle)
                     .flatMap(searchResponse -> {
                         if (searchResponse.status() == SearchEngine.SearchStatus.FAILED) {
-                            log.warn("[RAG Pipeline] Web search FAILED for query: '{}'. Skipping cache write and falling back to LLM.", normalizedTitle);
+                            logRequestFailure(intent.name(), request.getMessage(), "WEB_SEARCH_FAILED", null);
                             return Mono.just(new RAGData(SearchEngine.SearchStatus.FAILED, "", "", searchResponse.source()));
                         } else if (searchResponse.status() == SearchEngine.SearchStatus.EMPTY) {
-                            log.info("[RAG Pipeline] Web search returned EMPTY for query: '{}'. Adding to negative cache.", normalizedTitle);
+                            logRequestFailure(intent.name(), request.getMessage(), "WEB_SEARCH_EMPTY", null);
                             try {
                                 searchCacheRepository.deleteByQuery(normalizedTitle);
                                 SearchCache newCache = new SearchCache();
@@ -361,7 +374,7 @@ public class ChatService {
                                 newCache.setFound(false);
                                 searchCacheRepository.save(newCache);
                             } catch (Exception e) {
-                                log.error("[RAG Pipeline] Failed to save negative cache", e);
+                                logRequestFailure(intent.name(), request.getMessage(), "NEGATIVE_CACHE_WRITE_FAILED", e);
                             }
                             return Mono.just(new RAGData(SearchEngine.SearchStatus.EMPTY, "", "", searchResponse.source()));
                         } else {
@@ -456,12 +469,10 @@ public class ChatService {
                         if (isLlmUnavailableReply(reply)) {
                             responseReply = reply;
                         } else if (!isRecipeRequestIntent && looksLikeRecipeResponse(reply)) {
-                            log.warn("[Intent Guard] Non-recipe intent produced recipe-like reply. Intent: {}, message: '{}'",
-                                    intent, request.getMessage());
+                            logRequestFailure(intent.name(), request.getMessage(), "NON_RECIPE_INTENT_RECIPE_OUTPUT", null);
                             responseReply = buildNonRecipeIntentReply(intent, request.getMessage());
                         } else if (isRecipeRequestIntent && !hasTrustedRecipe && !normalizedTitle.isBlank() && !looksLikeRecipeResponse(reply)) {
-                            log.warn("[RAG Pipeline] Recipe request produced non-recipe reply. Query: '{}', Reply: {}",
-                                    normalizedTitle, truncateRecipeField(nullToBlank(reply)));
+                            logRequestFailure(intent.name(), request.getMessage(), "RECIPE_REQUEST_NON_RECIPE_OUTPUT", null);
                             responseReply = buildRecipeValidationFailureReply(normalizedTitle, ragData.status());
                         } else if (isRecipeRequestIntent && !hasTrustedRecipe && !normalizedTitle.isBlank() && looksLikeRecipeResponse(reply)) {
                             try {
@@ -476,8 +487,7 @@ public class ChatService {
                                             parsedRecipe,
                                             request.getMessage());
                                     if (!allergyConflicts.isEmpty()) {
-                                        log.warn("[Safety Guard] Generated recipe blocked for allergies. Query: '{}', Conflicts: {}",
-                                                normalizedTitle, allergyConflicts);
+                                        logRequestFailure(intent.name(), request.getMessage(), "ALLERGY_GUARD_BLOCK", null);
                                         responseReply = buildAllergyBlockedReply(normalizedTitle, allergyConflicts);
                                     } else {
                                         RecipeValidator.ValidationResult valResult = recipeValidator.validate(
@@ -485,27 +495,24 @@ public class ChatService {
                                         saveGeneratedRecipeAudit(normalizedTitle, parsedRecipe, ragData.rawSearchContext(), ragData.source(), responseReply, valResult);
 
                                         if (!valResult.valid()) {
-                                            log.warn("[RAG Pipeline] Generated recipe failed validation for query: '{}'. Reasons: {}",
-                                                    normalizedTitle, valResult.reasons());
+                                            logRequestFailure(intent.name(), request.getMessage(), "RECIPE_VALIDATION_FAILED", null);
                                             responseReply = buildRecipeValidationFailureReply(normalizedTitle, ragData.status());
                                         } else {
                                             responseReply = buildGeneratedRecipeReply(parsedRecipe);
                                             if (!valResult.dataQualityLow()) {
                                                 saveToRecipeDbSafely(parsedRecipe);
                                             } else {
-                                                log.info("[RAG Pipeline] Generated recipe served but not promoted due to data quality warnings. Query: '{}', Warnings: {}",
-                                                        normalizedTitle, valResult.dataQualityWarnings());
+                                                logRequestFailure(intent.name(), request.getMessage(), "RECIPE_PROMOTION_SKIPPED", null);
                                             }
                                             responseRecipe = parsedRecipe;
                                         }
                                     }
                                 } else {
-                                    log.warn("[RAG Pipeline] Generated recipe-like reply could not be parsed for validation. Query: '{}', Reply: {}",
-                                            normalizedTitle, truncateRecipeField(nullToBlank(responseReply)));
+                                    logRequestFailure(intent.name(), request.getMessage(), "RECIPE_REPLY_PARSE_FAILED", null);
                                     responseReply = buildRecipeValidationFailureReply(normalizedTitle, ragData.status());
                                 }
                             } catch (Exception e) {
-                                log.error("[RAG Pipeline] Failed in validation/audit/promotion sequence", e);
+                                logRequestFailure(intent.name(), request.getMessage(), "RECIPE_PIPELINE_FAILED", e);
                                 responseReply = buildRecipeValidationFailureReply(normalizedTitle, ragData.status());
                             }
                         }
@@ -545,6 +552,38 @@ public class ChatService {
                 "자세", "원래레시피", "원본레시피", "왜", "빼", "제외", "말고",
                 "대신", "대체", "바꿔", "변경", "맞게", "다시", "냉장고", "사용해",
                 "재료", "인분", "조리", "레시피");
+    }
+
+    private void logRequestFailure(String intent, String message, String failureCategory, Throwable error) {
+        String value = message == null ? "" : message;
+        log.warn("[ChatEvent] requestId={}, intent={}, messageLength={}, messageHash={}, failureCategory={}, exceptionClass={}",
+                requestId(),
+                intent == null || intent.isBlank() ? "UNKNOWN" : intent,
+                value.length(),
+                messageHash(value),
+                failureCategory,
+                error == null ? "none" : error.getClass().getSimpleName());
+    }
+
+    private void logFailure(String failureCategory, Throwable error) {
+        log.warn("[ChatEvent] requestId={}, failureCategory={}, exceptionClass={}",
+                requestId(),
+                failureCategory,
+                error == null ? "none" : error.getClass().getSimpleName());
+    }
+
+    private String requestId() {
+        String requestId = MDC.get("requestId");
+        return requestId == null || requestId.isBlank() ? "unavailable" : requestId;
+    }
+
+    private String messageHash(String message) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest((message == null ? "" : message).getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            return "hash-unavailable";
+        }
     }
 
     private Mono<ChatDto.Response> buildStructuredRecipeResponse(
@@ -775,7 +814,7 @@ public class ChatService {
                     appendNormalizedValues(goals, profile.getGoals(), false);
                 });
             } catch (Exception e) {
-                log.warn("건강 정보 안전 컨텍스트 구성 중 오류 발생: {}", e.getMessage());
+                logRequestFailure("SAFETY_CONTEXT", request == null ? "" : request.getMessage(), "HEALTH_CONTEXT_LOAD_FAILED", e);
             }
         });
 
@@ -875,7 +914,12 @@ public class ChatService {
                 continue;
             }
 
-            if (containsAllergyTerm(title, allergy, requestMessage)) {
+            boolean titleOnlyCheck = recipe == null;
+            if (titleOnlyCheck && isIngredientExplicitlyExcluded(requestMessage, allergy)) {
+                continue;
+            }
+
+            if (containsAllergyTerm(title, allergy)) {
                 conflicts.add(allergy);
                 continue;
             }
@@ -885,9 +929,9 @@ public class ChatService {
             }
 
             boolean ingredientConflict = cleanRecipeValues(recipe.getIngredients()).stream()
-                    .anyMatch(ingredient -> containsAllergyTerm(ingredient, allergy, requestMessage));
+                    .anyMatch(ingredient -> containsAllergyTerm(ingredient, allergy));
             boolean stepConflict = cleanRecipeValues(recipe.getSteps()).stream()
-                    .anyMatch(step -> containsAllergyTerm(step, allergy, requestMessage));
+                    .anyMatch(step -> containsAllergyTerm(step, allergy));
             if (ingredientConflict || stepConflict) {
                 conflicts.add(allergy);
             }
@@ -895,14 +939,13 @@ public class ChatService {
         return new ArrayList<>(conflicts);
     }
 
-    private boolean containsAllergyTerm(String text, String allergy, String requestMessage) {
+    private boolean containsAllergyTerm(String text, String allergy) {
         String normalizedText = normalizeIngredientForMatching(text);
         String normalizedAllergy = normalizeIngredientForMatching(allergy);
         if (normalizedText.isBlank() || normalizedAllergy.isBlank() || !normalizedText.contains(normalizedAllergy)) {
             return false;
         }
-        return !isIngredientExplicitlyExcluded(text, allergy)
-                && !isIngredientExplicitlyExcluded(requestMessage, allergy);
+        return !isIngredientExplicitlyExcluded(text, allergy);
     }
 
     private boolean isIngredientExplicitlyExcluded(String text, String allergy) {
@@ -1048,6 +1091,45 @@ public class ChatService {
                     recipeWorkSessionService.saveRecommendation(userId, sessionId, sanitized);
                     return new ChatDto.Response(sessionId, sanitized, true, false);
                 })
+                .block());
+    }
+
+    private Optional<ChatDto.Response> buildRecipeSubstitutionFollowUp(
+            Long userId,
+            ChatSession chatSession,
+            ChatDto.Request request,
+            SafetyContext safetyContext) {
+        if (chatSession == null) {
+            return Optional.empty();
+        }
+        Optional<RecipeWorkSessionDTO> workSession = recipeWorkSessionService.find(userId, chatSession.getId());
+        if (workSession.isEmpty() || workSession.get().getLastRecommendation() == null
+                || workSession.get().getLastRecommendation().isBlank()) {
+            return Optional.empty();
+        }
+
+        String lastRecommendation = sanitizeRecipeReply(workSession.get().getLastRecommendation());
+        String baseTitle = extractFollowUpRecipeTitle(lastRecommendation);
+        RecipeGenerationRequest generationRequest = buildRecipeGenerationRequest(
+                RecipeGenerationRequest.Mode.SUBSTITUTE,
+                request,
+                baseTitle,
+                List.of(),
+                lastRecommendation + "\n" + request.getMessage(),
+                "previous-recipe",
+                List.of(),
+                safetyContext,
+                lastRecommendation,
+                List.of(request.getMessage()),
+                List.of(),
+                extractIngredientSubstitutions(request.getMessage()));
+
+        return Optional.ofNullable(buildStructuredRecipeResponse(
+                generationRequest,
+                safetyContext,
+                Optional.of(userId),
+                chatSession.getId(),
+                SearchEngine.SearchStatus.SUCCESS)
                 .block());
     }
 
@@ -1204,6 +1286,28 @@ public class ChatService {
                 && !normalized.startsWith("조리법")
                 && !normalized.startsWith("만드는법");
         return asksForMoreDetail && !hasNewFoodName;
+    }
+
+    private boolean isIngredientSubstitutionFollowUp(String message) {
+        if (message == null || message.isBlank()) {
+            return false;
+        }
+        String normalized = message.replaceAll("\\s+", "");
+        boolean substitution = normalized.contains("대신")
+                || normalized.contains("대체")
+                || normalized.contains("바꿔")
+                || normalized.contains("바꾸")
+                || normalized.contains("교체");
+        boolean asksRecipeRevision = normalized.contains("어때")
+                || normalized.contains("가능")
+                || normalized.contains("될까")
+                || normalized.contains("되나")
+                || normalized.contains("써도")
+                || normalized.contains("사용")
+                || normalized.contains("넣어")
+                || normalized.contains("레시피")
+                || normalized.contains("만들");
+        return substitution && asksRecipeRevision;
     }
 
     private boolean isRevisionOrQuestion(String message) {
@@ -1471,7 +1575,7 @@ public class ChatService {
             }
             systemContext.append("========================================\n");
         } catch (Exception e) {
-            log.warn("레시피 DB 컨텍스트 구성 중 오류 발생: {}", e.getMessage());
+            logFailure("RECIPE_DB_CONTEXT_FAILED", e);
         }
     }
 
@@ -1556,7 +1660,7 @@ public class ChatService {
         try {
             return findTrustedRecipes(message);
         } catch (Exception e) {
-            log.warn("레시피 DB 검색 중 오류 발생: {}", e.getMessage());
+            logFailure("RECIPE_DB_SEARCH_FAILED", e);
             return List.of();
         }
     }
@@ -2582,7 +2686,7 @@ public class ChatService {
 
             return recipe;
         } catch (Exception e) {
-            log.error("[RAG Pipeline] Failed to parse recipe from reply", e);
+            logFailure("RECIPE_REPLY_PARSE_EXCEPTION", e);
             return null;
         }
     }

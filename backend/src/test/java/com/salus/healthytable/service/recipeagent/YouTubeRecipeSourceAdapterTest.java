@@ -338,6 +338,34 @@ class YouTubeRecipeSourceAdapterTest {
     }
 
     @Test
+    void youtubeFailureDoesNotPreventVerifiedWebSourceAndNoSourcesDoNotFallback() {
+        RecipeRepository recipes = mock(RecipeRepository.class);
+        when(recipes.findByTitleContaining("김치찌개")).thenReturn(List.of());
+        InternalRecipeSourceDiscoveryAdapter internal = new InternalRecipeSourceDiscoveryAdapter(recipes);
+        StructuredRecipePageAdapter structured = structuredAdapter(Map.of("https://recipes.example.com/kimchi-jjigae", fixture("single-recipe.html")));
+        YouTubeRecipeSourceDiscoveryAdapter failingYoutube = adapter(
+                query -> {
+                    throw new RuntimeException("quota");
+                },
+                ids -> List.of(),
+                resolver(List.of()),
+                structuredAdapter(Map.of()),
+                new DefaultYouTubeTranscriptAdapter(false));
+        CompositeRecipeSourceDiscoveryAdapter composite = new CompositeRecipeSourceDiscoveryAdapter(
+                internal,
+                (queries, maxResults) -> List.of(new WebRecipeSearchResult("김치찌개", "https://recipes.example.com/kimchi-jjigae", "snippet", "recipes.example.com", 1)),
+                structured,
+                new InMemoryRecipeSourceCache(),
+                failingYoutube);
+        ReflectionTestUtils.setField(composite, "webSourceEnabled", true);
+
+        List<RecipeSourceDocument> sources = composite.search(plan("김치찌개", "", List.of("김치찌개 레시피")), UserRecipeContext.empty(1L));
+
+        assertThat(sources).isNotEmpty();
+        assertThat(sources.get(0).content()).contains("김치 200g");
+    }
+
+    @Test
     void youtubeCacheDoesNotStoreUserHealthOrPersonalization() throws Exception {
         InMemoryYouTubeRecipeSourceCache cache = new InMemoryYouTubeRecipeSourceCache();
         YouTubeRecipeSourceCandidate candidate = new YouTubeRecipeSourceCandidate(
@@ -481,6 +509,17 @@ class YouTubeRecipeSourceAdapterTest {
             return "<html><head><script type=\"application/ld+json\">"
                     + objectMapper.writeValueAsString(json)
                     + "</script></head><body></body></html>";
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private String fixture(String name) {
+        try (InputStream inputStream = getClass().getResourceAsStream("/recipe-agent-fixtures/" + name)) {
+            if (inputStream == null) {
+                throw new IllegalArgumentException("missing fixture: " + name);
+            }
+            return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
