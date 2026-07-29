@@ -27,23 +27,27 @@ public class PaymentTxHelper {
 
     @Transactional
     public Payment savePaymentAndUpgradeUser(String impUid, String merchantUid, Integer amount, String status, Long userId) {
-        // 결제 정보 저장 여부 확인 (중복 결제 방지)
+        // 이 메서드만 Transaction으로 묶어 유저 등급 변경과 결제 이력 저장을 한 단위로 처리합니다.
+        // 중간에 저장 실패가 나면 둘 다 rollback되어 "등급만 올라간 결제" 같은 불일치를 막습니다.
         if (paymentRepository.findByImpUid(impUid).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 처리된 결제입니다.");
         }
 
+        // 사전 중복 조회는 사용자에게 빠르게 409를 돌려주기 위한 방어선입니다.
+        // 동시에 두 요청이 들어오는 상황은 DB unique 제약에서 한 번 더 막아야 안전합니다.
         if (paymentRepository.findByMerchantUid(merchantUid).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 처리된 결제입니다.");
         }
 
-        // User 조회 및 등급 업그레이드
+        // 결제 검증은 끝났지만, 실제로 업그레이드할 User가 존재하는지는 DB 기준으로 다시 확인합니다.
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
 
         user.setGrade(UserGrade.PLUS);
         userRepository.save(user);
 
-        // Payment 생성 및 저장
+        // 결제 시각은 클라이언트 시간이 아니라 서버 Clock을 기준으로 저장합니다.
+        // 그래야 테스트에서는 고정 시간이 가능하고 운영에서는 서버 시간대 정책을 따릅니다.
         Payment payment = Payment.builder()
                 .impUid(impUid)
                 .merchantUid(merchantUid)

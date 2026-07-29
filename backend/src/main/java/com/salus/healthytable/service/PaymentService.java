@@ -55,17 +55,20 @@ public class PaymentService {
         String normalizedImpUid = normalizePaymentIdentifier(impUid, "결제 고유번호");
         String normalizedMerchantUid = normalizePaymentIdentifier(requestedMerchantUid, "주문번호");
 
-        // 1. 포트원 API 액세스 토큰 발급
+        // Portone 같은 외부 API 호출은 네트워크 지연이나 장애가 생길 수 있습니다.
+        // 이 메서드에는 @Transactional을 붙이지 않아 DB Transaction을 잡은 채로 외부 응답을 기다리지 않습니다.
         String accessToken = getIamportAccessToken();
 
-        // 2. impUid로 결제 상세 정보 조회
+        // impUid로 결제 상세 정보를 조회한 뒤, 클라이언트가 보낸 주문번호/금액을 서버에서 다시 검증합니다.
+        // 결제 완료 화면의 값만 믿으면 사용자가 금액이나 merchantUid를 조작해도 알아차리기 어렵습니다.
         Map<String, Object> paymentData = getPaymentData(normalizedImpUid, accessToken);
 
         Integer amount = toInteger(paymentData.get("amount"));
         String status = toStringOrNull(paymentData.get("status"));
         String merchantUid = toStringOrNull(paymentData.get("merchant_uid"));
 
-        // 3. 결제 상태, 주문번호, 금액 위변조 검증
+        // DB에 쓰기 전에 결제 상태, 주문번호, 금액 위변조 여부를 모두 확인합니다.
+        // 검증 실패 거래를 저장하지 않으면 운영자가 이후 결제 이력을 해석하기 쉬워집니다.
         if (!"paid".equals(status)) {
             logPaymentValidationFailure("status_not_paid", userId);
             throw new IllegalArgumentException("결제가 완료되지 않은 거래입니다.");
@@ -84,7 +87,8 @@ public class PaymentService {
             throw new IllegalArgumentException("결제 금액이 일치하지 않습니다. 의심되는 거래입니다.");
         }
 
-        // 4 ~ 6. DB 중복 결제 확인, 유저 업그레이드 및 결제 이력 저장은 트랜잭션 전담 객체로 위임
+        // DB 중복 결제 확인, 유저 업그레이드, 결제 이력 저장만 짧은 Transaction으로 묶습니다.
+        // 같은 클래스 내부 메서드 호출은 Spring Transaction proxy를 거치지 않으므로 전담 Bean에 위임합니다.
         return paymentTxHelper.savePaymentAndUpgradeUser(normalizedImpUid, normalizedMerchantUid, amount, status, userId);
     }
 

@@ -27,7 +27,8 @@ public class PaymentController {
 
         Long userId = authenticatedUserProvider.requireUserId();
 
-        // 결제 정보 검증 및 처리
+        // 결제 성공 여부는 클라이언트 응답만 믿지 않고 서버가 Portone에 다시 확인합니다.
+        // Controller는 인증 사용자와 요청값을 넘기고, 검증/저장 책임은 Service에 둡니다.
         paymentService.verifyAndSavePayment(request.getImpUid(), request.getMerchantUid(), userId);
 
         log.info("Payment verified successfully. userId={}", userId);

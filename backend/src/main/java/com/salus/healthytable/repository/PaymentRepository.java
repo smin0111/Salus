@@ -25,7 +25,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     @Query("UPDATE Payment p SET p.user = null WHERE p.user = :user")
     void anonymizeByUser(@Param("user") User user);
 
-    // 기간별 결제 건수 (status = 'paid')
+    // 결제 상태가 paid인 기간별 결제 건수
     long countByPaidAtBetweenAndStatus(LocalDateTime from, LocalDateTime to, String status);
 
     // 기간별 결제 금액 합계

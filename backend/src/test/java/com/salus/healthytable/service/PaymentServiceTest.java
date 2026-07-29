@@ -52,6 +52,8 @@ class PaymentServiceTest {
         RestTemplate restTemplate = new RestTemplate();
         server = MockRestServiceServer.createServer(restTemplate);
         clock = Clock.fixed(Instant.parse("2026-07-05T15:30:00Z"), ZoneId.of("Asia/Seoul"));
+        // PaymentService는 외부 Portone API 검증, PaymentTxHelper는 DB Transaction 저장을 담당합니다.
+        // 테스트에서도 두 객체를 실제로 연결해 분리된 책임이 함께 동작하는지 확인합니다.
         PaymentTxHelper paymentTxHelper = new PaymentTxHelper(paymentRepository, userRepository, clock);
         paymentService = new PaymentService(paymentRepository, userRepository, restTemplate, clock, paymentTxHelper);
         ReflectionTestUtils.setField(paymentService, "iamportApiKey", "test-key");
@@ -74,6 +76,8 @@ class PaymentServiceTest {
                 {"code":0,"response":{"amount":9900,"status":"paid","merchant_uid":"mid_123"}}
                 """);
 
+        // 정상 결제에서는 외부 검증 결과와 내부 구독 금액이 모두 맞아야 등급 업그레이드와 저장이 진행됩니다.
+        // paidAt은 고정 Clock 기준이라 테스트 실행 시간이 달라도 결과가 흔들리지 않습니다.
         Payment payment = paymentService.verifyAndSavePayment("imp_123", "mid_123", 1L);
 
         assertThat(user.getGrade()).isEqualTo(UserGrade.PLUS);
@@ -231,6 +235,8 @@ class PaymentServiceTest {
                 {"code":0,"response":{"amount":9900,"status":"paid","merchant_uid":"mid_123"}}
                 """);
 
+        // 사전 중복 조회를 통과했더라도 DB unique 제약에서 다시 막힐 수 있습니다.
+        // 이 경우에도 사용자에게는 같은 409 응답을 주고, 결제 식별자는 로그에 남기지 않습니다.
         assertThatThrownBy(() -> paymentService.verifyAndSavePayment("imp_123", "mid_123", 1L))
                 .isInstanceOfSatisfying(ResponseStatusException.class, ex -> {
                     assertThat(ex.getStatusCode().value()).isEqualTo(409);
