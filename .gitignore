@@ -1,6 +1,11 @@
 # Sensitive files - DO NOT COMMIT
 frontend/src/secrets.js
 backend/src/main/resources/application-secret.properties
+*.keystore
+*.jks
+*.p12
+*.pem
+*.key
 backend/scratch_*.py
 backend/scratch_data_importer.py
 backend/scratch_seed_importer.py
@@ -8,6 +13,7 @@ backend/scratch_seed_importer.py
 *.env.local
 .env.*
 !.env.example
+!frontend/ios/.xcode.env
 
 # Node modules
 node_modules/
