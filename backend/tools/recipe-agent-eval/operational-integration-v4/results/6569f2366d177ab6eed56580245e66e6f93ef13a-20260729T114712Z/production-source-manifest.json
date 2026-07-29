@@ -1,0 +1,147 @@
+{
+  "manifestVersion" : "recipe-agent-operational-production-v4",
+  "selectionRules" : [ "all regular Java sources directly under src/main/java/com/salus/healthytable/service/recipeagent", "explicit ChatService, work-session, normalization, DTO, repository/domain boundaries and application.properties" ],
+  "fileCount" : 35,
+  "aggregateSha256" : "5cc72768bf5d2511b5b35e13ea7274f9af63cdf94833edccf76987e8cb8d33c3",
+  "files" : [ {
+    "relativePath" : "src/main/java/com/salus/healthytable/domain/ChatSession.java",
+    "sha256" : "5d0be0dc4b1111c5f6946085e04a13cf48366e367d1cd8d6cb1ad53f764dc581",
+    "sizeBytes" : 835
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/domain/FridgeItem.java",
+    "sha256" : "e9d25057ed7d93c0cdb38d838daabbcd0699db437b69ea9631faf7cbf3a20d3c",
+    "sizeBytes" : 591
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/domain/HealthProfile.java",
+    "sha256" : "003a5640aa67ba5f81029fb25d3bd478814d66ef97a601abebe5f774576d4627",
+    "sizeBytes" : 1208
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/domain/Recipe.java",
+    "sha256" : "0e3b79fdeaac4fd0e875e7238d234066e05388fc85fff44bada97b938a293d7c",
+    "sizeBytes" : 814
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/dto/ChatDto.java",
+    "sha256" : "dfbb7af56ebb173a7bb528204f8830f9be948c9701c810c07adc99bb2d82d4e3",
+    "sizeBytes" : 2506
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/dto/RecipeWorkSessionDTO.java",
+    "sha256" : "df3ffe41eee2980af766396b64e4c83bff0d306de550b0814fb2f103db142c73",
+    "sizeBytes" : 706
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/repository/ChatMessageRepository.java",
+    "sha256" : "a7f6947132793026686b983b812aa5a18c8de88330ed6b40ac55449683842b70",
+    "sizeBytes" : 679
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/repository/ChatSessionRepository.java",
+    "sha256" : "3882c1177a53adaf18eea1d47ab65d2632aa44145034263a0244a6917aee4cfa",
+    "sizeBytes" : 568
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/repository/FridgeItemRepository.java",
+    "sha256" : "38e89f598dcfbbf162dd691c273b372edf215c9cc180e4df1b966a0e2d11ecb7",
+    "sizeBytes" : 515
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/repository/HealthProfileRepository.java",
+    "sha256" : "91a74157d0f8e7062ccfb7bfcc69b5d0116353022e48a8f1d55597be27d49de6",
+    "sizeBytes" : 469
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/repository/RecipeRepository.java",
+    "sha256" : "e0f29802827538d231bd712ecb081f56094a02e9a6ce61eb1b2827c7b12979da",
+    "sizeBytes" : 1335
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/ChatIntentClassifier.java",
+    "sha256" : "634c1c44f58dce2a85ad89fdda59acb12d290b008ed06224ff30fd6272b8e148",
+    "sizeBytes" : 2194
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/ChatService.java",
+    "sha256" : "003948da1964ca74048d913e14fd485d02faa9ffe8cfbf0071121e5ec70a1621",
+    "sizeBytes" : 137120
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/RecipeNormalizer.java",
+    "sha256" : "7ddb5a6824deb558911fcab23c735e7d8c5249d5bb700868319dc0c1f11948be",
+    "sizeBytes" : 2445
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/RecipeWorkSessionService.java",
+    "sha256" : "ad54969e245a9224ec1ee756b616ea4d82340f95e28c1fd83766e542e3ba3e84",
+    "sizeBytes" : 5220
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/CompositeRecipeSourceDiscoveryAdapter.java",
+    "sha256" : "8a647060d70838dc06c0e957e42312bb147e09bdc071fad3e273f760fef0c666",
+    "sizeBytes" : 3902
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/DefaultSafeWebPageFetcher.java",
+    "sha256" : "fa43d4b7bc7979d6aa6b8272cb93327089a107e87ed506997e928f64e5db25a1",
+    "sizeBytes" : 9328
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/MedicationInformationApiAdapters.java",
+    "sha256" : "55f20f2f74dde8c7732ff6e840bb19ab36cf683f02298983a03ee70b1c827172",
+    "sizeBytes" : 79250
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/MedicationInteractionProcessing.java",
+    "sha256" : "291b4fb22562b30981325d05a04d12ea5c649fe2175a0ccd6780a8455ec4cfef",
+    "sizeBytes" : 58398
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/RecipeAgentDomain.java",
+    "sha256" : "f6a637c88b6d55ef59339bafd3218c49b57e93ae0bae89e65f867636c4064d13",
+    "sizeBytes" : 25219
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/RecipeAgentInfrastructure.java",
+    "sha256" : "2ceaa58d2b79655d44b771c54b180c572c5601e12bbc0a979a86406bcc36079e",
+    "sizeBytes" : 13345
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/RecipeAgentMedicationDomain.java",
+    "sha256" : "0550a2c0ec9e8348e36850d36e8edff805363c6dfb49590c5a88c1711dd393e2",
+    "sizeBytes" : 18930
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/RecipeAgentOrchestrator.java",
+    "sha256" : "3018b2a670890f21ac53b15d4b7d5b24be738a4b51b608f1e906ba4e2e20b4f6",
+    "sizeBytes" : 14170
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/RecipeAgentPipeline.java",
+    "sha256" : "da9191c2e311ed8d09328b5ed299fa00920139c8e81daf90d0e2c2f0a85c5c42",
+    "sizeBytes" : 12315
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/RecipeAgentWebDomain.java",
+    "sha256" : "e62cf7715beb578e6c3f13af69343a9e7383523586fc9f2a4b7742e02a698351",
+    "sizeBytes" : 3614
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/RecipeAgentYouTubeDomain.java",
+    "sha256" : "036f86a49f05e5a0a5ea7543cc750265b0af91259d8ced06e06b45f672acb093",
+    "sizeBytes" : 6367
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/RecipePersonalizationPolicies.java",
+    "sha256" : "932000ad2a140099268bb2f19084e2d9978ba3023bd6d8c1b8fef4f68651e1d4",
+    "sizeBytes" : 21401
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/RecipeWebSourceProcessing.java",
+    "sha256" : "b932e6b215b7ae018687254d818a065d9479536080c7f7a28ea1096fc8f36f7c",
+    "sizeBytes" : 19909
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/RepositoryUserRecipeContextLoader.java",
+    "sha256" : "89f470bbbefa9b81eafcfa0cfe1434fa102525eaa496541a0cf16e1267c1538d",
+    "sizeBytes" : 4274
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/SchemaOrgRecipeJsonLdExtractor.java",
+    "sha256" : "ce7895d027c21b3cdfc6f0174d420a616b9dffa125910428e6d82b8811675f25",
+    "sizeBytes" : 14432
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/WebRecipeSearchAdapter.java",
+    "sha256" : "b363b4add0cc39a859215ff78884c3af65bff94f8efa536f252f13ae1c4e9ee1",
+    "sizeBytes" : 2804
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/YouTubeApiClientAdapter.java",
+    "sha256" : "2f9d88d41a8a717d73656cdb1d6d8ff00e826fc674290c2f7497af5a91861db6",
+    "sizeBytes" : 9504
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/YouTubeRecipeSourceDiscoveryAdapter.java",
+    "sha256" : "13f430a89a53189c56ad13ebe48b1319df9feb6285314e1f46f60b35379ecab1",
+    "sizeBytes" : 14984
+  }, {
+    "relativePath" : "src/main/java/com/salus/healthytable/service/recipeagent/YouTubeRecipeSourceProcessing.java",
+    "sha256" : "b827b8cf6b3a229afa9fb29c87799884bc4d9806f9312cfeb5d5a90d918724da",
+    "sizeBytes" : 26909
+  }, {
+    "relativePath" : "src/main/resources/application.properties",
+    "sha256" : "192013d6f6772f5e4d0d4eb281666a73a1c11ba289c3ff09c1fdbb72f8f88cb1",
+    "sizeBytes" : 6093
+  } ]
+}

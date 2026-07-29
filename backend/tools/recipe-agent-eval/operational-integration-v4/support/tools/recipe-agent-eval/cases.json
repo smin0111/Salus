@@ -1,0 +1,1829 @@
+[
+  {
+    "id": "tuna-kimbap-perilla-allergy",
+    "userRequest": "참치김밥 레시피 알려줘.",
+    "context": {
+      "allergies": [
+        "깻잎"
+      ],
+      "fridgeIngredients": [
+        "참치캔",
+        "오이",
+        "계란"
+      ]
+    },
+    "expectedDecisionType": "MODIFY",
+    "expectedConflicts": [
+      "ALLERGY:깻잎"
+    ],
+    "expectedRemovedIngredients": [
+      "깻잎"
+    ],
+    "expectedFridgeItemsUsed": [
+      "오이",
+      "계란"
+    ],
+    "expectedPurchaseItems": [
+      "김밥김",
+      "밥"
+    ],
+    "mustIncludeExplanation": [
+      "일반적인 참치김밥",
+      "깻잎 알레르기",
+      "제외"
+    ],
+    "category": "ALLERGY",
+    "userContext": {
+      "allergies": [
+        "깻잎"
+      ],
+      "fridgeIngredients": [
+        "참치캔",
+        "오이",
+        "계란"
+      ]
+    },
+    "request": "참치김밥 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "MODIFY",
+    "expectedRequiredChanges": [
+      "깻잎"
+    ],
+    "expectedForbiddenIngredients": [
+      "깻잎"
+    ],
+    "expectedRequiredNotices": [
+      "일반적인 참치김밥",
+      "깻잎 알레르기",
+      "제외"
+    ],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "peanut-sauce-bibim-noodle-peanut-allergy",
+    "userRequest": "땅콩소스 비빔면 레시피 알려줘.",
+    "context": {
+      "allergies": [
+        "땅콩"
+      ]
+    },
+    "expectedDecisionType": "BLOCK",
+    "expectedConflicts": [
+      "ALLERGY:땅콩"
+    ],
+    "expectedRemovedIngredients": [],
+    "mustIncludeExplanation": [
+      "땅콩 알레르기",
+      "핵심 재료",
+      "제공하지"
+    ],
+    "category": "ALLERGY",
+    "userContext": {
+      "allergies": [
+        "땅콩"
+      ]
+    },
+    "request": "땅콩소스 비빔면 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "BLOCK",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [
+      "땅콩"
+    ],
+    "expectedRequiredNotices": [
+      "땅콩 알레르기",
+      "핵심 재료",
+      "제공하지"
+    ],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": false
+  },
+  {
+    "id": "banana-brulee-diabetes",
+    "userRequest": "바나나 브륄레 레시피 알려줘.",
+    "context": {
+      "chronicConditions": [
+        "당뇨"
+      ],
+      "healthGoals": [
+        "당류 줄이기"
+      ]
+    },
+    "expectedDecisionType": "RECOMMEND_ALTERNATIVE",
+    "expectedConflicts": [
+      "CHRONIC_CONDITION:추가당"
+    ],
+    "expectedAlternative": "설탕 없는 구운 바나나와 무가당 그릭요거트",
+    "mustIncludeExplanation": [
+      "당뇨",
+      "당류 줄이기",
+      "기본 방식은 우선 추천하지"
+    ],
+    "category": "CHRONIC_CONDITION",
+    "userContext": {
+      "chronicConditions": [
+        "당뇨"
+      ],
+      "healthGoals": [
+        "당류 줄이기"
+      ]
+    },
+    "request": "바나나 브륄레 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "RECOMMEND_ALTERNATIVE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [
+      "당뇨",
+      "당류 줄이기",
+      "기본 방식은 우선 추천하지"
+    ],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "jeyuk-diabetes-allulose-owned",
+    "userRequest": "제육볶음 레시피 알려줘.",
+    "context": {
+      "chronicConditions": [
+        "당뇨"
+      ],
+      "healthGoals": [
+        "당류 줄이기"
+      ],
+      "fridgeIngredients": [
+        "알룰로스"
+      ]
+    },
+    "expectedDecisionType": "MODIFY",
+    "expectedConflicts": [
+      "CHRONIC_CONDITION:추가당"
+    ],
+    "expectedModifications": [
+      "설탕:SUBSTITUTE_OR_REDUCE"
+    ],
+    "expectedFridgeItemsUsedOrSubstitution": [
+      "알룰로스"
+    ],
+    "category": "CHRONIC_CONDITION",
+    "userContext": {
+      "chronicConditions": [
+        "당뇨"
+      ],
+      "healthGoals": [
+        "당류 줄이기"
+      ],
+      "fridgeIngredients": [
+        "알룰로스"
+      ]
+    },
+    "request": "제육볶음 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "MODIFY",
+    "expectedRequiredChanges": [
+      "설탕:SUBSTITUTE_OR_REDUCE"
+    ],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "grapefruit-drink-medication-possible-interaction",
+    "userRequest": "자몽 음료 레시피 알려줘.",
+    "context": {
+      "medications": [
+        "상호작용 확인 필요 약"
+      ]
+    },
+    "expectedDecisionTypeWhenTrustedConflict": "BLOCK",
+    "expectedDecisionTypeWhenUnknown": "ALLOW_WITH_NOTICE",
+    "mustNotGenerateFakeConflictWhenUnknown": true,
+    "category": "SOURCE_DISCOVERY",
+    "userContext": {
+      "medications": [
+        "상호작용 확인 필요 약"
+      ]
+    },
+    "request": "자몽 음료 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "UNKNOWN",
+    "expectedExposable": true
+  },
+  {
+    "id": "fridge-tofu-egg-zucchini-recommendation",
+    "userRequest": "냉장고에 있는 두부, 계란, 애호박으로 만들 수 있는 요리 추천해줘.",
+    "context": {
+      "fridgeIngredients": [
+        "두부",
+        "계란",
+        "애호박"
+      ]
+    },
+    "expectedDecisionType": "ALLOW_WITH_NOTICE",
+    "expectedFridgeItemsUsed": [
+      "두부",
+      "계란",
+      "애호박"
+    ],
+    "expectedPurchaseItems": [],
+    "category": "FRIDGE_ADAPTATION",
+    "userContext": {
+      "fridgeIngredients": [
+        "두부",
+        "계란",
+        "애호박"
+      ]
+    },
+    "request": "냉장고에 있는 두부, 계란, 애호박으로 만들 수 있는 요리 추천해줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "jeyuk-without-onion",
+    "userRequest": "양파 제외하고 제육볶음 레시피 알려줘.",
+    "context": {
+      "explicitlyExcludedIngredients": [
+        "양파"
+      ]
+    },
+    "expectedDecisionType": "MODIFY",
+    "expectedRemovedIngredients": [
+      "양파"
+    ],
+    "mustIncludeExplanation": [
+      "사용자 제외 요청",
+      "양파"
+    ],
+    "category": "EXPLICIT_EXCLUSION",
+    "userContext": {
+      "explicitlyExcludedIngredients": [
+        "양파"
+      ]
+    },
+    "request": "양파 제외하고 제육볶음 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "MODIFY",
+    "expectedRequiredChanges": [
+      "양파"
+    ],
+    "expectedForbiddenIngredients": [
+      "양파"
+    ],
+    "expectedRequiredNotices": [
+      "사용자 제외 요청",
+      "양파"
+    ],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "doenjang-jjigae-low-sodium-goal",
+    "userRequest": "된장찌개 레시피 알려줘.",
+    "context": {
+      "healthGoals": [
+        "저염"
+      ]
+    },
+    "expectedDecisionType": "MODIFY",
+    "expectedConflicts": [
+      "CHRONIC_CONDITION:염분 양념"
+    ],
+    "mustIncludeExplanation": [
+      "저염",
+      "된장",
+      "양을 줄"
+    ],
+    "category": "HEALTH_GOAL",
+    "userContext": {
+      "healthGoals": [
+        "저염"
+      ]
+    },
+    "request": "된장찌개 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "MODIFY",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [
+      "저염",
+      "된장",
+      "양을 줄"
+    ],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "kidney-context-potassium-caution",
+    "userRequest": "시금치 토마토 샐러드 레시피 알려줘.",
+    "context": {
+      "chronicConditions": [
+        "신장질환"
+      ]
+    },
+    "expectedDecisionType": "ALLOW_WITH_NOTICE",
+    "expectedConflicts": [
+      "CHRONIC_CONDITION:고칼륨 가능 재료"
+    ],
+    "mustIncludeExplanation": [
+      "신장질환",
+      "섭취량",
+      "확인"
+    ],
+    "category": "CHRONIC_CONDITION",
+    "userContext": {
+      "chronicConditions": [
+        "신장질환"
+      ]
+    },
+    "request": "시금치 토마토 샐러드 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [
+      "신장질환",
+      "섭취량",
+      "확인"
+    ],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "expiring-tofu-priority",
+    "userRequest": "오늘 냉장고 재료로 저녁 추천해줘.",
+    "context": {
+      "fridgeIngredients": [
+        {
+          "name": "두부",
+          "expirationDate": "2026-07-17"
+        },
+        {
+          "name": "당근",
+          "expirationDate": "2026-08-10"
+        }
+      ]
+    },
+    "expectedDecisionType": "ALLOW_WITH_NOTICE",
+    "expectedExpiringSoonIngredients": [
+      "두부"
+    ],
+    "mustIncludeExplanation": [
+      "유통기한이 가까운",
+      "두부"
+    ],
+    "category": "FRIDGE_ADAPTATION",
+    "userContext": {
+      "fridgeIngredients": [
+        {
+          "name": "두부",
+          "expirationDate": "2026-07-17"
+        },
+        {
+          "name": "당근",
+          "expirationDate": "2026-08-10"
+        }
+      ]
+    },
+    "request": "오늘 냉장고 재료로 저녁 추천해줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [
+      "유통기한이 가까운",
+      "두부"
+    ],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "web-kimchi-jjigae-jsonld",
+    "userRequest": "김치찌개 레시피 알려줘.",
+    "sourceFixture": "single-recipe.html",
+    "expectedFetchSuccess": true,
+    "expectedJsonLdExtracted": true,
+    "expectedDishMatched": true,
+    "expectedFinalUserExposable": true,
+    "mustNotUseSnippetAsRecipeEvidence": true,
+    "category": "SOURCE_VALIDATION",
+    "userContext": {},
+    "request": "김치찌개 레시피 알려줘.",
+    "expectedDecision": "ALLOW",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "WEB_JSON_LD",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "web-creator-kimchi-jjigae-author-match",
+    "userRequest": "Salus Kitchen 김치찌개 레시피 알려줘.",
+    "sourceFixture": "single-recipe.html",
+    "expectedAuthorMatched": true,
+    "expectedDishMatched": true,
+    "expectedFinalUserExposable": true,
+    "category": "SOURCE_VALIDATION",
+    "userContext": {},
+    "request": "Salus Kitchen 김치찌개 레시피 알려줘.",
+    "expectedDecision": "ALLOW",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "WEB_JSON_LD",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "web-creator-kimchi-jjigae-author-mismatch",
+    "userRequest": "백종원 김치찌개 레시피 알려줘.",
+    "sourceFixture": "author-mismatch.html",
+    "expectedAuthorMatched": false,
+    "expectedFinalUserExposable": false,
+    "expectedBlockingReason": "작성자 지정 요청과 출처 author가 일치하지 않습니다.",
+    "category": "SOURCE_VALIDATION",
+    "userContext": {},
+    "request": "백종원 김치찌개 레시피 알려줘.",
+    "expectedDecision": "BLOCK",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "NO_VERIFIED_SOURCE",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": false
+  },
+  {
+    "id": "web-tuna-kimbap-perilla-allergy",
+    "userRequest": "참치김밥 레시피 알려줘.",
+    "sourceFixture": "nested-section.html",
+    "context": {
+      "allergies": [
+        "깻잎"
+      ]
+    },
+    "expectedOriginalContains": [
+      "깻잎"
+    ],
+    "expectedPersonalizedExcludes": [
+      "깻잎"
+    ],
+    "expectedDecisionType": "MODIFY",
+    "category": "ALLERGY",
+    "userContext": {
+      "allergies": [
+        "깻잎"
+      ]
+    },
+    "request": "참치김밥 레시피 알려줘.",
+    "expectedDecision": "MODIFY",
+    "expectedRequiredChanges": [
+      "깻잎"
+    ],
+    "expectedForbiddenIngredients": [
+      "깻잎"
+    ],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "WEB_JSON_LD",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "web-banana-brulee-diabetes",
+    "userRequest": "바나나 브륄레 레시피 알려줘.",
+    "sourceFixture": "banana-brulee-jsonld",
+    "context": {
+      "chronicConditions": [
+        "당뇨"
+      ],
+      "healthGoals": [
+        "당류 줄이기"
+      ]
+    },
+    "expectedHealthPolicyApplied": true,
+    "expectedDecisionType": "RECOMMEND_ALTERNATIVE",
+    "category": "CHRONIC_CONDITION",
+    "userContext": {
+      "chronicConditions": [
+        "당뇨"
+      ],
+      "healthGoals": [
+        "당류 줄이기"
+      ]
+    },
+    "request": "바나나 브륄레 레시피 알려줘.",
+    "expectedDecision": "RECOMMEND_ALTERNATIVE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "WEB_JSON_LD",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "web-tofu-expiring-fridge",
+    "userRequest": "두부 레시피 알려줘.",
+    "sourceFixture": "graph-recipe.html",
+    "context": {
+      "fridgeIngredients": [
+        {
+          "name": "두부",
+          "expirationDate": "2026-07-20"
+        }
+      ]
+    },
+    "expectedFridgeItemsUsed": [
+      "두부"
+    ],
+    "expectedExpiringSoonIngredients": [
+      "두부"
+    ],
+    "category": "FRIDGE_ADAPTATION",
+    "userContext": {
+      "fridgeIngredients": [
+        {
+          "name": "두부",
+          "expirationDate": "2026-07-20"
+        }
+      ]
+    },
+    "request": "두부 레시피 알려줘.",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "WEB_JSON_LD",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "web-no-jsonld-no-fallback",
+    "userRequest": "김치찌개 레시피 알려줘.",
+    "sourceFixture": "no-jsonld.html",
+    "expectedJsonLdExtracted": false,
+    "expectedUnsupportedFallback": false,
+    "expectedFinalUserExposable": false,
+    "category": "NO_VERIFIED_SOURCE",
+    "userContext": {},
+    "request": "김치찌개 레시피 알려줘.",
+    "expectedDecision": "BLOCK",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "NO_VERIFIED_SOURCE",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": false
+  },
+  {
+    "id": "web-ingredients-without-steps",
+    "userRequest": "김치찌개 레시피 알려줘.",
+    "sourceFixture": "ingredients-only-jsonld",
+    "expectedJsonLdExtracted": true,
+    "expectedInstructionCompleteness": false,
+    "expectedFinalUserExposable": false,
+    "category": "SOURCE_VALIDATION",
+    "userContext": {},
+    "request": "김치찌개 레시피 알려줘.",
+    "expectedDecision": "BLOCK",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "WEB_JSON_LD",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": false
+  },
+  {
+    "id": "web-duplicate-identical-recipes",
+    "userRequest": "김치찌개 레시피 알려줘.",
+    "sourceFixtures": [
+      "single-recipe.html",
+      "single-recipe.html"
+    ],
+    "expectedDeduplicated": true,
+    "expectedBaseCandidateCount": 1,
+    "category": "SOURCE_VALIDATION",
+    "userContext": {},
+    "request": "김치찌개 레시피 알려줘.",
+    "sourceFixture": "single-recipe.html",
+    "expectedDecision": "ALLOW",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "WEB_JSON_LD",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "web-conflicting-different-creators",
+    "userRequest": "김치찌개 레시피 알려줘.",
+    "sourceFixtures": [
+      "single-recipe.html",
+      "author-mismatch.html"
+    ],
+    "expectedNotMergedAcrossCreators": true,
+    "expectedBaseCandidateCount": 2,
+    "category": "SOURCE_VALIDATION",
+    "userContext": {},
+    "request": "김치찌개 레시피 알려줘.",
+    "sourceFixture": "single-recipe.html",
+    "expectedDecision": "ALLOW",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "WEB_JSON_LD",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "youtube-official-tuna-kimbap-perilla-allergy",
+    "userRequest": "참치김밥 레시피 알려줘.",
+    "youtubeFixture": "official-channel-complete-description",
+    "context": {
+      "allergies": [
+        "깻잎"
+      ]
+    },
+    "expectedYoutubeSearchSuccess": true,
+    "expectedMetadataSuccess": true,
+    "expectedDescriptionEvidence": "COMPLETE_RECIPE",
+    "expectedDecisionType": "MODIFY",
+    "expectedOriginalContains": [
+      "깻잎"
+    ],
+    "expectedPersonalizedExcludes": [
+      "깻잎"
+    ],
+    "category": "ALLERGY",
+    "userContext": {
+      "allergies": [
+        "깻잎"
+      ]
+    },
+    "request": "참치김밥 레시피 알려줘.",
+    "sourceFixture": "official-channel-complete-description",
+    "expectedDecision": "MODIFY",
+    "expectedRequiredChanges": [
+      "깻잎"
+    ],
+    "expectedForbiddenIngredients": [
+      "깻잎"
+    ],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "YOUTUBE_DESCRIPTION",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "youtube-official-banana-brulee-diabetes",
+    "userRequest": "바나나 브륄레 레시피 알려줘.",
+    "youtubeFixture": "official-channel-banana-brulee",
+    "context": {
+      "chronicConditions": [
+        "당뇨"
+      ],
+      "healthGoals": [
+        "당류 줄이기"
+      ]
+    },
+    "expectedDescriptionEvidence": "COMPLETE_RECIPE",
+    "expectedDecisionType": "RECOMMEND_ALTERNATIVE",
+    "expectedHealthPolicyAppliedByPolicyEngine": true,
+    "category": "CHRONIC_CONDITION",
+    "userContext": {
+      "chronicConditions": [
+        "당뇨"
+      ],
+      "healthGoals": [
+        "당류 줄이기"
+      ]
+    },
+    "request": "바나나 브륄레 레시피 알려줘.",
+    "sourceFixture": "official-channel-banana-brulee",
+    "expectedDecision": "RECOMMEND_ALTERNATIVE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "YOUTUBE_DESCRIPTION",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "youtube-creator-request-channel-id-match",
+    "userRequest": "fixture-creator 참치김밥 레시피 알려줘.",
+    "youtubeFixture": "creator-channel-id-match",
+    "creatorRegistryFixture": {
+      "name": "fixture-creator",
+      "youtubeChannelIds": [
+        "UC_VERIFIED"
+      ]
+    },
+    "expectedCreatorMatchStatus": "VERIFIED_CHANNEL_ID",
+    "expectedCandidateCreated": true,
+    "category": "SOURCE_VALIDATION",
+    "userContext": {},
+    "request": "fixture-creator 참치김밥 레시피 알려줘.",
+    "sourceFixture": "creator-channel-id-match",
+    "expectedDecision": "ALLOW",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "YOUTUBE_DESCRIPTION",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "youtube-creator-request-title-only",
+    "userRequest": "fixture-creator 참치김밥 레시피 알려줘.",
+    "youtubeFixture": "creator-name-in-title-only",
+    "expectedCreatorMatchStatus": "UNVERIFIED",
+    "expectedCandidateCreated": false,
+    "expectedNotClaimedAsOfficialCreatorRecipe": true,
+    "category": "SOURCE_VALIDATION",
+    "userContext": {},
+    "request": "fixture-creator 참치김밥 레시피 알려줘.",
+    "sourceFixture": "creator-name-in-title-only",
+    "expectedDecision": "BLOCK",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "NO_VERIFIED_SOURCE",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": false
+  },
+  {
+    "id": "youtube-creator-request-channel-id-mismatch",
+    "userRequest": "fixture-creator 참치김밥 레시피 알려줘.",
+    "youtubeFixture": "creator-channel-id-mismatch",
+    "creatorRegistryFixture": {
+      "name": "fixture-creator",
+      "youtubeChannelIds": [
+        "UC_VERIFIED"
+      ]
+    },
+    "expectedCreatorMatchStatus": "MISMATCH",
+    "expectedCandidateCreated": false,
+    "category": "SOURCE_VALIDATION",
+    "userContext": {},
+    "request": "fixture-creator 참치김밥 레시피 알려줘.",
+    "sourceFixture": "creator-channel-id-mismatch",
+    "expectedDecision": "BLOCK",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "NO_VERIFIED_SOURCE",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": false
+  },
+  {
+    "id": "youtube-high-view-no-evidence",
+    "userRequest": "인기 있는 참치김밥 레시피 알려줘.",
+    "youtubeFixture": "high-view-metadata-only",
+    "expectedPopularityScorePresent": true,
+    "expectedEvidenceScore": 0,
+    "expectedCandidateCreated": false,
+    "category": "NO_VERIFIED_SOURCE",
+    "userContext": {},
+    "request": "인기 있는 참치김밥 레시피 알려줘.",
+    "sourceFixture": "high-view-metadata-only",
+    "expectedDecision": "BLOCK",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "NO_VERIFIED_SOURCE",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": false
+  },
+  {
+    "id": "youtube-low-view-official-description",
+    "userRequest": "참치김밥 레시피 알려줘.",
+    "youtubeFixture": "low-view-complete-description",
+    "expectedPopularityScoreLow": true,
+    "expectedEvidenceScoreHigh": true,
+    "expectedCandidateCreated": true,
+    "category": "SOURCE_VALIDATION",
+    "userContext": {},
+    "request": "참치김밥 레시피 알려줘.",
+    "sourceFixture": "low-view-complete-description",
+    "expectedDecision": "ALLOW",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "YOUTUBE_DESCRIPTION",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "youtube-official-external-recipe-link",
+    "userRequest": "두부조림 레시피 알려줘.",
+    "youtubeFixture": "description-official-recipe-link",
+    "webSourceFixture": "graph-recipe.html",
+    "expectedExternalLinkVerified": true,
+    "expectedSourceType": "OFFICIAL_WEB",
+    "category": "SOURCE_VALIDATION",
+    "userContext": {},
+    "request": "두부조림 레시피 알려줘.",
+    "sourceFixture": "description-official-recipe-link",
+    "expectedDecision": "ALLOW",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "YOUTUBE_EXTERNAL_RECIPE",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "youtube-shopping-link-only",
+    "userRequest": "두부조림 레시피 알려줘.",
+    "youtubeFixture": "shopping-link-only",
+    "expectedLinkExcluded": true,
+    "expectedCandidateCreated": false,
+    "category": "SOURCE_VALIDATION",
+    "userContext": {},
+    "request": "두부조림 레시피 알려줘.",
+    "sourceFixture": "shopping-link-only",
+    "expectedDecision": "BLOCK",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "NO_VERIFIED_SOURCE",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": false
+  },
+  {
+    "id": "youtube-caption-declared-transcript-disabled",
+    "userRequest": "참치김밥 레시피 알려줘.",
+    "youtubeFixture": "caption-declared-no-description",
+    "expectedCaptionDeclared": true,
+    "expectedTranscriptStatus": "DISABLED",
+    "expectedCandidateCreated": false,
+    "category": "SOURCE_VALIDATION",
+    "userContext": {},
+    "request": "참치김밥 레시피 알려줘.",
+    "sourceFixture": "caption-declared-no-description",
+    "expectedDecision": "BLOCK",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "NO_VERIFIED_SOURCE",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": false
+  },
+  {
+    "id": "youtube-api-failed-web-success",
+    "userRequest": "김치찌개 레시피 알려줘.",
+    "youtubeFixture": "api-failed",
+    "webSourceFixture": "single-recipe.html",
+    "expectedYoutubeStatus": "API_FAILED",
+    "expectedWebSourceStillEvaluated": true,
+    "expectedFinalUserExposable": true,
+    "category": "PARTIAL_SOURCE_FAILURE",
+    "userContext": {},
+    "request": "김치찌개 레시피 알려줘.",
+    "sourceFixture": "api-failed",
+    "expectedDecision": "ALLOW",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "PARTIAL_SOURCE_FAILURE",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "youtube-and-web-no-evidence",
+    "userRequest": "김치찌개 레시피 알려줘.",
+    "youtubeFixture": "metadata-only",
+    "webSourceFixture": "no-jsonld.html",
+    "expectedCandidateCreated": false,
+    "expectedUnsupportedFallback": false,
+    "category": "NO_VERIFIED_SOURCE",
+    "userContext": {},
+    "request": "김치찌개 레시피 알려줘.",
+    "sourceFixture": "metadata-only",
+    "expectedDecision": "BLOCK",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "NO_VERIFIED_SOURCE",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": false
+  },
+  {
+    "id": "youtube-fridge-tofu-video",
+    "userRequest": "냉장고 두부로 만들 수 있는 요리 추천해줘.",
+    "youtubeFixture": "tofu-complete-description",
+    "context": {
+      "fridgeIngredients": [
+        "두부"
+      ]
+    },
+    "expectedFridgeItemsUsed": [
+      "두부"
+    ],
+    "expectedCandidateCreated": true,
+    "category": "FRIDGE_ADAPTATION",
+    "userContext": {
+      "fridgeIngredients": [
+        "두부"
+      ]
+    },
+    "request": "냉장고 두부로 만들 수 있는 요리 추천해줘.",
+    "sourceFixture": "tofu-complete-description",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "YOUTUBE_DESCRIPTION",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "youtube-expiring-ingredient-candidate",
+    "userRequest": "유통기한 임박한 두부를 활용한 레시피 알려줘.",
+    "youtubeFixture": "tofu-complete-description",
+    "context": {
+      "fridgeIngredients": [
+        {
+          "name": "두부",
+          "expirationDate": "2026-07-20"
+        }
+      ]
+    },
+    "expectedSearchUsesExpiringIngredient": true,
+    "expectedExpiringSoonIngredients": [
+      "두부"
+    ],
+    "category": "FRIDGE_ADAPTATION",
+    "userContext": {
+      "fridgeIngredients": [
+        {
+          "name": "두부",
+          "expirationDate": "2026-07-20"
+        }
+      ]
+    },
+    "request": "유통기한 임박한 두부를 활용한 레시피 알려줘.",
+    "sourceFixture": "tofu-complete-description",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "YOUTUBE_DESCRIPTION",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "youtube-same-dish-different-creators",
+    "userRequest": "참치김밥 레시피 알려줘.",
+    "youtubeFixtures": [
+      "creator-a-complete-description",
+      "creator-b-complete-description"
+    ],
+    "expectedNotMergedAcrossCreators": true,
+    "expectedBaseCandidateCount": 2,
+    "category": "SOURCE_VALIDATION",
+    "userContext": {},
+    "request": "참치김밥 레시피 알려줘.",
+    "sourceFixture": "creator-a-complete-description",
+    "expectedDecision": "ALLOW",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "YOUTUBE_DESCRIPTION",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "medication-explicit-avoid-food-label",
+    "userRequest": "자몽 에이드 레시피 알려줘.",
+    "context": {
+      "medications": [
+        "fixture-grapefruit-avoid"
+      ]
+    },
+    "medicationFixture": "explicit-avoid-grapefruit",
+    "expectedMedicationNormalization": true,
+    "expectedInteractionStatus": "CONFIRMED_CONFLICT",
+    "expectedDecisionType": "BLOCK",
+    "expectedMedicationSourceShown": true,
+    "category": "MEDICATION_INTERACTION",
+    "userContext": {
+      "medications": [
+        "fixture-grapefruit-avoid"
+      ]
+    },
+    "request": "자몽 에이드 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "BLOCK",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "CONFIRMED_CONFLICT",
+    "expectedExposable": false
+  },
+  {
+    "id": "medication-limit-food-label",
+    "userRequest": "커피 스무디 레시피 알려줘.",
+    "context": {
+      "medications": [
+        "fixture-caffeine-limit"
+      ]
+    },
+    "medicationFixture": "limit-caffeine",
+    "expectedInteractionStatus": "CAUTION",
+    "expectedDecisionType": "ALLOW_WITH_NOTICE",
+    "category": "MEDICATION_INTERACTION",
+    "userContext": {
+      "medications": [
+        "fixture-caffeine-limit"
+      ]
+    },
+    "request": "커피 스무디 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "CAUTION",
+    "expectedExposable": true
+  },
+  {
+    "id": "medication-separate-timing-condition",
+    "userRequest": "우유 스무디 레시피 알려줘.",
+    "context": {
+      "medications": [
+        "fixture-dairy-separate"
+      ]
+    },
+    "medicationFixture": "separate-dairy",
+    "expectedInteractionStatus": "TIMING_CONDITION",
+    "expectedNoGeneratedDoseSchedule": true,
+    "category": "MEDICATION_INTERACTION",
+    "userContext": {
+      "medications": [
+        "fixture-dairy-separate"
+      ]
+    },
+    "request": "우유 스무디 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "TIMING_CONDITION",
+    "expectedExposable": true
+  },
+  {
+    "id": "medication-take-with-food-condition",
+    "userRequest": "밥과 계란으로 아침 추천해줘.",
+    "context": {
+      "medications": [
+        "fixture-take-with-food"
+      ]
+    },
+    "medicationFixture": "take-with-food",
+    "expectedInteractionStatus": "FOOD_INTAKE_CONDITION",
+    "expectedNoStopMedicationInstruction": true,
+    "category": "MEDICATION_INTERACTION",
+    "userContext": {
+      "medications": [
+        "fixture-take-with-food"
+      ]
+    },
+    "request": "밥과 계란으로 아침 추천해줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "FOOD_INTAKE_CONDITION",
+    "expectedExposable": true
+  },
+  {
+    "id": "medication-domestic-product-exact",
+    "userRequest": "토마토 샐러드 레시피 알려줘.",
+    "context": {
+      "medications": [
+        "국내제품정"
+      ]
+    },
+    "medicationFixture": "mfds-exact-product",
+    "expectedNormalizationStatus": "EXACT_PRODUCT_MATCH",
+    "expectedIngredientIdentified": true,
+    "category": "MEDICATION_INTERACTION",
+    "userContext": {
+      "medications": [
+        "국내제품정"
+      ]
+    },
+    "request": "토마토 샐러드 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "UNKNOWN",
+    "expectedExposable": true
+  },
+  {
+    "id": "medication-english-rxnorm-normalization",
+    "userRequest": "시금치 샐러드 레시피 알려줘.",
+    "context": {
+      "medications": [
+        "warfarin"
+      ]
+    },
+    "medicationFixture": "rxnorm-normalized",
+    "expectedRxNormNormalizationOnly": true,
+    "expectedRxNormNotUsedAsInteractionDatabase": true,
+    "category": "MEDICATION_INTERACTION",
+    "userContext": {
+      "medications": [
+        "warfarin"
+      ]
+    },
+    "request": "시금치 샐러드 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "UNKNOWN",
+    "expectedExposable": true
+  },
+  {
+    "id": "medication-multiple-candidates",
+    "userRequest": "자몽 에이드 레시피 알려줘.",
+    "context": {
+      "medications": [
+        "모호한약"
+      ]
+    },
+    "medicationFixture": "multiple-medication-matches",
+    "expectedInteractionStatus": "MULTIPLE_MEDICATION_MATCHES",
+    "expectedDecisionType": "ALLOW_WITH_NOTICE",
+    "category": "MULTIPLE_MEDICATION_MATCHES",
+    "userContext": {
+      "medications": [
+        "모호한약"
+      ]
+    },
+    "request": "자몽 에이드 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "MULTIPLE_MEDICATION_MATCHES",
+    "expectedExposable": true
+  },
+  {
+    "id": "medication-not-identified",
+    "userRequest": "자몽 에이드 레시피 알려줘.",
+    "context": {
+      "medications": [
+        "식별불가약"
+      ]
+    },
+    "medicationFixture": "medication-not-found",
+    "expectedInteractionStatus": "MEDICATION_NOT_IDENTIFIED",
+    "expectedDecisionType": "ALLOW_WITH_NOTICE",
+    "category": "UNKNOWN_MEDICATION_EVIDENCE",
+    "userContext": {
+      "medications": [
+        "식별불가약"
+      ]
+    },
+    "request": "자몽 에이드 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "MEDICATION_NOT_IDENTIFIED",
+    "expectedExposable": true
+  },
+  {
+    "id": "medication-mfds-failed-openfda-success",
+    "userRequest": "자몽 에이드 레시피 알려줘.",
+    "context": {
+      "medications": [
+        "failed-mfds"
+      ]
+    },
+    "medicationFixture": "mfds-api-failed-openfda-label",
+    "expectedOfficialSourceFallback": "OPENFDA_FALLBACK_NOT_APPLICABLE",
+    "expectedInteractionStatus": "API_FAILED",
+    "supportNote": "MFDS identification failure for an unverified input is not forwarded directly to openFDA. Only a verified English generic/brand or RxCUI may use the existing openFDA label path.",
+    "category": "MEDICATION_INTERACTION",
+    "userContext": {
+      "medications": [
+        "failed-mfds"
+      ]
+    },
+    "request": "자몽 에이드 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "API_FAILED",
+    "expectedExposable": true
+  },
+  {
+    "id": "medication-openfda-failed-mfds-success",
+    "userRequest": "자몽 에이드 레시피 알려줘.",
+    "context": {
+      "medications": [
+        "openfda실패정"
+      ]
+    },
+    "medicationFixture": "openfda-api-failed-mfds-easy-drug",
+    "expectedOfficialSourceFallback": "MFDS_EASY_DRUG",
+    "expectedInteractionStatus": "CONFIRMED_CONFLICT",
+    "category": "MEDICATION_INTERACTION",
+    "userContext": {
+      "medications": [
+        "openfda실패정"
+      ]
+    },
+    "request": "자몽 에이드 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "BLOCK",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "CONFIRMED_CONFLICT",
+    "expectedExposable": false
+  },
+  {
+    "id": "medication-official-source-conflict",
+    "userRequest": "자몽 에이드 레시피 알려줘.",
+    "context": {
+      "medications": [
+        "충돌정"
+      ]
+    },
+    "medicationFixture": "mfds-openfda-conflicting-instructions",
+    "expectedInteractionStatus": "EVIDENCE_CONFLICT",
+    "expectedAutoBlock": false,
+    "category": "MEDICATION_INTERACTION",
+    "userContext": {
+      "medications": [
+        "충돌정"
+      ]
+    },
+    "request": "자몽 에이드 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "EVIDENCE_CONFLICT",
+    "expectedExposable": true
+  },
+  {
+    "id": "medication-label-without-food-info",
+    "userRequest": "김치찌개 레시피 알려줘.",
+    "context": {
+      "medications": [
+        "음식정보없음정"
+      ]
+    },
+    "medicationFixture": "label-no-food-section",
+    "expectedInteractionStatus": "NO_MATCHING_INTERACTION_FOUND",
+    "expectedNotSafeClaim": true,
+    "category": "UNKNOWN_MEDICATION_EVIDENCE",
+    "userContext": {
+      "medications": [
+        "음식정보없음정"
+      ]
+    },
+    "request": "김치찌개 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NO_MATCHING_INTERACTION_FOUND",
+    "expectedExposable": true
+  },
+  {
+    "id": "medication-unrelated-food-only",
+    "userRequest": "토마토 샐러드 레시피 알려줘.",
+    "context": {
+      "medications": [
+        "자몽주의정"
+      ]
+    },
+    "medicationFixture": "explicit-avoid-grapefruit",
+    "expectedInteractionStatus": "NO_MATCHING_INTERACTION_FOUND",
+    "expectedRecipeIngredientMatchingRequired": true,
+    "category": "MEDICATION_INTERACTION",
+    "userContext": {
+      "medications": [
+        "자몽주의정"
+      ]
+    },
+    "request": "토마토 샐러드 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NO_MATCHING_INTERACTION_FOUND",
+    "expectedExposable": true
+  },
+  {
+    "id": "medication-allergy-and-drug-conflict",
+    "userRequest": "자몽 깻잎 샐러드 레시피 알려줘.",
+    "context": {
+      "allergies": [
+        "깻잎"
+      ],
+      "medications": [
+        "자몽주의정"
+      ]
+    },
+    "medicationFixture": "explicit-avoid-grapefruit",
+    "expectedAllergyPriorityPreserved": true,
+    "expectedMedicationConflictPreserved": true,
+    "category": "MEDICATION_INTERACTION",
+    "userContext": {
+      "allergies": [
+        "깻잎"
+      ],
+      "medications": [
+        "자몽주의정"
+      ]
+    },
+    "request": "자몽 깻잎 샐러드 레시피 알려줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "BLOCK",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [
+      "깻잎"
+    ],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "UNKNOWN",
+    "expectedExposable": false
+  },
+  {
+    "id": "medication-fridge-ingredient-conflict",
+    "userRequest": "냉장고 자몽으로 음료 추천해줘.",
+    "context": {
+      "medications": [
+        "자몽주의정"
+      ],
+      "fridgeIngredients": [
+        "자몽"
+      ]
+    },
+    "medicationFixture": "explicit-avoid-grapefruit",
+    "expectedMedicationConflictOverridesFridgeConvenience": true,
+    "category": "MEDICATION_INTERACTION",
+    "userContext": {
+      "medications": [
+        "자몽주의정"
+      ],
+      "fridgeIngredients": [
+        "자몽"
+      ]
+    },
+    "request": "냉장고 자몽으로 음료 추천해줘.",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "BLOCK",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "UNKNOWN",
+    "expectedExposable": false
+  },
+  {
+    "id": "medication-youtube-source-conflict",
+    "userRequest": "유튜브 참치김밥 레시피 알려줘.",
+    "youtubeFixture": "official-channel-complete-description",
+    "context": {
+      "medications": [
+        "비타민K주의정"
+      ]
+    },
+    "medicationFixture": "vitamin-k-caution",
+    "expectedSourceType": "YOUTUBE_DESCRIPTION",
+    "expectedMedicationPolicyApplied": true,
+    "category": "MEDICATION_INTERACTION",
+    "userContext": {
+      "medications": [
+        "비타민K주의정"
+      ]
+    },
+    "request": "유튜브 참치김밥 레시피 알려줘.",
+    "sourceFixture": "official-channel-complete-description",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "YOUTUBE_DESCRIPTION",
+    "expectedMedicationStatus": "UNKNOWN",
+    "expectedExposable": true
+  },
+  {
+    "id": "medication-web-jsonld-source-conflict",
+    "userRequest": "자몽 음료 레시피 알려줘.",
+    "sourceFixture": "single-recipe.html",
+    "context": {
+      "medications": [
+        "자몽주의정"
+      ]
+    },
+    "medicationFixture": "explicit-avoid-grapefruit",
+    "expectedSourceType": "GENERAL_WEB",
+    "expectedMedicationPolicyApplied": true,
+    "category": "MEDICATION_INTERACTION",
+    "userContext": {
+      "medications": [
+        "자몽주의정"
+      ]
+    },
+    "request": "자몽 음료 레시피 알려줘.",
+    "expectedDecision": "BLOCK",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "WEB_JSON_LD",
+    "expectedMedicationStatus": "UNKNOWN",
+    "expectedExposable": false
+  },
+  {
+    "id": "allergy-perilla-fridge-priority",
+    "category": "POLICY_PRIORITY",
+    "request": "참치김밥 레시피 알려줘.",
+    "userRequest": "참치김밥 레시피 알려줘.",
+    "userContext": {
+      "allergies": [
+        "깻잎"
+      ],
+      "fridgeIngredients": [
+        "깻잎",
+        "참치",
+        "오이"
+      ]
+    },
+    "context": {
+      "allergies": [
+        "깻잎"
+      ],
+      "fridgeIngredients": [
+        "깻잎",
+        "참치",
+        "오이"
+      ]
+    },
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "MODIFY",
+    "expectedDecisionType": "MODIFY",
+    "expectedRequiredChanges": [
+      "깻잎"
+    ],
+    "expectedForbiddenIngredients": [
+      "깻잎"
+    ],
+    "expectedRequiredNotices": [
+      "깻잎 알레르기"
+    ],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": true
+  },
+  {
+    "id": "dietary-vegan-tuna-kimbap",
+    "category": "DIETARY_RESTRICTION",
+    "request": "참치김밥 레시피 알려줘.",
+    "userRequest": "참치김밥 레시피 알려줘.",
+    "userContext": {
+      "dietaryRestrictions": [
+        "비건"
+      ]
+    },
+    "context": {
+      "dietaryRestrictions": [
+        "비건"
+      ]
+    },
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "BLOCK",
+    "expectedRequiredChanges": [
+      "동물성 재료"
+    ],
+    "expectedForbiddenIngredients": [
+      "참치",
+      "계란"
+    ],
+    "expectedRequiredNotices": [
+      "식단 제한"
+    ],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedExposable": false
+  },
+  {
+    "id": "policy-priority-allergy-diabetes-unknown-medication",
+    "category": "POLICY_PRIORITY",
+    "request": "참치김밥 레시피 알려줘.",
+    "userRequest": "참치김밥 레시피 알려줘.",
+    "userContext": {
+      "allergies": [
+        "깻잎"
+      ],
+      "chronicConditions": [
+        "당뇨"
+      ],
+      "medications": [
+        "식별불가약"
+      ],
+      "healthGoals": [
+        "당류 줄이기"
+      ],
+      "fridgeIngredients": [
+        "깻잎",
+        "설탕",
+        "오이"
+      ]
+    },
+    "context": {
+      "allergies": [
+        "깻잎"
+      ],
+      "chronicConditions": [
+        "당뇨"
+      ],
+      "medications": [
+        "식별불가약"
+      ],
+      "healthGoals": [
+        "당류 줄이기"
+      ],
+      "fridgeIngredients": [
+        "깻잎",
+        "설탕",
+        "오이"
+      ]
+    },
+    "medicationFixture": "medication-not-found",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "MODIFY",
+    "expectedRequiredChanges": [
+      "깻잎"
+    ],
+    "expectedForbiddenIngredients": [
+      "깻잎"
+    ],
+    "expectedRequiredNotices": [
+      "식별하지 못해",
+      "상호작용이 없다는 의미는 아닙니다"
+    ],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "MEDICATION_NOT_IDENTIFIED",
+    "expectedInteractionStatus": "MEDICATION_NOT_IDENTIFIED",
+    "expectedExposable": true
+  },
+  {
+    "id": "medication-with-or-without-food-neutral",
+    "category": "UNKNOWN_MEDICATION_EVIDENCE",
+    "request": "김치찌개 레시피 알려줘.",
+    "userRequest": "김치찌개 레시피 알려줘.",
+    "userContext": {
+      "medications": [
+        "중립복약정"
+      ]
+    },
+    "context": {
+      "medications": [
+        "중립복약정"
+      ]
+    },
+    "medicationFixture": "with-or-without-food-neutral",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [
+      "상호작용이 없다는 의미는 아닙니다"
+    ],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NO_MATCHING_INTERACTION_FOUND",
+    "expectedInteractionStatus": "NO_MATCHING_INTERACTION_FOUND",
+    "expectedExposable": true
+  },
+  {
+    "id": "context-load-failed-personalization-blocked",
+    "category": "POLICY_PRIORITY",
+    "request": "참치김밥 레시피 알려줘.",
+    "userRequest": "참치김밥 레시피 알려줘.",
+    "userContext": {},
+    "context": {},
+    "contextLoadState": "LOAD_FAILED",
+    "sourceFixture": "internal-fixture",
+    "expectedDecision": "BLOCK",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [
+      "사용자 건강정보와 냉장고 정보를 불러오지 못해"
+    ],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedContextStatus": "CONTEXT_NOT_PROPAGATED",
+    "expectedExposable": false
+  },
+  {
+    "id": "follow-up-remove-onion",
+    "category": "FOLLOW_UP",
+    "request": "양파는 빼줘",
+    "userRequest": "양파는 빼줘",
+    "baseRequest": "제육볶음 레시피 알려줘.",
+    "userContext": {},
+    "context": {},
+    "previousContext": {
+      "explicitlyExcludedIngredients": [
+        "양파"
+      ]
+    },
+    "sourceFixture": "structured-session",
+    "expectedDecision": "MODIFY",
+    "expectedRequiredChanges": [
+      "양파"
+    ],
+    "expectedForbiddenIngredients": [
+      "양파"
+    ],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedContextStatus": "CONTEXT_LOADED",
+    "expectedExposable": true
+  },
+  {
+    "id": "follow-up-more-detail",
+    "category": "FOLLOW_UP",
+    "request": "좀 더 자세히 설명해줘",
+    "userRequest": "좀 더 자세히 설명해줘",
+    "baseRequest": "참치김밥 레시피 알려줘.",
+    "userContext": {},
+    "context": {},
+    "previousContext": {
+      "allergies": [
+        "깻잎"
+      ]
+    },
+    "sourceFixture": "structured-session",
+    "expectedDecision": "MODIFY",
+    "expectedRequiredChanges": [
+      "깻잎"
+    ],
+    "expectedForbiddenIngredients": [
+      "깻잎"
+    ],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedContextStatus": "CONTEXT_LOADED",
+    "expectedExposable": true
+  },
+  {
+    "id": "follow-up-diabetes-adaptation",
+    "category": "FOLLOW_UP",
+    "request": "당뇨에 맞게 다시 바꿔줘",
+    "userRequest": "당뇨에 맞게 다시 바꿔줘",
+    "baseRequest": "바나나 브륄레 레시피 알려줘.",
+    "userContext": {},
+    "context": {},
+    "previousContext": {
+      "chronicConditions": [
+        "당뇨"
+      ],
+      "healthGoals": [
+        "당류 줄이기"
+      ]
+    },
+    "sourceFixture": "structured-session",
+    "expectedDecision": "RECOMMEND_ALTERNATIVE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedContextStatus": "CONTEXT_LOADED",
+    "expectedExposable": true
+  },
+  {
+    "id": "follow-up-use-fridge-tofu",
+    "category": "FOLLOW_UP",
+    "request": "냉장고에 있는 두부를 사용해줘",
+    "userRequest": "냉장고에 있는 두부를 사용해줘",
+    "baseRequest": "두부 레시피 알려줘.",
+    "userContext": {},
+    "context": {},
+    "previousContext": {
+      "fridgeIngredients": [
+        "두부"
+      ]
+    },
+    "sourceFixture": "structured-session",
+    "expectedDecision": "ALLOW_WITH_NOTICE",
+    "expectedRequiredChanges": [],
+    "expectedForbiddenIngredients": [],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedContextStatus": "CONTEXT_LOADED",
+    "expectedExposable": true
+  },
+  {
+    "id": "follow-up-why-excluded",
+    "category": "FOLLOW_UP",
+    "request": "왜 이 재료를 제외했어?",
+    "userRequest": "왜 이 재료를 제외했어?",
+    "baseRequest": "참치김밥 레시피 알려줘.",
+    "userContext": {},
+    "context": {},
+    "previousContext": {
+      "allergies": [
+        "깻잎"
+      ]
+    },
+    "sourceFixture": "structured-session",
+    "expectedDecision": "MODIFY",
+    "expectedRequiredChanges": [
+      "깻잎"
+    ],
+    "expectedForbiddenIngredients": [
+      "깻잎"
+    ],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedContextStatus": "CONTEXT_LOADED",
+    "expectedExposable": true
+  },
+  {
+    "id": "follow-up-show-original",
+    "category": "FOLLOW_UP",
+    "request": "원래 레시피도 보여줘",
+    "userRequest": "원래 레시피도 보여줘",
+    "baseRequest": "참치김밥 레시피 알려줘.",
+    "userContext": {},
+    "context": {},
+    "previousContext": {
+      "allergies": [
+        "깻잎"
+      ]
+    },
+    "sourceFixture": "structured-session",
+    "expectedDecision": "MODIFY",
+    "expectedRequiredChanges": [
+      "깻잎"
+    ],
+    "expectedForbiddenIngredients": [
+      "깻잎"
+    ],
+    "expectedRequiredNotices": [],
+    "expectedSourceStatus": "INTERNAL",
+    "expectedMedicationStatus": "NOT_APPLICABLE",
+    "expectedContextStatus": "CONTEXT_LOADED",
+    "expectedExposable": true
+  }
+]

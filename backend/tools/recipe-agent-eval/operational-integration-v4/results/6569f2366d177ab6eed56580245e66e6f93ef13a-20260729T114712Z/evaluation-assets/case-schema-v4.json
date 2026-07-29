@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Salus Recipe Agent operational evaluation v4 case set",
+  "type": "array",
+  "minItems": 70,
+  "maxItems": 70,
+  "items": {
+    "type": "object",
+    "required": ["id", "category", "expectedOriginalRecipeState", "expectedFollowUpState"],
+    "properties": {
+      "id": {"type": "string", "minLength": 1},
+      "operationalMultiMedicationFollowUp": {"type": "boolean"},
+      "expectedMedicationCount": {"type": "integer", "minimum": 2},
+      "expectedMedicationNamesPreserved": {"const": true},
+      "expectedPartialMedicationFailureVisible": {"const": true},
+      "expectedOverallSafe": {"const": false},
+      "expectedFollowUpSafetyContextPreserved": {"const": true},
+      "expectedNoMedicationStopInstruction": {"const": true},
+      "expectedNoMedicationDoseChangeInstruction": {"const": true},
+      "expectedNoGeneratedDoseSchedule": {"const": true}
+    },
+    "additionalProperties": true
+  }
+}
