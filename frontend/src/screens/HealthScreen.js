@@ -16,6 +16,8 @@ const MAX_PROFILE_ITEM_LENGTH = 80;
 const compactStringList = (values) => {
     if (!Array.isArray(values)) return [];
     const seen = new Set();
+    // 건강 정보는 AI 안전 컨텍스트에 그대로 들어가므로 공백과 중복을 먼저 정리합니다.
+    // 같은 알레르기가 여러 번 들어가면 prompt만 길어지고 중요한 제한 조건이 흐려질 수 있습니다.
     return values
         .map(value => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : ''))
         .filter(Boolean)
@@ -87,12 +89,21 @@ function HealthSectionCard({
     onRemoveItem,
 }) {
     const [draftValue, setDraftValue] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const hoverAnim = React.useRef(new Animated.Value(1)).current;
 
-    const handleAddItem = () => {
-        const added = onAddItem(section.key, draftValue);
-        if (added) {
-            setDraftValue('');
+    const handleAddItem = async () => {
+        if (isSubmitting) {
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            const added = await onAddItem(section.key, draftValue);
+            if (added) {
+                setDraftValue('');
+            }
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -152,10 +163,16 @@ function HealthSectionCard({
                             onSubmitEditing={Platform.OS === 'web' ? undefined : handleAddItem}
                             returnKeyType="done"
                             blurOnSubmit={false}
+                            editable={!isSubmitting}
                         />
                         <TouchableOpacity
-                            style={[styles.addButton, { backgroundColor: section.color }]}
+                            style={[
+                                styles.addButton,
+                                { backgroundColor: section.color },
+                                isSubmitting && styles.addButtonDisabled
+                            ]}
                             onPress={handleAddItem}
+                            disabled={isSubmitting}
                         >
                             <Ionicons name="add" size={20} color="white" />
                         </TouchableOpacity>
@@ -203,6 +220,8 @@ export default function HealthScreen({ healthProfile, setHealthProfile, isSideba
         }
 
         try {
+            // 건강 정보는 사용자 개인 데이터라 항상 JWT와 함께 저장합니다.
+            // 백엔드도 현재 인증 사용자 기준으로 저장하므로 body에 사용자 ID를 보낼 필요가 없습니다.
             await axios.put(
                 `${config.API_BASE_URL}/users/me/health-profile`,
                 normalizeHealthProfile(nextProfile),
@@ -217,7 +236,7 @@ export default function HealthScreen({ healthProfile, setHealthProfile, isSideba
         }
     };
 
-    const handleAddItem = (sectionKey, text) => {
+    const handleAddItem = async (sectionKey, text) => {
         const section = SECTIONS.find(item => item.key === sectionKey);
         const label = section?.title || '건강 정보';
         const normalizedText = typeof text === 'string' ? text.replace(/\s+/g, ' ').trim() : '';
@@ -235,20 +254,26 @@ export default function HealthScreen({ healthProfile, setHealthProfile, isSideba
                 ...healthProfile,
                 [sectionKey]: [...currentItems, normalizedText]
             });
+            const saved = await saveHealthProfile(nextProfile);
+            if (!saved) {
+                return false;
+            }
             setHealthProfile(nextProfile);
-            saveHealthProfile(nextProfile);
             return true;
         }
         return false;
     };
 
-    const handleRemoveItem = (sectionKey, itemToRemove) => {
+    const handleRemoveItem = async (sectionKey, itemToRemove) => {
         const nextProfile = normalizeHealthProfile({
             ...healthProfile,
             [sectionKey]: (healthProfile[sectionKey] || []).filter(item => item !== itemToRemove)
         });
+        const saved = await saveHealthProfile(nextProfile);
+        if (!saved) {
+            return;
+        }
         setHealthProfile(nextProfile);
-        saveHealthProfile(nextProfile);
     };
 
     const renderSection = (section) => {
@@ -545,5 +570,8 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    addButtonDisabled: {
+        opacity: 0.6,
     },
 });

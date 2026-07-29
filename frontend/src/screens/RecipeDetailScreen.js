@@ -14,9 +14,28 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
     const [shareMessage, setShareMessage] = useState('');
     const [sharing, setSharing] = useState(false);
 
-    // Parse ingredients/steps if they are JSON strings (from MySQL)
+    if (!recipe) {
+        return (
+            <View style={styles.container}>
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                        <Ionicons name="arrow-back" size={24} color="white" />
+                    </TouchableOpacity>
+                </View>
+                <View style={styles.emptyDetail}>
+                    <Ionicons name="restaurant-outline" size={32} color={colors.primary} />
+                    <Text style={styles.emptyDetailTitle}>레시피 정보를 불러오지 못했습니다.</Text>
+                </View>
+            </View>
+        );
+    }
+
+    // MySQL에서 JSON 문자열로 내려온 재료와 조리 순서를 화면에서 쓸 배열 형태로 정규화합니다.
     const ingredients = toStringList(recipe.ingredients);
     const steps = toStringList(recipe.steps);
+    const fullText = typeof recipe.fullText === 'string' ? recipe.fullText.trim() : '';
+    const hasStructuredRecipe = ingredients.length > 0 || steps.length > 0;
+    const heroImage = recipe.image || recipe.imageUrl;
     const canShareRecipe = recipe.shareable !== false && Boolean(recipe.id);
 
     const openShareModal = () => {
@@ -67,7 +86,7 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
 
     return (
         <View style={styles.container}>
-            {/* Header */}
+            {/* 상단 영역에는 뒤로가기와 공유 버튼처럼 화면 이동에 필요한 버튼만 둡니다. */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={onBack} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color="white" />
@@ -78,13 +97,19 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                {/* Hero Image */}
-                <Image source={{ uri: recipe.image || recipe.imageUrl }} style={styles.heroImage} />
+                {/* 대표 이미지는 사용자가 어떤 레시피를 보고 있는지 빠르게 인식하게 합니다. */}
+                {heroImage ? (
+                    <Image source={{ uri: heroImage }} style={styles.heroImage} />
+                ) : (
+                    <View style={styles.heroPlaceholder}>
+                        <Ionicons name="restaurant-outline" size={54} color={colors.primary} />
+                    </View>
+                )}
 
-                {/* Title & Stats */}
+                {/* 제목과 요약 지표는 레시피 선택 판단에 가장 먼저 필요한 정보입니다. */}
                 <View style={styles.section}>
-                    <Text style={styles.title}>{recipe.title}</Text>
-                    <Text style={styles.description}>{recipe.description}</Text>
+                    <Text style={styles.title}>{recipe.title || '레시피 상세'}</Text>
+                    {!!recipe.description && <Text style={styles.description}>{recipe.description}</Text>}
 
                     <View style={styles.statsRow}>
                         <View style={styles.stat}>
@@ -102,32 +127,43 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
                     </View>
                 </View>
 
-                {/* Ingredients */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>재료</Text>
-                    {ingredients.map((ing, index) => (
-                        <View key={index} style={styles.listItem}>
-                            <View style={styles.bullet} />
-                            <Text style={styles.listText}>{ing}</Text>
-                        </View>
-                    ))}
-                </View>
-
-                {/* Steps */}
-                <View style={[styles.section, { marginBottom: 40 }]}>
-                    <Text style={styles.sectionTitle}>조리 순서</Text>
-                    {steps.map((step, index) => (
-                        <View key={index} style={styles.stepItem}>
-                            <View style={styles.stepNumber}>
-                                <Text style={styles.stepNumberText}>{index + 1}</Text>
+                {/* 재료 목록은 조리 전에 확인해야 하므로 조리 순서보다 먼저 보여줍니다. */}
+                {ingredients.length > 0 && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>재료</Text>
+                        {ingredients.map((ing, index) => (
+                            <View key={index} style={styles.listItem}>
+                                <View style={styles.bullet} />
+                                <Text style={styles.listText}>{ing}</Text>
                             </View>
-                            <Text style={styles.stepText}>{step}</Text>
-                        </View>
-                    ))}
-                </View>
+                        ))}
+                    </View>
+                )}
+
+                {/* 조리 순서는 번호와 본문을 분리해 긴 문장도 따라가기 쉽게 보여줍니다. */}
+                {steps.length > 0 && (
+                    <View style={[styles.section, { marginBottom: fullText && !hasStructuredRecipe ? 16 : 40 }]}>
+                        <Text style={styles.sectionTitle}>조리 순서</Text>
+                        {steps.map((step, index) => (
+                            <View key={index} style={styles.stepItem}>
+                                <View style={styles.stepNumber}>
+                                    <Text style={styles.stepNumberText}>{index + 1}</Text>
+                                </View>
+                                <Text style={styles.stepText}>{step}</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                {!hasStructuredRecipe && fullText ? (
+                    <View style={[styles.section, { marginBottom: 40 }]}>
+                        <Text style={styles.sectionTitle}>레시피 내용</Text>
+                        <Text style={styles.fullText}>{fullText}</Text>
+                    </View>
+                ) : null}
             </ScrollView>
 
-            {/* Share Modal */}
+            {/* 공유 모달은 로그인된 사용자가 커뮤니티에 올릴 메시지를 입력하는 흐름입니다. */}
             <Modal
                 animationType="slide"
                 transparent={true}
@@ -231,6 +267,28 @@ const styles = StyleSheet.create({
         height: 300,
         resizeMode: 'cover',
     },
+    heroPlaceholder: {
+        width: '100%',
+        height: 220,
+        backgroundColor: '#FFF7ED',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderBottomWidth: 1,
+        borderBottomColor: '#FED7AA',
+    },
+    emptyDetail: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 24,
+    },
+    emptyDetailTitle: {
+        marginTop: 12,
+        fontSize: 16,
+        fontWeight: '700',
+        color: colors.text,
+        textAlign: 'center',
+    },
     section: {
         padding: 24,
         borderBottomWidth: 1,
@@ -287,6 +345,11 @@ const styles = StyleSheet.create({
     listText: {
         fontSize: 15,
         color: colors.text,
+    },
+    fullText: {
+        fontSize: 15,
+        color: colors.text,
+        lineHeight: 23,
     },
     stepItem: {
         flexDirection: 'row',
