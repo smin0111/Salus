@@ -3,10 +3,11 @@ package com.salus.healthytable.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.salus.healthytable.dto.RecipeWorkSessionDTO;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -15,13 +16,24 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
-@RequiredArgsConstructor
 public class RecipeWorkSessionService {
 
     private static final Duration TTL = Duration.ofHours(6);
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final Clock clock;
     private final Map<String, StoredWorkSession> fallbackStore = new ConcurrentHashMap<>();
+
+    @Autowired
+    public RecipeWorkSessionService(StringRedisTemplate redisTemplate, ObjectMapper objectMapper) {
+        this(redisTemplate, objectMapper, Clock.systemDefaultZone());
+    }
+
+    public RecipeWorkSessionService(StringRedisTemplate redisTemplate, ObjectMapper objectMapper, Clock clock) {
+        this.redisTemplate = redisTemplate;
+        this.objectMapper = objectMapper;
+        this.clock = clock == null ? Clock.systemDefaultZone() : clock;
+    }
 
     public Optional<RecipeWorkSessionDTO> find(Long userId, Long chatSessionId) {
         if (userId == null || chatSessionId == null) {
@@ -49,7 +61,20 @@ public class RecipeWorkSessionService {
                         .build());
 
         state.setLastRecommendation(recommendation);
-        state.setUpdatedAt(LocalDateTime.now());
+        state.setUpdatedAt(LocalDateTime.now(clock));
+        save(state);
+        return state;
+    }
+
+    public RecipeWorkSessionDTO saveAgentSession(
+            Long userId,
+            Long chatSessionId,
+            String recommendation,
+            Object agentSession) {
+        RecipeWorkSessionDTO state = saveRecommendation(userId, chatSessionId, recommendation);
+        state.setStatus("RECIPE_AGENT");
+        state.setAgentSession(objectMapper.convertValue(agentSession, Map.class));
+        state.setUpdatedAt(LocalDateTime.now(clock));
         save(state);
         return state;
     }
@@ -64,7 +89,7 @@ public class RecipeWorkSessionService {
 
         state.getModifiers().add(modifier);
         state.setStatus("REVISING");
-        state.setUpdatedAt(LocalDateTime.now());
+        state.setUpdatedAt(LocalDateTime.now(clock));
         save(state);
         return state;
     }
@@ -80,7 +105,7 @@ public class RecipeWorkSessionService {
 
     private void save(RecipeWorkSessionDTO state) {
         String key = key(state.getUserId(), state.getChatSessionId());
-        fallbackStore.put(key, new StoredWorkSession(state, Instant.now().plus(TTL)));
+        fallbackStore.put(key, new StoredWorkSession(copy(state), Instant.now(clock).plus(TTL)));
         try {
             redisTemplate.opsForValue().set(key, objectMapper.writeValueAsString(state), TTL);
         } catch (JsonProcessingException ignored) {
@@ -93,11 +118,15 @@ public class RecipeWorkSessionService {
         if (stored == null) {
             return Optional.empty();
         }
-        if (stored.isExpired()) {
+        if (stored.isExpired(clock)) {
             fallbackStore.remove(key);
             return Optional.empty();
         }
-        return Optional.of(stored.state());
+        return Optional.of(copy(stored.state()));
+    }
+
+    private RecipeWorkSessionDTO copy(RecipeWorkSessionDTO state) {
+        return objectMapper.convertValue(state, RecipeWorkSessionDTO.class);
     }
 
     private String key(Long userId, Long chatSessionId) {
@@ -105,8 +134,8 @@ public class RecipeWorkSessionService {
     }
 
     private record StoredWorkSession(RecipeWorkSessionDTO state, Instant expiresAt) {
-        private boolean isExpired() {
-            return Instant.now().isAfter(expiresAt);
+        private boolean isExpired(Clock clock) {
+            return !Instant.now(clock).isBefore(expiresAt);
         }
     }
 }

@@ -66,6 +66,22 @@ public class RecipeValidator {
     ) {}
 
     public ValidationResult validate(Recipe recipe, String searchContext, String rawResponse) {
+        return validate(recipe, searchContext, rawResponse, null);
+    }
+
+    public ValidationResult validateStructured(
+            Recipe recipe,
+            String searchContext,
+            String rawResponse,
+            GeneratedRecipeDraft structuredDraft) {
+        return validate(recipe, searchContext, rawResponse, structuredDraft);
+    }
+
+    private ValidationResult validate(
+            Recipe recipe,
+            String searchContext,
+            String rawResponse,
+            GeneratedRecipeDraft structuredDraft) {
         List<String> reasons = new ArrayList<>();
 
         if (recipe == null) {
@@ -115,7 +131,11 @@ public class RecipeValidator {
 
         double processScore = calculateProcessScore(evidence.verbGroups(), generated.verbGroups(), dataQualityWarnings);
         double timeScore = calculateTimeScore(evidence.minutes(), recipe.getCookingTime(), reasons);
-        validateInternalRecipeQuality(recipe, ingredientText, stepText, dataQualityWarnings);
+        if (structuredDraft == null) {
+            validateInternalRecipeQuality(recipe, ingredientText, stepText, dataQualityWarnings);
+        } else {
+            validateStructuredRecipeQuality(recipe, structuredDraft, dataQualityWarnings);
+        }
 
         double confidenceScore = round(
                 generatedIngredientScore * 0.45
@@ -219,6 +239,24 @@ public class RecipeValidator {
                         "상단 조리 시간과 조리 순서의 시간 합계가 맞지 않을 수 있습니다. 상단: %d분 / 순서 내 시간 합계: %d분",
                         recipe.getCookingTime(), stepMinuteSum));
             }
+        }
+    }
+
+    private void validateStructuredRecipeQuality(
+            Recipe recipe,
+            GeneratedRecipeDraft structuredDraft,
+            List<String> warnings) {
+        if (recipe.getCookingTime() == null) {
+            return;
+        }
+        int stepMinuteSum = safeSteps(structuredDraft).stream()
+                .filter(step -> step != null && step.minutes() != null && step.minutes() > 0)
+                .mapToInt(GeneratedCookingStep::minutes)
+                .sum();
+        if (stepMinuteSum > Math.round(recipe.getCookingTime() * 1.4)) {
+            warnings.add(String.format(Locale.ROOT,
+                    "상단 조리 시간과 조리 순서의 시간 합계가 맞지 않을 수 있습니다. 상단: %d분 / 순서 내 시간 합계: %d분",
+                    recipe.getCookingTime(), stepMinuteSum));
         }
     }
 
@@ -447,6 +485,10 @@ public class RecipeValidator {
 
     private List<String> safeList(List<String> values) {
         return values == null ? List.of() : values;
+    }
+
+    private List<GeneratedCookingStep> safeSteps(GeneratedRecipeDraft draft) {
+        return draft == null || draft.steps() == null ? List.of() : draft.steps();
     }
 
     private String normalize(String value) {

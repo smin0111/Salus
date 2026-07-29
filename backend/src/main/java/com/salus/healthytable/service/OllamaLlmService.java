@@ -1,5 +1,6 @@
 package com.salus.healthytable.service;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.salus.healthytable.dto.ChatDto;
 import lombok.AllArgsConstructor;
@@ -54,10 +55,12 @@ public class OllamaLlmService implements LlmService {
                 ollamaModel,
                 messages,
                 false,
+                null,
                 Map.of(
                         "temperature", 0.1,
                         "top_p", 0.65,
-                        "num_predict", 700));
+                        "num_predict", 700),
+                null);
 
         log.info("[Ollama] Initiating request to primary instance using model: {}...", ollamaModel);
 
@@ -220,7 +223,14 @@ public class OllamaLlmService implements LlmService {
         private String model;
         private List<OllamaMessage> messages;
         private boolean stream;
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        private Boolean think;
         private Map<String, Object> options;
+        private Object format;
+
+        public OllamaRequest(String model, List<OllamaMessage> messages, boolean stream, Map<String, Object> options, Object format) {
+            this(model, messages, stream, null, options, format);
+        }
     }
 
     @Data
@@ -229,6 +239,11 @@ public class OllamaLlmService implements LlmService {
     public static class OllamaMessage {
         private String role;
         private String content;
+        private String thinking;
+
+        public OllamaMessage(String role, String content) {
+            this(role, content, null);
+        }
     }
 
     @Data

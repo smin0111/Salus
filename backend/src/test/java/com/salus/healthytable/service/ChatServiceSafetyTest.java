@@ -17,6 +17,7 @@ import com.salus.healthytable.repository.HealthProfileRepository;
 import com.salus.healthytable.repository.RecipeRepository;
 import com.salus.healthytable.repository.SearchCacheRepository;
 import com.salus.healthytable.repository.UserRepository;
+import com.salus.healthytable.service.recipeagent.RecipeAgentOrchestrator;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -58,6 +59,11 @@ class ChatServiceSafetyTest {
     private final RecipeValidator recipeValidator = mock(RecipeValidator.class);
     private final SearchCacheRepository searchCacheRepository = mock(SearchCacheRepository.class);
     private final GeneratedRecipeRepository generatedRecipeRepository = mock(GeneratedRecipeRepository.class);
+    private final RecipeGenerationClient recipeGenerationClient = mock(RecipeGenerationClient.class);
+    private final RecipeDraftValidator recipeDraftValidator = new RecipeDraftValidator();
+    private final RecipeDraftMapper recipeDraftMapper = new RecipeDraftMapper();
+    private final RecipeReplyFormatter recipeReplyFormatter = new RecipeReplyFormatter(recipeDraftMapper);
+    private final RecipeAgentOrchestrator recipeAgentOrchestrator = mock(RecipeAgentOrchestrator.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-05T15:30:00Z"), ZoneId.of("Asia/Seoul"));
 
     private final ChatService chatService = new ChatService(
@@ -78,6 +84,11 @@ class ChatServiceSafetyTest {
             recipeValidator,
             searchCacheRepository,
             generatedRecipeRepository,
+            recipeGenerationClient,
+            recipeDraftValidator,
+            recipeDraftMapper,
+            recipeReplyFormatter,
+            recipeAgentOrchestrator,
             clock);
 
     @Test
@@ -213,24 +224,23 @@ class ChatServiceSafetyTest {
                         "https://example.com/watermelon",
                         "수박, 블루베리, 얼음을 넣어 차갑게 섞는 수박화채 레시피입니다.")),
                 "test")));
-        when(llmService.getChatResponse(anyString(), any())).thenReturn(Mono.just("""
-                수박화채 레시피입니다.
-
-                시원하고 달콤한 여름 디저트입니다.
-
-                조리 시간: 10분 / 열량: 80kcal / 난이도: 1
-
-                [재료]
-                - 수박 1/2개
-                - 블루베리 50g
-                - 얼음 适量
-
-                [조리 순서]
-                1. 수박은 껍질을 제거하고 먹기 좋은 크기로 썰어줍니다. 처음엔 센불로 올리고 큰 거품이 올라오면 중약불로 낮추세요. 국물이 너무 졸면 물을 2~3큰술씩 보충하면 됩니다.
-                2. 큰 볼에 수박과 블루베리를 담습니다. 불은 중불부터 시작하고, 타는 냄새가 나면 바로 약불로 낮춘 뒤 바닥을 긁듯이 저어주세요.
-                3. 얼음을 넣고 잘 섞어줍니다. 불은 중불부터 시작하고, 타는 냄새가 나면 바로 약불로 낮춘 뒤 바닥을 긁듯이 저어주세요.
-                """));
-        when(recipeValidator.validate(any(Recipe.class), anyString(), anyString()))
+        when(recipeGenerationClient.generate(any(RecipeGenerationRequest.class))).thenReturn(Mono.just(new GeneratedRecipeDraft(
+                "수박화채",
+                "시원하고 달콤한 여름 디저트입니다.",
+                2,
+                10,
+                80,
+                1,
+                List.of(
+                        new GeneratedIngredient("수박", 0.5, "개", null),
+                        new GeneratedIngredient("블루베리", "50g"),
+                        new GeneratedIngredient("얼음 적당량", null, "약간", null)),
+                List.of(
+                        new GeneratedCookingStep(1, "수박은 껍질을 제거하고 과일 크기는 한입 크기로 썰어줍니다", "무가열", null, "한입 크기", "물기가 많으면 키친타월로 살짝 눌러주세요", List.of("수박")),
+                        new GeneratedCookingStep(2, "큰 볼에 수박과 블루베리를 담습니다", "무가열", null, "고르게 담긴 상태", "과일이 으깨지지 않게 살살 다루세요", List.of("수박", "블루베리")),
+                        new GeneratedCookingStep(3, "얼음을 넣고 가볍게 섞어줍니다", "무가열", null, "차갑게 섞인 상태", "얼음은 먹기 직전에 넣어야 맛이 묽어지지 않습니다", List.of("얼음 적당량"))),
+                List.of())));
+        when(recipeValidator.validateStructured(any(Recipe.class), anyString(), anyString(), any(GeneratedRecipeDraft.class)))
                 .thenReturn(new RecipeValidator.ValidationResult(
                         true,
                         true,

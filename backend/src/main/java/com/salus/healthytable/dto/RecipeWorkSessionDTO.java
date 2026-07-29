@@ -7,7 +7,9 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -19,6 +21,8 @@ public class RecipeWorkSessionDTO {
     private String lastRecommendation;
     @Builder.Default
     private List<String> modifiers = new ArrayList<>();
+    @Builder.Default
+    private Map<String, Object> agentSession = new LinkedHashMap<>();
     private String status;
     private LocalDateTime updatedAt;
 }

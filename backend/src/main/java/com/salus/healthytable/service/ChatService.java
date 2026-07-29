@@ -22,6 +22,7 @@ import com.salus.healthytable.repository.RecipeRepository;
 import com.salus.healthytable.repository.UserRepository;
 import com.salus.healthytable.repository.GeneratedRecipeRepository;
 import com.salus.healthytable.repository.SearchCacheRepository;
+import com.salus.healthytable.service.recipeagent.RecipeAgentOrchestrator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -66,10 +67,17 @@ public class ChatService {
     private final RecipeValidator recipeValidator;
     private final SearchCacheRepository searchCacheRepository;
     private final GeneratedRecipeRepository generatedRecipeRepository;
+    private final RecipeGenerationClient recipeGenerationClient;
+    private final RecipeDraftValidator recipeDraftValidator;
+    private final RecipeDraftMapper recipeDraftMapper;
+    private final RecipeReplyFormatter recipeReplyFormatter;
+    private final RecipeAgentOrchestrator recipeAgentOrchestrator;
     private final Clock clock;
 
     @Value("${rag.negative-cache-days:7}")
     private int negativeCacheDays;
+    @Value("${recipe.agent.enabled:false}")
+    private boolean recipeAgentEnabled;
 
     private static final int MAX_RAG_RECIPE_COUNT = 3;
     private static final int MAX_RECIPE_FIELD_LENGTH = 900;
@@ -119,6 +127,30 @@ public class ChatService {
         boolean isDetailFollowUp = isRecipeDetailFollowUp(request.getMessage());
         boolean isRecipeRequestIntent = (intent == ChatIntentClassifier.ChatIntent.RECIPE_REQUEST) && !isDetailFollowUp;
 
+        ChatSession chatSession = authenticatedUserId
+                .map(userId -> resolveSession(userId, request))
+                .orElse(null);
+        Long authenticatedUserIdValue = authenticatedUserId.orElse(null);
+        Long sessionId = chatSession != null ? chatSession.getId() : null;
+        boolean structuredAgentFollowUp = recipeAgentEnabled
+                && hasStructuredAgentSession(authenticatedUserIdValue, sessionId)
+                && isRecipeAgentFollowUpCandidate(request.getMessage());
+        boolean recipeAgentInitialRequest = recipeAgentEnabled
+                && (isRecipeRequestIntent || intent == ChatIntentClassifier.ChatIntent.MENU_RECOMMENDATION);
+
+        if (structuredAgentFollowUp || recipeAgentInitialRequest) {
+            if (chatSession != null) {
+                saveChatMessage(chatSession, "user", request.getMessage());
+            }
+            return recipeAgentOrchestrator.handle(authenticatedUserIdValue, sessionId, request)
+                    .map(response -> {
+                        if (chatSession != null) {
+                            saveChatMessage(chatSession, "model", response.getReply());
+                        }
+                        return response;
+                    });
+        }
+
         // 2. 입력 정규화 (자연어 질문에서 핵심 요리명만 추출)
         String normalizedTitle = isRecipeRequestIntent ? recipeNormalizer.normalize(request.getMessage()) : "";
 
@@ -128,11 +160,11 @@ public class ChatService {
                 : List.of();
         boolean hasTrustedRecipe = !trustedRecipes.isEmpty();
 
-        ChatSession chatSession = authenticatedUserId
-                .map(userId -> resolveSession(userId, request))
-                .orElse(null);
-
         SafetyContext safetyContext = buildSafetyContext(authenticatedUserId, request);
+        List<FridgeItem> fridgeItemsForGeneration = authenticatedUserId
+                .filter(userId -> isRecipeRequestIntent)
+                .map(fridgeItemRepository::findByUserIdOrderByExpiryDate)
+                .orElse(List.of());
 
         if (isRecipeRequestIntent) {
             Optional<String> allergyBlockedReply = buildAllergyConflictReply(
@@ -387,6 +419,34 @@ public class ChatService {
             final String finalMessage = systemContext.length() > 0 ? request.getMessage() + systemContext : request.getMessage();
             List<ChatDto.Message> history = resolveHistoryForAi(chatSession, request);
 
+            if (isRecipeRequestIntent && !hasTrustedRecipe && !normalizedTitle.isBlank()) {
+                RecipeGenerationRequest generationRequest = buildRecipeGenerationRequest(
+                        RecipeGenerationRequest.Mode.CREATE,
+                        request,
+                        normalizedTitle,
+                        List.of(),
+                        ragData.rawSearchContext(),
+                        ragData.source(),
+                        fridgeItemsForGeneration,
+                        safetyContext,
+                        "",
+                        List.of(),
+                        extractExcludedIngredients(request.getMessage()),
+                        extractIngredientSubstitutions(request.getMessage()));
+                return buildStructuredRecipeResponse(
+                        generationRequest,
+                        safetyContext,
+                        authenticatedUserId,
+                        sessionIdForWork,
+                        ragData.status())
+                        .map(response -> {
+                            if (chatSession != null) {
+                                saveChatMessage(chatSession, "model", response.getReply());
+                            }
+                            return response;
+                        });
+            }
+
             return llmService.getChatResponse(finalMessage, history)
                     .map(reply -> {
                         String responseReply = reply;
@@ -464,6 +524,212 @@ public class ChatService {
                         return response;
                     });
         });
+    }
+
+    private boolean hasStructuredAgentSession(Long userId, Long chatSessionId) {
+        if (userId == null || chatSessionId == null) {
+            return false;
+        }
+        return recipeWorkSessionService.find(userId, chatSessionId)
+                .map(RecipeWorkSessionDTO::getAgentSession)
+                .filter(agentSession -> agentSession != null && !agentSession.isEmpty())
+                .isPresent();
+    }
+
+    private boolean isRecipeAgentFollowUpCandidate(String message) {
+        String normalized = message == null ? "" : message.replaceAll("\\s+", "").toLowerCase();
+        if (normalized.isBlank()) {
+            return false;
+        }
+        return containsTextAny(normalized,
+                "자세", "원래레시피", "원본레시피", "왜", "빼", "제외", "말고",
+                "대신", "대체", "바꿔", "변경", "맞게", "다시", "냉장고", "사용해",
+                "재료", "인분", "조리", "레시피");
+    }
+
+    private Mono<ChatDto.Response> buildStructuredRecipeResponse(
+            RecipeGenerationRequest generationRequest,
+            SafetyContext safetyContext,
+            Optional<Long> authenticatedUserId,
+            Long sessionId,
+            SearchEngine.SearchStatus ragStatus) {
+        return recipeGenerationClient.generate(generationRequest)
+                .flatMap(draft -> validateStructuredDraft(
+                        generationRequest,
+                        draft,
+                        safetyContext,
+                        authenticatedUserId,
+                        ragStatus,
+                        0))
+                .onErrorResume(error -> Mono.just(StructuredRecipeOutcome.failure(List.of(error.getMessage()))))
+                .map(outcome -> toChatResponse(generationRequest, outcome, authenticatedUserId, sessionId, ragStatus));
+    }
+
+    private Mono<StructuredRecipeOutcome> validateStructuredDraft(
+            RecipeGenerationRequest generationRequest,
+            GeneratedRecipeDraft draft,
+            SafetyContext safetyContext,
+            Optional<Long> authenticatedUserId,
+            SearchEngine.SearchStatus ragStatus,
+            int attempt) {
+        Recipe candidate = draft == null ? null : recipeDraftMapper.toRecipe(draft);
+        if (candidate != null) {
+            List<String> allergyConflicts = findAllergyConflicts(
+                    safetyContext,
+                    candidate.getTitle(),
+                    candidate,
+                    generationRequest.userMessage());
+            if (!allergyConflicts.isEmpty()) {
+                return Mono.just(StructuredRecipeOutcome.blocked(
+                        buildAllergyBlockedReply(candidate.getTitle(), allergyConflicts)));
+            }
+        }
+
+        RecipeDraftValidator.ValidationResult draftValidation = recipeDraftValidator.validate(generationRequest, draft);
+        if (draftValidation.blocking()) {
+            String reply = "명시적인 식단 제한과 충돌하는 재료가 있어 레시피를 제공하지 않았습니다.\n\n"
+                    + String.join("\n", draftValidation.reasons());
+            return Mono.just(StructuredRecipeOutcome.blocked(reply));
+        }
+        if (!draftValidation.valid()) {
+            return repairOrFail(generationRequest, draft, draftValidation.reasons(), safetyContext, authenticatedUserId, ragStatus, attempt);
+        }
+
+        List<String> safetyNotes = candidate == null
+                ? List.of()
+                : buildRecipeSafetyNotes(authenticatedUserId, safetyContext, candidate);
+        String reply = recipeReplyFormatter.format(draft, safetyNotes);
+        RecipeValidator.ValidationResult validationResult = recipeValidator.validateStructured(
+                candidate,
+                nullToBlank(generationRequest.searchContext()),
+                reply,
+                draft);
+        saveGeneratedRecipeAudit(
+                generationRequest.requestedTitle(),
+                candidate,
+                nullToBlank(generationRequest.searchContext()),
+                nullToBlank(generationRequest.searchSource()),
+                reply,
+                validationResult);
+
+        if (validationResult.valid()) {
+            return Mono.just(StructuredRecipeOutcome.success(draft, candidate, reply, safetyNotes, validationResult));
+        }
+        if (validationResult.hasForbidden()) {
+            return Mono.just(StructuredRecipeOutcome.failure(validationResult.reasons()));
+        }
+        List<String> reasons = new ArrayList<>(validationResult.reasons());
+        reasons.addAll(validationResult.dataQualityWarnings());
+        return repairOrFail(generationRequest, draft, reasons, safetyContext, authenticatedUserId, ragStatus, attempt);
+    }
+
+    private Mono<StructuredRecipeOutcome> repairOrFail(
+            RecipeGenerationRequest generationRequest,
+            GeneratedRecipeDraft invalidDraft,
+            List<String> reasons,
+            SafetyContext safetyContext,
+            Optional<Long> authenticatedUserId,
+            SearchEngine.SearchStatus ragStatus,
+            int attempt) {
+        if (attempt >= 1) {
+            return Mono.just(StructuredRecipeOutcome.failure(reasons));
+        }
+        return recipeGenerationClient.repair(generationRequest, invalidDraft, reasons)
+                .flatMap(repairedDraft -> validateStructuredDraft(
+                        generationRequest,
+                        repairedDraft,
+                        safetyContext,
+                        authenticatedUserId,
+                        ragStatus,
+                        attempt + 1))
+                .onErrorResume(error -> {
+                    List<String> mergedReasons = new ArrayList<>(reasons == null ? List.of() : reasons);
+                    mergedReasons.add(error.getMessage());
+                    return Mono.just(StructuredRecipeOutcome.failure(mergedReasons));
+                });
+    }
+
+    private ChatDto.Response toChatResponse(
+            RecipeGenerationRequest generationRequest,
+            StructuredRecipeOutcome outcome,
+            Optional<Long> authenticatedUserId,
+            Long sessionId,
+            SearchEngine.SearchStatus ragStatus) {
+        if (outcome.blocked()) {
+            return new ChatDto.Response(sessionId, outcome.reply(), false, false);
+        }
+        if (!outcome.success()) {
+            return new ChatDto.Response(
+                    sessionId,
+                    buildRecipeValidationFailureReply(generationRequest.requestedTitle(), ragStatus),
+                    false,
+                    false);
+        }
+
+        Recipe recipe = outcome.recipe();
+        RecipeValidator.ValidationResult validationResult = outcome.validationResult();
+        if (!validationResult.dataQualityLow()) {
+            saveToRecipeDbSafely(recipe);
+        }
+
+        authenticatedUserId.ifPresent(userId -> {
+            if (sessionId != null) {
+                recipeWorkSessionService.saveRecommendation(userId, sessionId, outcome.reply());
+            }
+        });
+
+        ChatDto.Response response = new ChatDto.Response(sessionId, outcome.reply(), authenticatedUserId.isPresent(), false);
+        response.setRecipe(buildRecipeCard(recipe, outcome.safetyNotes()));
+        return response;
+    }
+
+    private RecipeGenerationRequest buildRecipeGenerationRequest(
+            RecipeGenerationRequest.Mode mode,
+            ChatDto.Request request,
+            String requestedTitle,
+            List<Recipe> trustedRecipes,
+            String searchContext,
+            String searchSource,
+            List<FridgeItem> fridgeItems,
+            SafetyContext safetyContext,
+            String previousRecipeText,
+            List<String> modifiers,
+            List<String> excludedIngredients,
+            List<RecipeGenerationRequest.IngredientSubstitution> substitutions) {
+        return new RecipeGenerationRequest(
+                mode,
+                request.getMessage(),
+                requestedTitle,
+                trustedRecipes == null ? List.of() : trustedRecipes,
+                searchContext,
+                searchSource,
+                formatFridgeItems(fridgeItems),
+                toSafetyConditions(safetyContext),
+                previousRecipeText,
+                modifiers == null ? List.of() : modifiers,
+                excludedIngredients == null ? List.of() : excludedIngredients,
+                substitutions == null ? List.of() : substitutions);
+    }
+
+    private List<String> formatFridgeItems(List<FridgeItem> fridgeItems) {
+        if (fridgeItems == null || fridgeItems.isEmpty()) {
+            return List.of();
+        }
+        return fridgeItems.stream()
+                .map(item -> item.getName() + " " + nullToBlank(item.getQuantity()))
+                .toList();
+    }
+
+    private RecipeGenerationRequest.SafetyConditions toSafetyConditions(SafetyContext safetyContext) {
+        if (safetyContext == null) {
+            return new RecipeGenerationRequest.SafetyConditions(List.of(), List.of(), List.of(), List.of(), List.of());
+        }
+        return new RecipeGenerationRequest.SafetyConditions(
+                safetyContext.allergies(),
+                safetyContext.chronicConditions(),
+                safetyContext.dietaryRestrictions(),
+                safetyContext.medications(),
+                safetyContext.goals());
     }
 
     public List<ChatDto.Message> resolveHistoryForAi(ChatSession session, ChatDto.Request request) {
@@ -1729,6 +1995,31 @@ public class ChatService {
         return new ArrayList<>(ingredients);
     }
 
+    private List<RecipeGenerationRequest.IngredientSubstitution> extractIngredientSubstitutions(String message) {
+        if (message == null || message.isBlank()) {
+            return List.of();
+        }
+        String normalized = message.replaceAll("[,，.?!]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        List<RecipeGenerationRequest.IngredientSubstitution> substitutions = new ArrayList<>();
+        List<java.util.regex.Pattern> patterns = List.of(
+                java.util.regex.Pattern.compile("([^\\s]+?)(?:을|를|은|는)?\\s*대신\\s*([^\\s]+)"),
+                java.util.regex.Pattern.compile("([^\\s]+?)(?:을|를|은|는)?\\s*대체(?:해서|로)?\\s*([^\\s]+)")
+        );
+        for (java.util.regex.Pattern pattern : patterns) {
+            java.util.regex.Matcher matcher = pattern.matcher(normalized);
+            while (matcher.find()) {
+                String from = normalizeExcludedIngredientName(matcher.group(1));
+                String to = normalizeExcludedIngredientName(matcher.group(2));
+                if (isLikelyIngredientName(from) && isLikelyIngredientName(to)) {
+                    substitutions.add(new RecipeGenerationRequest.IngredientSubstitution(from, to));
+                }
+            }
+        }
+        return substitutions;
+    }
+
     private String normalizeExcludedIngredientName(String ingredient) {
         if (ingredient == null) {
             return "";
@@ -2152,6 +2443,35 @@ public class ChatService {
     }
 
     private record RAGData(SearchEngine.SearchStatus status, String systemContextSnippet, String rawSearchContext, String source) {
+    }
+
+    private record StructuredRecipeOutcome(
+            boolean success,
+            boolean blocked,
+            String reply,
+            GeneratedRecipeDraft draft,
+            Recipe recipe,
+            List<String> safetyNotes,
+            RecipeValidator.ValidationResult validationResult,
+            List<String> reasons) {
+
+        private static StructuredRecipeOutcome success(
+                GeneratedRecipeDraft draft,
+                Recipe recipe,
+                String reply,
+                List<String> safetyNotes,
+                RecipeValidator.ValidationResult validationResult) {
+            return new StructuredRecipeOutcome(true, false, reply, draft, recipe, safetyNotes, validationResult, List.of());
+        }
+
+        private static StructuredRecipeOutcome blocked(String reply) {
+            return new StructuredRecipeOutcome(false, true, reply, null, null, List.of(), null, List.of());
+        }
+
+        private static StructuredRecipeOutcome failure(List<String> reasons) {
+            return new StructuredRecipeOutcome(false, false, "", null, null, List.of(), null,
+                    reasons == null ? List.of() : List.copyOf(reasons));
+        }
     }
 
     private Recipe parseRecipeFromReply(String title, String reply) {
