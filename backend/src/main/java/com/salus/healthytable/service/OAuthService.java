@@ -44,6 +44,8 @@ public class OAuthService {
 
     @SuppressWarnings("unchecked")
     public Map<String, Object> exchangeNaverCode(String code, String state, String redirectUri) {
+        requireNaverClientConfig();
+
         return webClientBuilder.build()
                 .get()
                 .uri(uriBuilder -> uriBuilder
@@ -54,7 +56,8 @@ public class OAuthService {
                         .queryParam("client_id", naverClientId)
                         .queryParam("client_secret", naverClientSecret)
                         .queryParam("code", code)
-                        .queryParam("state", state)
+                        .queryParamIfPresent("state", optionalQueryValue(state))
+                        .queryParamIfPresent("redirect_uri", optionalQueryValue(redirectUri))
                         .build())
                 .retrieve()
                 .bodyToMono(Map.class)
@@ -70,5 +73,19 @@ public class OAuthService {
                 .retrieve()
                 .bodyToMono(Map.class)
                 .block();
+    }
+
+    private void requireNaverClientConfig() {
+        if (!hasText(naverClientId) || !hasText(naverClientSecret)) {
+            throw new IllegalStateException("Naver OAuth 설정이 누락되었습니다.");
+        }
+    }
+
+    private java.util.Optional<String> optionalQueryValue(String value) {
+        return hasText(value) ? java.util.Optional.of(value.trim()) : java.util.Optional.empty();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }

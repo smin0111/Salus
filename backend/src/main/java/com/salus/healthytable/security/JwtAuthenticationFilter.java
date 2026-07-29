@@ -41,6 +41,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     Optional<Long> parsedUserId = parseUserId(userId);
 
                     if (parsedUserId.isPresent()) {
+                        // JWT 서명이 맞아도 User를 DB에서 다시 확인합니다.
+                        // 탈퇴한 사용자나 role이 바뀐 사용자의 오래된 토큰이 계속 권한을 갖지 않게 하기 위해서입니다.
                         Optional<User> user = userRepository.findById(parsedUserId.get());
 
                         if (user.isPresent()) {
@@ -59,6 +61,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
             }
         } catch (Exception ex) {
+            // 잘못된 토큰 하나 때문에 공개 API까지 500으로 실패하면 장애처럼 보입니다.
+            // 인증 설정이 필요한 엔드포인트는 이후 SecurityConfig에서 401/403으로 정리됩니다.
             logger.warn("JWT authentication was skipped: " + ex.getMessage());
             if (logger.isDebugEnabled()) {
                 logger.debug("JWT authentication failure details", ex);

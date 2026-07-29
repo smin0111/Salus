@@ -8,5 +8,5 @@ public class LoginRequestDTO {
     private String code;
     private String state;
     private String redirectUri;
-    private String provider; // google, kakao, naver
+    private String provider; // 소셜 로그인 provider 값입니다.
 }

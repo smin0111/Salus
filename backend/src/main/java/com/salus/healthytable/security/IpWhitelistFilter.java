@@ -29,6 +29,7 @@ public class IpWhitelistFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
 
         // 관리자 엔드포인트 IP 제한은 운영 환경에 따라 선택적으로 켭니다.
+        // 컨테이너나 프록시 뒤에서는 실제 사용자 IP가 다르게 보일 수 있어 기본값은 꺼 둡니다.
         if (ipWhitelistEnabled && path.startsWith("/api/admin/")) {
             String remoteAddr = request.getRemoteAddr();
 

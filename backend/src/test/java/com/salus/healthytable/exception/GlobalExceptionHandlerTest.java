@@ -24,6 +24,8 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void illegalArgumentReturnsConsistentJsonError() {
+        // 예외 타입이 달라도 status/error/message/path 구조가 유지되는지 확인합니다.
+        // 프론트엔드는 이 공통 구조를 믿고 오류 UI와 사용자 안내 문구를 만들 수 있습니다.
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/community/posts");
 
         ResponseEntity<Map<String, Object>> response = handler.handleIllegalArgumentException(
@@ -98,6 +100,8 @@ class GlobalExceptionHandlerTest {
     void unexpectedExceptionHidesInternalDetails(CapturedOutput output) {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/users/me");
 
+        // 예상치 못한 예외는 사용자에게 내부 메시지를 보여주지 않아야 합니다.
+        // 운영 로그에도 민감한 원문 메시지를 남기지 않는지 함께 검증합니다.
         ResponseEntity<Map<String, Object>> response = handler.handleAllExceptions(
                 new RuntimeException("database password leaked here"),
                 request);

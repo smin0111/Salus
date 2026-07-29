@@ -120,8 +120,8 @@ class AuthControllerTest {
         LoginRequestDTO request = new LoginRequestDTO();
         request.setCode("auth-code");
         request.setState("state");
-        request.setRedirectUri("mychefai://redirect");
-        when(oAuthService.exchangeNaverCode("auth-code", "state", "mychefai://redirect")).thenReturn(Map.of());
+        request.setRedirectUri("salus://redirect");
+        when(oAuthService.exchangeNaverCode("auth-code", "state", "salus://redirect")).thenReturn(Map.of());
 
         ResponseEntity<?> response = controller.loginNaver(request);
 
@@ -130,14 +130,14 @@ class AuthControllerTest {
                 .contains("OAuth login failed. provider=naver, reason=access_token_missing")
                 .doesNotContain("auth-code")
                 .doesNotContain("state")
-                .doesNotContain("mychefai://redirect");
+                .doesNotContain("salus://redirect");
     }
 
     @Test
     void naverLoginWithoutCodeDoesNotCallOAuth(CapturedOutput output) {
         LoginRequestDTO request = new LoginRequestDTO();
         request.setState("state");
-        request.setRedirectUri("mychefai://redirect");
+        request.setRedirectUri("salus://redirect");
 
         ResponseEntity<?> response = controller.loginNaver(request);
 
@@ -145,7 +145,23 @@ class AuthControllerTest {
         assertThat(output.getOut())
                 .contains("OAuth login failed. provider=naver, reason=code_missing")
                 .doesNotContain("state")
-                .doesNotContain("mychefai://redirect");
+                .doesNotContain("salus://redirect");
+        verifyNoInteractions(oAuthService, userRepository, jwtTokenProvider);
+    }
+
+    @Test
+    void naverLoginWithoutStateDoesNotCallOAuth(CapturedOutput output) {
+        LoginRequestDTO request = new LoginRequestDTO();
+        request.setCode("auth-code");
+        request.setRedirectUri("salus://redirect");
+
+        ResponseEntity<?> response = controller.loginNaver(request);
+
+        assertErrorResponse(response, 401, "UNAUTHORIZED", "소셜 로그인 인증에 실패했습니다.", "/api/auth/naver");
+        assertThat(output.getOut())
+                .contains("OAuth login failed. provider=naver, reason=state_missing")
+                .doesNotContain("auth-code")
+                .doesNotContain("salus://redirect");
         verifyNoInteractions(oAuthService, userRepository, jwtTokenProvider);
     }
 

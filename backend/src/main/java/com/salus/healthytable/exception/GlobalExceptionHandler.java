@@ -25,6 +25,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleMethodArgumentNotValidException(
             MethodArgumentNotValidException ex, HttpServletRequest request) {
+        // @Valid DTO 검증 실패는 여기로 모입니다.
+        // Controller마다 다른 응답 모양을 만들지 않게 한 곳에서 표준 JSON 오류로 변환합니다.
         String defaultMessage = ex.getBindingResult().getAllErrors().get(0).getDefaultMessage();
         return apiError(HttpStatus.BAD_REQUEST, "BAD_REQUEST", defaultMessage, request);
     }
@@ -87,6 +89,8 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<Map<String, Object>> apiError(HttpStatusCode statusCode, String error, String message,
             HttpServletRequest request) {
+        // 프론트엔드는 status/error/message/path/requestId가 항상 있다고 가정하고 공통 오류 UI를 만들 수 있습니다.
+        // requestId는 운영 로그와 사용자 제보를 연결하는 단서라 장애 분석 시간을 줄여 줍니다.
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("status", statusCode.value());
         response.put("error", error);

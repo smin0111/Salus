@@ -19,6 +19,8 @@ class ApiSecurityErrorHandlerTest {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/users/me");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
+        // Spring Security 단계의 인증 실패도 JSON으로 내려와야 프론트엔드가 같은 오류 처리 유틸을 쓸 수 있습니다.
+        // HTML 기본 오류 페이지가 내려오면 모바일 앱이나 웹 화면에서 메시지를 안정적으로 보여주기 어렵습니다.
         handler.handleAuthenticationException(request, response, new BadCredentialsException("bad token"));
 
         assertThat(response.getStatus()).isEqualTo(401);
@@ -37,6 +39,8 @@ class ApiSecurityErrorHandlerTest {
         request.setAttribute(RequestIdFilter.REQUEST_ID_ATTRIBUTE, "req-admin-403");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
+        // 403 응답에 requestId가 포함되면 운영자가 관리자 접근 실패 로그를 더 빨리 찾을 수 있습니다.
+        // 인증 실패와 권한 부족을 구분하는지도 함께 확인합니다.
         handler.handleAccessDeniedException(request, response, new AccessDeniedException("not admin"));
 
         assertThat(response.getStatus()).isEqualTo(403);

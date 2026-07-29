@@ -87,9 +87,10 @@ public class AuthController {
     public ResponseEntity<?> loginNaver(@RequestBody LoginRequestDTO request) {
         try {
             String code = requireText(request != null ? request.getCode() : null, "code_missing");
+            String state = requireText(request != null ? request.getState() : null, "state_missing");
             Map<String, Object> tokenResponse = oAuthService.exchangeNaverCode(
                     code,
-                    request != null ? request.getState() : null,
+                    state,
                     request != null ? request.getRedirectUri() : null);
 
             String accessToken = optionalText(tokenResponse != null ? tokenResponse.get("access_token") : null, "");
@@ -140,11 +141,15 @@ public class AuthController {
             User newUser = new User();
             newUser.setEmail(email);
             newUser.setName(name);
+            // 가입 시각도 Clock을 통해 기록하면 테스트에서 시간값을 고정할 수 있습니다.
+            // 운영에서는 app.time-zone 정책과 같은 기준으로 사용자 생성일을 해석할 수 있습니다.
             newUser.setCreatedAt(LocalDateTime.now(clock));
             newUser.setPassword("");
             return userRepository.save(newUser);
         });
 
+        // JWT subject에는 내부 User ID만 넣고, 권한은 요청마다 DB에서 다시 읽습니다.
+        // 이렇게 하면 토큰 payload가 오래되어도 최신 role 기준으로 접근 제어할 수 있습니다.
         String token = jwtTokenProvider.createToken(String.valueOf(user.getId()));
 
         return ResponseEntity.ok(Map.of(

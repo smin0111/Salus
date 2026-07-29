@@ -122,6 +122,26 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void tokenForDeletedUserDoesNotAuthenticateUser() throws Exception {
+        JwtTokenProvider tokenProvider = mock(JwtTokenProvider.class);
+        UserRepository userRepository = mock(UserRepository.class);
+        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(tokenProvider, userRepository);
+
+        when(tokenProvider.validateToken("valid-token")).thenReturn(true);
+        when(tokenProvider.getUserId("valid-token")).thenReturn("7");
+        when(userRepository.findById(7L)).thenReturn(Optional.empty());
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer valid-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(userRepository).findById(7L);
+    }
+
+    @Test
     void invalidTokenDoesNotAuthenticateUser() throws Exception {
         JwtTokenProvider tokenProvider = mock(JwtTokenProvider.class);
         UserRepository userRepository = mock(UserRepository.class);
