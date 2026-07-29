@@ -12,7 +12,7 @@ public interface RecipeShareRepository extends JpaRepository<RecipeShare, Long> 
     // 최신순으로 공유된 레시피 조회
     List<RecipeShare> findAllByOrderByCreatedAtDesc();
 
-    // Public으로 공유된 레시피만 조회
+    // 공개 상태로 공유된 레시피만 조회
     List<RecipeShare> findByVisibilityOrderByCreatedAtDesc(String visibility);
 
     // 특정 사용자가 공유한 레시피 조회

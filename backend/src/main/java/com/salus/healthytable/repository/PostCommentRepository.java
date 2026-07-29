@@ -11,13 +11,13 @@ import java.util.List;
 @Repository
 public interface PostCommentRepository extends JpaRepository<PostComment, Long> {
 
-    // 특정 게시글의 댓글 조회 (작성 시간 오름차순)
+    // 댓글 목록처럼 실제 댓글 내용을 보여줄 때만 Entity 목록을 조회합니다.
     List<PostComment> findByPostIdOrderByCreatedAtAsc(Long postId);
 
-    // 특정 게시글의 댓글 개수
+    // 상세 화면처럼 게시글 1개만 다룰 때 사용하는 단건 댓글 수 집계입니다.
     long countByPostId(Long postId);
 
-    // 특정 사용자가 작성한 댓글 조회
+    // 마이페이지나 사용자 데이터 정리처럼 특정 사용자의 댓글을 다룰 때 사용합니다.
     List<PostComment> findByUserIdOrderByCreatedAtDesc(Long userId);
 
     long countByUserId(Long userId);
@@ -26,6 +26,8 @@ public interface PostCommentRepository extends JpaRepository<PostComment, Long> 
 
     void deleteByPostIdIn(List<Long> postIds);
 
+    // 게시글 목록에서 댓글 수를 붙일 때 countByPostId를 반복하면 N+1 문제가 생깁니다.
+    // IN + GROUP BY 집계로 쿼리 수를 고정해 목록 조회 성능을 예측 가능하게 만듭니다.
     @Query("SELECT c.postId, COUNT(c) FROM PostComment c WHERE c.postId IN :postIds GROUP BY c.postId")
     List<Object[]> countCommentsByPostIds(@Param("postIds") List<Long> postIds);
 }

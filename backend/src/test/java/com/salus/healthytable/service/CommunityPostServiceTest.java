@@ -46,6 +46,8 @@ class CommunityPostServiceTest {
         when(postRepository.findByCreatedAtAfterOrderByCreatedAtDesc(any(LocalDateTime.class)))
                 .thenReturn(List.of());
 
+        // 인기글 기간 계산은 LocalDateTime.now()를 직접 쓰면 테스트 실행 날짜마다 값이 달라집니다.
+        // 고정 Clock을 주입해 daily/weekly/monthly 기준이 운영 시간대 정책대로 계산되는지 확인합니다.
         service.getPopularPosts(null, 10, "daily");
         service.getPopularPosts(null, 10, "weekly");
         service.getPopularPosts(null, 10, "monthly");
@@ -79,6 +81,8 @@ class CommunityPostServiceTest {
         request.setContent("수정 내용");
         when(postRepository.findById(1L)).thenReturn(Optional.of(post));
 
+        // 게시글 수정은 단순 데이터 변경이 아니라 소유자 검증이 핵심입니다.
+        // 이 테스트가 있어야 다른 사용자의 게시글을 수정하는 보안 회귀를 빠르게 잡을 수 있습니다.
         assertThatThrownBy(() -> service.updatePost(1L, 20L, request))
                 .isInstanceOfSatisfying(ResponseStatusException.class, ex -> {
                     assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
@@ -120,6 +124,8 @@ class CommunityPostServiceTest {
 
         service.deletePost(1L, 10L);
 
+        // 현재 구현은 게시글 Entity 삭제만 Service에서 수행합니다.
+        // 댓글/좋아요 정리 정책이 바뀌면 이 테스트가 변경 범위를 다시 생각하게 해 주는 안전장치가 됩니다.
         verify(postRepository).delete(post);
         verifyNoInteractions(likeRepository, commentRepository);
     }

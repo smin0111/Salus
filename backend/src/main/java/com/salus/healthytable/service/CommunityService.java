@@ -26,22 +26,22 @@ public class CommunityService {
         private final Clock clock;
 
         public List<CommunityFeedItemDTO> getPublicFeed() {
-                // 1. Public으로 공유된 레시피 share 가져오기
+                // 공개 상태로 공유된 레시피 목록을 최신순으로 가져옵니다.
                 List<RecipeShare> shares = recipeShareRepository.findByVisibilityOrderByCreatedAtDesc("PUBLIC");
 
-                // 2. 필요한 Recipe와 User ID 추출
+                // 화면 조립에 필요한 Recipe ID와 User ID만 먼저 모읍니다.
                 List<Long> recipeIds = shares.stream().map(RecipeShare::getRecipeId).distinct()
                                 .collect(Collectors.toList());
                 List<Long> userIds = shares.stream().map(RecipeShare::getUserId).distinct()
                                 .collect(Collectors.toList());
 
-                // 3. Batch 조회 (N+1 방지)
+                // 관련 Recipe와 User를 한 번에 조회해 공유 글마다 DB를 다시 조회하는 N+1 문제를 막습니다.
                 Map<Long, Recipe> recipeMap = recipeRepository.findByIdIn(recipeIds).stream()
                                 .collect(Collectors.toMap(Recipe::getId, r -> r));
                 Map<Long, User> userMap = userRepository.findByIdIn(userIds).stream()
                                 .collect(Collectors.toMap(User::getId, u -> u));
 
-                // 4. DTO 변환
+                // DB Entity를 그대로 노출하지 않고 화면에 필요한 값만 DTO로 변환합니다.
                 return shares.stream()
                                 .map(share -> {
                                         Recipe recipe = recipeMap.get(share.getRecipeId());

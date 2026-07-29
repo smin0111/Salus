@@ -22,7 +22,7 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, Lo
     // 특정 기간 이후 게시글 조회
     List<CommunityPost> findByCreatedAtAfterOrderByCreatedAtDesc(java.time.LocalDateTime date);
 
-    // Batch 조회용
+    // 게시글 목록에서 여러 게시글을 한 번에 다시 조회해야 할 때 사용합니다.
     List<CommunityPost> findByIdIn(List<Long> ids);
 
     // 검색 (제목 또는 내용)

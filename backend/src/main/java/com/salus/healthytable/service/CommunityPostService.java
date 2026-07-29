@@ -53,13 +53,15 @@ public class CommunityPostService {
         } else if ("monthly".equalsIgnoreCase(timeframe)) {
             since = LocalDateTime.now(clock).minusMonths(1);
         } else {
-            // 기본값: 전체 기간 (최근 1년 정도나 전체 최신순)
+            // timeframe이 없으면 기간 필터를 걸지 않습니다.
+            // 인기글의 의미가 바뀌지 않도록 기본 동작은 기존 전체 기간 기준으로 유지합니다.
             return getPopularPosts(currentUserId, limit);
         }
 
         posts = postRepository.findByCreatedAtAfterOrderByCreatedAtDesc(since);
 
-        // 좋아요 수로 정렬
+        // 정렬 전에 convertToDTO에서 좋아요/댓글/작성자 정보를 한 번에 모읍니다.
+        // 여기서 게시글마다 Repository를 다시 호출하면 기간 필터를 적용해도 N+1 문제가 되살아납니다.
         List<CommunityPostDTO> dtos = convertToDTO(posts, currentUserId);
         return dtos.stream()
                 .sorted((a, b) -> Long.compare(b.getLikeCount(), a.getLikeCount()))
@@ -192,7 +194,8 @@ public class CommunityPostService {
                 .map(CommunityPost::getId)
                 .collect(Collectors.toList());
 
-        // 사용자 정보 일괄 조회
+        // 목록 화면에서는 게시글 개수만큼 작성자/좋아요/댓글 정보를 붙여야 합니다.
+        // 각 게시글마다 개별 조회하면 20개 게시글에서 수십 번의 쿼리가 나가므로, 먼저 ID 목록을 모읍니다.
         List<Long> userIds = posts.stream()
                 .map(CommunityPost::getUserId)
                 .distinct()
@@ -200,21 +203,24 @@ public class CommunityPostService {
         Map<Long, User> userMap = userRepository.findByIdIn(userIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
 
-        // 좋아요 수 일괄 조회
+        // 좋아요 수는 IN + GROUP BY로 한 번에 조회합니다.
+        // 이렇게 하면 게시글 수가 늘어도 좋아요 집계 쿼리는 1번으로 고정됩니다.
         Map<Long, Long> likeCountMap = likeRepository.countLikesByPostIds(postIds).stream()
                 .collect(Collectors.toMap(
                         row -> (Long) row[0],
                         row -> (Long) row[1]
                 ));
 
-        // 댓글 수 일괄 조회
+        // 댓글 수도 같은 방식으로 미리 Map에 담아 둡니다.
+        // DTO 조립 단계에서는 DB가 아니라 메모리 Map을 읽기 때문에 응답 시간이 안정적입니다.
         Map<Long, Long> commentCountMap = commentRepository.countCommentsByPostIds(postIds).stream()
                 .collect(Collectors.toMap(
                         row -> (Long) row[0],
                         row -> (Long) row[1]
                 ));
 
-        // 현재 사용자가 좋아요 한 포스트 ID 목록 일괄 조회
+        // 현재 사용자의 좋아요 여부도 게시글별 exists 조회를 반복하지 않습니다.
+        // 로그인하지 않은 공개 조회에서는 빈 Set을 사용해 같은 DTO 변환 흐름을 재사용합니다.
         Set<Long> likedPostIds = currentUserId != null ?
                 new HashSet<>(likeRepository.findLikedPostIdsByPostIdsAndUserId(postIds, currentUserId)) :
                 Collections.emptySet();

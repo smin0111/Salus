@@ -42,6 +42,8 @@ public class CommunityController {
     @PostMapping("/share")
     public ResponseEntity<?> shareRecipe(@Valid @RequestBody RecipeShareRequestDTO request) {
         Long userId = authenticatedUserProvider.requireUserId();
+        // @Valid는 null/길이/패턴처럼 형식 검증을 담당하고, Controller는 인증된 사용자 ID 주입을 담당합니다.
+        // 요청 body의 userId를 그대로 믿으면 다른 사용자 이름으로 공유하는 보안 문제가 생길 수 있습니다.
         String message = request.getMessage() != null ? request.getMessage().trim() : null;
         String visibility = request.getVisibility() == null || request.getVisibility().isBlank() ? "PUBLIC" : request.getVisibility().trim().toUpperCase();
         communityService.shareRecipe(
@@ -119,6 +121,8 @@ public class CommunityController {
     public ResponseEntity<?> createPost(
             @Valid @RequestBody CreatePostRequestDTO request) {
         Long userId = authenticatedUserProvider.requireUserId();
+        // Bean Validation은 "비어 있지 않다"와 "최대 길이"를 보장합니다.
+        // 저장 전 trim과 현재 사용자 ID 덮어쓰기는 데이터 정합성과 보안을 위한 Controller의 마지막 정리입니다.
         request.setTitle(request.getTitle().trim());
         request.setContent(request.getContent().trim());
         request.setUserId(userId);
@@ -213,6 +217,8 @@ public class CommunityController {
     }
 
     private String normalizeRequired(String value, String message, int maxLength, String lengthMessage) {
+        // Map이나 @RequestParam으로 받는 값은 DTO처럼 Bean Validation 대상이 아닙니다.
+        // 그래서 댓글 수정, 검색어처럼 DTO가 없는 입력은 이 작은 수동 검증으로 같은 정책을 맞춥니다.
         String normalized = value == null ? "" : value.trim();
         if (normalized.isEmpty()) {
             throw new IllegalArgumentException(message);

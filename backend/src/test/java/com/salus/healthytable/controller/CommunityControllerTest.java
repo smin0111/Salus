@@ -56,6 +56,8 @@ class CommunityControllerTest {
                 recommendationService,
                 authenticatedUserProvider);
 
+        // 단순 메서드 호출 테스트가 아니라 MockMvc로 Spring MVC 요청 흐름을 태웁니다.
+        // 그래야 @Valid, JSON 변환, ControllerAdvice가 실제 HTTP 요청처럼 동작하는지 검증할 수 있습니다.
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setMessageConverters(
@@ -73,6 +75,8 @@ class CommunityControllerTest {
         request.setContent("본문입니다.");
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
 
+        // 제목 누락은 Service까지 내려가기 전에 Bean Validation에서 400으로 막혀야 합니다.
+        // 이 테스트가 깨지면 Controller 검증 책임이 다시 수동 코드나 Service로 새고 있다는 신호입니다.
         mockMvc.perform(post("/api/community/posts")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
@@ -137,6 +141,8 @@ class CommunityControllerTest {
         RecipeShareRequestDTO request = new RecipeShareRequestDTO();
         request.setMessage("공유합니다");
 
+        // 필수 recipeId가 없을 때 shareRecipe가 호출되지 않는지 함께 확인합니다.
+        // 실패 요청이 비즈니스 로직을 실행하지 않는다는 점이 Controller 검증 테스트의 핵심입니다.
         mockMvc.perform(post("/api/community/share")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
