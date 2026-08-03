@@ -1,6 +1,7 @@
 package com.salus.healthytable.service.recipeagent;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -36,6 +37,7 @@ class DefaultSafeWebPageFetcher implements SafeWebPageFetcher {
     private final int maxResponseBytes;
     private final Duration requestTimeout;
 
+    @Autowired
     DefaultSafeWebPageFetcher(
             @Value("${recipe.agent.web-fetch.max-redirects:3}") int maxRedirects,
             @Value("${recipe.agent.web-fetch.max-response-bytes:1048576}") int maxResponseBytes,

@@ -3,6 +3,7 @@ package com.salus.healthytable.service.recipeagent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
@@ -37,6 +38,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
     private final int maxIngredientPages;
     private final int maxIngredientItems;
 
+    @Autowired
     MfdsDrugProductPermitAdapter(
             WebClient.Builder webClientBuilder,
             ObjectMapper objectMapper,
@@ -1191,6 +1193,7 @@ class OpenFdaDrugLabelAdapter implements OpenFdaDrugLabelPort {
     private final String apiKey;
     private final Duration timeout;
 
+    @Autowired
     OpenFdaDrugLabelAdapter(
             WebClient.Builder webClientBuilder,
             ObjectMapper objectMapper,
