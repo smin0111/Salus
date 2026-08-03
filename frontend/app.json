@@ -47,6 +47,7 @@
       "package": "com.salus.healthytable"
     },
     "web": {
+      "bundler": "metro",
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
