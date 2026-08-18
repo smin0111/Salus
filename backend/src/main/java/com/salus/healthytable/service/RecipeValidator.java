@@ -20,6 +20,9 @@ import java.util.regex.Pattern;
 public class RecipeValidator {
 
     private static final double MIN_CONFIDENCE_SCORE = 0.50;
+    private static final double MIN_GENERATED_INGREDIENT_COVERAGE = 0.65;
+    private static final double MIN_EVIDENCE_COVERAGE = 0.45;
+    private static final double MIN_PROCESS_COVERAGE = 0.40;
     private static final int MIN_EVIDENCE_INGREDIENTS = 1;
 
     private static final List<String> GENERIC_FORBIDDEN_INGREDIENTS = List.of(
@@ -117,6 +120,11 @@ public class RecipeValidator {
         RecipeProfile generated = buildRecipeProfile(recipe, ingredientText, stepText);
         EvidenceProfile evidence = buildEvidenceProfile(context, generated.ingredients());
 
+        boolean titleGrounded = isTitleGrounded(title, context);
+        if (!titleGrounded) {
+            reasons.add("요청 음식명과 생성된 레시피 제목이 검색 근거에서 확인되지 않습니다.");
+        }
+
         if (context.isBlank()) {
             reasons.add("RAG 외부 검색 지식 컨텍스트가 주어지지 않았습니다.");
         }
@@ -142,7 +150,7 @@ public class RecipeValidator {
                 .filter(ingredient -> !evidenceContainsIngredient(context, ingredient))
                 .toList();
         if (!unsupportedIngredients.isEmpty()) {
-            dataQualityWarnings.add("검색 근거 snippet에 직접 등장하지 않는 생성 재료가 있습니다: "
+            reasons.add("검색 근거에 없는 핵심 재료가 생성 결과에 포함되었습니다: "
                     + String.join(", ", unsupportedIngredients));
         }
 
@@ -176,20 +184,28 @@ public class RecipeValidator {
                     confidenceScore, MIN_CONFIDENCE_SCORE));
         }
 
-        boolean contentSufficient = safeList(recipe.getIngredients()).size() >= 3
-                && safeList(recipe.getSteps()).size() >= 3;
+        boolean contentSufficient = structuredDraft == null
+                ? safeList(recipe.getIngredients()).size() >= 3 && safeList(recipe.getSteps()).size() >= 3
+                : !safeList(recipe.getIngredients()).isEmpty() && !safeList(recipe.getSteps()).isEmpty();
         if (!contentSufficient) {
             reasons.add("레시피로 제공하기에는 재료 또는 조리 순서가 부족합니다.");
         }
 
         boolean hasForbidden = hasPolicyViolation;
+        boolean evidenceSufficient = matchedGeneratedIngredients >= MIN_EVIDENCE_INGREDIENTS
+                && generatedIngredientScore >= MIN_GENERATED_INGREDIENT_COVERAGE
+                && evidenceCoverageScore >= MIN_EVIDENCE_COVERAGE
+                && unsupportedIngredients.isEmpty();
+        boolean processSufficient = evidence.verbGroups().isEmpty() || processScore >= MIN_PROCESS_COVERAGE;
         boolean valid = formatValid
                 && !hasForbidden
                 && !context.isBlank()
                 && contentSufficient
-                && (confidenceScore >= MIN_CONFIDENCE_SCORE
-                        || matchedGeneratedIngredients >= MIN_EVIDENCE_INGREDIENTS
-                        || totalGeneratedIngredients >= 4);
+                && titleGrounded
+                && evidenceSufficient
+                && processSufficient
+                && confidenceScore >= MIN_CONFIDENCE_SCORE
+                && reasons.isEmpty();
 
         log.info("[RecipeValidator] Title: {}, Valid: {}, Confidence: {} ({}/{}), EvidenceCoverage: {}/{}, Reasons: {}",
                 recipe.getTitle(), valid, confidenceScore, matchedGeneratedIngredients, totalGeneratedIngredients,
@@ -451,6 +467,23 @@ public class RecipeValidator {
             }
         }
         return false;
+    }
+
+    private boolean isTitleGrounded(String title, String context) {
+        String compactTitle = compact(title);
+        String compactContext = compact(context);
+        if (compactTitle.isBlank() || compactContext.isBlank()) {
+            return false;
+        }
+        if (compactContext.contains(compactTitle)) {
+            return true;
+        }
+        Matcher matcher = Pattern.compile("(?m)^검색어\\s*:\\s*(.+)$").matcher(context);
+        if (!matcher.find()) {
+            return false;
+        }
+        String query = compact(matcher.group(1));
+        return !query.isBlank() && (compactTitle.contains(query) || query.contains(compactTitle));
     }
 
     private boolean containsIngredientMatch(Set<String> candidates, String target) {

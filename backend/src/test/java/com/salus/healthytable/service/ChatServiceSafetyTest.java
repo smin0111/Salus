@@ -10,7 +10,6 @@ import com.salus.healthytable.dto.MealLogDTO;
 import com.salus.healthytable.dto.RecipeWorkSessionDTO;
 import com.salus.healthytable.repository.ChatMessageRepository;
 import com.salus.healthytable.repository.ChatSessionRepository;
-import com.salus.healthytable.repository.FridgeItemRepository;
 import com.salus.healthytable.repository.GeneratedRecipeRepository;
 import com.salus.healthytable.repository.HealthCheckupRepository;
 import com.salus.healthytable.repository.HealthProfileRepository;
@@ -22,6 +21,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -49,7 +49,6 @@ import static org.mockito.Mockito.when;
 class ChatServiceSafetyTest {
 
     private final LlmService llmService = mock(LlmService.class);
-    private final FridgeItemRepository fridgeItemRepository = mock(FridgeItemRepository.class);
     private final HealthProfileRepository healthProfileRepository = mock(HealthProfileRepository.class);
     private final HealthCheckupRepository healthCheckupRepository = mock(HealthCheckupRepository.class);
     private final HealthCheckupAnalysisService healthCheckupAnalysisService = mock(HealthCheckupAnalysisService.class);
@@ -60,6 +59,7 @@ class ChatServiceSafetyTest {
     private final UserRepository userRepository = mock(UserRepository.class);
     private final RecipeRepository recipeRepository = mock(RecipeRepository.class);
     private final SearchEngine searchEngine = mock(SearchEngine.class);
+    private final MfdsRecipeSearchClient mfdsRecipeSearchClient = mock(MfdsRecipeSearchClient.class);
     private final ChatIntentClassifier chatIntentClassifier = mock(ChatIntentClassifier.class);
     private final RecipeNormalizer recipeNormalizer = mock(RecipeNormalizer.class);
     private final RecipeValidator recipeValidator = mock(RecipeValidator.class);
@@ -72,30 +72,66 @@ class ChatServiceSafetyTest {
     private final RecipeAgentOrchestrator recipeAgentOrchestrator = mock(RecipeAgentOrchestrator.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-05T15:30:00Z"), ZoneId.of("Asia/Seoul"));
 
-    private final ChatService chatService = new ChatService(
-            llmService,
-            fridgeItemRepository,
-            healthProfileRepository,
-            healthCheckupRepository,
-            healthCheckupAnalysisService,
-            chatSessionRepository,
-            chatMessageRepository,
-            recipeWorkSessionService,
-            mealLogService,
-            userRepository,
+    private final RecipeResponseSanitizer recipeResponseSanitizer = new RecipeResponseSanitizer();
+    private final ChatRequestParser chatRequestParser = new ChatRequestParser();
+    private final RecipeReplyParser recipeReplyParser = new RecipeReplyParser(recipeResponseSanitizer);
+    private final ChatSessionService chatSessionService = new ChatSessionService(
+            chatSessionRepository, chatMessageRepository);
+    private final ChatSafetyContextService chatSafetyContextService = new ChatSafetyContextService(
+            healthProfileRepository, healthCheckupRepository, healthCheckupAnalysisService);
+    private final GeneratedRecipeLifecycleService generatedRecipeLifecycleService =
+            new GeneratedRecipeLifecycleService(generatedRecipeRepository, recipeRepository, clock);
+    private final RecipeEvidenceService recipeEvidenceService = new RecipeEvidenceService(
             recipeRepository,
-            searchEngine,
-            chatIntentClassifier,
-            recipeNormalizer,
-            recipeValidator,
             searchCacheRepository,
-            generatedRecipeRepository,
+            searchEngine,
+            mfdsRecipeSearchClient,
+            chatRequestParser,
+            recipeResponseSanitizer,
+            clock);
+    private final RecipeGenerationCoordinator recipeGenerationCoordinator = new RecipeGenerationCoordinator(
             recipeGenerationClient,
             recipeDraftValidator,
             recipeDraftMapper,
             recipeReplyFormatter,
-            recipeAgentOrchestrator,
+            recipeValidator,
+            recipeWorkSessionService,
+            chatSafetyContextService,
+            recipeResponseSanitizer,
+            generatedRecipeLifecycleService,
+            chatRequestParser);
+    private final ChatFollowUpService chatFollowUpService = new ChatFollowUpService(
+            llmService,
+            recipeWorkSessionService,
+            mealLogService,
+            userRepository,
+            chatSessionService,
+            recipeGenerationCoordinator,
+            recipeResponseSanitizer,
+            chatRequestParser,
+            recipeReplyParser,
+            chatSafetyContextService,
             clock);
+
+    private final ChatService chatService = new ChatService(
+            llmService,
+            chatSafetyContextService,
+            recipeResponseSanitizer,
+            recipeEvidenceService,
+            recipeGenerationCoordinator,
+            chatFollowUpService,
+            chatSessionService,
+            chatIntentClassifier,
+            recipeNormalizer,
+            recipeAgentOrchestrator);
+
+    @BeforeEach
+    void useWebSearchWhenOfficialRecipeIsUnavailable() {
+        when(mfdsRecipeSearchClient.search(anyString())).thenReturn(Mono.just(new SearchEngine.SearchResponse(
+                SearchEngine.SearchStatus.EMPTY,
+                List.of(),
+                "식품의약품안전처 레시피 DB")));
+    }
 
     @Test
     void structuredAgentSessionRoutesFollowUpToRecipeAgentRegardlessOfIntentClassification() {
@@ -115,7 +151,6 @@ class ChatServiceSafetyTest {
         when(chatMessageRepository.findTop12BySessionOrderByCreatedAtDesc(session)).thenReturn(List.of());
         when(healthProfileRepository.findByUserId(1L)).thenReturn(Optional.empty());
         when(healthCheckupRepository.findTopByUserIdOrderByCheckupDateDescIdDesc(1L)).thenReturn(Optional.empty());
-        when(fridgeItemRepository.findByUserIdOrderByExpiryDate(1L)).thenReturn(List.of());
         when(recipeWorkSessionService.find(1L, 41L)).thenReturn(Optional.of(workSession));
         when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
         when(llmService.getChatResponse(anyString(), any())).thenReturn(Mono.just("legacy path"));
@@ -408,6 +443,7 @@ class ChatServiceSafetyTest {
         assertThat(response.getReply()).contains("검증을 통과하지 못해 제공하지 않았습니다");
         assertThat(response.getReply()).doesNotContain("버터를 팬에 넣습니다");
         verify(recipeGenerationClient, times(1)).repair(any(), any(), any());
+        verify(recipeRepository, never()).save(any(Recipe.class));
     }
 
     @Test
@@ -508,6 +544,75 @@ class ChatServiceSafetyTest {
     }
 
     @Test
+    void healthProfileReadFailureBlocksPersonalizedRecipeGeneration() {
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("두부구이 레시피 알려줘");
+
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.RECIPE_REQUEST);
+        when(chatSessionRepository.save(any(ChatSession.class))).thenAnswer(invocation -> {
+            ChatSession session = invocation.getArgument(0);
+            session.setId(77L);
+            return session;
+        });
+        when(healthProfileRepository.findByUserId(1L))
+                .thenThrow(new IllegalStateException("database unavailable"));
+
+        ChatDto.Response response = chatService.processChat(Optional.of(1L), request).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getReply())
+                .contains("건강 정보를 안전하게 확인하지 못해")
+                .contains("개인화 레시피를 제공하지 않았습니다");
+        verify(recipeGenerationClient, never()).generate(any());
+        verify(searchEngine, never()).search(anyString());
+        verify(llmService, never()).getChatResponse(anyString(), any());
+        verify(recipeAgentOrchestrator, never()).handle(any(), any(), any());
+    }
+
+    @Test
+    void excludedIngredientDoesNotReturnAsRecipeIngredientOrCookingStep() {
+        ChatSession chatSession = new ChatSession();
+        chatSession.setId(10L);
+        chatSession.setUserId(1L);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setSessionId(10L);
+        request.setMessage("양파 없는 다른 볶음밥 레시피로 바꿔줘");
+
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        when(chatSessionRepository.findByIdAndUserId(10L, 1L)).thenReturn(Optional.of(chatSession));
+        when(healthProfileRepository.findByUserId(1L)).thenReturn(Optional.empty());
+        when(recipeWorkSessionService.find(1L, 10L)).thenReturn(Optional.of(RecipeWorkSessionDTO.builder()
+                .userId(1L)
+                .chatSessionId(10L)
+                .lastRecommendation("""
+                        채소 볶음밥 레시피입니다.
+
+                        채소를 볶아 만드는 한 끼입니다.
+
+                        조리 시간: 15분 / 열량: 320kcal / 난이도: 1
+
+                        [재료]
+                        - 밥 1공기
+                        - 양파 1/2개
+                        - 당근 30g
+
+                        [조리 순서]
+                        1. 양파와 당근을 잘게 썹니다.
+                        2. 팬에 양파와 당근을 볶습니다.
+                        3. 밥을 넣고 고르게 볶습니다.
+                        """)
+                .build()));
+
+        ChatDto.Response response = chatService.processChat(Optional.of(1L), request).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getRecipe()).isNotNull();
+        assertThat(response.getRecipe().getIngredients()).noneMatch(value -> value.contains("양파"));
+        assertThat(response.getRecipe().getSteps()).noneMatch(value -> value.contains("양파"));
+        assertThat(response.getReply()).doesNotContain("양파 1/2개", "양파와 당근", "팬에 양파");
+    }
+
+    @Test
     void noHeatDessertDoesNotReceiveFireControlTips() {
         Recipe recipe = new Recipe();
         recipe.setTitle("수박화채");
@@ -586,6 +691,105 @@ class ChatServiceSafetyTest {
     }
 
     @Test
+    void trustedDatabaseRecipeAlsoPassesStructuredAccuracyPipeline() {
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("김치찌개 레시피 알려줘");
+        request.setUseFridge(true);
+
+        Recipe trusted = new Recipe();
+        trusted.setId(91L);
+        trusted.setTitle("김치찌개");
+        trusted.setDescription("김치와 돼지고기를 충분히 끓이는 찌개입니다.");
+        trusted.setIngredients(List.of("김치 200g", "돼지고기 150g", "두부 0.5모", "물 500ml"));
+        trusted.setSteps(List.of(
+                "김치와 돼지고기를 5분 볶습니다.",
+                "물을 붓고 돼지고기가 중심까지 익도록 15분 끓입니다.",
+                "두부를 넣고 3분 더 끓입니다."));
+        trusted.setCookingTime(25);
+        trusted.setDifficulty(1);
+
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.RECIPE_REQUEST);
+        when(recipeNormalizer.normalize(anyString())).thenReturn("김치찌개");
+        when(recipeRepository.findByTitleContaining(anyString())).thenReturn(List.of(trusted));
+        when(recipeGenerationClient.generate(any(RecipeGenerationRequest.class))).thenReturn(Mono.just(new GeneratedRecipeDraft(
+                "김치찌개",
+                "김치와 돼지고기를 충분히 끓이는 찌개입니다.",
+                2,
+                25,
+                null,
+                1,
+                List.of(
+                        new GeneratedIngredient("김치", "200g"),
+                        new GeneratedIngredient("돼지고기", "150g"),
+                        new GeneratedIngredient("두부", "0.5모"),
+                        new GeneratedIngredient("물", "500ml")),
+                List.of(
+                        new GeneratedCookingStep(1, "김치와 돼지고기를 볶습니다", "중불", 5, "돼지고기 겉면이 익은 상태", "타면 물을 조금 넣으세요", List.of("김치", "돼지고기")),
+                        new GeneratedCookingStep(2, "물을 붓고 끓입니다", "중불", 15, "돼지고기가 중심까지 익고 김치가 부드러운 상태", "국물이 졸면 물을 보충하세요", List.of("물", "김치", "돼지고기")),
+                        new GeneratedCookingStep(3, "두부를 넣고 더 끓입니다", "중약불", 3, "두부가 속까지 따뜻한 상태", "두부가 부서지지 않게 젓지 마세요", List.of("두부"))),
+                List.of())));
+        when(recipeValidator.validateStructured(any(Recipe.class), anyString(), anyString(), any(GeneratedRecipeDraft.class)))
+                .thenReturn(new RecipeValidator.ValidationResult(
+                        true, true, false, 1.0, 3, 3, false, List.of(), List.of()));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getReply()).contains("김치찌개 레시피입니다.");
+        ArgumentCaptor<RecipeGenerationRequest> captor = ArgumentCaptor.forClass(RecipeGenerationRequest.class);
+        verify(recipeGenerationClient).generate(captor.capture());
+        assertThat(captor.getValue().trustedRecipes()).containsExactly(trusted);
+        assertThat(captor.getValue().searchContext())
+                .contains("근거 유형: 검증된 내부 레시피")
+                .contains("돼지고기 150g");
+        assertThat(captor.getValue().fridgeItems()).isEmpty();
+        verify(searchEngine, never()).search(anyString());
+    }
+
+    @Test
+    void irrelevantWebSearchResultIsRejectedBeforeRecipeGeneration() {
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("김치찌개 레시피 알려줘");
+
+        stubRecipeRequest("김치찌개");
+        when(searchCacheRepository.findByQuery("김치찌개")).thenReturn(Optional.empty());
+        when(searchEngine.search("김치찌개")).thenReturn(Mono.just(new SearchEngine.SearchResponse(
+                SearchEngine.SearchStatus.SUCCESS,
+                List.of(new SearchEngine.SearchResult(
+                        "휴대전화 할인 행사",
+                        "https://example.com/phone-sale",
+                        "최신 휴대전화의 가격과 할인 정보를 안내합니다.")),
+                "test")));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getReply()).contains("신뢰할 수 있는 레시피 정보를 찾지 못했습니다");
+        verify(recipeGenerationClient, never()).generate(any());
+    }
+
+    @Test
+    void officialRecipeSearchIsPreferredOverGeneralWebSearch() {
+        SearchEngine.SearchResponse official = new SearchEngine.SearchResponse(
+                SearchEngine.SearchStatus.SUCCESS,
+                List.of(new SearchEngine.SearchResult(
+                        "김치찌개 공식 레시피",
+                        "https://www.foodsafetykorea.go.kr/recipe",
+                        "재료: 김치 200g\n조리 단계 1: 김치를 볶는다.")),
+                "식품의약품안전처 레시피 DB");
+        when(mfdsRecipeSearchClient.search("김치찌개")).thenReturn(Mono.just(official));
+
+        Mono<SearchEngine.SearchResponse> responseMono = ReflectionTestUtils.invokeMethod(
+                chatService,
+                "searchOfficialThenWeb",
+                "김치찌개");
+
+        assertThat(responseMono).isNotNull();
+        assertThat(responseMono.block()).isEqualTo(official);
+        verify(searchEngine, never()).search(anyString());
+    }
+
+    @Test
     void saveCurrentRecommendationUsesConfiguredClockForTomorrowMealDate() {
         ChatSession chatSession = new ChatSession();
         chatSession.setId(10L);
@@ -618,7 +822,7 @@ class ChatServiceSafetyTest {
 
     @Test
     void negativeRecipeSearchCacheExpiresUsingConfiguredClock() {
-        ReflectionTestUtils.setField(chatService, "negativeCacheDays", 1);
+        ReflectionTestUtils.setField(recipeEvidenceService, "negativeCacheDays", 1);
 
         SearchCache cache = new SearchCache();
         cache.setQuery("미등록요리");

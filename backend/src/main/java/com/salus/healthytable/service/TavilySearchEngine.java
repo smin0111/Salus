@@ -1,6 +1,7 @@
 package com.salus.healthytable.service;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -19,6 +20,7 @@ import java.util.Objects;
 public class TavilySearchEngine implements SearchEngine {
 
     private static final int MAX_RESULTS = 3;
+    private static final int MAX_RAW_CONTENT_LENGTH = 4_000;
 
     private final WebClient webClient;
     private final String apiKey;
@@ -42,13 +44,14 @@ public class TavilySearchEngine implements SearchEngine {
         }
 
         Map<String, Object> request = Map.of(
-                "query", query + " 레시피",
-                "search_depth", "basic",
+                "query", query + " 레시피 재료 분량 조리 순서",
+                "search_depth", "advanced",
                 "topic", "general",
                 "country", "south korea",
                 "max_results", MAX_RESULTS,
+                "chunks_per_source", 3,
                 "include_answer", false,
-                "include_raw_content", false,
+                "include_raw_content", "text",
                 "include_usage", true
         );
 
@@ -82,7 +85,7 @@ public class TavilySearchEngine implements SearchEngine {
                 .map(result -> new SearchResult(
                         nullToBlank(result.title()),
                         nullToBlank(result.url()),
-                        nullToBlank(result.content())
+                        bestAvailableContent(result)
                 ))
                 .filter(result -> !result.title().isBlank() && !result.snippet().isBlank())
                 .limit(MAX_RESULTS)
@@ -101,11 +104,25 @@ public class TavilySearchEngine implements SearchEngine {
         return value == null ? "" : value;
     }
 
+    private String bestAvailableContent(TavilyResult result) {
+        String rawContent = nullToBlank(result.rawContent()).replaceAll("\\s+", " ").trim();
+        String content = nullToBlank(result.content()).replaceAll("\\s+", " ").trim();
+        String selected = rawContent.isBlank() ? content : rawContent;
+        if (selected.length() <= MAX_RAW_CONTENT_LENGTH) {
+            return selected;
+        }
+        return selected.substring(0, MAX_RAW_CONTENT_LENGTH);
+    }
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record TavilyResponse(List<TavilyResult> results) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record TavilyResult(String title, String url, String content) {
+    private record TavilyResult(
+            String title,
+            String url,
+            String content,
+            @JsonProperty("raw_content") String rawContent) {
     }
 }

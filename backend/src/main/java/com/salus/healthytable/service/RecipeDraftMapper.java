@@ -56,6 +56,9 @@ public class RecipeDraftMapper {
         if (!heatLevel.isBlank() && !"무가열".equals(heatLevel) && !"해당 없음".equals(heatLevel)) {
             appendSentence(builder, "불 세기는 " + heatLevel + "로 맞추세요");
         }
+        if (step.temperatureC() != null && step.temperatureC() > 0) {
+            appendSentence(builder, "조리 온도는 " + step.temperatureC() + "℃로 맞추세요");
+        }
         if (step.minutes() != null && step.minutes() > 0) {
             appendSentence(builder, step.minutes() + "분 정도 진행하세요");
         }

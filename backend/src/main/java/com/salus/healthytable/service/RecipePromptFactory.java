@@ -51,10 +51,15 @@ public class RecipePromptFactory {
                 - 근거 없는 핵심 재료를 추가하지 말고, 필요한 기본 양념은 소량만 쓰세요.
                 - ingredients의 단위는 g, kg, ml, L, 개, 장, 대, 모, 컵, 큰술, 작은술, 약간 중 하나만 쓰세요.
                 - steps[].ingredientNames는 ingredients[].name에 존재하는 실제 재료명만 쓰세요.
+                - 모든 ingredients 항목은 실제 사용하는 steps[].ingredientNames에 최소 한 번 포함하세요.
                 - 대체 요청은 ingredients, steps[].ingredientNames, adjustments에 모두 반영하세요.
                 - 제외 재료는 ingredients, steps[].ingredientNames, 실제 사용 지시에서 제거하세요.
-                - 각 단계에 시간, 완료 상태, 복구 팁을 가능한 한 구체적으로 쓰세요.
+                - 팬·냄비 조리 단계는 heatLevel, minutes, completionCue를 반드시 쓰세요.
+                - 오븐·에어프라이어 조리 단계는 temperatureC, minutes, completionCue를 반드시 쓰세요.
+                - 생고기·가금류·달걀·생선·해산물은 색이나 겉모습만으로 단정하지 말고 중심까지 안전하게 익었는지 확인하는 완료 기준을 쓰세요.
+                - 각 단계에 실패했을 때 실제로 복구할 수 있는 recoveryTip을 구체적으로 쓰세요.
                 - 무가열 메뉴의 heatLevel은 무가열 또는 해당 없음만 사용하세요.
+                - 근거에서 확인할 수 없는 재료, 수량, 조리법은 추측하지 마세요. 근거가 부족하면 핵심 재료를 임의로 추가하지 마세요.
 
                 출력 형식:
                 API format 필드로 전달된 JSON Schema를 엄격히 따르세요.
@@ -106,6 +111,7 @@ public class RecipePromptFactory {
                 - ingredients에 없는 재료를 steps[].ingredientNames에 쓰지 마세요.
                 - 대체/제외 요청은 ingredients, steps[].ingredientNames, adjustments에 정확히 반영하세요.
                 - heatLevel과 unit은 Schema enum 값만 사용하세요.
+                - 오븐·에어프라이어 단계의 temperatureC와 모든 가열 단계의 minutes, completionCue를 채우세요.
                 - order는 1부터 연속되게 고치세요.
 
                 [출력 형식]
@@ -137,6 +143,7 @@ public class RecipePromptFactory {
         stepProperties.put("order", Map.of("type", "integer"));
         stepProperties.put("instruction", Map.of("type", "string"));
         stepProperties.put("heatLevel", Map.of("type", List.of("string", "null"), "enum", heatLevelEnumWithNull()));
+        stepProperties.put("temperatureC", Map.of("type", List.of("integer", "null"), "minimum", 40, "maximum", 300));
         stepProperties.put("minutes", Map.of("type", List.of("integer", "null")));
         stepProperties.put("completionCue", Map.of("type", List.of("string", "null")));
         stepProperties.put("recoveryTip", Map.of("type", List.of("string", "null")));
@@ -145,7 +152,9 @@ public class RecipePromptFactory {
         Map<String, Object> step = new LinkedHashMap<>();
         step.put("type", "object");
         step.put("additionalProperties", false);
-        step.put("required", List.of("order", "instruction", "ingredientNames"));
+        step.put("required", List.of(
+                "order", "instruction", "heatLevel", "temperatureC", "minutes",
+                "completionCue", "recoveryTip", "ingredientNames"));
         step.put("properties", stepProperties);
 
         Map<String, Object> adjustment = new LinkedHashMap<>();
@@ -162,8 +171,8 @@ public class RecipePromptFactory {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("title", Map.of("type", "string"));
         properties.put("description", Map.of("type", "string"));
-        properties.put("servings", Map.of("type", List.of("integer", "null")));
-        properties.put("cookingTimeMinutes", Map.of("type", List.of("integer", "null")));
+        properties.put("servings", Map.of("type", "integer", "minimum", 1, "maximum", 50));
+        properties.put("cookingTimeMinutes", Map.of("type", "integer", "minimum", 1, "maximum", 1440));
         properties.put("caloriesKcal", Map.of("type", List.of("integer", "null")));
         properties.put("difficulty", Map.of("type", "integer", "minimum", 1, "maximum", 3));
         properties.put("ingredients", Map.of("type", "array", "minItems", 1, "items", ingredient));
@@ -174,7 +183,9 @@ public class RecipePromptFactory {
         Map<String, Object> schema = new LinkedHashMap<>();
         schema.put("type", "object");
         schema.put("additionalProperties", false);
-        schema.put("required", List.of("title", "ingredients", "steps", "difficulty"));
+        schema.put("required", List.of(
+                "title", "description", "servings", "cookingTimeMinutes", "caloriesKcal",
+                "difficulty", "ingredients", "steps", "adjustments", "safetyNotes"));
         schema.put("properties", properties);
         return schema;
     }
@@ -251,12 +262,16 @@ public class RecipePromptFactory {
         if (searchContext == null || searchContext.isBlank()) {
             return "없음";
         }
-        return List.of(searchContext.split("\\R+")).stream()
+        String summarized = List.of(searchContext.split("\\R+")).stream()
                 .map(String::trim)
                 .filter(value -> !value.isBlank())
                 .distinct()
-                .limit(3)
+                .limit(80)
                 .collect(Collectors.joining("\n"));
+        int maxLength = 12_000;
+        return summarized.length() <= maxLength
+                ? summarized
+                : summarized.substring(0, maxLength);
     }
 
     private String formatIngredientNames(GeneratedRecipeDraft draft) {

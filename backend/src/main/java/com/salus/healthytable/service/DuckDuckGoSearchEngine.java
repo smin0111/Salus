@@ -25,7 +25,7 @@ public class DuckDuckGoSearchEngine implements SearchEngine {
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
     private static final int TIMEOUT_MS = 6000;
     private static final int PAGE_FETCH_TIMEOUT_MS = 4500;
-    private static final int MAX_PAGE_TEXT_LENGTH = 1800;
+    private static final int MAX_PAGE_TEXT_LENGTH = 4000;
 
     @Override
     public Mono<SearchResponse> search(String query) {
@@ -99,14 +99,18 @@ public class DuckDuckGoSearchEngine implements SearchEngine {
                     .followRedirects(true)
                     .get();
 
+            String structuredRecipe = extractStructuredRecipe(page);
             page.select("script, style, noscript, header, footer, nav, aside, form, iframe").remove();
             String pageText = page.body() == null ? "" : page.body().text();
             pageText = normalizePageText(pageText);
-            if (pageText.isBlank()) {
+            String evidenceText = structuredRecipe.isBlank() ? pageText : structuredRecipe;
+            if (evidenceText.isBlank()) {
                 return result;
             }
 
-            String enrichedSnippet = result.snippet() + "\n본문 근거: " + truncate(pageText, MAX_PAGE_TEXT_LENGTH);
+            String evidenceLabel = structuredRecipe.isBlank() ? "본문 근거" : "구조화 레시피 근거";
+            String enrichedSnippet = result.snippet() + "\n" + evidenceLabel + ": "
+                    + truncate(evidenceText, MAX_PAGE_TEXT_LENGTH);
             return new SearchResult(result.title(), result.url(), enrichedSnippet);
         } catch (Exception e) {
             log.warn("[DuckDuckGoSearch] Failed to fetch result page. url={}, reason={}", result.url(), e.getMessage());
@@ -154,6 +158,25 @@ public class DuckDuckGoSearchEngine implements SearchEngine {
                 .replaceAll("\\s+", " ")
                 .replaceAll("(?i)(copyright|all rights reserved|로그인|회원가입|공유하기|댓글|광고)", " ")
                 .trim();
+    }
+
+    private String extractStructuredRecipe(Document page) {
+        if (page == null) {
+            return "";
+        }
+        for (Element script : page.select("script[type=application/ld+json]")) {
+            String json = script.data();
+            if (json == null || json.isBlank()) {
+                json = script.html();
+            }
+            String normalized = json == null ? "" : json.toLowerCase(Locale.ROOT);
+            if (normalized.contains("recipeingredient")
+                    && normalized.contains("recipeinstructions")
+                    && normalized.contains("recipe")) {
+                return json.replaceAll("\\s+", " ").trim();
+            }
+        }
+        return "";
     }
 
     private String truncate(String text, int maxLength) {
