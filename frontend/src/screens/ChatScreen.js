@@ -1521,6 +1521,8 @@ const styles = StyleSheet.create({
         ...Platform.select({
             web: {
                 lineHeight: '22px',
+                outlineStyle: 'none',
+                outlineWidth: 0,
             }
         })
     },

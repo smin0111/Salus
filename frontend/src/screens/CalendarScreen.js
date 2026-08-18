@@ -1,855 +1,263 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ScrollView, Modal, Platform, ActivityIndicator, Animated } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme/colors';
-import axios from 'axios';
-import config from '../config';
 import { useAuth } from '../context/AuthContext';
-import { debugLog } from '../utils/logger';
+import { getActivities, getMealLogs, getMonthlyMealAnalysis } from '../api/meals';
 import { isAuthError } from '../utils/apiError';
+import {
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  ErrorState,
+  IconButton,
+  OfflineState,
+  SectionHeader,
+  Skeleton,
+  Tabs,
+} from '../components/common';
+import useResponsive from '../hooks/useResponsive';
+import { color, radius, spacing, typography } from '../theme/tokens';
 
 const WEEK_DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+const VIEW_ITEMS = [{ id: 'today', label: '오늘' }, { id: 'week', label: '주간' }, { id: 'month', label: '월간' }];
+const MEAL_SLOTS = [
+  { id: 'breakfast', label: '아침', icon: 'sunny-outline', tone: '#D77C28' },
+  { id: 'lunch', label: '점심', icon: 'restaurant-outline', tone: color.success },
+  { id: 'dinner', label: '저녁', icon: 'moon-outline', tone: color.info },
+  { id: 'snacks', label: '간식', icon: 'cafe-outline', tone: color.accent },
+];
 
-export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, onToggleSidebar, onNavigate, webMode = false }) {
-    const { isLoggedIn, token } = useAuth();
-    const [currentDate, setCurrentDate] = useState(new Date());
-    const [selectedDate, setSelectedDate] = useState(null);
-    const [showMealModal, setShowMealModal] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [activityData, setActivityData] = useState({});
-    const [monthlyAnalysis, setMonthlyAnalysis] = useState('');
+const formatDate = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const dateLabel = date => `${date.getMonth() + 1}월 ${date.getDate()}일 ${WEEK_DAYS[date.getDay()]}요일`;
+const sameDate = (left, right) => formatDate(left) === formatDate(right);
+const addDays = (date, days) => { const next = new Date(date); next.setDate(next.getDate() + days); return next; };
+const startOfWeek = date => addDays(date, -date.getDay());
 
-    // 식단 기록, 활동 기록, 월간 분석 조회
-    useEffect(() => {
-        if (isLoggedIn && token) {
-            fetchMealLogs();
-            fetchActivityLogs();
-            fetchMonthlyAnalysis();
-        }
-    }, [isLoggedIn, token, currentDate]);
+const parseDetails = value => {
+  if (!value) return {};
+  try { return typeof value === 'string' ? JSON.parse(value) : value; } catch { return {}; }
+};
 
-    const fetchMonthlyAnalysis = async () => {
-        if (!token) return;
-        try {
-            const year = currentDate.getFullYear();
-            const month = currentDate.getMonth() + 1;
-            const response = await axios.get(`${config.API_BASE_URL}/meallogs/analysis/monthly`, {
-                params: { year, month },
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setMonthlyAnalysis(response.data);
-        } catch (error) {
-            if (isAuthError(error)) return;
-            debugLog('Monthly analysis failed or empty');
-            setMonthlyAnalysis('');
-        }
-    };
+export default function CalendarScreen({ mealData, setMealData, onToggleSidebar, onNavigate, webMode = false }) {
+  const { isLoggedIn, token } = useAuth();
+  const { isDesktop } = useResponsive();
+  const [view, setView] = useState('today');
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [displayMonth, setDisplayMonth] = useState(new Date());
+  const [activityData, setActivityData] = useState({});
+  const [monthlyAnalysis, setMonthlyAnalysis] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [errors, setErrors] = useState([]);
+  const [expandedMeal, setExpandedMeal] = useState(null);
 
-    const fetchActivityLogs = async () => {
-        if (!token) return;
-        try {
-            const response = await axios.get(`${config.API_BASE_URL}/activities`, {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            });
-            const logs = response.data;
-            const transformed = {};
-            logs.forEach(log => {
-                transformed[log.activityDate] = log;
-            });
-            setActivityData(transformed);
-        } catch (error) {
-            if (isAuthError(error)) return;
-            console.error('Failed to fetch activity logs:', error);
-        }
-    };
+  const loadData = async () => {
+    if (!token) return;
+    setLoading(true);
+    setErrors([]);
+    const year = displayMonth.getFullYear();
+    const month = displayMonth.getMonth() + 1;
+    const [mealsResult, activitiesResult, analysisResult] = await Promise.allSettled([
+      getMealLogs(token),
+      getActivities(token),
+      getMonthlyMealAnalysis(year, month, token),
+    ]);
 
-    const fetchMealLogs = async () => {
-        if (!token) return;
-        setLoading(true);
-        try {
-            const response = await axios.get(`${config.API_BASE_URL}/meallogs`, {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            });
-            const logs = response.data;
-
-            // 날짜를 키로 쓰는 객체 형태로 변환
-            const transformedData = {};
-            logs.forEach(log => {
-                let parsedDetails = {};
-                try {
-                    if (log.mealDetails) {
-                        parsedDetails = JSON.parse(log.mealDetails);
-                    }
-                } catch (e) {
-                    console.error("JSON Parse Error:", e);
-                    // 일부 식단 상세 JSON이 깨져도 캘린더 전체 조회는 계속 진행합니다.
-                }
-
-                transformedData[log.recordDate] = {
-                    breakfast: log.breakfast,
-                    lunch: log.lunch,
-                    dinner: log.dinner,
-                    breakfastCalories: log.breakfastCalories,
-                    lunchCalories: log.lunchCalories,
-                    dinnerCalories: log.dinnerCalories,
-                    isAiBreakfast: log.isAiBreakfast,
-                    isAiLunch: log.isAiLunch,
-                    isAiDinner: log.isAiDinner,
-                    snacks: log.snacks ? JSON.parse(log.snacks) : [],
-                    mealDetails: parsedDetails
-                };
-            });
-
-            setMealData(transformedData);
-        } catch (error) {
-            if (isAuthError(error)) return;
-            console.error('Failed to fetch meal logs:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-
-    // 보조 함수
-    const getCalendarDays = () => {
-        const year = currentDate.getFullYear();
-        const month = currentDate.getMonth();
-        const firstDay = new Date(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0);
-        const daysInMonth = lastDay.getDate();
-        const startingDayOfWeek = firstDay.getDay();
-
-        const days = [];
-        for (let i = 0; i < startingDayOfWeek; i++) days.push(null);
-        for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
-        return days;
-    };
-
-    const formatDate = (date) => {
-        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    };
-
-    const getMealForDate = (date) => {
-        if (!date) return null;
-        const dateKey = formatDate(date);
-        return mealData[dateKey] || null;
-    };
-
-    const hasMeal = (date) => !!getMealForDate(date);
-
-    const isToday = (date) => {
-        if (!date) return false;
-        const today = new Date();
-        return date.getDate() === today.getDate() &&
-            date.getMonth() === today.getMonth() &&
-            date.getFullYear() === today.getFullYear();
-    };
-
-    const handleDateClick = (date) => {
-        if (!date) return;
-        setSelectedDate(date);
-        setShowMealModal(true);
-    };
-
-    const goToPreviousMonth = () => {
-        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
-    };
-
-    const goToNextMonth = () => {
-        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-    };
-
-    // 렌더링 준비
-    const selectedMeal = getMealForDate(selectedDate);
-
-    const openMealRecipeDetail = (type, title, mealContent, details) => {
-        const recipe = buildRecipeFromMealDetails(type, title, mealContent, details);
-        if (!recipe || !onNavigate) {
-            return;
-        }
-
-        setShowMealModal(false);
-        onNavigate('recipe-detail', {
-            recipe,
-            returnTo: 'calendar',
-        });
-    };
-
-    const renderMealSection = (type, icon, title, color, bgColor) => {
-        const mealContent = selectedMeal ? selectedMeal[type] : null;
-        const calories = selectedMeal ? selectedMeal[`${type}Calories`] : null;
-        const isAi = selectedMeal ? selectedMeal[`isAi${type.charAt(0).toUpperCase() + type.slice(1)}`] : false;
-        const details = selectedMeal?.mealDetails?.[type];
-        const hasDetails = Boolean(getMealDetailText(details) || details?.recipe);
-
-        return (
-            <TouchableOpacity
-                style={[styles.mealSection, { backgroundColor: bgColor, borderColor: color + '40' }]}
-                activeOpacity={hasDetails ? 0.7 : 1}
-                onPress={() => {
-                    if (hasDetails) {
-                        openMealRecipeDetail(type, title, mealContent, details);
-                    }
-                }}
-            >
-                <View style={styles.mealHeader}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                        {icon ? <Text style={{ fontSize: 12, color: color, marginRight: 8 }}>{icon}</Text> : null}
-                        <Text style={[styles.mealTitle, { color: color }]}>{title}</Text>
-                        {isAi && (
-                            <View style={styles.aiBadge}>
-                                <Text style={styles.aiBadgeText}>AI</Text>
-                            </View>
-                        )}
-                        {hasDetails && (
-                            <Text style={{ fontSize: 12, color: color, marginLeft: 8 }}>상세</Text>
-                        )}
-                    </View>
-                    {calories && (
-                        <View style={styles.calorieBadge}>
-                            <Text style={styles.calorieText}>{calories}kcal</Text>
-                        </View>
-                    )}
-                </View>
-                <Text style={styles.mealContent}>
-                    {mealContent || '기록 없음'}
-                </Text>
-                {hasDetails && (
-                    <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 4, marginLeft: 30 }}>
-                        (탭하여 레시피 보기)
-                    </Text>
-                )}
-            </TouchableOpacity>
-        );
-    };
-
-    const AnimatedDayCell = ({ date, index, activity, meal, dateKey }) => {
-        const hoverAnim = React.useRef(new Animated.Value(1)).current;
-
-        const handleMouseEnter = () => {
-            if (Platform.OS === 'web' && date) {
-                Animated.spring(hoverAnim, { toValue: 1.1, friction: 5, useNativeDriver: true }).start();
-            }
+    if (mealsResult.status === 'fulfilled') {
+      const transformed = {};
+      (mealsResult.value.data || []).forEach(log => {
+        transformed[log.recordDate] = {
+          breakfast: log.breakfast,
+          lunch: log.lunch,
+          dinner: log.dinner,
+          breakfastCalories: log.breakfastCalories,
+          lunchCalories: log.lunchCalories,
+          dinnerCalories: log.dinnerCalories,
+          isAiBreakfast: log.isAiBreakfast,
+          isAiLunch: log.isAiLunch,
+          isAiDinner: log.isAiDinner,
+          snacks: parseDetails(log.snacks) || [],
+          mealDetails: parseDetails(log.mealDetails),
         };
+      });
+      setMealData(transformed);
+    } else if (!isAuthError(mealsResult.reason)) setErrors(previous => [...previous, mealsResult.reason]);
 
-        const handleMouseLeave = () => {
-            if (Platform.OS === 'web' && date) {
-                Animated.spring(hoverAnim, { toValue: 1, friction: 5, useNativeDriver: true }).start();
-            }
-        };
+    if (activitiesResult.status === 'fulfilled') {
+      const transformed = {};
+      (activitiesResult.value.data || []).forEach(log => { transformed[log.activityDate] = log; });
+      setActivityData(transformed);
+    } else if (!isAuthError(activitiesResult.reason)) setErrors(previous => [...previous, activitiesResult.reason]);
 
-        return (
-            <Animated.View style={[styles.dayCellWrapper, { transform: [{ scale: hoverAnim }] }]}>
-                <TouchableOpacity
-                    style={[
-                        styles.dayCell,
-                        date && isToday(date) && styles.todayCell,
-                        date && !isToday(date) && activity && (activity.hasAiInteraction ? styles.aiDayCell : styles.activeDayCell)
-                    ]}
-                    onPress={() => handleDateClick(date)}
-                    disabled={!date}
-                    activeOpacity={0.7}
-                    {...(Platform.OS === 'web' ? { onMouseEnter: handleMouseEnter, onMouseLeave: handleMouseLeave } : {})}
-                >
-                    {date && (
-                        <>
-                            <Text style={[
-                                styles.dayText,
-                                isToday(date) && styles.todayText,
-                                !isToday(date) && index % 7 === 0 && { color: '#EF4444' },
-                                !isToday(date) && index % 7 === 6 && { color: '#3B82F6' },
-                            ]}
-                            >
-                                {date.getDate()}
-                            </Text>
-                            <View style={styles.dotsRow}>
-                                {meal?.breakfast && <View style={[styles.mealDot, { backgroundColor: '#F59E0B' }]} />}
-                                {meal?.lunch && <View style={[styles.mealDot, { backgroundColor: '#10B981' }]} />}
-                                {meal?.dinner && <View style={[styles.mealDot, { backgroundColor: '#3B82F6' }]} />}
-                            </View>
-                        </>
-                    )}
-                </TouchableOpacity>
-            </Animated.View>
-        );
-    };
+    if (analysisResult.status === 'fulfilled') setMonthlyAnalysis(analysisResult.value.data || '');
+    else if (!isAuthError(analysisResult.reason)) setErrors(previous => [...previous, analysisResult.reason]);
+    setLoading(false);
+  };
 
+  useEffect(() => {
+    if (isLoggedIn && token) loadData();
+    else setLoading(false);
+  }, [isLoggedIn, token, displayMonth.getFullYear(), displayMonth.getMonth()]);
+
+  const selectedKey = formatDate(selectedDate);
+  const selectedMeal = mealData[selectedKey] || {};
+  const weekDates = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(startOfWeek(selectedDate), index)), [selectedKey]);
+
+  const monthCells = useMemo(() => {
+    const year = displayMonth.getFullYear();
+    const month = displayMonth.getMonth();
+    const first = new Date(year, month, 1);
+    const days = new Date(year, month + 1, 0).getDate();
+    return [...Array(first.getDay()).fill(null), ...Array.from({ length: days }, (_, index) => new Date(year, month, index + 1))];
+  }, [displayMonth]);
+
+  const calorieTotal = ['breakfastCalories', 'lunchCalories', 'dinnerCalories'].reduce((sum, key) => sum + (Number(selectedMeal[key]) || 0), 0);
+  const recordedSlots = ['breakfast', 'lunch', 'dinner'].filter(key => selectedMeal[key]).length + (Array.isArray(selectedMeal.snacks) && selectedMeal.snacks.length ? 1 : 0);
+
+  const chooseDate = date => {
+    setSelectedDate(date);
+    setExpandedMeal(null);
+  };
+
+  const navigateMonth = delta => setDisplayMonth(previous => new Date(previous.getFullYear(), previous.getMonth() + delta, 1));
+
+  const askAi = message => onNavigate?.('chat', { prompt: message });
+
+  const renderMealSlot = slot => {
+    const content = slot.id === 'snacks'
+      ? (Array.isArray(selectedMeal.snacks) ? selectedMeal.snacks.map(value => typeof value === 'string' ? value : value.name).filter(Boolean).join(', ') : '')
+      : selectedMeal[slot.id];
+    const calorie = selectedMeal[`${slot.id}Calories`];
+    const aiField = `isAi${slot.id.charAt(0).toUpperCase()}${slot.id.slice(1)}`;
+    const details = selectedMeal.mealDetails?.[slot.id];
+    const fullText = details?.fullText;
+    const expanded = expandedMeal === slot.id;
     return (
-        <SafeAreaView style={styles.container}>
-            {/* 헤더 */}
-            {!webMode && <View style={styles.header}>
-                <View style={styles.headerLeft}>
-                    <TouchableOpacity onPress={onToggleSidebar} style={styles.menuButton}>
-                        <Ionicons name="menu" size={24} color={colors.primary} />
-                    </TouchableOpacity>
-                    <View>
-                        <Text style={styles.headerTitle}>식단 기록</Text>
-                        <Text style={styles.headerSubtitle}>매일 먹은 음식을 기록하세요</Text>
-                    </View>
-                </View>
-            </View>}
-
-            {/* 달력 컨트롤 */}
-            <View style={styles.calendarControls}>
-                <TouchableOpacity onPress={goToPreviousMonth} style={styles.arrowButton}>
-                    <Ionicons name="chevron-back" size={24} color={colors.white} />
-                </TouchableOpacity>
-                <Text style={styles.monthTitle}>
-                    {currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월
-                </Text>
-                <TouchableOpacity onPress={goToNextMonth} style={styles.arrowButton}>
-                    <Ionicons name="chevron-forward" size={24} color={colors.white} />
-                </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.content}>
-                {/* 요일 헤더 */}
-                <View style={styles.weekRow}>
-                    {WEEK_DAYS.map((day, index) => (
-                        <Text
-                            key={day}
-                            style={[
-                                styles.weekDayText,
-                                index === 0 && { color: '#EF4444' },
-                                index === 6 && { color: '#3B82F6' }
-                            ]}
-                        >
-                            {day}
-                        </Text>
-                    ))}
-                </View>
-
-                {/* 날짜 그리드 */}
-                <View style={styles.daysGrid}>
-                    {getCalendarDays().map((date, index) => {
-                        const meal = getMealForDate(date);
-                        const dateKey = date ? formatDate(date) : null;
-                        const activity = dateKey ? activityData[dateKey] : null;
-
-                        return <AnimatedDayCell key={index} date={date} index={index} activity={activity} meal={meal} dateKey={dateKey} />;
-                    })}
-                </View>
-
-                {/* 월간 AI 분석 배너 */}
-                {monthlyAnalysis ? (
-                    <View style={styles.analysisCard}>
-                        <Text style={styles.analysisTitle}>AI 셰프의 이번 달 코멘트</Text>
-                        <Text style={styles.analysisText}>{monthlyAnalysis}</Text>
-                    </View>
-                ) : null}
-
-                {/* 통계 */}
-                <View style={styles.statsContainer}>
-                    <View style={[styles.statCard, { borderColor: '#FCD34D' }]}>
-                        <Text style={styles.statIcon}>아침</Text>
-                        <View>
-                            <Text style={styles.statLabel}>아침</Text>
-                            <Text style={styles.statValue}>
-                                {Object.values(mealData).filter(m => m.breakfast).length}일
-                            </Text>
-                        </View>
-                    </View>
-                    <View style={[styles.statCard, { borderColor: '#34D399' }]}>
-                        <Text style={styles.statIcon}>점심</Text>
-                        <View>
-                            <Text style={styles.statLabel}>점심</Text>
-                            <Text style={styles.statValue}>
-                                {Object.values(mealData).filter(m => m.lunch).length}일
-                            </Text>
-                        </View>
-                    </View>
-                    <View style={[styles.statCard, { borderColor: '#60A5FA' }]}>
-                        <Text style={styles.statIcon}>저녁</Text>
-                        <View>
-                            <Text style={styles.statLabel}>저녁</Text>
-                            <Text style={styles.statValue}>
-                                {Object.values(mealData).filter(m => m.dinner).length}일
-                            </Text>
-                        </View>
-                    </View>
-                </View>
-            </ScrollView>
-
-            {/* 식단 상세 모달 */}
-            <Modal
-                animationType="slide"
-                transparent={true}
-                visible={showMealModal}
-                onRequestClose={() => setShowMealModal(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <View>
-                                <Text style={styles.modalDate}>
-                                    {selectedDate?.getMonth() + 1}월 {selectedDate?.getDate()}일
-                                </Text>
-                                <Text style={styles.modalDay}>
-                                    {selectedDate && WEEK_DAYS[selectedDate.getDay()]}요일
-                                </Text>
-                            </View>
-                            <TouchableOpacity onPress={() => setShowMealModal(false)} style={styles.closeButton}>
-                                <Ionicons name="close" size={24} color="#6B7280" />
-                            </TouchableOpacity>
-                        </View>
-
-                        {/* 일일 칼로리 요약 */}
-                        {selectedMeal && (
-                            <View style={styles.dailySummary}>
-                                <Text style={styles.summaryText}>
-                                    총 섭취 칼로리: <Text style={styles.highlightText}>
-                                        {(selectedMeal.breakfastCalories || 0) +
-                                            (selectedMeal.lunchCalories || 0) +
-                                            (selectedMeal.dinnerCalories || 0)} kcal
-                                    </Text>
-                                </Text>
-                            </View>
-                        )}
-
-                        <ScrollView contentContainerStyle={styles.mealList}>
-                            {renderMealSection('breakfast', '', '아침', '#F59E0B', '#FFFBEB')}
-                            {renderMealSection('lunch', '', '점심', '#10B981', '#ECFDF5')}
-                            {renderMealSection('dinner', '', '저녁', '#3B82F6', '#EFF6FF')}
-
-                            {/* 간식 */}
-                            <View style={[styles.mealSection, { backgroundColor: '#FDF2F8', borderColor: '#DB277740' }]}>
-                                <View style={styles.mealHeader}>
-                                    <Text style={[styles.mealTitle, { color: '#DB2777' }]}>간식</Text>
-                                </View>
-                                {selectedMeal?.snacks && selectedMeal.snacks.length > 0 ? (
-                                    <View style={styles.snackContainer}>
-                                        {selectedMeal.snacks.map((snack, idx) => (
-                                            <View key={idx} style={styles.snackTag}>
-                                                <Text style={styles.snackText}>{snack}</Text>
-                                            </View>
-                                        ))}
-                                    </View>
-                                ) : (
-                                    <Text style={styles.mealContent}>기록 없음</Text>
-                                )}
-                            </View>
-
-                            {!selectedMeal && (
-                                <View style={styles.emptyState}>
-                                    <Text style={{ color: '#9CA3AF', textAlign: 'center' }}>기록된 식사가 없습니다</Text>
-                                </View>
-                            )}
-                        </ScrollView>
-
-                        <TouchableOpacity style={styles.addMealButton}>
-                            <Ionicons name="add" size={20} color="white" />
-                            <Text style={styles.addMealButtonText}>식사 추가 / 수정</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
-
-        </SafeAreaView>
+      <Card key={slot.id} style={styles.mealCard}>
+        <View style={styles.mealTop}>
+          <View style={[styles.mealIcon, { backgroundColor: `${slot.tone}18` }]}><Ionicons name={slot.icon} size={20} color={slot.tone} /></View>
+          <View style={styles.mealCopy}><View style={styles.mealTitleRow}><Text style={styles.mealTitle}>{slot.label}</Text>{selectedMeal[aiField] && <Chip label="AI 추천" icon="sparkles-outline" tone="brand" />}</View><Text style={[styles.mealValue, !content && styles.mealEmpty]} numberOfLines={expanded ? undefined : 2}>{content || '기록 없음'}</Text></View>
+          {!!calorie && <Text style={styles.calorie}>{calorie} kcal</Text>}
+        </View>
+        <View style={styles.mealActions}>
+          {!!fullText && <Button variant="ghost" size="sm" label={expanded ? '레시피 접기' : '레시피 보기'} onPress={() => setExpandedMeal(expanded ? null : slot.id)} />}
+          {!content && <Button variant="soft" size="sm" icon="add" label="식사 추가" onPress={() => askAi(`${dateLabel(selectedDate)} ${slot.label} 식사를 추천하고 식단에 저장할 수 있게 도와줘`)} />}
+        </View>
+        {expanded && <View style={styles.inlineRecipe}><Text style={styles.inlineRecipeTitle}>저장된 레시피 상세</Text><Text style={styles.inlineRecipeText}>{fullText}</Text></View>}
+      </Card>
     );
+  };
+
+  const TodayPanel = () => (
+    <View style={styles.todayPanel}>
+      <View style={styles.dateHeading}><View><Text style={styles.dateEyebrow}>{sameDate(selectedDate, new Date()) ? 'TODAY' : 'SELECTED DAY'}</Text><Text style={styles.dateTitle}>{dateLabel(selectedDate)}</Text></View><Button variant="secondary" icon="sparkles-outline" label="AI 추천" onPress={() => askAi(`${dateLabel(selectedDate)} 식단을 내 조건에 맞게 추천해줘`)} /></View>
+      <Card style={styles.calorieCard}><View><Text style={styles.calorieLabel}>하루 칼로리 요약</Text><Text style={styles.calorieValue}>{calorieTotal ? `${calorieTotal.toLocaleString()} kcal` : '기록 전'}</Text></View><View style={styles.recordRing}><Text style={styles.recordValue}>{recordedSlots}/4</Text><Text style={styles.recordLabel}>끼니 기록</Text></View></Card>
+      <View style={styles.mealList}>{MEAL_SLOTS.map(renderMealSlot)}</View>
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      {!webMode && <View style={styles.mobileHeader}><IconButton icon="menu" label="보조 메뉴 열기" onPress={onToggleSidebar} /><View style={styles.headerCopy}><Text style={styles.headerTitle}>식단</Text><Text style={styles.headerSubtitle}>오늘의 식사를 가볍게 기록하세요</Text></View><IconButton icon="sparkles-outline" label="AI 식단 상담" onPress={() => askAi('오늘 식단을 상담하고 싶어')} /></View>}
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.titleRow}><SectionHeader eyebrow="MEAL RHYTHM" title="식단 기록" description="모바일에서는 오늘을 먼저 보고, 필요할 때 주간과 월간 흐름으로 확장합니다." /><Tabs items={VIEW_ITEMS} value={view} onChange={setView} style={styles.viewTabs} /></View>
+
+        {errors.length > 0 && Object.keys(mealData).length > 0 && <View style={styles.partialNotice}><Ionicons name="cloud-offline-outline" size={18} color={color.info} /><Text style={styles.partialText}>일부 정보를 불러오지 못했습니다. 불러온 식단은 계속 표시합니다.</Text><Text style={styles.retry} onPress={loadData}>재시도</Text></View>}
+
+        {loading ? <View style={styles.loading}><Skeleton width="42%" height={28} /><Skeleton height={110} style={{ marginTop: spacing.lg }} /><Skeleton height={160} style={{ marginTop: spacing.sm }} /><Skeleton height={160} style={{ marginTop: spacing.sm }} /></View> : errors.length >= 3 && !Object.keys(mealData).length ? (errors.some(error => !error?.response) ? <OfflineState onAction={loadData} /> : <ErrorState description="식단 기록을 불러오지 못했습니다." onAction={loadData} />) : (
+          <>
+            {view === 'week' && <Card style={styles.weekCard}><View style={styles.weekHeader}><IconButton icon="chevron-back" label="이전 주" onPress={() => chooseDate(addDays(selectedDate, -7))} /><Text style={styles.weekTitle}>{weekDates[0].getMonth() + 1}월 {weekDates[0].getDate()}일 – {weekDates[6].getMonth() + 1}월 {weekDates[6].getDate()}일</Text><IconButton icon="chevron-forward" label="다음 주" onPress={() => chooseDate(addDays(selectedDate, 7))} /></View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weekStrip}>{weekDates.map(date => { const key = formatDate(date); const meal = mealData[key] || {}; const count = ['breakfast', 'lunch', 'dinner'].filter(slot => meal[slot]).length; const selected = sameDate(date, selectedDate); return <TouchableOpacity key={key} style={[styles.dayPill, selected && styles.dayPillSelected]} onPress={() => chooseDate(date)} accessibilityRole="button" accessibilityState={{ selected }} accessibilityLabel={`${dateLabel(date)}, ${count}끼 기록`}><Text style={[styles.dayName, selected && styles.dayTextSelected]}>{WEEK_DAYS[date.getDay()]}</Text><Text style={[styles.dayNumber, selected && styles.dayTextSelected]}>{date.getDate()}</Text><View style={styles.recordDots}>{[0, 1, 2].map(index => <View key={index} style={[styles.recordDot, index < count && styles.recordDotOn, selected && index < count && styles.recordDotSelected]} />)}</View></TouchableOpacity>; })}</ScrollView></Card>}
+
+            {view === 'month' && <View style={[styles.monthLayout, isDesktop && styles.monthLayoutDesktop]}><Card style={styles.monthCard}><View style={styles.monthHeader}><IconButton icon="chevron-back" label="이전 달" onPress={() => navigateMonth(-1)} /><Text style={styles.monthTitle}>{displayMonth.getFullYear()}년 {displayMonth.getMonth() + 1}월</Text><IconButton icon="chevron-forward" label="다음 달" onPress={() => navigateMonth(1)} /></View><View style={styles.weekLabels}>{WEEK_DAYS.map(day => <Text key={day} style={styles.weekLabel}>{day}</Text>)}</View><View style={styles.monthGrid}>{monthCells.map((date, index) => { if (!date) return <View key={`blank-${index}`} style={styles.monthCell} />; const key = formatDate(date); const meal = mealData[key]; const selected = sameDate(date, selectedDate); const ai = activityData[key]?.hasAiInteraction; return <TouchableOpacity key={key} style={[styles.monthCell, selected && styles.monthCellSelected, sameDate(date, new Date()) && styles.todayCell]} onPress={() => chooseDate(date)} accessibilityLabel={`${dateLabel(date)}${meal ? ', 식사 기록 있음' : ', 기록 없음'}${ai ? ', AI 추천 있음' : ''}`}><Text style={[styles.monthDay, selected && styles.monthDaySelected]}>{date.getDate()}</Text><View style={styles.monthMarkers}>{meal && <View style={styles.mealMarker} />}{ai && <View style={styles.aiMarker} />}</View></TouchableOpacity>; })}</View></Card><View style={styles.monthDetail}><TodayPanel /></View></View>}
+
+            {view !== 'month' && <TodayPanel />}
+
+            <View style={styles.analysisSection}><SectionHeader eyebrow="GENTLE REVIEW" title="식단 흐름 돌아보기" description="기록을 바탕으로 생활 습관을 돌아보는 안내이며 의료 진단이 아닙니다." /><View style={[styles.analysisGrid, isDesktop && styles.analysisGridDesktop]}><Card style={styles.analysisCard}><Text style={styles.analysisKicker}>잘한 점</Text><Text style={styles.analysisValue}>이번 달 {Object.values(mealData).filter(meal => meal.breakfast || meal.lunch || meal.dinner).length}일 기록</Text><Text style={styles.analysisText}>꾸준히 남긴 기록은 다음 식단을 고르는 좋은 단서가 됩니다.</Text></Card><Card style={styles.analysisCard}><Text style={styles.analysisKicker}>확인할 점</Text><Text style={styles.analysisValue}>{recordedSlots < 4 ? '아직 비어 있는 끼니가 있어요' : '오늘 네 끼니를 모두 기록했어요'}</Text><Text style={styles.analysisText}>정확한 판단보다 빠뜨린 기록을 가볍게 보완해 보세요.</Text></Card><Card style={styles.analysisCard}><Text style={styles.analysisKicker}>다음 추천</Text><Text style={styles.analysisValue}>기록이 적은 끼니부터 한 가지씩</Text><Button variant="soft" size="sm" label="AI에게 식단 상담하기" onPress={() => askAi(`최근 식단 기록을 바탕으로 다음 식사를 상담해줘${monthlyAnalysis ? `. 월간 코멘트: ${monthlyAnalysis}` : ''}`)} style={styles.analysisButton} /></Card></View>{monthlyAnalysis ? <Card style={styles.monthlyComment}><Ionicons name="sparkles-outline" size={20} color={color.accent} /><View style={styles.monthlyCopy}><Text style={styles.monthlyTitle}>이번 달 AI 코멘트</Text><Text style={styles.monthlyText}>{String(monthlyAnalysis)}</Text></View></Card> : <EmptyState compact title="아직 월간 AI 코멘트가 없어요" description="식단 기록이 쌓이면 기존 분석 API의 코멘트를 여기에 표시합니다." />}</View>
+          </>
+        )}
+      </ScrollView>
+    </View>
+  );
 }
 
-const buildRecipeFromMealDetails = (type, mealLabel, mealContent, details) => {
-    if (!details) {
-        return null;
-    }
-
-    const detailObject = normalizeMealDetails(details);
-    const fullText = getMealDetailText(detailObject);
-    const structuredRecipe = detailObject.recipe || parseRecipeFromText(fullText);
-    const title = structuredRecipe?.title || detailObject.title || mealContent || `${mealLabel} 레시피`;
-
-    return {
-        ...(structuredRecipe || {}),
-        id: structuredRecipe?.id || null,
-        title,
-        description: structuredRecipe?.description || detailObject.description || `${mealLabel} 식단으로 저장한 레시피입니다.`,
-        fullText,
-        sourceMealType: type,
-        shareable: false,
-    };
-};
-
-const normalizeMealDetails = (details) => (
-    typeof details === 'string' ? { fullText: details } : details
-);
-
-const getMealDetailText = (details) => {
-    const detailObject = normalizeMealDetails(details);
-    return detailObject?.fullText || detailObject?.text || '';
-};
-
-const parseRecipeFromText = (text) => {
-    if (!text || !text.includes('[재료]') || !text.includes('[조리 순서]')) {
-        return null;
-    }
-
-    const title = (text.split('\n').find(line => line.trim()) || '')
-        .replace(' 레시피입니다.', '')
-        .trim();
-    const description = text
-        .split('\n')
-        .map(line => line.trim())
-        .filter(Boolean)
-        .find(line => !line.includes('레시피입니다.') && !line.includes('조리 시간:') && !line.startsWith('[') && !line.startsWith('- ') && !/^\d+\./.test(line));
-    const summaryLine = text.split('\n').find(line => line.includes('조리 시간:') || line.includes('열량:') || line.includes('난이도:')) || '';
-    const ingredientsBlock = text.split('[재료]')[1]?.split('[조리 순서]')[0] || '';
-    const stepsBlock = text.split('[조리 순서]')[1]?.split('위 내용은')[0] || '';
-    const safetyBlock = text.includes('[건강 주의]')
-        ? text.split('[건강 주의]')[1]?.split('[재료]')[0] || ''
-        : '';
-
-    const ingredients = ingredientsBlock
-        .split('\n')
-        .map(line => line.replace(/^- /, '').trim())
-        .filter(Boolean);
-    const steps = stepsBlock
-        .split('\n')
-        .map(line => line.replace(/^\d+\.\s*/, '').trim())
-        .filter(Boolean);
-    const safetyNotes = safetyBlock
-        .split('\n')
-        .map(line => line.replace(/^- /, '').trim())
-        .filter(Boolean);
-
-    const calories = summaryLine.match(/열량:\s*(\d+)/)?.[1];
-    const cookingTime = summaryLine.match(/조리 시간:\s*(\d+)/)?.[1];
-    const difficulty = summaryLine.match(/난이도:\s*(\d+)/)?.[1];
-
-    return {
-        title,
-        description,
-        ingredients,
-        steps,
-        safetyNotes,
-        calories: calories ? Number(calories) : null,
-        cookingTime: cookingTime ? Number(cookingTime) : null,
-        difficulty: difficulty ? Number(difficulty) : null,
-    };
-};
-
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F9FAFB',
-    },
-    header: {
-        paddingHorizontal: 20,
-        paddingVertical: 14,
-        backgroundColor: '#FFF7ED',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingTop: Platform.OS === 'android' ? 40 : 14,
-        borderBottomWidth: 1,
-        borderBottomColor: '#FED7AA'
-    },
-    headerLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    menuButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 14,
-        backgroundColor: '#FFFFFF',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 12,
-        borderWidth: 1,
-        borderColor: '#FED7AA',
-    },
-    headerTitle: {
-        fontSize: 20,
-        fontWeight: '800',
-        color: '#9A3412',
-    },
-    headerSubtitle: {
-        fontSize: 12,
-        color: '#EA580C',
-        marginTop: 2,
-    },
-    calendarControls: {
-        backgroundColor: colors.primary,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        justifyContent: 'space-between',
-        padding: 20,
-        marginHorizontal: 24,
-        marginTop: 16,
-        marginBottom: 16,
-        borderRadius: 16,
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
-    },
-    monthTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: 'white',
-    },
-    arrowButton: {
-        padding: 8,
-    },
-    content: {
-        flex: 1,
-    },
-    weekRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        justifyContent: 'space-around',
-        paddingHorizontal: 24,
-        marginBottom: 8,
-    },
-    weekDayText: {
-        width: 40,
-        textAlign: 'center',
-        fontWeight: 'bold',
-        color: '#4B5563',
-    },
-    daysGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        paddingHorizontal: 24,
-    },
-    dayCellWrapper: {
-        width: '14.28%', // 100% / 7
-        aspectRatio: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    dayCell: {
-        width: '85%',
-        height: '85%',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginVertical: 4,
-        borderRadius: 12,
-        ...Platform.select({ web: { cursor: 'pointer' } })
-    },
-    todayCell: {
-        backgroundColor: colors.primary,
-        ...Platform.select({ web: { boxShadow: '0px 4px 10px rgba(109,40,217,0.3)' } })
-    },
-    dayText: {
-        fontSize: 16,
-        fontWeight: '500',
-        color: '#374151',
-    },
-    todayText: {
-        color: 'white',
-        fontWeight: 'bold',
-    },
-    hasMealDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: colors.primary,
-        marginTop: 4,
-    },
-    dotsRow: {
-        flexDirection: 'row',
-        gap: 2,
-        marginTop: 4,
-        height: 6,
-        justifyContent: 'center',
-    },
-    mealDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-    },
-    statsContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        padding: 24,
-        gap: 8,
-    },
-    statCard: {
-        flex: 1,
-        backgroundColor: 'white',
-        padding: 12,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderBottomWidth: 3,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    statIcon: {
-        fontSize: 20,
-        marginRight: 8,
-    },
-    statLabel: {
-        fontSize: 11,
-        color: '#6B7280',
-    },
-    statValue: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#1F2937',
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'flex-end',
-    },
-    modalContent: {
-        backgroundColor: 'white',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        padding: 24,
-        height: '80%',
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: 24,
-    },
-    modalDate: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#111827',
-    },
-    modalDay: {
-        fontSize: 14,
-        color: '#6B7280',
-        marginTop: 2,
-    },
-    closeButton: {
-        padding: 4,
-        backgroundColor: '#F3F4F6',
-        borderRadius: 20,
-    },
-    mealList: {
-        gap: 16,
-        paddingBottom: 24,
-    },
-    mealSection: {
-        padding: 16,
-        borderRadius: 16,
-        borderWidth: 1,
-    },
-    mealHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    mealTitle: {
-        fontWeight: 'bold',
-    },
-    mealContent: {
-        color: '#4B5563',
-        marginLeft: 30, // 텍스트 위치에 맞춤
-    },
-    snackContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        marginLeft: 30,
-        gap: 6,
-    },
-    snackTag: {
-        backgroundColor: '#FCE7F3',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 8,
-    },
-    snackText: {
-        color: '#DB2777',
-        fontSize: 12,
-    },
-    emptyState: {
-        padding: 32,
-        alignItems: 'center',
-    },
-    addMealButton: {
-        backgroundColor: colors.primary,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
-        borderRadius: 16,
-        marginTop: 'auto',
-    },
-    addMealButtonText: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 16,
-        marginLeft: 8,
-    },
-    calorieBadge: {
-        backgroundColor: 'rgba(0,0,0,0.05)',
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 6,
-    },
-    calorieText: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: '#4B5563',
-    },
-    aiDayCell: {
-        backgroundColor: '#FEF3C7', // 앰버 100
-        borderWidth: 1,
-        borderColor: '#FDE68A', // 앰버 200
-    },
-    activeDayCell: {
-        backgroundColor: '#DCFCE7', // 그린 100
-        borderWidth: 1,
-        borderColor: '#BBF7D0', // 그린 200
-    },
-    aiBadge: {
-        backgroundColor: colors.secondary,
-        paddingHorizontal: 6,
-        paddingVertical: 1,
-        borderRadius: 4,
-        marginLeft: 6,
-    },
-    aiBadgeText: {
-        color: 'white',
-        fontSize: 10,
-        fontWeight: 'bold',
-    },
-    analysisCard: {
-        backgroundColor: '#EEF2FF',
-        padding: 16,
-        margin: 16,
-        borderRadius: 12,
-        borderLeftWidth: 4,
-        borderLeftColor: colors.primary,
-    },
-    analysisTitle: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#1F2937',
-        marginBottom: 8,
-    },
-    analysisText: {
-        fontSize: 14,
-        color: '#4B5563',
-        lineHeight: 20,
-    },
-    dailySummary: {
-        backgroundColor: '#F3F4F6',
-        padding: 12,
-        borderRadius: 8,
-        marginBottom: 16,
-        marginHorizontal: 16,
-        alignItems: 'center',
-    },
-    summaryText: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#374151',
-    },
-    highlightText: {
-        color: colors.primary,
-    },
+  container: { flex: 1, backgroundColor: color.canvas },
+  mobileHeader: { minHeight: 64, paddingHorizontal: spacing.sm, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: color.borderSubtle, backgroundColor: color.surfaceRaised },
+  headerCopy: { flex: 1, paddingHorizontal: spacing.xs },
+  headerTitle: { ...typography.h3, color: color.text },
+  headerSubtitle: { ...typography.caption, color: color.textMuted },
+  scroll: { flex: 1 },
+  content: { width: '100%', maxWidth: 1180, alignSelf: 'center', padding: spacing.xl, paddingBottom: 120 },
+  titleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: spacing.lg },
+  viewTabs: { width: '100%', maxWidth: 360 },
+  partialNotice: { minHeight: 48, marginTop: spacing.lg, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: color.safety.partialBg, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  partialText: { ...typography.bodySmall, color: color.textSecondary, flex: 1 },
+  retry: { ...typography.label, color: color.info },
+  loading: { marginTop: spacing.xxl },
+  todayPanel: { marginTop: spacing.xxl },
+  dateHeading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  dateEyebrow: { ...typography.caption, color: color.accent, letterSpacing: 1 },
+  dateTitle: { ...typography.h2, color: color.text, marginTop: 3 },
+  calorieCard: { marginTop: spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: color.brandStrong },
+  calorieLabel: { ...typography.bodySmall, color: color.brandSoft },
+  calorieValue: { ...typography.h2, color: color.inverse, marginTop: 4 },
+  recordRing: { width: 70, height: 70, borderRadius: 35, borderWidth: 5, borderColor: color.accent, alignItems: 'center', justifyContent: 'center' },
+  recordValue: { ...typography.label, color: color.inverse },
+  recordLabel: { fontSize: 9, color: color.brandSoft },
+  mealList: { marginTop: spacing.sm, gap: spacing.sm },
+  mealCard: { padding: spacing.md },
+  mealTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  mealIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  mealCopy: { flex: 1 },
+  mealTitleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.xs },
+  mealTitle: { ...typography.label, fontSize: 16, color: color.text },
+  mealValue: { ...typography.body, color: color.textSecondary, marginTop: 5 },
+  mealEmpty: { color: color.textSubtle },
+  calorie: { ...typography.caption, color: color.textMuted },
+  mealActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing.xs, marginTop: spacing.xs },
+  inlineRecipe: { marginTop: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: color.canvasMuted },
+  inlineRecipeTitle: { ...typography.label, color: color.text },
+  inlineRecipeText: { ...typography.bodySmall, color: color.textSecondary, marginTop: spacing.xs },
+  weekCard: { marginTop: spacing.xxl, padding: spacing.sm },
+  weekHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  weekTitle: { ...typography.label, color: color.text },
+  weekStrip: { width: '100%', minWidth: 620, justifyContent: 'space-between', paddingTop: spacing.sm },
+  dayPill: { width: 76, minHeight: 96, borderRadius: radius.xl, alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: color.canvasMuted },
+  dayPillSelected: { backgroundColor: color.brand },
+  dayName: { ...typography.caption, color: color.textMuted },
+  dayNumber: { ...typography.h3, color: color.text },
+  dayTextSelected: { color: color.inverse },
+  recordDots: { flexDirection: 'row', gap: 3 },
+  recordDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: color.border },
+  recordDotOn: { backgroundColor: color.success },
+  recordDotSelected: { backgroundColor: color.accentSoft },
+  monthLayout: { marginTop: spacing.xxl, gap: spacing.md },
+  monthLayoutDesktop: { flexDirection: 'row', alignItems: 'flex-start' },
+  monthCard: { flex: 1, padding: spacing.md },
+  monthDetail: { flex: 1 },
+  monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
+  monthTitle: { ...typography.h3, color: color.text },
+  weekLabels: { flexDirection: 'row' },
+  weekLabel: { width: '14.285%', textAlign: 'center', ...typography.caption, color: color.textMuted, paddingVertical: spacing.xs },
+  monthGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  monthCell: { width: '14.285%', aspectRatio: 1, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  monthCellSelected: { backgroundColor: color.brand },
+  todayCell: { borderWidth: 2, borderColor: color.accent },
+  monthDay: { ...typography.bodySmall, color: color.text },
+  monthDaySelected: { color: color.inverse, fontWeight: '800' },
+  monthMarkers: { flexDirection: 'row', gap: 3, marginTop: 3 },
+  mealMarker: { width: 5, height: 5, borderRadius: 3, backgroundColor: color.success },
+  aiMarker: { width: 5, height: 5, borderRadius: 3, backgroundColor: color.accent },
+  analysisSection: { marginTop: spacing.canvas },
+  analysisGrid: { gap: spacing.sm, marginTop: spacing.xl },
+  analysisGridDesktop: { flexDirection: 'row' },
+  analysisCard: { flex: 1, minWidth: 220 },
+  analysisKicker: { ...typography.caption, color: color.accent },
+  analysisValue: { ...typography.h3, color: color.text, marginTop: spacing.xs },
+  analysisText: { ...typography.bodySmall, color: color.textMuted, marginTop: spacing.xs },
+  analysisButton: { alignSelf: 'flex-start', marginTop: spacing.md },
+  monthlyComment: { marginTop: spacing.sm, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, backgroundColor: color.accentSoft },
+  monthlyCopy: { flex: 1 },
+  monthlyTitle: { ...typography.label, color: color.text },
+  monthlyText: { ...typography.bodySmall, color: color.textSecondary, marginTop: 4 },
 });

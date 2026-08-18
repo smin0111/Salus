@@ -1,426 +1,333 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import axios from 'axios';
-import config from '../config';
-import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
-import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
+import { getHealthCheckupAnalysis, getLatestHealthCheckup, saveHealthCheckup } from '../api/healthCheckups';
+import { getApiErrorMessage, isAuthError } from '../utils/apiError';
+import { Button, Card, IconButton, Input, SectionHeader, Skeleton, Tabs, Toast } from '../components/common';
+import CheckupAnalysis from '../components/health/CheckupAnalysis';
+import useResponsive from '../hooks/useResponsive';
+import {
+  calculateBmi,
+  CHECKUP_GROUPS,
+  checkupToForm,
+  checkupToPayload,
+  createDemoCheckupForm,
+  createEmptyCheckupForm,
+  validateCheckupForm,
+} from '../features/health/checkupModel';
+import { color, radius, size, spacing, typography } from '../theme/tokens';
 
-const FIELD_GROUPS = [
-    {
-        title: '기본 정보',
-        fields: [
-            { key: 'checkupDate', label: '검진일', placeholder: '2026-05-09', keyboardType: 'default' },
-            { key: 'height', label: '키(cm)', placeholder: '170', keyboardType: 'numeric' },
-            { key: 'weight', label: '몸무게(kg)', placeholder: '68', keyboardType: 'numeric' },
-            { key: 'bmi', label: 'BMI', placeholder: '자동 계산 또는 직접 입력', keyboardType: 'numeric' },
-        ],
-    },
-    {
-        title: '주요 검진 수치',
-        fields: [
-            { key: 'systolicBp', label: '수축기 혈압', placeholder: '130', keyboardType: 'numeric' },
-            { key: 'diastolicBp', label: '이완기 혈압', placeholder: '80', keyboardType: 'numeric' },
-            { key: 'fastingGlucose', label: '공복혈당', placeholder: '105', keyboardType: 'numeric' },
-            { key: 'totalCholesterol', label: '총콜레스테롤', placeholder: '210', keyboardType: 'numeric' },
-            { key: 'hdl', label: 'HDL', placeholder: '55', keyboardType: 'numeric' },
-            { key: 'ldl', label: 'LDL', placeholder: '135', keyboardType: 'numeric' },
-            { key: 'triglyceride', label: '중성지방', placeholder: '160', keyboardType: 'numeric' },
-            { key: 'ast', label: 'AST', placeholder: '32', keyboardType: 'numeric' },
-            { key: 'alt', label: 'ALT', placeholder: '35', keyboardType: 'numeric' },
-        ],
-    },
+const VIEW_ITEMS = [
+  { id: 'analysis', label: '분석 결과' },
+  { id: 'input', label: '검진 수치 입력' },
 ];
 
-const today = () => new Date().toISOString().split('T')[0];
-
-const demoValues = {
-    checkupDate: today(),
-    height: '172',
-    weight: '78',
-    bmi: '',
-    systolicBp: '134',
-    diastolicBp: '84',
-    fastingGlucose: '108',
-    totalCholesterol: '218',
-    hdl: '48',
-    ldl: '142',
-    triglyceride: '168',
-    ast: '32',
-    alt: '38',
-};
-
 export default function HealthCheckupScreen({ onToggleSidebar, onNavigate, webMode = false }) {
-    const { token } = useAuth();
-    const [form, setForm] = useState({ checkupDate: today() });
-    const [latest, setLatest] = useState(null);
-    const [analysis, setAnalysis] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [saving, setSaving] = useState(false);
+  const { token } = useAuth();
+  const { isTablet, isDesktop } = useResponsive();
+  const [view, setView] = useState('analysis');
+  const [form, setForm] = useState(createEmptyCheckupForm);
+  const [latest, setLatest] = useState(null);
+  const [analysis, setAnalysis] = useState(null);
+  const [loading, setLoading] = useState(Boolean(token));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [toast, setToast] = useState('');
+  const [bmiManuallyEdited, setBmiManuallyEdited] = useState(false);
 
-    useEffect(() => {
-        if (token) {
-            fetchLatest();
-        }
-    }, [token]);
+  const loadCheckup = async () => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    const [latestResult, analysisResult] = await Promise.allSettled([
+      getLatestHealthCheckup(token),
+      getHealthCheckupAnalysis(token),
+    ]);
 
-    const fetchLatest = async () => {
-        if (!token) return;
-        setLoading(true);
-        try {
-            const [latestResponse, analysisResponse] = await Promise.all([
-                axios.get(`${config.API_BASE_URL}/health-checkups/latest`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                }),
-                axios.get(`${config.API_BASE_URL}/health-checkups/analysis`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                }),
-            ]);
+    let nextLatest = null;
+    const errors = [];
+    if (latestResult.status === 'fulfilled') {
+      if (latestResult.value.status !== 204 && latestResult.value.data) {
+        nextLatest = latestResult.value.data;
+        setLatest(nextLatest);
+        setForm(checkupToForm(nextLatest));
+        setBmiManuallyEdited(Boolean(nextLatest.bmi));
+      } else {
+        setLatest(null);
+        setForm(createEmptyCheckupForm());
+      }
+    } else if (!isAuthError(latestResult.reason)) errors.push(latestResult.reason);
 
-            if (latestResponse.status !== 204) {
-                setLatest(latestResponse.data);
-                setForm(toForm(latestResponse.data));
-            }
-            setAnalysis(analysisResponse.data);
-        } catch (error) {
-            if (isAuthError(error)) return;
-            console.error('건강검진 조회 실패:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    if (analysisResult.status === 'fulfilled') setAnalysis(analysisResult.value.data || null);
+    else if (!isAuthError(analysisResult.reason)) errors.push(analysisResult.reason);
 
-    const toForm = (checkup) => {
-        const next = {};
-        Object.keys(demoValues).forEach((key) => {
-            const value = checkup?.[key];
-            next[key] = value === null || value === undefined ? '' : String(value);
-        });
-        return next;
-    };
+    if (!nextLatest && latestResult.status === 'fulfilled') setView('input');
+    setError(errors[0] || null);
+    setLoading(false);
+  };
 
-    const updateField = (key, value) => {
-        setForm(prev => ({ ...prev, [key]: value }));
-    };
+  useEffect(() => {
+    loadCheckup();
+  }, [token]);
 
-    const toNumber = (value) => {
-        if (value === undefined || value === null || value === '') return null;
-        const parsed = Number(value);
-        return Number.isNaN(parsed) ? null : parsed;
-    };
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timeout = setTimeout(() => setToast(''), 2800);
+    return () => clearTimeout(timeout);
+  }, [toast]);
 
-    const handleSave = async () => {
-        if (!form.checkupDate) {
-            Alert.alert('입력 필요', '검진일을 입력해주세요.');
-            return;
-        }
+  const updateField = (key, value) => {
+    if (key === 'bmi') setBmiManuallyEdited(Boolean(value));
+    setForm(previous => {
+      const next = { ...previous, [key]: value };
+      if ((key === 'height' || key === 'weight') && !bmiManuallyEdited) {
+        const bmi = calculateBmi(next.height, next.weight);
+        next.bmi = bmi == null ? '' : String(bmi);
+      }
+      return next;
+    });
+  };
 
-        const payload = {
-            checkupDate: form.checkupDate,
-            height: toNumber(form.height),
-            weight: toNumber(form.weight),
-            bmi: toNumber(form.bmi),
-            systolicBp: toNumber(form.systolicBp),
-            diastolicBp: toNumber(form.diastolicBp),
-            fastingGlucose: toNumber(form.fastingGlucose),
-            totalCholesterol: toNumber(form.totalCholesterol),
-            hdl: toNumber(form.hdl),
-            ldl: toNumber(form.ldl),
-            triglyceride: toNumber(form.triglyceride),
-            ast: toNumber(form.ast),
-            alt: toNumber(form.alt),
-        };
+  const fillDemo = () => {
+    const demo = createDemoCheckupForm();
+    demo.bmi = String(calculateBmi(demo.height, demo.weight));
+    setForm(demo);
+    setBmiManuallyEdited(false);
+    setView('input');
+  };
 
-        setSaving(true);
-        try {
-            const response = await axios.post(`${config.API_BASE_URL}/health-checkups`, payload, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setLatest(response.data);
-            await fetchLatest();
-            Alert.alert('저장 완료', '검진 결과가 AI 추천에 반영됩니다.');
-        } catch (error) {
-            if (isAuthError(error)) return;
-            console.error('건강검진 저장 실패:', error);
-            Alert.alert('저장 실패', getErrorMessage(error, '검진 결과를 저장하지 못했습니다.'));
-        } finally {
-            setSaving(false);
-        }
-    };
+  const resetForm = () => {
+    setForm(latest ? checkupToForm(latest) : createEmptyCheckupForm());
+    setBmiManuallyEdited(Boolean(latest?.bmi));
+  };
 
-    const renderField = (field) => (
-        <View key={field.key} style={styles.field}>
-            <Text style={styles.fieldLabel}>{field.label}</Text>
-            <TextInput
-                style={styles.input}
-                value={form[field.key] || ''}
-                onChangeText={(value) => updateField(field.key, value)}
-                placeholder={field.placeholder}
-                placeholderTextColor="#9CA3AF"
-                keyboardType={field.keyboardType}
-            />
+  const persist = async () => {
+    const validationError = validateCheckupForm(form);
+    if (validationError) {
+      Alert.alert('입력 확인', validationError);
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await saveHealthCheckup(checkupToPayload(form), token);
+      await loadCheckup();
+      setView('analysis');
+      setToast('검진 결과가 저장되어 AI 추천 기준에 반영됩니다.');
+    } catch (nextError) {
+      if (!isAuthError(nextError)) {
+        setError(nextError);
+        Alert.alert('저장 실패', getApiErrorMessage(nextError, '검진 결과를 저장하지 못했습니다.'));
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const risks = Array.isArray(analysis?.risks) ? analysis.risks : [];
+
+  return (
+    <View style={styles.container}>
+      {!webMode ? (
+        <View style={styles.mobileHeader}>
+          <IconButton icon="menu" label="메뉴 열기" onPress={onToggleSidebar} />
+          <View style={styles.mobileHeaderCopy}>
+            <Text style={styles.mobileTitle}>건강검진 분석</Text>
+            <Text style={styles.mobileSubtitle}>검진 수치를 식단 기준으로</Text>
+          </View>
+          <IconButton icon="flask-outline" label="예시 수치 채우기" onPress={fillDemo} />
         </View>
-    );
+      ) : null}
 
-    const risks = analysis?.risks || [];
-    const policies = analysis?.recommendationPolicies || [];
-    const guides = analysis?.foodGuides || [];
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.fill}>
+        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+          <View style={[styles.hero, isDesktop && styles.heroDesktop]}>
+            <View style={styles.heroCopy}>
+              <Text style={styles.eyebrow}>CHECKUP TO TABLE · 02</Text>
+              <Text style={[styles.heroTitle, !isTablet && styles.heroTitleMobile]}>검진 결과를{isTablet ? ' ' : '\n'}오늘의 식사 기준으로.</Text>
+              <Text style={styles.heroBody}>수치를 다시 판정하는 대신, 서버가 분석한 고려 항목을 레시피의 재료·조리법·추천 우선순위에 연결합니다.</Text>
+              <View style={styles.heroActions}>
+                <Button label={latest ? '새 검진 결과 입력' : '검진 수치 입력'} icon="create-outline" onPress={() => setView('input')} />
+                <Button variant="ghost" label="예시로 체험" icon="flask-outline" onPress={fillDemo} textStyle={styles.heroGhostText} />
+              </View>
+            </View>
 
-    return (
-        <SafeAreaView style={styles.container}>
-            {!webMode && <View style={styles.header}>
-                <View style={styles.headerLeft}>
-                    <TouchableOpacity onPress={onToggleSidebar} style={styles.menuButton}>
-                        <Ionicons name="menu" size={24} color={colors.primary} />
-                    </TouchableOpacity>
-                    <View>
-                        <Text style={styles.headerTitle}>건강검진 연동 데모</Text>
-                        <Text style={styles.headerSubtitle}>검진 수치 기반 AI 식단 추천</Text>
-                    </View>
+            <Card style={styles.statusCard}>
+              <View style={styles.statusTop}>
+                <Text style={styles.statusLabel}>LATEST CONNECTION</Text>
+                <View style={[styles.statusDot, latest && styles.statusDotActive]} />
+              </View>
+              <Text style={styles.statusDate}>{latest?.checkupDate || '연결 전'}</Text>
+              <Text style={styles.statusDescription}>{latest ? (risks.length ? `${risks.length}개 고려 항목이 현재 추천 정책에 연결되어 있습니다.` : '균형 유지 중심의 기본 추천 정책이 연결되어 있습니다.') : '최근 결과를 입력하면 분석 흐름을 시작합니다.'}</Text>
+              <View style={styles.statusRule} />
+              <View style={styles.statusMeta}>
+                <View><Text style={styles.statusMetaValue}>{latest ? 'ON' : 'OFF'}</Text><Text style={styles.statusMetaLabel}>추천 반영</Text></View>
+                <View><Text style={styles.statusMetaValue}>{risks.length}</Text><Text style={styles.statusMetaLabel}>고려 항목</Text></View>
+                <View><Text style={styles.statusMetaValue}>{analysis?.recommendationPolicies?.length || 0}</Text><Text style={styles.statusMetaLabel}>추천 정책</Text></View>
+              </View>
+            </Card>
+          </View>
+
+          <View style={styles.viewBar}>
+            <Tabs items={VIEW_ITEMS} value={view} onChange={setView} style={styles.tabs} />
+            {isTablet ? <Text style={styles.viewHint}>{view === 'analysis' ? '저장된 최신 결과를 기준으로 표시합니다.' : '결과지에 적힌 단위 그대로 입력하세요.'}</Text> : null}
+          </View>
+
+          {error && !loading ? (
+            <View style={styles.partialNotice}>
+              <Ionicons name="cloud-offline-outline" size={18} color={color.info} />
+              <Text style={styles.partialText}>{getApiErrorMessage(error, '일부 검진 정보를 불러오지 못했습니다.')}</Text>
+              <Text style={styles.retry} onPress={loadCheckup} accessibilityRole="button">재시도</Text>
+            </View>
+          ) : null}
+
+          {loading ? (
+            <View style={styles.loading}>
+              <Skeleton width="34%" height={28} />
+              <Skeleton height={150} style={styles.loadingBlock} />
+              <View style={[styles.loadingGrid, isTablet && styles.loadingGridWide]}>
+                <Skeleton height={210} style={styles.loadingCard} />
+                <Skeleton height={210} style={styles.loadingCard} />
+              </View>
+            </View>
+          ) : view === 'analysis' ? (
+            <CheckupAnalysis
+              latest={latest}
+              analysis={analysis}
+              onStartInput={() => setView('input')}
+              onAskAi={() => onNavigate?.('chat')}
+              wide={isTablet}
+            />
+          ) : (
+            <View style={styles.formArea}>
+              <SectionHeader
+                eyebrow="CHECKUP INPUT"
+                title={latest ? '새 검진 결과 등록' : '첫 검진 결과 등록'}
+                description="빈 항목은 건너뛰어도 됩니다. 검진일과 확인 가능한 주요 수치만 정확히 입력해 주세요."
+                action={isTablet ? <Button variant="secondary" size="sm" label="예시 수치" icon="flask-outline" onPress={fillDemo} /> : null}
+              />
+
+              <Card style={styles.inputNotice}>
+                <Ionicons name="lock-closed-outline" size={19} color={color.brand} />
+                <View style={styles.inputNoticeCopy}>
+                  <Text style={styles.inputNoticeTitle}>입력한 검진 정보는 내 계정에 저장됩니다</Text>
+                  <Text style={styles.inputNoticeText}>수치 자체를 피드에 공개하지 않으며, 개인화된 식단 추천을 만드는 데 사용합니다.</Text>
                 </View>
-                <TouchableOpacity style={styles.demoButton} onPress={() => setForm(demoValues)}>
-                    <Ionicons name="flask-outline" size={16} color={colors.primary} />
-                    <Text style={styles.demoButtonText}>데모값</Text>
-                </TouchableOpacity>
-            </View>}
+              </Card>
 
-            {webMode && (
-                <View style={styles.webActionBar}>
-                    <View>
-                        <Text style={styles.webActionTitle}>검진 수치 입력</Text>
-                        <Text style={styles.webActionSubtitle}>수치를 입력하면 식단 리스크를 분석합니다</Text>
+              <View style={styles.formGroups}>
+                {CHECKUP_GROUPS.map(group => (
+                  <Card key={group.id} style={styles.formCard}>
+                    <View style={styles.formHeader}>
+                      <Text style={styles.formNumber}>{group.number}</Text>
+                      <View style={styles.formHeaderCopy}>
+                        <Text style={styles.formTitle}>{group.title}</Text>
+                        <Text style={styles.formDescription}>{group.description}</Text>
+                      </View>
                     </View>
-                    <TouchableOpacity style={styles.demoButton} onPress={() => setForm(demoValues)}>
-                        <Ionicons name="flask-outline" size={16} color={colors.primary} />
-                        <Text style={styles.demoButtonText}>데모값</Text>
-                    </TouchableOpacity>
+                    <View style={[styles.fieldGrid, isTablet && styles.fieldGridWide]}>
+                      {group.fields.map(field => (
+                        <Input
+                          key={field.key}
+                          label={`${field.label}${field.unit ? ` · ${field.unit}` : ''}`}
+                          value={form[field.key] || ''}
+                          onChangeText={value => updateField(field.key, value)}
+                          placeholder={field.placeholder}
+                          keyboardType={field.keyboardType}
+                          autoCapitalize="none"
+                          maxLength={field.type === 'date' ? 10 : 12}
+                          help={field.key === 'bmi' && form.bmi ? (bmiManuallyEdited ? '직접 입력한 값' : '키와 몸무게로 자동 계산한 값') : undefined}
+                          style={[styles.field, isTablet && styles.fieldWide]}
+                        />
+                      ))}
+                    </View>
+                  </Card>
+                ))}
+              </View>
+
+              <Card style={[styles.saveBar, isTablet && styles.saveBarWide]}>
+                <View style={styles.saveCopy}>
+                  <Text style={styles.saveTitle}>입력 내용을 확인했나요?</Text>
+                  <Text style={styles.saveText}>저장하면 최신 검진 결과와 분석이 교체되고 다음 AI 추천부터 반영됩니다.</Text>
                 </View>
-            )}
-
-            {loading ? (
-                <View style={styles.loadingBox}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={styles.loadingText}>검진 정보를 불러오는 중...</Text>
+                <View style={styles.saveActions}>
+                  <Button variant="ghost" label="입력 되돌리기" onPress={resetForm} disabled={saving} />
+                  <Button label="저장하고 분석 보기" icon="analytics-outline" onPress={persist} loading={saving} />
                 </View>
-            ) : (
-                <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-                    <View style={styles.summaryBand}>
-                        <View style={styles.summaryIcon}>
-                            <Ionicons name="document-text-outline" size={22} color="white" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.summaryTitle}>
-                                {latest ? `${latest.checkupDate} 검진 결과` : '등록된 검진 결과 없음'}
-                            </Text>
-                            <Text style={styles.summaryText}>
-                                {analysis?.summary || '검진 수치를 입력하면 AI 추천 정책이 생성됩니다.'}
-                            </Text>
-                        </View>
-                    </View>
+              </Card>
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-                    {risks.length > 0 && (
-                        <View style={styles.analysisSection}>
-                            <Text style={styles.sectionTitle}>주의 항목</Text>
-                            <View style={styles.chipRow}>
-                                {risks.map((risk) => (
-                                    <View key={risk} style={styles.riskChip}>
-                                        <Ionicons name="alert-circle-outline" size={14} color="#DC2626" />
-                                        <Text style={styles.riskChipText}>{risk}</Text>
-                                    </View>
-                                ))}
-                            </View>
-                        </View>
-                    )}
-
-                    {policies.length > 0 && (
-                        <View style={styles.analysisSection}>
-                            <Text style={styles.sectionTitle}>AI 추천 정책</Text>
-                            {policies.map((policy) => (
-                                <View key={policy} style={styles.policyRow}>
-                                    <Ionicons name="checkmark-circle-outline" size={18} color="#059669" />
-                                    <Text style={styles.policyText}>{policy}</Text>
-                                </View>
-                            ))}
-                        </View>
-                    )}
-
-                    {guides.length > 0 && (
-                        <View style={styles.analysisSection}>
-                            <Text style={styles.sectionTitle}>식단 가이드</Text>
-                            {guides.map((guide) => (
-                                <Text key={guide} style={styles.guideText}>• {guide}</Text>
-                            ))}
-                        </View>
-                    )}
-
-                    {FIELD_GROUPS.map((group) => (
-                        <View key={group.title} style={styles.formSection}>
-                            <Text style={styles.sectionTitle}>{group.title}</Text>
-                            <View style={styles.fieldGrid}>
-                                {group.fields.map(renderField)}
-                            </View>
-                        </View>
-                    ))}
-
-                    <View style={styles.actions}>
-                        <TouchableOpacity style={[styles.saveButton, saving && styles.disabledButton]} onPress={handleSave} disabled={saving}>
-                            <Ionicons name="save-outline" size={18} color="white" />
-                            <Text style={styles.saveButtonText}>{saving ? '저장 중...' : '검진 결과 저장'}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.chatButton} onPress={() => onNavigate('chat')}>
-                            <Ionicons name="chatbubbles-outline" size={18} color={colors.primary} />
-                            <Text style={styles.chatButtonText}>AI에게 식단 추천 받기</Text>
-                        </TouchableOpacity>
-                    </View>
-                </ScrollView>
-            )}
-        </SafeAreaView>
-    );
+      <Toast visible={Boolean(toast)} message={toast} tone="success" />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F8FAFC' },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingVertical: 14,
-        paddingTop: Platform.OS === 'android' ? 40 : 14,
-        backgroundColor: '#FFF7ED',
-        borderBottomWidth: 1,
-        borderBottomColor: '#FED7AA',
-    },
-    headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-    menuButton: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', marginRight: 12, borderWidth: 1, borderColor: '#FED7AA' },
-    headerTitle: { fontSize: 20, fontWeight: '800', color: '#9A3412' },
-    headerSubtitle: { fontSize: 12, color: '#EA580C', marginTop: 2 },
-    demoButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 10,
-        paddingVertical: 8,
-        borderRadius: 10,
-        backgroundColor: '#FFF7ED',
-        borderWidth: 1,
-        borderColor: '#FED7AA',
-    },
-    demoButtonText: { color: colors.primary, fontWeight: '700', fontSize: 12 },
-    webActionBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 24,
-        paddingVertical: 14,
-        backgroundColor: '#FFFFFF',
-        borderBottomWidth: 1,
-        borderBottomColor: '#EEF0F3',
-    },
-    webActionTitle: {
-        fontSize: 15,
-        fontWeight: '800',
-        color: '#202124',
-    },
-    webActionSubtitle: {
-        fontSize: 12,
-        color: '#5F6368',
-        marginTop: 2,
-    },
-    loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    loadingText: { marginTop: 12, color: '#6B7280' },
-    content: { flex: 1 },
-    contentContainer: { padding: 16, paddingBottom: 32 },
-    summaryBand: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 16,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        marginBottom: 14,
-    },
-    summaryIcon: {
-        width: 42,
-        height: 42,
-        borderRadius: 8,
-        backgroundColor: colors.primary,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 12,
-    },
-    summaryTitle: { fontSize: 16, fontWeight: '800', color: '#111827', marginBottom: 4 },
-    summaryText: { fontSize: 13, lineHeight: 19, color: '#4B5563' },
-    analysisSection: {
-        backgroundColor: 'white',
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        padding: 16,
-        marginBottom: 14,
-    },
-    sectionTitle: { fontSize: 15, fontWeight: '800', color: '#111827', marginBottom: 12 },
-    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    riskChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        backgroundColor: '#FEF2F2',
-        borderWidth: 1,
-        borderColor: '#FECACA',
-        borderRadius: 999,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-    },
-    riskChipText: { color: '#B91C1C', fontWeight: '700', fontSize: 12 },
-    policyRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 },
-    policyText: { flex: 1, color: '#374151', lineHeight: 20, marginLeft: 8 },
-    guideText: { color: '#4B5563', lineHeight: 20, marginBottom: 6 },
-    formSection: {
-        backgroundColor: 'white',
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        padding: 16,
-        marginBottom: 14,
-    },
-    fieldGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-    field: { width: Platform.OS === 'web' ? '48%' : '100%' },
-    fieldLabel: { fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 6 },
-    input: {
-        borderWidth: 1,
-        borderColor: '#D1D5DB',
-        borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        fontSize: 14,
-        backgroundColor: '#FFFFFF',
-        color: '#111827',
-    },
-    actions: { gap: 10, marginTop: 2 },
-    saveButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        backgroundColor: colors.primary,
-        borderRadius: 8,
-        paddingVertical: 14,
-    },
-    disabledButton: { opacity: 0.7 },
-    saveButtonText: { color: 'white', fontWeight: '800', fontSize: 15 },
-    chatButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#FED7AA',
-        paddingVertical: 14,
-    },
-    chatButtonText: { color: colors.primary, fontWeight: '800', fontSize: 15 },
+  container: { flex: 1, backgroundColor: color.canvas },
+  fill: { flex: 1 },
+  mobileHeader: { minHeight: size.header, paddingHorizontal: spacing.xs, paddingTop: Platform.OS === 'android' ? spacing.lg : 0, flexDirection: 'row', alignItems: 'center', backgroundColor: color.surface, borderBottomWidth: 1, borderBottomColor: color.borderSubtle },
+  mobileHeaderCopy: { flex: 1, paddingHorizontal: spacing.xs },
+  mobileTitle: { ...typography.label, fontSize: 16, color: color.text },
+  mobileSubtitle: { ...typography.caption, color: color.textMuted, marginTop: 1 },
+  content: { width: '100%', maxWidth: 1180, alignSelf: 'center', padding: spacing.md, paddingBottom: spacing.canvas },
+  hero: { backgroundColor: color.brandStrong, borderRadius: radius.xxl, padding: spacing.xl, gap: spacing.xl, overflow: 'hidden' },
+  heroDesktop: { flexDirection: 'row', padding: spacing.xxl, gap: spacing.xxl },
+  heroCopy: { flex: 1, justifyContent: 'center' },
+  eyebrow: { ...typography.caption, color: '#F0A18A', letterSpacing: 1.4, fontWeight: '900' },
+  heroTitle: { ...typography.h1, color: color.inverse, marginTop: spacing.md },
+  heroTitleMobile: { ...typography.h2 },
+  heroBody: { ...typography.body, color: '#CAD5CE', marginTop: spacing.md, maxWidth: 630 },
+  heroActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xl },
+  heroGhostText: { color: '#EDF2EF' },
+  statusCard: { flex: 0.72, backgroundColor: '#24372D', borderColor: '#43564B', shadowOpacity: 0 },
+  statusTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  statusLabel: { ...typography.caption, color: '#9EADA4', letterSpacing: 1 },
+  statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: color.textSubtle },
+  statusDotActive: { backgroundColor: color.success },
+  statusDate: { ...typography.h2, color: color.inverse, marginTop: spacing.lg },
+  statusDescription: { ...typography.bodySmall, color: '#C7D2CB', marginTop: spacing.xs },
+  statusRule: { height: 1, backgroundColor: '#43564B', marginVertical: spacing.lg },
+  statusMeta: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
+  statusMetaValue: { ...typography.h3, color: color.inverse },
+  statusMetaLabel: { ...typography.caption, color: '#93A198', marginTop: 2 },
+  viewBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.lg, marginVertical: spacing.xl },
+  tabs: { width: '100%', maxWidth: 430 },
+  viewHint: { ...typography.caption, color: color.textMuted, flex: 1, textAlign: 'right' },
+  partialNotice: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, backgroundColor: color.safety.partialBg, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.lg },
+  partialText: { ...typography.bodySmall, color: color.info, flex: 1 },
+  retry: { ...typography.label, color: color.info, padding: spacing.xs },
+  loading: { gap: spacing.md },
+  loadingBlock: { marginTop: spacing.sm },
+  loadingGrid: { gap: spacing.md },
+  loadingGridWide: { flexDirection: 'row' },
+  loadingCard: { flex: 1 },
+  formArea: { gap: spacing.xl },
+  inputNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, backgroundColor: color.surfaceTint, borderColor: color.brandSoft, shadowOpacity: 0 },
+  inputNoticeCopy: { flex: 1 },
+  inputNoticeTitle: { ...typography.label, color: color.text },
+  inputNoticeText: { ...typography.bodySmall, color: color.textMuted, marginTop: 2 },
+  formGroups: { gap: spacing.md },
+  formCard: { padding: spacing.xl },
+  formHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, paddingBottom: spacing.lg, borderBottomWidth: 1, borderBottomColor: color.borderSubtle },
+  formNumber: { ...typography.caption, color: color.accent, letterSpacing: 1.1, paddingTop: 4 },
+  formHeaderCopy: { flex: 1 },
+  formTitle: { ...typography.h3, color: color.text },
+  formDescription: { ...typography.bodySmall, color: color.textMuted, marginTop: 3 },
+  fieldGrid: { gap: spacing.md, marginTop: spacing.lg },
+  fieldGridWide: { flexDirection: 'row', flexWrap: 'wrap' },
+  field: { width: '100%' },
+  fieldWide: { width: '48.9%' },
+  saveBar: { gap: spacing.lg, borderColor: color.border },
+  saveBarWide: { flexDirection: 'row', alignItems: 'center' },
+  saveCopy: { flex: 1 },
+  saveTitle: { ...typography.h3, color: color.text },
+  saveText: { ...typography.bodySmall, color: color.textMuted, marginTop: 4 },
+  saveActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
 });
