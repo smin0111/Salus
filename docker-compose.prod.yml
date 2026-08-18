@@ -1,0 +1,105 @@
+services:
+  mysql:
+    # Spring Boot 3.2.x가 관리하는 Flyway 9.22.x와 맞춘 MySQL 8.0 계열입니다.
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-mychefai}
+      MYSQL_USER: ${MYSQL_USER:-salus}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      TZ: ${APP_TIME_ZONE:-Asia/Seoul}
+    volumes:
+      - salus-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.2-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - salus-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    stop_grace_period: ${BACKEND_STOP_GRACE_PERIOD:-40s}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-mychefai}?useSSL=false&serverTimezone=Asia/Seoul&characterEncoding=UTF-8&allowPublicKeyRetrieval=false
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-salus}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE: ${SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE:-30s}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:?APP_CORS_ALLOWED_ORIGINS is required}
+      APP_TIME_ZONE: ${APP_TIME_ZONE:-Asia/Seoul}
+      APP_ADMIN_IP_WHITELIST_ENABLED: ${APP_ADMIN_IP_WHITELIST_ENABLED:-false}
+      APP_ADMIN_ALLOWED_IPS: ${APP_ADMIN_ALLOWED_IPS:-127.0.0.1,::1}
+      APP_CHAT_RATE_LIMIT_ENABLED: ${APP_CHAT_RATE_LIMIT_ENABLED:-true}
+      APP_CHAT_RATE_LIMIT_GUEST_MAX_REQUESTS_PER_MINUTE: ${APP_CHAT_RATE_LIMIT_GUEST_MAX_REQUESTS_PER_MINUTE:-10}
+      APP_CHAT_RATE_LIMIT_AUTHENTICATED_MAX_REQUESTS_PER_MINUTE: ${APP_CHAT_RATE_LIMIT_AUTHENTICATED_MAX_REQUESTS_PER_MINUTE:-60}
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma2}
+      OLLAMA_PRIMARY_URL: ${OLLAMA_PRIMARY_URL:-http://host.docker.internal:11434/api/chat}
+      OLLAMA_SECONDARY_URL: ${OLLAMA_SECONDARY_URL:-http://host.docker.internal:11435/api/chat}
+      SEARCH_PROVIDER: ${SEARCH_PROVIDER:-duckduckgo}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      MFDS_RECIPE_SOURCE_ENABLED: ${MFDS_RECIPE_SOURCE_ENABLED:-false}
+      MFDS_RECIPE_API_KEY: ${MFDS_RECIPE_API_KEY:-}
+      RECIPE_AGENT_ENABLED: ${RECIPE_AGENT_ENABLED:-false}
+      RECIPE_AGENT_INITIAL_ROUTING_ENABLED: ${RECIPE_AGENT_INITIAL_ROUTING_ENABLED:-false}
+      RECIPE_AGENT_SOURCE_DISCOVERY_ENABLED: ${RECIPE_AGENT_SOURCE_DISCOVERY_ENABLED:-false}
+      RECIPE_AGENT_WEB_SOURCE_ENABLED: ${RECIPE_AGENT_WEB_SOURCE_ENABLED:-false}
+      RECIPE_AGENT_YOUTUBE_SOURCE_ENABLED: ${RECIPE_AGENT_YOUTUBE_SOURCE_ENABLED:-false}
+      RECIPE_AGENT_YOUTUBE_TRANSCRIPT_ENABLED: ${RECIPE_AGENT_YOUTUBE_TRANSCRIPT_ENABLED:-false}
+      RECIPE_AGENT_MEDICATION_INTERACTION_ENABLED: ${RECIPE_AGENT_MEDICATION_INTERACTION_ENABLED:-false}
+      RECIPE_AGENT_MEDICATION_LIVE_EVAL_ENABLED: ${RECIPE_AGENT_MEDICATION_LIVE_EVAL_ENABLED:-false}
+      RECIPE_AGENT_MFDS_DRUG_PRODUCT_PERMIT_ENABLED: ${RECIPE_AGENT_MFDS_DRUG_PRODUCT_PERMIT_ENABLED:-false}
+      RECIPE_AGENT_MFDS_MEDICATION_ENABLED: ${RECIPE_AGENT_MFDS_MEDICATION_ENABLED:-false}
+      RECIPE_AGENT_OPENFDA_MEDICATION_ENABLED: ${RECIPE_AGENT_OPENFDA_MEDICATION_ENABLED:-false}
+      RECIPE_AGENT_RXNORM_ENABLED: ${RECIPE_AGENT_RXNORM_ENABLED:-false}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+      MFDS_MEDICATION_API_KEY: ${MFDS_MEDICATION_API_KEY:-}
+      OPENFDA_API_KEY: ${OPENFDA_API_KEY:-}
+      IAMPORT_API_KEY: ${IAMPORT_API_KEY:?IAMPORT_API_KEY is required}
+      IAMPORT_API_SECRET: ${IAMPORT_API_SECRET:?IAMPORT_API_SECRET is required}
+      NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
+      NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+
+  admin:
+    build:
+      context: ./admin
+      args:
+        VITE_API_BASE_URL: /api
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${ADMIN_PORT:-8081}:8080"
+
+volumes:
+  salus-mysql-data:
+  salus-redis-data:
