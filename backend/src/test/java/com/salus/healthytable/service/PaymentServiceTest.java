@@ -15,6 +15,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -22,6 +23,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.lang.reflect.Method;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -87,6 +89,17 @@ class PaymentServiceTest {
         assertThat(payment.getPaidAt()).isEqualTo(LocalDateTime.of(2026, 7, 6, 0, 30));
         verify(userRepository).save(user);
         server.verify();
+    }
+
+    @Test
+    void providerVerificationIsOutsideTransactionAndOnlyDatabaseWriteHelperIsTransactional() throws Exception {
+        Method providerVerification = PaymentService.class.getMethod(
+                "verifyAndSavePayment", String.class, String.class, Long.class);
+        Method databaseWrite = PaymentTxHelper.class.getMethod(
+                "savePaymentAndUpgradeUser", String.class, String.class, Integer.class, String.class, Long.class);
+
+        assertThat(providerVerification.isAnnotationPresent(Transactional.class)).isFalse();
+        assertThat(databaseWrite.isAnnotationPresent(Transactional.class)).isTrue();
     }
 
     @Test
