@@ -1,0 +1,23 @@
+{
+  "evaluationVersion": "v4",
+  "sourceCommitSha": "6569f2366d177ab6eed56580245e66e6f93ef13a",
+  "sourceBranch": "feature-레시피에이전트-0729",
+  "gitDirtyAtStart": false,
+  "externalApisEnabled": false,
+  "startedAtUtc": "2026-07-29T11:47:15.017607Z",
+  "finishedAtUtc": "2026-07-29T11:47:16.799104Z",
+  "javaVersion": "17.0.14",
+  "mavenVersion": "Apache Maven 3.9.9 (8e8579a9e76f7d015ee5ec7bfcdc97d260186937)",
+  "mavenTestsRun": 329,
+  "mavenFailures": 0,
+  "mavenErrors": 0,
+  "mavenSkipped": 0,
+  "runnerCommand": "RECIPE_AGENT_OPERATIONAL_EVAL_PHASE=final-verification RECIPE_AGENT_OPERATIONAL_EVAL_RUN_ID=6569f2366d177ab6eed56580245e66e6f93ef13a-20260729T114712Z mvn -q -Dtest=RecipeAgentOperationalPathEvaluationRunner test (external v4 runner copy)",
+  "caseCount": 70,
+  "executionSuccessCount": 70,
+  "executionFailureCount": 0,
+  "retryCount": 0,
+  "operationalMultiMedicationFollowUpContextLoss": 0,
+  "fixtureLatencyAverageMs": 24.3,
+  "fixtureLatencyP95Ms": 22
+}

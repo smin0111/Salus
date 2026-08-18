@@ -33,6 +33,8 @@ const WEB_SHELL_EXCLUDED_SCREENS = [
   'upgrade',
 ];
 
+// 보호 화면 목록은 화면 이동 직전에 한 번 더 확인합니다.
+// 라우팅만 숨기는 것으로는 부족하고, 사용자가 URL을 직접 입력하는 web 환경도 고려해야 합니다.
 const PROTECTED_SCREENS = ['community', 'fridge', 'calendar', 'health', 'health-checkup', 'account-settings', 'create-post'];
 
 const WEB_NAV_ITEMS = [
@@ -92,6 +94,14 @@ const getWebPathForScreen = (screen) => {
 };
 
 const isProtectedScreen = (screen) => PROTECTED_SCREENS.includes(screen);
+
+const createEmptyHealthProfile = () => ({
+  allergies: [],
+  chronicConditions: [],
+  dietaryRestrictions: [],
+  medications: [],
+  goals: [],
+});
 
 function WebAppShell({ children, currentScreen, onNavigate, isLoggedIn, user, onLogout }) {
   const [title, subtitle] = WEB_SCREEN_TITLES[currentScreen] || WEB_SCREEN_TITLES.chat;
@@ -179,6 +189,7 @@ function WebAppShell({ children, currentScreen, onNavigate, isLoggedIn, user, on
 export default function AppNavigator() {
   const [currentScreen, setCurrentScreen] = useState('chat');
   const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [recipeBackScreen, setRecipeBackScreen] = useState('community');
   const [selectedPost, setSelectedPost] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAppReady, setIsAppReady] = useState(false);
@@ -190,11 +201,7 @@ export default function AppNavigator() {
     { id: 1, text: '안녕하세요! 건강한 식탁을 위한 Salus입니다.\n알레르기나 건강 정보를 알려주시면 더 안전한 레시피를 추천해드려요.', sender: 'ai' }
   ]);
   const [healthProfile, setHealthProfile] = useState({
-    allergies: [],
-    chronicConditions: [],
-    dietaryRestrictions: [],
-    medications: [],
-    goals: [],
+    ...createEmptyHealthProfile(),
   });
   const [mealData, setMealData] = useState({});
   const [fridgeItems, setFridgeItems] = useState([]);
@@ -226,6 +233,8 @@ export default function AppNavigator() {
       return;
     }
 
+    // 저장소 복원 중에는 기다리고, 복원이 끝났는데 세션이 없으면 로그인 화면으로 보냅니다.
+    // 이렇게 해야 새로고침 직후 보호 화면이 잠깐 노출되는 깜빡임을 줄일 수 있습니다.
     setCurrentScreen('login');
     if (Platform.OS === 'web') {
       window.history.replaceState({}, '', getWebPathForScreen('login'));
@@ -247,15 +256,19 @@ export default function AppNavigator() {
     }
   }, [isLoggedIn, token]);
 
-  // 로그인 상태가 변동될 때(로그인 완료 또는 로그아웃 실행) 대화방 세션을 철저히 상호 분리하고 초기화
+  // 로그인 상태가 변동될 때(로그인 완료 또는 로그아웃 실행) 대화방 세션과 건강 정보를 상호 분리합니다.
+  // 알레르기 정보가 이전 사용자나 게스트 채팅으로 섞이면 추천 결과와 개인정보 보호가 동시에 깨질 수 있습니다.
   useEffect(() => {
     setMessages([
       { id: 1, text: '안녕하세요! 건강한 식탁을 위한 Salus입니다.\n알레르기나 건강 정보를 알려주시면 더 안전한 레시피를 추천해드려요.', sender: 'ai' }
     ]);
-  }, [isLoggedIn]);
+    setHealthProfile(createEmptyHealthProfile());
+  }, [isLoggedIn, token, user?.id]);
 
   const handleNavigate = (screen, data = null) => {
     if (isProtectedScreen(screen) && !hasSession) {
+      // 클라이언트 보호는 사용자 경험을 위한 1차 방어입니다.
+      // 실제 데이터 보호는 백엔드 JWT 인증이 담당하지만, 화면에서도 불필요한 API 호출을 줄입니다.
       alert('로그인이 필요한 기능입니다.');
       setCurrentScreen('login');
       if (Platform.OS === 'web') {
@@ -265,7 +278,9 @@ export default function AppNavigator() {
     }
 
     if (screen === 'recipe-detail') {
-      setSelectedRecipe(data);
+      const recipePayload = data && data.recipe ? data.recipe : data;
+      setSelectedRecipe(recipePayload);
+      setRecipeBackScreen(data?.returnTo || currentScreen || 'community');
     }
     if (screen === 'post-detail') {
       setSelectedPost(data);
@@ -282,6 +297,7 @@ export default function AppNavigator() {
     setMessages([
       { id: 1, text: '안녕하세요! 건강한 식탁을 위한 Salus입니다.\n알레르기나 건강 정보를 알려주시면 더 안전한 레시피를 추천해드려요.', sender: 'ai' }
     ]);
+    setHealthProfile(createEmptyHealthProfile());
     handleNavigate('chat');
   };
 
@@ -290,7 +306,7 @@ export default function AppNavigator() {
       case 'payment-result':
         return <PaymentResultScreen onNavigate={handleNavigate} />;
       case 'recipe-detail':
-        return <RecipeDetailScreen recipe={selectedRecipe} onBack={() => handleNavigate('community')} />;
+        return <RecipeDetailScreen recipe={selectedRecipe} onBack={() => handleNavigate(recipeBackScreen || 'community')} />;
       case 'about':
         return <LandingPageScreen onNavigate={handleNavigate} />;
       case 'chat':
@@ -313,7 +329,7 @@ export default function AppNavigator() {
       case 'post-detail':
         return <PostDetailScreen post={selectedPost} user={user} onNavigate={handleNavigate} onBack={() => handleNavigate('community')} webMode={Platform.OS === 'web'} />;
       case 'calendar':
-        return <CalendarScreen mealData={mealData} setMealData={setMealData} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} webMode={Platform.OS === 'web'} />;
+        return <CalendarScreen mealData={mealData} setMealData={setMealData} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={Platform.OS === 'web'} />;
       case 'health':
         return <HealthScreen healthProfile={healthProfile} setHealthProfile={setHealthProfile} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} webMode={Platform.OS === 'web'} />;
       case 'health-checkup':

@@ -1,0 +1,4 @@
+# Preserve byte-identical immutable v4 evidence files.
+# Their original SHA-256 values are verified by the evaluation manifest.
+results/6569f2366d177ab6eed56580245e66e6f93ef13a-20260729T114712Z/report.md -whitespace
+support/pom.xml -whitespace

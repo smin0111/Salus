@@ -68,7 +68,7 @@ export default function LandingPageScreen({ onNavigate }) {
 
             <View style={[styles.hero, isWeb && styles.webHero]}>
                 <View style={styles.heroCopy}>
-                    <Text style={styles.kicker}>MYCHEF AI</Text>
+                    <Text style={styles.kicker}>SALUS</Text>
                     <Text style={styles.heroTitle}>내 건강과 냉장고를 이해하는 AI 셰프</Text>
                     <Text style={styles.heroText}>
                         Salus는 오늘 가진 재료와 건강 조건을 함께 보고, 먹기 좋은 한 끼를 차분하게 제안하는 개인 식탁 도우미입니다.

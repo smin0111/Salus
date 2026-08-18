@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ScrollView, Modal, Platform, ActivityIndicator, Alert, Animated } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ScrollView, Modal, Platform, ActivityIndicator, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import axios from 'axios';
@@ -10,7 +10,7 @@ import { isAuthError } from '../utils/apiError';
 
 const WEEK_DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
-export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, onToggleSidebar, webMode = false }) {
+export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, onToggleSidebar, onNavigate, webMode = false }) {
     const { isLoggedIn, token } = useAuth();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(null);
@@ -86,7 +86,7 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
                     }
                 } catch (e) {
                     console.error("JSON Parse Error:", e);
-                    // Alert.alert("데이터 오류", "레시피 정보를 불러오는 중 오류가 발생했습니다: " + e.message);
+                    // 일부 식단 상세 JSON이 깨져도 캘린더 전체 조회는 계속 진행합니다.
                 }
 
                 transformedData[log.recordDate] = {
@@ -166,12 +166,25 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
     // 렌더링 준비
     const selectedMeal = getMealForDate(selectedDate);
 
+    const openMealRecipeDetail = (type, title, mealContent, details) => {
+        const recipe = buildRecipeFromMealDetails(type, title, mealContent, details);
+        if (!recipe || !onNavigate) {
+            return;
+        }
+
+        setShowMealModal(false);
+        onNavigate('recipe-detail', {
+            recipe,
+            returnTo: 'calendar',
+        });
+    };
+
     const renderMealSection = (type, icon, title, color, bgColor) => {
         const mealContent = selectedMeal ? selectedMeal[type] : null;
         const calories = selectedMeal ? selectedMeal[`${type}Calories`] : null;
         const isAi = selectedMeal ? selectedMeal[`isAi${type.charAt(0).toUpperCase() + type.slice(1)}`] : false;
         const details = selectedMeal?.mealDetails?.[type];
-        const hasDetails = details && details.fullText;
+        const hasDetails = Boolean(getMealDetailText(details) || details?.recipe);
 
         return (
             <TouchableOpacity
@@ -179,11 +192,7 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
                 activeOpacity={hasDetails ? 0.7 : 1}
                 onPress={() => {
                     if (hasDetails) {
-                        Alert.alert(
-                            `${title} 레시피 상세`,
-                            details.fullText,
-                            [{ text: "확인", style: "default" }]
-                        );
+                        openMealRecipeDetail(type, title, mealContent, details);
                     }
                 }}
             >
@@ -442,6 +451,85 @@ export default function CalendarScreen({ mealData, setMealData, isSidebarOpen, o
         </SafeAreaView>
     );
 }
+
+const buildRecipeFromMealDetails = (type, mealLabel, mealContent, details) => {
+    if (!details) {
+        return null;
+    }
+
+    const detailObject = normalizeMealDetails(details);
+    const fullText = getMealDetailText(detailObject);
+    const structuredRecipe = detailObject.recipe || parseRecipeFromText(fullText);
+    const title = structuredRecipe?.title || detailObject.title || mealContent || `${mealLabel} 레시피`;
+
+    return {
+        ...(structuredRecipe || {}),
+        id: structuredRecipe?.id || null,
+        title,
+        description: structuredRecipe?.description || detailObject.description || `${mealLabel} 식단으로 저장한 레시피입니다.`,
+        fullText,
+        sourceMealType: type,
+        shareable: false,
+    };
+};
+
+const normalizeMealDetails = (details) => (
+    typeof details === 'string' ? { fullText: details } : details
+);
+
+const getMealDetailText = (details) => {
+    const detailObject = normalizeMealDetails(details);
+    return detailObject?.fullText || detailObject?.text || '';
+};
+
+const parseRecipeFromText = (text) => {
+    if (!text || !text.includes('[재료]') || !text.includes('[조리 순서]')) {
+        return null;
+    }
+
+    const title = (text.split('\n').find(line => line.trim()) || '')
+        .replace(' 레시피입니다.', '')
+        .trim();
+    const description = text
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .find(line => !line.includes('레시피입니다.') && !line.includes('조리 시간:') && !line.startsWith('[') && !line.startsWith('- ') && !/^\d+\./.test(line));
+    const summaryLine = text.split('\n').find(line => line.includes('조리 시간:') || line.includes('열량:') || line.includes('난이도:')) || '';
+    const ingredientsBlock = text.split('[재료]')[1]?.split('[조리 순서]')[0] || '';
+    const stepsBlock = text.split('[조리 순서]')[1]?.split('위 내용은')[0] || '';
+    const safetyBlock = text.includes('[건강 주의]')
+        ? text.split('[건강 주의]')[1]?.split('[재료]')[0] || ''
+        : '';
+
+    const ingredients = ingredientsBlock
+        .split('\n')
+        .map(line => line.replace(/^- /, '').trim())
+        .filter(Boolean);
+    const steps = stepsBlock
+        .split('\n')
+        .map(line => line.replace(/^\d+\.\s*/, '').trim())
+        .filter(Boolean);
+    const safetyNotes = safetyBlock
+        .split('\n')
+        .map(line => line.replace(/^- /, '').trim())
+        .filter(Boolean);
+
+    const calories = summaryLine.match(/열량:\s*(\d+)/)?.[1];
+    const cookingTime = summaryLine.match(/조리 시간:\s*(\d+)/)?.[1];
+    const difficulty = summaryLine.match(/난이도:\s*(\d+)/)?.[1];
+
+    return {
+        title,
+        description,
+        ingredients,
+        steps,
+        safetyNotes,
+        calories: calories ? Number(calories) : null,
+        cookingTime: cookingTime ? Number(cookingTime) : null,
+        difficulty: difficulty ? Number(difficulty) : null,
+    };
+};
 
 const styles = StyleSheet.create({
     container: {

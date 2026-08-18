@@ -1,0 +1,263 @@
+package com.salus.healthytable.service;
+
+import com.salus.healthytable.domain.CommunityPost;
+import com.salus.healthytable.domain.PostLike;
+import com.salus.healthytable.domain.User;
+import com.salus.healthytable.dto.CommunityPostDTO;
+import com.salus.healthytable.dto.CreatePostRequestDTO;
+import com.salus.healthytable.dto.UpdatePostRequestDTO;
+import com.salus.healthytable.repository.CommunityPostRepository;
+import com.salus.healthytable.repository.PostCommentRepository;
+import com.salus.healthytable.repository.PostLikeRepository;
+import com.salus.healthytable.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+public class CommunityPostService {
+
+    private final CommunityPostRepository postRepository;
+    private final PostLikeRepository likeRepository;
+    private final PostCommentRepository commentRepository;
+    private final UserRepository userRepository;
+    private final Clock clock;
+
+    /**
+     * 전체 게시글 조회 (좋아요 수, 댓글 수 포함)
+     */
+    public List<CommunityPostDTO> getAllPosts(Long currentUserId) {
+        List<CommunityPost> posts = postRepository.findAllByOrderByCreatedAtDesc();
+        return convertToDTO(posts, currentUserId);
+    }
+
+    /**
+     * 인기 게시글 조회 (좋아요 수 기준 + 기간 필터)
+     */
+    public List<CommunityPostDTO> getPopularPosts(Long currentUserId, int limit, String timeframe) {
+        List<CommunityPost> posts;
+        LocalDateTime since;
+
+        if ("daily".equalsIgnoreCase(timeframe)) {
+            since = LocalDateTime.now(clock).minusDays(1);
+        } else if ("weekly".equalsIgnoreCase(timeframe)) {
+            since = LocalDateTime.now(clock).minusWeeks(1);
+        } else if ("monthly".equalsIgnoreCase(timeframe)) {
+            since = LocalDateTime.now(clock).minusMonths(1);
+        } else {
+            // timeframe이 없으면 기간 필터를 걸지 않습니다.
+            // 인기글의 의미가 바뀌지 않도록 기본 동작은 기존 전체 기간 기준으로 유지합니다.
+            return getPopularPosts(currentUserId, limit);
+        }
+
+        posts = postRepository.findByCreatedAtAfterOrderByCreatedAtDesc(since);
+
+        // 정렬 전에 convertToDTO에서 좋아요/댓글/작성자 정보를 한 번에 모읍니다.
+        // 여기서 게시글마다 Repository를 다시 호출하면 기간 필터를 적용해도 N+1 문제가 되살아납니다.
+        List<CommunityPostDTO> dtos = convertToDTO(posts, currentUserId);
+        return dtos.stream()
+                .sorted((a, b) -> Long.compare(b.getLikeCount(), a.getLikeCount()))
+                .limit(limit)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 기존 인기 게시글 조회 (전체 기간)
+     */
+    public List<CommunityPostDTO> getPopularPosts(Long currentUserId, int limit) {
+        List<CommunityPost> allPosts = postRepository.findAllByOrderByCreatedAtDesc();
+        List<CommunityPostDTO> dtos = convertToDTO(allPosts, currentUserId);
+        return dtos.stream()
+                .sorted((a, b) -> Long.compare(b.getLikeCount(), a.getLikeCount()))
+                .limit(limit)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 게시글 상세 조회
+     */
+    public CommunityPostDTO getPostById(Long postId, Long currentUserId) {
+        CommunityPost post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다."));
+
+        List<CommunityPostDTO> dtos = convertToDTO(Collections.singletonList(post), currentUserId);
+        return dtos.isEmpty() ? null : dtos.get(0);
+    }
+
+    /**
+     * 게시글 작성
+     */
+    @Transactional
+    public CommunityPost createPost(CreatePostRequestDTO request) {
+        CommunityPost post = new CommunityPost();
+        post.setUserId(request.getUserId());
+        post.setTitle(request.getTitle());
+        post.setContent(request.getContent());
+        post.setIngredients(request.getIngredients());
+        post.setSteps(request.getSteps());
+        post.setTags(request.getTags());
+        post.setImageUrl(request.getImageUrl());
+
+        return postRepository.save(post);
+    }
+
+    /**
+     * 게시글 수정 (권한 확인)
+     */
+    @Transactional
+    public CommunityPost updatePost(Long postId, Long userId, UpdatePostRequestDTO request) {
+        CommunityPost post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다."));
+
+        // 권한 확인
+        if (!post.getUserId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인의 게시글만 수정할 수 있습니다.");
+        }
+
+        post.setTitle(request.getTitle());
+        post.setContent(request.getContent());
+        post.setIngredients(request.getIngredients());
+        post.setSteps(request.getSteps());
+        post.setTags(request.getTags());
+        post.setImageUrl(request.getImageUrl());
+
+        return postRepository.save(post);
+    }
+
+    /**
+     * 게시글 삭제 (권한 확인)
+     */
+    @Transactional
+    public void deletePost(Long postId, Long userId) {
+        CommunityPost post = postRepository.findById(postId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다."));
+
+        // 권한 확인
+        if (!post.getUserId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인의 게시글만 삭제할 수 있습니다.");
+        }
+
+        postRepository.delete(post);
+    }
+
+    /**
+     * 좋아요 토글 (좋아요/좋아요 취소)
+     */
+    @Transactional
+    public Map<String, Object> toggleLike(Long postId, Long userId) {
+        // 게시글 존재 확인
+        if (!postRepository.existsById(postId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다.");
+        }
+
+        Optional<PostLike> existingLike = likeRepository.findByPostIdAndUserId(postId, userId);
+        boolean isLiked;
+
+        if (existingLike.isPresent()) {
+            // 좋아요 취소
+            likeRepository.delete(existingLike.get());
+            isLiked = false;
+        } else {
+            // 좋아요 추가
+            PostLike like = new PostLike();
+            like.setPostId(postId);
+            like.setUserId(userId);
+            likeRepository.save(like);
+            isLiked = true;
+        }
+
+        long likeCount = likeRepository.countByPostId(postId);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("isLiked", isLiked);
+        result.put("likeCount", likeCount);
+        return result;
+    }
+
+    /**
+     * Entity를 DTO로 변환 (좋아요 수, 댓글 수, 사용자 정보 포함)
+     */
+    private List<CommunityPostDTO> convertToDTO(List<CommunityPost> posts, Long currentUserId) {
+        if (posts.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Long> postIds = posts.stream()
+                .map(CommunityPost::getId)
+                .collect(Collectors.toList());
+
+        // 목록 화면에서는 게시글 개수만큼 작성자/좋아요/댓글 정보를 붙여야 합니다.
+        // 각 게시글마다 개별 조회하면 20개 게시글에서 수십 번의 쿼리가 나가므로, 먼저 ID 목록을 모읍니다.
+        List<Long> userIds = posts.stream()
+                .map(CommunityPost::getUserId)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, User> userMap = userRepository.findByIdIn(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+
+        // 좋아요 수는 IN + GROUP BY로 한 번에 조회합니다.
+        // 이렇게 하면 게시글 수가 늘어도 좋아요 집계 쿼리는 1번으로 고정됩니다.
+        Map<Long, Long> likeCountMap = likeRepository.countLikesByPostIds(postIds).stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (Long) row[1]
+                ));
+
+        // 댓글 수도 같은 방식으로 미리 Map에 담아 둡니다.
+        // DTO 조립 단계에서는 DB가 아니라 메모리 Map을 읽기 때문에 응답 시간이 안정적입니다.
+        Map<Long, Long> commentCountMap = commentRepository.countCommentsByPostIds(postIds).stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (Long) row[1]
+                ));
+
+        // 현재 사용자의 좋아요 여부도 게시글별 exists 조회를 반복하지 않습니다.
+        // 로그인하지 않은 공개 조회에서는 빈 Set을 사용해 같은 DTO 변환 흐름을 재사용합니다.
+        Set<Long> likedPostIds = currentUserId != null ?
+                new HashSet<>(likeRepository.findLikedPostIdsByPostIdsAndUserId(postIds, currentUserId)) :
+                Collections.emptySet();
+
+        return posts.stream().map(post -> {
+            User user = userMap.get(post.getUserId());
+            long likeCount = likeCountMap.getOrDefault(post.getId(), 0L);
+            long commentCount = commentCountMap.getOrDefault(post.getId(), 0L);
+            boolean isLiked = likedPostIds.contains(post.getId());
+
+            return new CommunityPostDTO(
+                    post.getId(),
+                    post.getUserId(),
+                    user != null ? user.getName() : "알 수 없음",
+                    post.getTitle(),
+                    post.getContent(),
+                    post.getIngredients(),
+                    post.getSteps(),
+                    post.getTags(),
+                    post.getImageUrl(),
+                    likeCount,
+                    commentCount,
+                    isLiked,
+                    post.getCreatedAt(),
+                    post.getUpdatedAt());
+        }).collect(Collectors.toList());
+    }
+
+    /**
+     * 게시글 검색 (제목, 내용)
+     */
+    public List<CommunityPostDTO> searchPosts(String keyword, Long currentUserId) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return getAllPosts(currentUserId);
+        }
+        List<CommunityPost> posts = postRepository.findByTitleContainingOrContentContainingOrderByCreatedAtDesc(keyword,
+                keyword);
+        return convertToDTO(posts, currentUserId);
+    }
+}

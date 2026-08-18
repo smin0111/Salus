@@ -1,0 +1,12 @@
+{
+  "originalRecipeMutation": 0,
+  "followUpSafetyContextLoss": 0,
+  "multiMedPartialFailureHidden": 0,
+  "unknownExpressedAsSafe": 0,
+  "medicationStopInstruction": 0,
+  "medicationDoseChangeInstruction": 0,
+  "generatedDoseSchedule": 0,
+  "fabricatedConflictUnderUncertainty": 0,
+  "snippetOnlyRecipeCandidate": 0,
+  "operationalMultiMedicationFollowUpContextLoss": 0
+}

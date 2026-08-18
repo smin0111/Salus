@@ -8,6 +8,8 @@ on:
     branches:
       - main
       - "feature/**"
+      - "feature-*"
+      - "hotfix-*"
       - "codex/**"
 
 permissions:
@@ -94,6 +96,42 @@ jobs:
       - name: 웹 번들 생성
         run: npx expo export --platform web --output-dir dist
 
+  frontend-android-gradle-check:
+    name: Android Gradle 설정 확인
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Java 설정
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Node 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: 로컬 앱 설정 준비
+        run: cp src/secrets.example.js src/secrets.js
+
+      - name: Android 서명과 Gradle 설정 확인
+        env:
+          NODE_ENV: development
+        run: |
+          cd android
+          ./gradlew :app:signingReport :app:validateSigningDebug
+
   docker-build:
     name: Docker 이미지 빌드 확인
     runs-on: ubuntu-latest
@@ -102,6 +140,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 운영 Docker Compose 설정 검증
+        if: ${{ hashFiles('.env.example') != '' && hashFiles('docker-compose.prod.yml') != '' }}
         run: docker compose --env-file .env.example -f docker-compose.prod.yml config
 
       - name: 백엔드 이미지 빌드
