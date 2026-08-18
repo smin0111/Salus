@@ -69,6 +69,7 @@ jobs:
   frontend-web-export:
     name: 프론트엔드 웹 내보내기
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: frontend
@@ -90,7 +91,7 @@ jobs:
         run: cp src/secrets.example.js src/secrets.js
 
       - name: 높음 이상 보안 취약점 차단
-        run: npm audit --audit-level=high
+        run: node ../.github/scripts/npm-audit-policy.mjs high frontend
 
       - name: 웹 번들 생성
         run: npx expo export --platform web --output-dir dist
