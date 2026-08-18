@@ -143,8 +143,12 @@
                                 <requireMavenVersion>
                                     <version>[3.9.0,)</version>
                                 </requireMavenVersion>
+                                <!-- Lombok과 Mockito가 지원하는 범위를 벗어난 JDK로 빌드하면
+                                     애노테이션 처리와 mock 생성이 조용히 깨지고, 원인과 무관한
+                                     "cannot find symbol" 에러 수백 개로 나타납니다.
+                                     CI와 동일한 17.x만 허용해 즉시 실패시킵니다. -->
                                 <requireJavaVersion>
-                                    <version>[17,)</version>
+                                    <version>[17,18)</version>
                                 </requireJavaVersion>
                             </rules>
                         </configuration>
