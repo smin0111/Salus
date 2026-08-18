@@ -27,10 +27,10 @@ public class OllamaRecipeGenerationClient implements RecipeGenerationClient {
     @Value("${ollama.recipe-model:${ollama.model:gemma2}}")
     private String recipeModel;
 
-    @Value("${ollama.recipe-temperature:0.15}")
+    @Value("${ollama.recipe-temperature:0.0}")
     private double recipeTemperature;
 
-    @Value("${ollama.recipe-top-p:0.8}")
+    @Value("${ollama.recipe-top-p:0.3}")
     private double recipeTopP;
 
     @Value("${ollama.recipe-num-predict:1200}")

@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
 import java.util.LinkedHashSet;
@@ -39,7 +40,8 @@ public class RecipeAgentOrchestrator {
     private boolean personalizationEnabled = true;
 
     public Mono<ChatDto.Response> handle(Long userId, Long chatSessionId, ChatDto.Request request) {
-        return Mono.fromCallable(() -> execute(userId, chatSessionId, request));
+        return Mono.fromCallable(() -> execute(userId, chatSessionId, request))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     private ChatDto.Response execute(Long userId, Long chatSessionId, ChatDto.Request request) {
@@ -199,11 +201,11 @@ public class RecipeAgentOrchestrator {
                 .toList();
     }
 
-    private RecipeSourceType sourceType(Object value) {
+    RecipeSourceType sourceType(Object value) {
         try {
             return RecipeSourceType.valueOf(string(value));
         } catch (Exception e) {
-            return RecipeSourceType.INTERNAL_DB;
+            return RecipeSourceType.GENERAL_WEB;
         }
     }
 

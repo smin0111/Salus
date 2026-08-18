@@ -7,6 +7,7 @@ public record GeneratedCookingStep(
         Integer order,
         String instruction,
         String heatLevel,
+        Integer temperatureC,
         Integer minutes,
         String completionCue,
         String recoveryTip,
@@ -18,8 +19,19 @@ public record GeneratedCookingStep(
             String heatLevel,
             Integer minutes,
             String completionCue,
+            String recoveryTip,
+            List<String> ingredientNames) {
+        this(order, instruction, heatLevel, null, minutes, completionCue, recoveryTip, ingredientNames);
+    }
+
+    public GeneratedCookingStep(
+            Integer order,
+            String instruction,
+            String heatLevel,
+            Integer minutes,
+            String completionCue,
             String recoveryTip) {
-        this(order, instruction, heatLevel, minutes, completionCue, recoveryTip, List.of());
+        this(order, instruction, heatLevel, null, minutes, completionCue, recoveryTip, List.of());
     }
 
     public String normalizedHeatLevel() {
