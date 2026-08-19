@@ -331,13 +331,13 @@ export default function AppNavigator() {
       case 'calendar':
         return <CalendarScreen mealData={mealData} setMealData={setMealData} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={Platform.OS === 'web'} />;
       case 'health':
-        return <HealthScreen healthProfile={healthProfile} setHealthProfile={setHealthProfile} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} webMode={Platform.OS === 'web'} />;
+        return <HealthScreen healthProfile={healthProfile} setHealthProfile={setHealthProfile} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={Platform.OS === 'web'} />;
       case 'health-checkup':
         return <HealthCheckupScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={Platform.OS === 'web'} />;
       case 'account-settings':
         return <AccountSettingsScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={Platform.OS === 'web'} />;
       case 'fridge':
-        return <FridgeScreen fridgeItems={fridgeItems} setFridgeItems={setFridgeItems} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} webMode={Platform.OS === 'web'} />;
+        return <FridgeScreen fridgeItems={fridgeItems} setFridgeItems={setFridgeItems} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={Platform.OS === 'web'} />;
       case 'search':
         return <SearchScreen onBack={() => handleNavigate('community')} onNavigate={handleNavigate} user={user} webMode={Platform.OS === 'web'} />;
       case 'login':
