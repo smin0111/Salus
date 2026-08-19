@@ -38,6 +38,22 @@ public class OllamaLlmService implements LlmService {
         this.webClient = webClient;
     }
 
+    /**
+     * 추론 과정을 노출하는 모델에서 thinking을 끌지 결정한다.
+     *
+     * <p>qwen3는 thinking이 기본 활성이라 num_predict 예산을 추론에 먼저 쓴다.
+     * 채팅 기본값 700 토큰으로는 추론만 하다 한도에 걸려 답변이 비어서 나간다.
+     * 실측에서 thinking 2,780자를 만들고 content는 0자였다.
+     *
+     * @return 끌 모델이면 FALSE, 그 외에는 null(모델 기본값 유지)
+     */
+    static Boolean thinkingSettingFor(String model) {
+        if (model == null) {
+            return null;
+        }
+        return model.toLowerCase(java.util.Locale.ROOT).startsWith("qwen3") ? Boolean.FALSE : null;
+    }
+
     @Override
     public Mono<String> getChatResponse(String currentMessage, List<ChatDto.Message> history) {
         List<OllamaMessage> messages = new java.util.ArrayList<>();
@@ -55,7 +71,7 @@ public class OllamaLlmService implements LlmService {
                 ollamaModel,
                 messages,
                 false,
-                null,
+                thinkingSettingFor(ollamaModel),
                 Map.of(
                         "temperature", 0.1,
                         "top_p", 0.65,
