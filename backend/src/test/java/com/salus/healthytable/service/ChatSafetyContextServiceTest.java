@@ -13,6 +13,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class ChatSafetyContextServiceTest {
+    private static com.salus.healthytable.service.allergen.AllergenMatcher allergenMatcher() {
+        com.salus.healthytable.service.allergen.AllergenDictionary dictionary =
+                new com.salus.healthytable.service.allergen.AllergenDictionary();
+        dictionary.load();
+        return new com.salus.healthytable.service.allergen.AllergenMatcher(dictionary);
+    }
+
 
     @Test
     void healthProfileReadFailureIsNotTreatedAsAvailablePersonalizationContext() {
@@ -20,7 +27,8 @@ class ChatSafetyContextServiceTest {
         ChatSafetyContextService service = new ChatSafetyContextService(
                 healthProfileRepository,
                 mock(HealthCheckupRepository.class),
-                mock(HealthCheckupAnalysisService.class));
+                mock(HealthCheckupAnalysisService.class),
+                allergenMatcher());
         ChatDto.Request request = new ChatDto.Request();
         request.setMessage("두부 레시피 알려줘");
         request.setHealthProfile(new ChatDto.HealthProfileContext(
@@ -40,7 +48,8 @@ class ChatSafetyContextServiceTest {
         ChatSafetyContextService service = new ChatSafetyContextService(
                 mock(HealthProfileRepository.class),
                 healthCheckupRepository,
-                mock(HealthCheckupAnalysisService.class));
+                mock(HealthCheckupAnalysisService.class),
+                allergenMatcher());
         when(healthCheckupRepository.findTopByUserIdOrderByCheckupDateDescIdDesc(1L))
                 .thenThrow(new IllegalStateException("database unavailable"));
 

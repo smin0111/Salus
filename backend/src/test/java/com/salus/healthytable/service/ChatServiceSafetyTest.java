@@ -47,6 +47,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ChatServiceSafetyTest {
+    private static com.salus.healthytable.service.allergen.AllergenMatcher allergenMatcher() {
+        com.salus.healthytable.service.allergen.AllergenDictionary dictionary =
+                new com.salus.healthytable.service.allergen.AllergenDictionary();
+        dictionary.load();
+        return new com.salus.healthytable.service.allergen.AllergenMatcher(dictionary);
+    }
+
 
     private final LlmService llmService = mock(LlmService.class);
     private final HealthProfileRepository healthProfileRepository = mock(HealthProfileRepository.class);
@@ -78,7 +85,7 @@ class ChatServiceSafetyTest {
     private final ChatSessionService chatSessionService = new ChatSessionService(
             chatSessionRepository, chatMessageRepository);
     private final ChatSafetyContextService chatSafetyContextService = new ChatSafetyContextService(
-            healthProfileRepository, healthCheckupRepository, healthCheckupAnalysisService);
+            healthProfileRepository, healthCheckupRepository, healthCheckupAnalysisService, allergenMatcher());
     private final GeneratedRecipeLifecycleService generatedRecipeLifecycleService =
             new GeneratedRecipeLifecycleService(generatedRecipeRepository, recipeRepository, clock);
     private final RecipeEvidenceService recipeEvidenceService = new RecipeEvidenceService(

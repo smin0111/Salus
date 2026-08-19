@@ -17,6 +17,13 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MedicationFoodInteractionAdapterTest {
+    private static com.salus.healthytable.service.allergen.AllergenMatcher sharedAllergenMatcher() {
+        com.salus.healthytable.service.allergen.AllergenDictionary dictionary =
+                new com.salus.healthytable.service.allergen.AllergenDictionary();
+        dictionary.load();
+        return new com.salus.healthytable.service.allergen.AllergenMatcher(dictionary);
+    }
+
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-20T00:00:00Z"), ZoneId.of("Asia/Seoul"));
 
@@ -557,7 +564,7 @@ class MedicationFoodInteractionAdapterTest {
 
     private RecipePersonalizationPolicyEngine engine(MedicationFoodInteractionPort port) {
         return new RecipePersonalizationPolicyEngine(List.of(
-                new AllergyPolicy(),
+                new AllergyPolicy(sharedAllergenMatcher()),
                 new MedicationInteractionPolicy(port),
                 new ChronicConditionPolicy(),
                 new DietaryRestrictionPolicy(),

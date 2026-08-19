@@ -6,6 +6,7 @@ import com.salus.healthytable.dto.ChatDto;
 import com.salus.healthytable.dto.HealthCheckupAnalysisDTO;
 import com.salus.healthytable.repository.HealthCheckupRepository;
 import com.salus.healthytable.repository.HealthProfileRepository;
+import com.salus.healthytable.service.allergen.AllergenMatcher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ public class ChatSafetyContextService {
     private final HealthProfileRepository healthProfileRepository;
     private final HealthCheckupRepository healthCheckupRepository;
     private final HealthCheckupAnalysisService healthCheckupAnalysisService;
+    private final AllergenMatcher allergenMatcher;
 
     @Transactional(readOnly = true)
     public SafetyContext build(Optional<Long> authenticatedUserId, ChatDto.Request request) {
@@ -164,31 +166,17 @@ public class ChatSafetyContextService {
         if (safetyContext == null || safetyContext.allergies().isEmpty()) {
             return List.of();
         }
-        Set<String> conflicts = new LinkedHashSet<>();
-        for (String allergy : safetyContext.allergies()) {
-            String normalizedAllergy = normalizeIngredientForMatching(allergy);
-            if (normalizedAllergy.length() < 2) {
-                continue;
-            }
-            if (recipe == null && isIngredientExplicitlyExcluded(requestMessage, allergy)) {
-                continue;
-            }
-            if (containsAllergyTerm(title, allergy)) {
-                conflicts.add(allergy);
-                continue;
-            }
-            if (recipe == null) {
-                continue;
-            }
-            boolean ingredientConflict = cleanRecipeValues(recipe.getIngredients()).stream()
-                    .anyMatch(ingredient -> containsAllergyTerm(ingredient, allergy));
-            boolean stepConflict = cleanRecipeValues(recipe.getSteps()).stream()
-                    .anyMatch(step -> containsAllergyTerm(step, allergy));
-            if (ingredientConflict || stepConflict) {
-                conflicts.add(allergy);
-            }
+        List<String> texts = new ArrayList<>();
+        if (title != null && !title.isBlank()) {
+            texts.add(title);
         }
-        return List.copyOf(conflicts);
+        if (recipe != null) {
+            texts.addAll(cleanRecipeValues(recipe.getIngredients()));
+            texts.addAll(cleanRecipeValues(recipe.getSteps()));
+        }
+        // requestMessage의 "빼고", "제외" 같은 표현으로는 판정을 끄지 않는다.
+        // 등록된 알레르기는 사용자의 그때그때 진술보다 우선한다.
+        return allergenMatcher.findConflicts(safetyContext.allergies(), texts);
     }
 
     @Transactional(readOnly = true)
@@ -298,38 +286,14 @@ public class ChatSafetyContextService {
                 && !compact.contains("알려주");
     }
 
-    private boolean containsAllergyTerm(String text, String allergy) {
-        String normalizedText = normalizeIngredientForMatching(text);
-        String normalizedAllergy = normalizeIngredientForMatching(allergy);
-        return !normalizedText.isBlank()
-                && !normalizedAllergy.isBlank()
-                && normalizedText.contains(normalizedAllergy)
-                && !isIngredientExplicitlyExcluded(text, allergy);
-    }
 
-    private boolean isIngredientExplicitlyExcluded(String text, String allergy) {
-        String normalizedText = normalizeIngredientForMatching(text);
-        String normalizedAllergy = normalizeIngredientForMatching(allergy);
-        if (normalizedText.isBlank() || normalizedAllergy.isBlank()) {
-            return false;
-        }
-        return normalizedText.contains(normalizedAllergy + "없는")
-                || normalizedText.contains(normalizedAllergy + "없이")
-                || normalizedText.contains(normalizedAllergy + "빼고")
-                || normalizedText.contains(normalizedAllergy + "제외")
-                || normalizedText.contains(normalizedAllergy + "말고")
-                || normalizedText.contains(normalizedAllergy + "안들어간");
-    }
 
     private void appendHealthProfileSafetyNotes(
             List<String> notes, SafetyContext safetyContext, String ingredientText) {
-        for (String allergy : safetyContext.allergies()) {
-            if (allergy != null && !allergy.isBlank()
-                    && normalizeIngredientForMatching(ingredientText)
-                    .contains(normalizeIngredientForMatching(allergy))) {
-                notes.add("확인된 알레르기 재료인 '" + allergy.trim()
-                        + "'가 포함되어 있습니다. 이 재료는 반드시 제외하거나 안전한 대체 재료를 사용하세요.");
-            }
+        for (String allergy : allergenMatcher.findConflicts(
+                safetyContext.allergies(), List.of(ingredientText))) {
+            notes.add("확인된 알레르기 재료인 '" + allergy
+                    + "'가 포함되어 있습니다. 이 재료는 반드시 제외하거나 안전한 대체 재료를 사용하세요.");
         }
         if (containsAny(safetyContext.chronicConditions(), "고혈압", "혈압")) {
             appendHighBloodPressureNote(notes, ingredientText);
@@ -405,9 +369,6 @@ public class ChatSafetyContextService {
                 .toList();
     }
 
-    private String normalizeIngredientForMatching(String text) {
-        return nullToBlank(text).toLowerCase().replaceAll("[^가-힣a-z0-9]", "");
-    }
 
     private void appendMetric(StringBuilder builder, String label, Object value) {
         if (value != null) {

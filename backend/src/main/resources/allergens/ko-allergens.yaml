@@ -1,0 +1,104 @@
+# 식약처 알레르기 유발물질 표시 대상을 기준으로 한 알레르겐 계층 사전.
+#
+# aliases: 같은 알레르겐을 가리키는 다른 이름. 사용자가 프로필에 입력할 수 있는 표기.
+# derived: 해당 알레르겐이 들어가는 파생 재료와 가공품. 재료명에 루트가 드러나지
+#          않아 문자열 포함만으로는 잡히지 않는 것들이다.
+#
+# 한 글자 용어는 토큰 전체가 일치할 때만 매칭한다. "밀"이 "밀크"에,
+# "게"가 "게으른"에 걸리는 오탐을 막기 위해서다. 파생 재료가 실제 탐지를 담당한다.
+
+allergens:
+  - id: EGG
+    name: 계란
+    aliases: [계란, 달걀, 난류, 알류, egg]
+    derived: [마요네즈, 머랭, 카스터드, 커스터드, 난백, 난황, 흰자, 노른자, 계란물, 달걀물, 마요, 타르타르소스]
+
+  - id: MILK
+    name: 우유
+    aliases: [우유, 유제품, milk]
+    derived: [버터, 치즈, 생크림, 휘핑크림, 연유, 분유, 요거트, 요구르트, 크림, 버터밀크, 사워크림, 리코타, 모짜렐라, 파르메산, 체다, 크림치즈, 가염버터, 무염버터, 우유식빵]
+
+  - id: WHEAT
+    name: 밀
+    aliases: [밀, 소맥, wheat, 글루텐]
+    derived: [밀가루, 박력분, 중력분, 강력분, 부침가루, 튀김가루, 빵가루, 국수, 소면, 칼국수, 라면, 파스타, 스파게티, 마카로니, 우동, 수제비, 만두피, 식빵, 바게트, 크래커, 밀떡, 밀전병]
+
+  - id: SOY
+    name: 대두
+    aliases: [대두, 콩, 콩류, soy, soybean]
+    derived: [두부, 된장, 간장, 고추장, 쌈장, 청국장, 두유, 콩나물, 콩기름, 대두유, 유부, 순두부, 연두부, 콩가루, 춘장]
+
+  - id: PEANUT
+    name: 땅콩
+    aliases: [땅콩, peanut]
+    derived: [땅콩버터, 땅콩분태, 땅콩가루, 피넛버터, 땅콩소스]
+
+  - id: WALNUT
+    name: 호두
+    aliases: [호두, walnut]
+    derived: [호두과자, 호두정과]
+
+  - id: PINE_NUT
+    name: 잣
+    aliases: [잣]
+    derived: [잣가루, 잣죽, 페스토]
+
+  - id: BUCKWHEAT
+    name: 메밀
+    aliases: [메밀, buckwheat]
+    derived: [메밀면, 냉면, 막국수, 메밀가루, 소바]
+
+  - id: CRAB
+    name: 게
+    aliases: [게, crab]
+    derived: [게살, 게장, 꽃게, 대게, 킹크랩, 게맛살, 크래미, 간장게장, 양념게장]
+
+  - id: SHRIMP
+    name: 새우
+    aliases: [새우, shrimp]
+    derived: [건새우, 새우젓, 대하, 칵테일새우, 새우가루, 액젓, 오징어젓]
+
+  - id: SQUID
+    name: 오징어
+    aliases: [오징어, squid]
+    derived: [진미채, 오징어채, 마른오징어, 한치]
+
+  - id: MACKEREL
+    name: 고등어
+    aliases: [고등어, mackerel]
+    derived: [자반고등어, 고등어살]
+
+  - id: SHELLFISH
+    name: 조개류
+    aliases: [조개, 조개류, shellfish]
+    derived: [굴, 전복, 홍합, 바지락, 모시조개, 가리비, 소라, 굴소스, 조개육수]
+
+  - id: PEACH
+    name: 복숭아
+    aliases: [복숭아, peach]
+    derived: [황도, 백도, 복숭아통조림, 복숭아잼]
+
+  - id: TOMATO
+    name: 토마토
+    aliases: [토마토, tomato]
+    derived: [케첩, 토마토소스, 토마토페이스트, 방울토마토, 홀토마토, 마리나라]
+
+  - id: PORK
+    name: 돼지고기
+    aliases: [돼지고기, 돈육, pork]
+    derived: [삼겹살, 목살, 베이컨, 햄, 소시지, 등심, 앞다리살, 항정살, 갈비, 라드, 돈까스]
+
+  - id: BEEF
+    name: 쇠고기
+    aliases: [쇠고기, 소고기, 우육, beef]
+    derived: [사골, 우삼겹, 차돌박이, 등심, 안심, 양지, 사태, 소갈비, 육수, 불고기]
+
+  - id: CHICKEN
+    name: 닭고기
+    aliases: [닭고기, 계육, chicken]
+    derived: [닭가슴살, 닭다리, 닭날개, 치킨스톡, 닭육수, 삼계]
+
+  - id: SULFITE
+    name: 아황산류
+    aliases: [아황산, 아황산류, sulfite]
+    derived: [건포도, 건살구, 와인, 물엿]

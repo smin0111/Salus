@@ -1,5 +1,6 @@
 package com.salus.healthytable.service.recipeagent;
 
+import com.salus.healthytable.service.allergen.AllergenMatcher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -85,27 +86,38 @@ class RecipePersonalizationPolicyEngine {
 
 @Component
 @Order(10)
+@RequiredArgsConstructor
 class AllergyPolicy implements RecipePersonalizationPolicy {
+
+    private final AllergenMatcher allergenMatcher;
 
     @Override
     public PolicyEvaluation evaluate(RecipeCandidate recipe, UserRecipeContext userContext) {
         if (userContext == null || userContext.allergies().isEmpty()) {
             return PolicyEvaluation.empty();
         }
+        List<String> texts = new ArrayList<>();
+        texts.add(recipe.title());
+        texts.addAll(recipe.ingredients());
+        texts.addAll(recipe.steps());
+
         List<RecipeConflict> conflicts = new ArrayList<>();
         List<RecipeModification> modifications = new ArrayList<>();
         List<String> notices = new ArrayList<>();
 
-        for (String allergy : userContext.allergies()) {
-            if (!recipe.containsIngredient(allergy)) {
-                continue;
-            }
-            if (recipe.isCoreIngredient(allergy)) {
+        for (String allergy : allergenMatcher.findConflicts(userContext.allergies(), texts)) {
+            // 재료명이 그대로 등장하고 핵심 재료가 아니면 그 재료만 빼서 제공할 수 있다.
+            // 반면 파생 재료로만 걸린 경우(우유 -> 버터·치즈)는 이름을 지워도 알레르겐이
+            // 남으므로 제거로 해결할 수 없다. 이때는 차단한다.
+            boolean removable = allergenMatcher.matchesLiterally(allergy, texts)
+                    && !recipe.isCoreIngredient(allergy);
+            if (!removable) {
                 conflicts.add(new RecipeConflict(
                         RecipeConflictType.ALLERGY,
                         allergy,
                         allergy + " 알레르기",
-                        allergy + " 알레르기 재료가 요리의 핵심 재료이므로 안전한 대체 근거 없이는 제공하지 않습니다.",
+                        allergy + " 알레르기 재료가 핵심 재료이거나 파생 재료로 포함되어 있어, "
+                                + "안전한 대체 근거 없이는 제공하지 않습니다.",
                         ConflictSeverity.BLOCKING,
                         "user-health-profile"));
                 continue;
