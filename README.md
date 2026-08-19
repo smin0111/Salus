@@ -51,7 +51,7 @@ Salus의 영속성 계층은 **Spring Data JPA · Hibernate**입니다. MyBatis 
 - Maven 3.9+
 - Node.js 20 / npm
 - Docker Desktop(Compose v2 포함)
-- 로컬 LLM을 사용할 경우 [Ollama](https://ollama.com/)와 `gemma2` 모델
+- 로컬 LLM을 사용할 경우 [Ollama](https://ollama.com/)와 `qwen3:8b` 모델
 
 ## 로컬 실행
 
@@ -78,7 +78,7 @@ docker compose up -d redis
 ### 2. Ollama
 
 ```bash
-ollama pull gemma2
+ollama pull qwen3:8b
 ollama serve
 ```
 

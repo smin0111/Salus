@@ -529,7 +529,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(properties).contains("recipe.agent.mfds-medication-enabled=${RECIPE_AGENT_MFDS_MEDICATION_ENABLED:false}");
         assertThat(properties).contains("recipe.agent.openfda-medication-enabled=${RECIPE_AGENT_OPENFDA_MEDICATION_ENABLED:false}");
         assertThat(properties).contains("recipe.agent.rxnorm-normalization-enabled=${RECIPE_AGENT_RXNORM_ENABLED:false}");
-        assertThat(properties).contains("ollama.model=${OLLAMA_MODEL:gemma2}");
+        assertThat(properties).contains("ollama.model=${OLLAMA_MODEL:qwen3:8b}");
         assertThat(properties).contains("ollama.timeout-seconds=${OLLAMA_TIMEOUT_SECONDS:180}");
     }
 
