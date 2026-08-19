@@ -114,9 +114,6 @@ public class OllamaRecipeGenerationClient implements RecipeGenerationClient {
     }
 
     private Boolean thinkValue(String model) {
-        if (model == null) {
-            return null;
-        }
-        return model.toLowerCase(Locale.ROOT).startsWith("qwen3") ? Boolean.FALSE : null;
+        return OllamaLlmService.thinkingSettingFor(model);
     }
 }
