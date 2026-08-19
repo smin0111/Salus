@@ -82,7 +82,13 @@ export default function SearchScreen({ onBack, onNavigate, user, webMode = false
         <View style={styles.container}>
             {/* 헤더 */}
             <View style={[styles.header, webMode && styles.webHeader, { paddingTop: webMode ? 14 : insets.top + (Platform.OS === 'android' ? 40 : 14) }]}>
-                <TouchableOpacity style={styles.headerIconButton} onPress={onBack}>
+                <TouchableOpacity
+                    style={styles.headerIconButton}
+                    onPress={onBack}
+                    accessibilityRole="button"
+                    accessibilityLabel="검색 화면 닫기"
+                    hitSlop={8}
+                >
                     <Ionicons name="arrow-back" size={22} color={colors.primary} />
                 </TouchableOpacity>
                 <View style={styles.searchContainer}>
@@ -98,7 +104,12 @@ export default function SearchScreen({ onBack, onNavigate, user, webMode = false
                         autoFocus
                     />
                     {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => { setSearchQuery(''); setResults([]); setHasSearched(false); }}>
+                        <TouchableOpacity
+                            onPress={() => { setSearchQuery(''); setResults([]); setHasSearched(false); }}
+                            accessibilityRole="button"
+                            accessibilityLabel="검색어 지우기"
+                            hitSlop={8}
+                        >
                             <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
                         </TouchableOpacity>
                     )}
@@ -148,33 +159,33 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 20,
         paddingBottom: 14,
-        backgroundColor: '#FFF7ED',
+        backgroundColor: colors.surface,
         borderBottomWidth: 1,
-        borderBottomColor: '#FED7AA',
+        borderBottomColor: colors.border,
         gap: 12,
     },
     webHeader: {
-        backgroundColor: '#FFFFFF',
-        borderBottomColor: '#EEF0F3',
+        backgroundColor: colors.surface,
+        borderBottomColor: colors.border,
         paddingHorizontal: 24,
     },
     headerIconButton: {
         width: 40,
         height: 40,
-        borderRadius: 14,
-        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        backgroundColor: colors.surfaceAlt,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: '#FED7AA',
+        borderColor: colors.border,
     },
     searchContainer: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: colors.surface,
         borderWidth: 1,
-        borderColor: '#FED7AA',
+        borderColor: colors.borderHighlight,
         borderRadius: 20,
         paddingHorizontal: 12,
         height: 40,
@@ -218,9 +229,11 @@ const styles = StyleSheet.create({
     },
     postCard: {
         backgroundColor: colors.surface,
-        borderRadius: 16,
+        borderRadius: 12,
         marginBottom: 16,
         overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: colors.border,
     },
     postImage: {
         width: '100%',
@@ -268,7 +281,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
     },
     tagText: {
-        fontSize: 11,
+        fontSize: 12,
         color: colors.primary,
         fontWeight: '600',
     },

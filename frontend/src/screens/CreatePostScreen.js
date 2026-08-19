@@ -164,7 +164,13 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
         <View style={styles.container}>
             {/* 헤더 */}
             {!webMode && <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 40 : 14) }]}>
-                <TouchableOpacity style={styles.headerIconButton} onPress={() => onNavigate && onNavigate('community')}>
+                <TouchableOpacity
+                    style={styles.headerIconButton}
+                    onPress={() => onNavigate && onNavigate('community')}
+                    accessibilityRole="button"
+                    accessibilityLabel="작성 취소"
+                    hitSlop={8}
+                >
                     <Ionicons name="close" size={24} color={colors.primary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>레시피 작성</Text>
@@ -181,7 +187,13 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
 
             {webMode && (
                 <View style={styles.webActionBar}>
-                    <TouchableOpacity style={styles.headerIconButton} onPress={() => onNavigate && onNavigate('community')}>
+                    <TouchableOpacity
+                        style={styles.headerIconButton}
+                        onPress={() => onNavigate && onNavigate('community')}
+                        accessibilityRole="button"
+                        accessibilityLabel="작성 취소"
+                        hitSlop={8}
+                    >
                         <Ionicons name="close" size={22} color={colors.primary} />
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -269,6 +281,8 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
                                 <TouchableOpacity
                                     style={styles.removeImageButton}
                                     onPress={() => setImageUrl('')}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="선택한 이미지 삭제"
                                 >
                                     <Ionicons name="close-circle" size={24} color={colors.error} />
                                 </TouchableOpacity>
@@ -340,24 +354,24 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 20,
         paddingBottom: 14,
-        backgroundColor: '#FFF7ED',
+        backgroundColor: colors.surface,
         borderBottomWidth: 1,
-        borderBottomColor: '#FED7AA',
+        borderBottomColor: colors.border,
     },
     headerIconButton: {
         width: 40,
         height: 40,
-        borderRadius: 14,
-        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        backgroundColor: colors.surfaceAlt,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: '#FED7AA',
+        borderColor: colors.border,
     },
     headerTitle: {
         fontSize: 20,
         fontWeight: '800',
-        color: '#9A3412',
+        color: colors.text,
     },
     submitButton: {
         paddingHorizontal: 8,
@@ -369,8 +383,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: 24,
         paddingVertical: 14,
         borderBottomWidth: 1,
-        borderBottomColor: '#EEF0F3',
-        backgroundColor: '#FFFFFF',
+        borderBottomColor: colors.border,
+        backgroundColor: colors.surface,
     },
     submitText: {
         fontSize: 16,
@@ -447,7 +461,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: -10,
         right: -10,
-        backgroundColor: 'white',
+        backgroundColor: colors.surface,
         borderRadius: 12,
     },
     tagContainer: {

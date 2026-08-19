@@ -85,7 +85,13 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
         <SafeAreaView style={styles.container}>
             {!webMode && <View style={styles.header}>
                 <View style={styles.headerLeft}>
-                    <TouchableOpacity onPress={onToggleSidebar} style={styles.menuButton}>
+                    <TouchableOpacity
+                        onPress={onToggleSidebar}
+                        style={styles.menuButton}
+                        accessibilityRole="button"
+                        accessibilityLabel="메뉴 열기"
+                        hitSlop={8}
+                    >
                         <Ionicons name="menu" size={24} color={colors.primary} />
                     </TouchableOpacity>
                     <View>
@@ -103,15 +109,15 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
                             <Text style={styles.membershipLabel}>나의 멤버십 등급</Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, flexWrap: 'wrap', gap: 6 }}>
                                 <Text style={styles.membershipGrade}>
-                                    {user?.grade === 'PLUS' ? 'Salus PLUS 프리미엄' : 'Salus BASIC 일반'}
+                                    {user?.grade === 'PLUS' ? 'SALUS PLUS 프리미엄' : 'SALUS BASIC 일반'}
                                 </Text>
                                 <View style={[
                                     styles.gradeBadge, 
-                                    { backgroundColor: user?.grade === 'PLUS' ? colors.primary : '#E5E7EB' }
+                                    { backgroundColor: user?.grade === 'PLUS' ? colors.primary : colors.disabled }
                                 ]}>
                                     <Text style={[
                                         styles.gradeBadgeText, 
-                                        { color: user?.grade === 'PLUS' ? 'white' : '#4B5563' }
+                                        { color: user?.grade === 'PLUS' ? colors.onPrimary : colors.textSecondary }
                                     ]}>
                                         {user?.grade === 'PLUS' ? 'PLUS' : 'BASIC'}
                                     </Text>
@@ -121,7 +127,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
                         <Ionicons 
                             name={user?.grade === 'PLUS' ? "sparkles" : "shield-outline"} 
                             size={28} 
-                            color={user?.grade === 'PLUS' ? colors.primary : '#9CA3AF'} 
+                            color={user?.grade === 'PLUS' ? colors.primary : colors.textTertiary}
                         />
                     </View>
 
@@ -199,7 +205,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
                     onPress={confirmDeleteAccount}
                     disabled={deleting}
                 >
-                    <Ionicons name="person-remove-outline" size={18} color="#DC2626" />
+                    <Ionicons name="person-remove-outline" size={18} color={colors.error} />
                     <Text style={styles.deleteButtonText}>{deleting ? '삭제 중...' : '계정 및 개인 데이터 삭제'}</Text>
                 </TouchableOpacity>
             </ScrollView>
@@ -217,7 +223,7 @@ function PolicyRow({ icon, text }) {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F8FAFC' },
+    container: { flex: 1, backgroundColor: colors.background },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -225,24 +231,24 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingVertical: 14,
         paddingTop: Platform.OS === 'android' ? 40 : 14,
-        backgroundColor: '#FFF7ED',
+        backgroundColor: colors.surface,
         borderBottomWidth: 1,
-        borderBottomColor: '#FED7AA',
+        borderBottomColor: colors.border,
     },
     headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-    menuButton: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', marginRight: 12, borderWidth: 1, borderColor: '#FED7AA' },
-    headerTitle: { fontSize: 20, fontWeight: '800', color: '#9A3412' },
-    headerSubtitle: { fontSize: 12, color: '#EA580C', marginTop: 2 },
+    menuButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', marginRight: 12, borderWidth: 1, borderColor: colors.border },
+    headerTitle: { fontSize: 20, fontWeight: '800', color: colors.text },
+    headerSubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
     content: { flex: 1 },
     contentContainer: { padding: 16, paddingBottom: 32 },
     noticeBand: {
         flexDirection: 'row',
         alignItems: 'center',
         padding: 16,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 8,
+        backgroundColor: colors.surface,
+        borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: colors.border,
         marginBottom: 14,
     },
     noticeIcon: {
@@ -254,33 +260,33 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginRight: 12,
     },
-    noticeTitle: { fontSize: 16, fontWeight: '800', color: '#111827', marginBottom: 4 },
-    noticeText: { fontSize: 13, color: '#4B5563', lineHeight: 19 },
+    noticeTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 4 },
+    noticeText: { fontSize: 13, color: colors.textSecondary, lineHeight: 19 },
     section: {
-        backgroundColor: 'white',
-        borderRadius: 8,
+        backgroundColor: colors.surface,
+        borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: colors.border,
         padding: 16,
         marginBottom: 14,
     },
-    sectionTitle: { fontSize: 15, fontWeight: '800', color: '#111827', marginBottom: 12 },
+    sectionTitle: { fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 12 },
     loadingRow: { flexDirection: 'row', alignItems: 'center' },
-    loadingText: { color: '#6B7280', marginLeft: 10 },
+    loadingText: { color: colors.textSecondary, marginLeft: 10 },
     summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     summaryItem: {
         width: Platform.OS === 'web' ? '31%' : '48%',
         padding: 12,
-        backgroundColor: '#F9FAFB',
+        backgroundColor: colors.surfaceAlt,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: '#EEF2F7',
+        borderColor: colors.border,
     },
-    summaryLabel: { fontSize: 12, color: '#6B7280', marginBottom: 6 },
-    summaryValue: { fontSize: 20, fontWeight: '800', color: '#111827' },
+    summaryLabel: { fontSize: 12, color: colors.textSecondary, marginBottom: 6 },
+    summaryValue: { fontSize: 20, fontWeight: '800', color: colors.text },
     policyRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
-    policyText: { flex: 1, marginLeft: 8, color: '#374151', lineHeight: 20 },
-    paragraph: { color: '#4B5563', lineHeight: 21 },
+    policyText: { flex: 1, marginLeft: 8, color: colors.text, lineHeight: 20 },
+    paragraph: { color: colors.textSecondary, lineHeight: 21 },
     deleteButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -288,20 +294,20 @@ const styles = StyleSheet.create({
         gap: 8,
         paddingVertical: 14,
         borderRadius: 8,
-        backgroundColor: '#FEF2F2',
+        backgroundColor: colors.errorLight,
         borderWidth: 1,
-        borderColor: '#FECACA',
+        borderColor: colors.error,
     },
     disabledButton: { opacity: 0.7 },
-    deleteButtonText: { color: '#DC2626', fontSize: 15, fontWeight: '800' },
+    deleteButtonText: { color: colors.error, fontSize: 15, fontWeight: '800' },
     membershipCard: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
+        backgroundColor: colors.surface,
+        borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: colors.border,
         padding: 20,
         marginBottom: 14,
-        shadowColor: '#000',
+        shadowColor: colors.text,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
         shadowRadius: 8,
@@ -312,13 +318,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         borderBottomWidth: 1,
-        borderBottomColor: '#F3F4F6',
+        borderBottomColor: colors.divider,
         paddingBottom: 16,
         marginBottom: 16,
     },
     membershipLabel: {
         fontSize: 12,
-        color: '#6B7280',
+        color: colors.textSecondary,
         fontWeight: '600',
         textTransform: 'uppercase',
         letterSpacing: 0.5,
@@ -326,7 +332,7 @@ const styles = StyleSheet.create({
     membershipGrade: {
         fontSize: 18,
         fontWeight: '800',
-        color: '#1F2937',
+        color: colors.text,
     },
     gradeBadge: {
         paddingHorizontal: 8,
@@ -334,19 +340,19 @@ const styles = StyleSheet.create({
         borderRadius: 6,
     },
     gradeBadgeText: {
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: '900',
     },
     upgradeSection: {
-        backgroundColor: '#FAF5FF',
+        backgroundColor: colors.primaryLight,
         borderRadius: 12,
         padding: 16,
         borderWidth: 1,
-        borderColor: '#F3E8FF',
+        borderColor: colors.primary,
     },
     upgradeDesc: {
         fontSize: 13,
-        color: '#6B21A8',
+        color: colors.primary,
         lineHeight: 20,
         marginBottom: 14,
         fontWeight: '500',
@@ -371,7 +377,7 @@ const styles = StyleSheet.create({
     },
     activePremiumText: {
         fontSize: 13,
-        color: '#B45309',
+        color: colors.warning,
         fontWeight: '600',
         lineHeight: 18,
         textAlign: 'center',

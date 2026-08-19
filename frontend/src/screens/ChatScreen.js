@@ -143,7 +143,7 @@ const RecipeMessageCard = ({ recipe }) => {
             {recipe.safetyNotes?.length > 0 && (
                 <View style={styles.recipeSafetyBox}>
                     <View style={styles.recipeSectionTitleRow}>
-                        <Ionicons name="shield-checkmark-outline" size={16} color="#B45309" />
+                        <Ionicons name="shield-checkmark-outline" size={16} color={colors.warning} />
                         <Text style={styles.recipeSafetyTitle}>건강 주의</Text>
                     </View>
                     {recipe.safetyNotes.map((note, index) => (
@@ -240,7 +240,7 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
         >
             {item.sender === 'ai' && (
                 <View style={styles.aiAvatar}>
-                    <Ionicons name="sparkles-outline" size={16} color="#111827" />
+                    <Ionicons name="sparkles-outline" size={16} color={colors.text} />
                 </View>
             )}
             <View style={[
@@ -285,11 +285,13 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
                                     Alert.alert('복사 완료', '답변이 클립보드에 복사되었습니다.');
                                 }
                             }}
+                            accessibilityRole="button"
+                            accessibilityLabel={copiedMessageId === item.id ? '답변 복사됨' : '답변 복사'}
                         >
                             <Ionicons
                                 name={copiedMessageId === item.id ? "checkmark-circle" : "copy-outline"}
                                 size={16}
-                                color={copiedMessageId === item.id ? "#10B981" : "#9CA3AF"}
+                                color={copiedMessageId === item.id ? colors.success : colors.textTertiary}
                             />
                         </TouchableOpacity>
 
@@ -297,11 +299,13 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
                         <TouchableOpacity
                             style={styles.actionIconButton}
                             onPress={() => speak(item.text, item.id)}
+                            accessibilityRole="button"
+                            accessibilityLabel={speakingMessageId === item.id ? '답변 읽기 중지' : '답변 소리 내어 읽기'}
                         >
                             <Ionicons
                                 name={speakingMessageId === item.id ? "volume-high" : "volume-medium-outline"}
                                 size={16}
-                                color={speakingMessageId === item.id ? colors.primary : "#9CA3AF"}
+                                color={speakingMessageId === item.id ? colors.primary : colors.textTertiary}
                             />
                         </TouchableOpacity>
 
@@ -315,7 +319,7 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
                                 <Ionicons
                                     name={item.isMealSaved ? "checkmark-circle" : "calendar-outline"}
                                     size={14}
-                                    color={item.isMealSaved ? '#10B981' : colors.secondary}
+                                    color={item.isMealSaved ? colors.success : colors.secondary}
                                 />
                                 <Text style={[styles.addToPlanText, item.isMealSaved && styles.addToPlanTextSaved]}>
                                     {item.isMealSaved ? '저장됨' : '식단에 추가'}
@@ -834,7 +838,13 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             {/* 상단 영역은 현재 사용자 등급과 주요 채팅 도구를 한눈에 보여줍니다. */}
             {!webMode && <View style={styles.header}>
                 <View style={styles.headerLeft}>
-                    <TouchableOpacity onPress={onToggleSidebar} style={styles.menuButton}>
+                    <TouchableOpacity
+                        onPress={onToggleSidebar}
+                        style={styles.menuButton}
+                        accessibilityRole="button"
+                        accessibilityLabel="메뉴 열기"
+                        hitSlop={8}
+                    >
                         <Ionicons name="menu" size={24} color={colors.text} />
                     </TouchableOpacity>
                     <View>
@@ -863,6 +873,8 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                         <TouchableOpacity
                             style={styles.cookingModeButton}
                             onPress={showCookingModeUnavailable}
+                            accessibilityRole="button"
+                            accessibilityLabel="조리 모드"
                         >
                             <Ionicons
                                 name="mic-outline"
@@ -884,8 +896,10 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                     <TouchableOpacity
                         style={[styles.sessionChip, !chatSessionId && styles.sessionChipActive]}
                         onPress={startNewChat}
+                        accessibilityRole="button"
+                        accessibilityLabel="새 대화 시작"
                     >
-                        <Ionicons name="add" size={14} color={!chatSessionId ? 'white' : '#4B5563'} />
+                        <Ionicons name="add" size={14} color={!chatSessionId ? colors.onPrimary : colors.textSecondary} />
                         <Text style={[styles.sessionChipText, !chatSessionId && styles.sessionChipTextActive]}>새 대화</Text>
                     </TouchableOpacity>
                     <FlatList
@@ -902,6 +916,8 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                                 <TouchableOpacity
                                     style={styles.sessionTitleButton}
                                     onPress={() => loadChatSession(item.id)}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`${item.title || '대화'} 열기`}
                                 >
                                     <Text
                                         numberOfLines={1}
@@ -913,21 +929,25 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                                 <TouchableOpacity
                                     style={styles.sessionIconButton}
                                     onPress={() => openRenameSession(item)}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`${item.title || '대화'} 이름 변경`}
                                 >
                                     <Ionicons
                                         name="pencil"
                                         size={12}
-                                        color={chatSessionId === item.id ? 'white' : '#6B7280'}
+                                        color={chatSessionId === item.id ? colors.onPrimary : colors.textSecondary}
                                     />
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={styles.sessionIconButton}
                                     onPress={() => confirmDeleteSession(item)}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`${item.title || '대화'} 삭제`}
                                 >
                                     <Ionicons
                                         name="trash-outline"
                                         size={12}
-                                        color={chatSessionId === item.id ? 'white' : '#6B7280'}
+                                        color={chatSessionId === item.id ? colors.onPrimary : colors.textSecondary}
                                     />
                                 </TouchableOpacity>
                             </View>
@@ -997,11 +1017,14 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                                 style={[styles.fridgeToggleBtn, useFridge && styles.fridgeToggleBtnActive]}
                                 onPress={() => setUseFridge(!useFridge)}
                                 activeOpacity={0.7}
+                                accessibilityRole="switch"
+                                accessibilityLabel="냉장고 재료 사용"
+                                accessibilityState={{ checked: useFridge }}
                             >
                                 <Ionicons
                                     name={useFridge ? "restaurant" : "restaurant-outline"}
                                     size={20}
-                                    color={useFridge ? colors.primary : "#9CA3AF"}
+                                    color={useFridge ? colors.primary : colors.textTertiary}
                                 />
                             </TouchableOpacity>
                         )}
@@ -1013,7 +1036,6 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                                     whiteSpace: 'pre-wrap',
                                     wordBreak: 'break-all',
                                     resize: 'none',
-                                    outlineStyle: 'none',
                                     width: '100%',
                                     minWidth: 0,
                                 } : {
@@ -1021,7 +1043,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                                 }
                             ]}
                             placeholder="무엇이든 물어보세요"
-                            placeholderTextColor="#9CA3AF"
+                            placeholderTextColor={colors.textTertiary}
                             value={inputText}
                             onChangeText={setInputText}
                             onKeyPress={handleKeyPress}
@@ -1034,13 +1056,20 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                                 setInputHeight(targetHeight);
                             }}
                         />
-                        <TouchableOpacity style={styles.micButton} onPress={() => Alert.alert("준비 중", "음성 인식 기능은 준비 중입니다.")}>
-                            <Ionicons name="mic-outline" size={22} color="#9CA3AF" />
+                        <TouchableOpacity
+                            style={styles.micButton}
+                            onPress={() => Alert.alert("준비 중", "음성 인식 기능은 준비 중입니다.")}
+                            accessibilityRole="button"
+                            accessibilityLabel="음성 입력"
+                        >
+                            <Ionicons name="mic-outline" size={22} color={colors.textTertiary} />
                         </TouchableOpacity>
                         <TouchableOpacity
-                            style={[styles.sendButton, { backgroundColor: inputText.trim() ? colors.primary : '#E5E7EB' }]}
+                            style={[styles.sendButton, { backgroundColor: inputText.trim() ? colors.primary : colors.disabled }]}
                             onPress={sendMessage}
                             disabled={loading || !inputText.trim()}
+                            accessibilityRole="button"
+                            accessibilityLabel="메시지 보내기"
                         >
                             <Ionicons name="arrow-up" size={18} color="white" />
                         </TouchableOpacity>
@@ -1065,7 +1094,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                             value={editingSessionTitle}
                             onChangeText={setEditingSessionTitle}
                             placeholder="대화 제목"
-                            placeholderTextColor="#9CA3AF"
+                            placeholderTextColor={colors.textTertiary}
                             maxLength={120}
                         />
                         <View style={styles.modalActions}>
@@ -1147,7 +1176,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                             <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.cancelButton}>
                                 <Text style={styles.cancelButtonText}>취소</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={confirmAddToPlan} style={[styles.confirmButton, { backgroundColor: '#8B5CF6' }]}>
+                            <TouchableOpacity onPress={confirmAddToPlan} style={styles.confirmButton}>
                                 <Text style={styles.confirmButtonText}>저장</Text>
                             </TouchableOpacity>
                         </View>
@@ -1160,27 +1189,27 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#FFFFFF' },
-    header: { padding: 16, backgroundColor: 'white', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'android' ? 40 : 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+    container: { flex: 1, backgroundColor: colors.background },
+    header: { padding: 16, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'android' ? 40 : 16, borderBottomWidth: 1, borderBottomColor: colors.border },
     headerLeft: { flexDirection: 'row', alignItems: 'center' },
     menuButton: { padding: 8, marginRight: 8 },
-    headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
-    headerSubtitle: { fontSize: 12, color: '#6B7280' },
+    headerTitle: { fontSize: 18, fontWeight: 'bold', color: colors.text },
+    headerSubtitle: { fontSize: 12, color: colors.textSecondary },
     sessionBar: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        backgroundColor: 'white',
+        backgroundColor: colors.surface,
         paddingHorizontal: 16,
         paddingVertical: 10,
         borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
+        borderBottomColor: colors.border,
     },
     webSessionBar: {
         paddingHorizontal: 24,
         paddingVertical: 12,
-        backgroundColor: '#FFFBF7',
-        borderBottomColor: '#FED7AA',
+        backgroundColor: colors.surfaceAlt,
+        borderBottomColor: colors.border,
     },
     sessionChip: {
         flexDirection: 'row',
@@ -1190,16 +1219,16 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
         paddingVertical: 7,
         borderRadius: 16,
-        backgroundColor: '#F3F4F6',
+        backgroundColor: colors.surfaceAlt,
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: colors.border,
     },
     sessionChipActive: {
         backgroundColor: colors.primary,
         borderColor: colors.primary,
     },
     sessionChipText: {
-        color: '#4B5563',
+        color: colors.textSecondary,
         fontSize: 12,
         fontWeight: '700',
     },
@@ -1238,7 +1267,7 @@ const styles = StyleSheet.create({
     },
     messageBubble: { marginBottom: 22, flexDirection: 'row', alignItems: 'flex-start' },
     userBubble: {
-        backgroundColor: '#F4F4F5',
+        backgroundColor: colors.surfaceStrong,
         alignSelf: 'flex-end',
         borderRadius: 18,
         maxWidth: '78%',
@@ -1250,13 +1279,13 @@ const styles = StyleSheet.create({
         width: 30,
         height: 30,
         borderRadius: 15,
-        backgroundColor: '#F4F4F5',
+        backgroundColor: colors.surfaceAlt,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 13,
         marginTop: 1,
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: colors.border,
     },
     messageContent: { flexShrink: 1, minWidth: 0 },
     aiMessageContent: {
@@ -1277,47 +1306,47 @@ const styles = StyleSheet.create({
         paddingVertical: 0,
     },
     messageText: { fontSize: 15, lineHeight: 25 },
-    userText: { color: '#1F2937' },
-    aiText: { color: '#1F2937' },
+    userText: { color: colors.text },
+    aiText: { color: colors.text },
     messageActions: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
     addToPlanButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8 },
-    addToPlanButtonSaved: { backgroundColor: '#ECFDF5' },
-    addToPlanText: { color: '#9CA3AF', fontSize: 12, fontWeight: '600', marginLeft: 4 },
-    addToPlanTextSaved: { color: '#10B981' },
+    addToPlanButtonSaved: { backgroundColor: colors.successLight },
+    addToPlanText: { color: colors.textTertiary, fontSize: 12, fontWeight: '600', marginLeft: 4 },
+    addToPlanTextSaved: { color: colors.success },
     actionIconButton: {
         width: 30,
         height: 30,
         borderRadius: 15,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#F9FAFB',
+        backgroundColor: colors.surfaceAlt,
     },
     recipePreparingBox: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: colors.surface,
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: colors.border,
         borderRadius: 8,
         paddingHorizontal: 14,
         paddingVertical: 12,
         maxWidth: 360,
     },
     recipePreparingText: {
-        color: '#4B5563',
+        color: colors.textSecondary,
         fontSize: 14,
         fontWeight: '600',
     },
     recipeMessageCard: {
         width: '100%',
         maxWidth: 720,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: colors.surface,
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: colors.border,
         borderRadius: 8,
         padding: 16,
-        shadowColor: '#000',
+        shadowColor: colors.text,
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.06,
         shadowRadius: 3,
@@ -1334,13 +1363,13 @@ const styles = StyleSheet.create({
         minWidth: 0,
     },
     recipeCardTitle: {
-        color: '#111827',
+        color: colors.text,
         fontSize: 18,
         fontWeight: '800',
         lineHeight: 24,
     },
     recipeCardDescription: {
-        color: '#4B5563',
+        color: colors.textSecondary,
         fontSize: 13,
         lineHeight: 20,
         marginTop: 6,
@@ -1352,23 +1381,23 @@ const styles = StyleSheet.create({
         marginTop: 12,
     },
     recipeMetaChip: {
-        backgroundColor: '#F3F4F6',
+        backgroundColor: colors.surfaceAlt,
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: colors.border,
         borderRadius: 8,
         paddingHorizontal: 9,
         paddingVertical: 5,
     },
     recipeMetaText: {
-        color: '#374151',
+        color: colors.text,
         fontSize: 12,
         fontWeight: '700',
     },
     recipeSafetyBox: {
         marginTop: 14,
-        backgroundColor: '#FFFBEB',
+        backgroundColor: colors.warningLight,
         borderWidth: 1,
-        borderColor: '#FDE68A',
+        borderColor: colors.warning,
         borderRadius: 8,
         padding: 12,
         gap: 6,
@@ -1379,12 +1408,12 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     recipeSafetyTitle: {
-        color: '#92400E',
+        color: colors.warning,
         fontSize: 13,
         fontWeight: '800',
     },
     recipeSafetyText: {
-        color: '#78350F',
+        color: colors.text,
         fontSize: 13,
         lineHeight: 19,
     },
@@ -1392,7 +1421,7 @@ const styles = StyleSheet.create({
         marginTop: 16,
     },
     recipeSectionTitle: {
-        color: '#111827',
+        color: colors.text,
         fontSize: 14,
         fontWeight: '800',
         marginBottom: 8,
@@ -1403,10 +1432,10 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     ingredientPill: {
-        color: '#374151',
-        backgroundColor: '#F9FAFB',
+        color: colors.text,
+        backgroundColor: colors.surfaceAlt,
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: colors.border,
         borderRadius: 8,
         paddingHorizontal: 9,
         paddingVertical: 6,
@@ -1425,7 +1454,7 @@ const styles = StyleSheet.create({
         height: 24,
         borderRadius: 12,
         backgroundColor: colors.primary,
-        color: '#FFFFFF',
+        color: colors.onPrimary,
         textAlign: 'center',
         lineHeight: 24,
         fontSize: 12,
@@ -1435,12 +1464,12 @@ const styles = StyleSheet.create({
     recipeStepText: {
         flex: 1,
         minWidth: 0,
-        color: '#1F2937',
+        color: colors.text,
         fontSize: 14,
         lineHeight: 22,
     },
     loadingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 20 },
-    loadingText: { marginLeft: 10, color: '#6B7280', fontSize: 14 },
+    loadingText: { marginLeft: 10, color: colors.textSecondary, fontSize: 14 },
     gradeBadge: {
         paddingHorizontal: 6,
         paddingVertical: 2,
@@ -1449,22 +1478,22 @@ const styles = StyleSheet.create({
         borderWidth: 1,
     },
     gradeBadgePlus: {
-        backgroundColor: '#FFFBEB',
-        borderColor: '#FDE047',
+        backgroundColor: colors.warningLight,
+        borderColor: colors.warning,
     },
     gradeBadgeBasic: {
-        backgroundColor: '#F3F4F6',
-        borderColor: '#E5E7EB',
+        backgroundColor: colors.surfaceAlt,
+        borderColor: colors.border,
     },
     gradeBadgeText: {
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: 'bold',
     },
     gradeBadgeTextPlus: {
-        color: '#D97706',
+        color: colors.warning,
     },
     gradeBadgeTextBasic: {
-        color: '#6B7280',
+        color: colors.textSecondary,
     },
 
     // 플로팅 입력창 스타일
@@ -1474,11 +1503,11 @@ const styles = StyleSheet.create({
         ...Platform.select({ web: { paddingBottom: 16 } })
     },
     inputFloatingContainer: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: colors.surface,
         borderRadius: 26,
         borderWidth: 1,
-        borderColor: '#E0E0E0',
-        shadowColor: '#000',
+        borderColor: colors.borderHighlight,
+        shadowColor: colors.text,
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.06,
         shadowRadius: 3,
@@ -1503,7 +1532,7 @@ const styles = StyleSheet.create({
         marginRight: 2,
     },
     fridgeToggleBtnActive: {
-        backgroundColor: '#E8F5E9',
+        backgroundColor: colors.secondaryLight,
     },
     micButton: { padding: 6, marginLeft: 2 },
     input: {
@@ -1515,7 +1544,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
         marginRight: 4,
         maxHeight: 120,
-        color: '#202124',
+        color: colors.text,
         textAlignVertical: 'center',
         lineHeight: 22,
         ...Platform.select({
@@ -1532,7 +1561,7 @@ const styles = StyleSheet.create({
         height: 32,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#E8F0FE',
+        backgroundColor: colors.primaryLight,
     },
 
     // 빈 상태 화면 스타일
@@ -1543,7 +1572,7 @@ const styles = StyleSheet.create({
         ...Platform.select({ web: { paddingBottom: 40 } })
     },
     webCenteredInputContainer: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: colors.background,
         paddingHorizontal: 28,
     },
     emptyStateContent: {
@@ -1552,11 +1581,11 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
     },
     emptyStateContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-    emptyTitle: { fontSize: 28, fontWeight: 'bold', color: '#1F2937', marginBottom: 30 },
+    emptyTitle: { fontSize: 28, fontWeight: 'bold', color: colors.text, marginBottom: 30 },
     webEmptyTitle: {
         fontSize: 32,
         fontWeight: '500',
-        color: '#202124',
+        color: colors.text,
         marginBottom: 14,
     },
     webHeroBadge: {
@@ -1566,9 +1595,9 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
         paddingVertical: 7,
         borderRadius: 999,
-        backgroundColor: '#FFF7ED',
+        backgroundColor: colors.primaryLight,
         borderWidth: 1,
-        borderColor: '#FED7AA',
+        borderColor: colors.primary,
         marginBottom: 18,
     },
     webHeroBadgeText: {
@@ -1579,35 +1608,35 @@ const styles = StyleSheet.create({
     webEmptySubtitle: {
         maxWidth: 560,
         textAlign: 'center',
-        color: '#6B7280',
+        color: colors.textSecondary,
         fontSize: 14,
         lineHeight: 22,
         marginBottom: 28,
     },
     suggestionChips: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', justifyContent: 'center' },
-    suggestionChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: 'white' },
-    suggestionText: { color: '#4B5563', fontSize: 14, fontWeight: '500' },
+    suggestionChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+    suggestionText: { color: colors.textSecondary, fontSize: 14, fontWeight: '500' },
 
     // 모달 스타일
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
-    renameModalContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
+    modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
+    modalContent: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
+    renameModalContent: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
     modalHeaderTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-    modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
-    recipeCard: { backgroundColor: '#F9FAFB', padding: 16, borderRadius: 12, borderLeftWidth: 4, borderLeftColor: colors.primary, marginBottom: 20 },
-    titleInput: { fontSize: 16, color: '#1F2937', fontWeight: 'bold', borderBottomWidth: 1, borderBottomColor: '#E5E7EB', paddingVertical: 4, marginBottom: 8 },
-    recipePreviewHint: { fontSize: 12, color: '#6B7280', marginTop: 4 },
-    recipePreview: { fontSize: 16, color: '#374151', fontWeight: '500' },
-    inputLabel: { fontSize: 14, fontWeight: 'bold', color: '#4B5563', marginBottom: 8, marginLeft: 4 },
+    modalTitle: { fontSize: 20, fontWeight: 'bold', color: colors.text },
+    recipeCard: { backgroundColor: colors.surfaceAlt, padding: 16, borderRadius: 12, borderLeftWidth: 4, borderLeftColor: colors.primary, marginBottom: 20 },
+    titleInput: { fontSize: 16, color: colors.text, fontWeight: 'bold', borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: 4, marginBottom: 8 },
+    recipePreviewHint: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
+    recipePreview: { fontSize: 16, color: colors.text, fontWeight: '500' },
+    inputLabel: { fontSize: 14, fontWeight: 'bold', color: colors.textSecondary, marginBottom: 8, marginLeft: 4 },
     selectionRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-    selectButton: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: '#F3F4F6', alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
+    selectButton: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: colors.surfaceAlt, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
     selectButtonActive: { backgroundColor: colors.primaryLight, borderColor: colors.primary },
-    selectButtonText: { fontSize: 14, color: '#6B7280', fontWeight: '600' },
+    selectButtonText: { fontSize: 14, color: colors.textSecondary, fontWeight: '600' },
     selectButtonTextActive: { color: colors.primary, fontWeight: 'bold' },
     modalActions: { flexDirection: 'row', gap: 12, marginTop: 8 },
-    cancelButton: { flex: 1, padding: 16, backgroundColor: '#F3F4F6', borderRadius: 12, alignItems: 'center' },
+    cancelButton: { flex: 1, padding: 16, backgroundColor: colors.surfaceAlt, borderRadius: 12, alignItems: 'center' },
     confirmButton: { flex: 2, padding: 16, backgroundColor: colors.primary, borderRadius: 12, alignItems: 'center' },
-    cancelButtonText: { color: '#374151', fontWeight: '600' },
+    cancelButtonText: { color: colors.textSecondary, fontWeight: '600' },
     confirmButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
 
     // 요리 모드 스타일
@@ -1615,7 +1644,7 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: '#FFF7ED',
+        backgroundColor: colors.primaryLight,
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 2,
@@ -1625,23 +1654,23 @@ const styles = StyleSheet.create({
     fridgeChip: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F9FAFB',
+        backgroundColor: colors.surfaceAlt,
         paddingVertical: 8,
         paddingHorizontal: 14,
         borderRadius: 20,
         gap: 6,
         borderWidth: 2,
-        borderColor: '#E5E7EB',
-        shadowColor: '#000',
+        borderColor: colors.border,
+        shadowColor: colors.text,
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
         shadowRadius: 2,
         elevation: 1,
     },
     fridgeChipActive: {
-        backgroundColor: '#10B981', // 활성 상태용 에메랄드 그린
-        borderColor: '#10B981',
-        shadowColor: '#10B981',
+        backgroundColor: colors.secondary,
+        borderColor: colors.secondary,
+        shadowColor: colors.secondary,
         shadowOpacity: 0.3,
         shadowRadius: 8,
         elevation: 5,
@@ -1649,7 +1678,7 @@ const styles = StyleSheet.create({
     },
     fridgeChipText: {
         fontSize: 13,
-        color: '#6B7280',
+        color: colors.textSecondary,
         fontWeight: '700',
         letterSpacing: -0.2
     },
@@ -1671,13 +1700,13 @@ const styles = StyleSheet.create({
     },
     activeBadgeText: {
         color: 'white',
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: '900',
     },
     toggleDotOn: {
         backgroundColor: colors.primary
     },
     toggleDotOff: {
-        backgroundColor: '#D1D5DB'
+        backgroundColor: colors.disabled
     }
 });

@@ -5,6 +5,7 @@ import axios from 'axios';
 import config from '../config';
 import { useAuth } from '../context/AuthContext';
 import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
+import { colors } from '../theme/colors';
 
 /**
  * 카카오페이 결제 완료 후 m_redirect_url로 리다이렉트되는 결제 결과 화면
@@ -72,7 +73,7 @@ export default function PaymentResultScreen({ onNavigate }) {
             <View style={styles.card}>
                 {status === 'loading' && (
                     <>
-                        <ActivityIndicator size="large" color="#FF6B35" style={{ marginBottom: 24 }} />
+                        <ActivityIndicator size="large" color={colors.primary} style={{ marginBottom: 24 }} />
                         <Text style={styles.title}>결제 확인 중...</Text>
                         <Text style={styles.subtitle}>잠시만 기다려 주세요</Text>
                     </>
@@ -110,7 +111,7 @@ export default function PaymentResultScreen({ onNavigate }) {
                         <Text style={styles.subtitle}>{message}</Text>
 
                         <TouchableOpacity
-                            style={[styles.button, { backgroundColor: '#6B7280' }]}
+                            style={[styles.button, { backgroundColor: colors.textSecondary }]}
                             onPress={() => onNavigate && onNavigate('chat')}
                         >
                             <Text style={styles.buttonText}>홈으로 돌아가기</Text>
@@ -124,7 +125,7 @@ export default function PaymentResultScreen({ onNavigate }) {
 
 const BenefitRow = ({ icon, text }) => (
     <View style={styles.benefitRow}>
-        <Ionicons name={icon} size={18} color="#FF6B35" style={{ marginRight: 10 }} />
+        <Ionicons name={icon} size={18} color={colors.primary} style={{ marginRight: 10 }} />
         <Text style={styles.benefitText}>{text}</Text>
     </View>
 );
@@ -132,25 +133,27 @@ const BenefitRow = ({ icon, text }) => (
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F9FAFB',
+        backgroundColor: colors.background,
         justifyContent: 'center',
         alignItems: 'center',
         padding: 24,
     },
     card: {
-        backgroundColor: 'white',
-        borderRadius: 24,
+        backgroundColor: colors.surface,
+        borderRadius: 20,
         padding: 40,
         alignItems: 'center',
         maxWidth: 420,
         width: '100%',
-        boxShadow: '0px 8px 32px rgba(0,0,0,0.08)',
+        borderWidth: 1,
+        borderColor: colors.border,
+        boxShadow: '0px 8px 32px rgba(23,35,29,0.08)',
     },
     iconCircleSuccess: {
         width: 88,
         height: 88,
         borderRadius: 44,
-        backgroundColor: '#10B981',
+        backgroundColor: colors.success,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 24,
@@ -159,7 +162,7 @@ const styles = StyleSheet.create({
         width: 88,
         height: 88,
         borderRadius: 44,
-        backgroundColor: '#EF4444',
+        backgroundColor: colors.error,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 24,
@@ -167,20 +170,20 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 26,
         fontWeight: 'bold',
-        color: '#1F2937',
+        color: colors.text,
         marginBottom: 8,
         textAlign: 'center',
     },
     subtitle: {
         fontSize: 15,
-        color: '#6B7280',
+        color: colors.textSecondary,
         textAlign: 'center',
         marginBottom: 28,
         lineHeight: 22,
     },
     benefitBox: {
         width: '100%',
-        backgroundColor: '#FFF7ED',
+        backgroundColor: colors.primaryLight,
         borderRadius: 14,
         padding: 18,
         marginBottom: 28,
@@ -192,11 +195,11 @@ const styles = StyleSheet.create({
     },
     benefitText: {
         fontSize: 14,
-        color: '#374151',
+        color: colors.text,
         fontWeight: '500',
     },
     button: {
-        backgroundColor: '#FF6B35',
+        backgroundColor: colors.primary,
         paddingHorizontal: 32,
         paddingVertical: 14,
         borderRadius: 14,

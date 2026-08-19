@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, StatusBar, ActivityIndicator, Platform, useWindowDimensions, Image } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, StatusBar, ActivityIndicator, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
+import SalusLogo, { SalusLogoMark } from '../components/SalusLogo';
 
 // --- Minimalist Components ---
 
@@ -11,7 +12,7 @@ const SocialButton = ({ icon, text, bgColor, iconColor, textColor, onPress, load
     <TouchableOpacity
         style={[
             styles.socialButton,
-            { backgroundColor: bgColor, borderColor: border ? '#E5E7EB' : 'transparent', borderWidth: border ? 1 : 0 }
+            { backgroundColor: bgColor, borderColor: border ? colors.border : 'transparent', borderWidth: border ? 1 : 0 }
         ]}
         onPress={onPress}
         disabled={loading}
@@ -33,10 +34,10 @@ const LoginForm = ({ onLogin, onGuest, loading, handleSocialLogin }) => {
         <View style={styles.formContainer}>
             <View style={styles.header}>
                 <View style={styles.logoBadge}>
-                    <Ionicons name="restaurant" size={32} color={colors.primary} />
+                    <SalusLogoMark size={64} />
                 </View>
                 <Text style={styles.title}>환영합니다!</Text>
-                <Text style={styles.subtitle}>로그인하고 Salus를 시작하세요</Text>
+                <Text style={styles.subtitle}>로그인하고 SALUS를 시작하세요</Text>
             </View>
 
             <View style={styles.buttonStack}>
@@ -58,10 +59,10 @@ const LoginForm = ({ onLogin, onGuest, loading, handleSocialLogin }) => {
                 />
                 <SocialButton
                     text="Google로 계속하기"
-                    bgColor="#FFFFFF"
-                    textColor="#374151"
+                    bgColor={colors.surface}
+                    textColor={colors.text}
                     border
-                    icon={<Ionicons name="logo-google" size={20} color="#374151" />}
+                    icon={<Ionicons name="logo-google" size={20} color={colors.text} />}
                     onPress={() => handleSocialLogin('google')}
                     loading={loading}
                 />
@@ -105,8 +106,7 @@ export default function LoginScreen({ onLogin, onGuest }) {
                 {/* Left Side: Brand Identity (Minimal) */}
                 <View style={styles.leftPane}>
                     <View style={styles.brandContainer}>
-                        <Ionicons name="restaurant-outline" size={64} color="rgba(255,255,255,0.9)" />
-                        <Text style={styles.brandTitle}>Salus</Text>
+                        <SalusLogo size={72} wordmarkColor={colors.onPrimary} wordmarkStyle={styles.brandWordmark} />
                         <Text style={styles.brandSlogan}>당신을 위한 스마트 인공지능 셰프</Text>
                     </View>
                     {/* Abstract Circle Decoration */}
@@ -129,7 +129,7 @@ export default function LoginScreen({ onLogin, onGuest }) {
     // Mobile Layout
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+            <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
             <View style={{ flex: 1, justifyContent: 'center', padding: 24 }}>
                 <LoginForm
                     onLogin={onLogin}
@@ -145,12 +145,12 @@ export default function LoginScreen({ onLogin, onGuest }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: colors.background,
     },
     // Split Layout Styles
     leftPane: {
         flex: 1,
-        backgroundColor: colors.primary, // Brand Color Background
+        backgroundColor: colors.secondary,
         justifyContent: 'center',
         padding: 60,
         position: 'relative',
@@ -160,18 +160,16 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: colors.background,
     },
     brandContainer: {
         zIndex: 10,
     },
-    brandTitle: {
+    brandWordmark: {
         fontSize: 48,
-        fontWeight: '800',
-        color: '#FFFFFF',
-        marginTop: 24,
-        marginBottom: 12,
-        letterSpacing: -1,
+        fontWeight: '900',
+        color: colors.onPrimary,
+        letterSpacing: 3.2,
     },
     brandSlogan: {
         fontSize: 20,
@@ -179,6 +177,7 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         maxWidth: 400,
         lineHeight: 30,
+        marginTop: 24,
     },
     circleDecoration: {
         position: 'absolute',
@@ -203,8 +202,6 @@ const styles = StyleSheet.create({
     logoBadge: {
         width: 64,
         height: 64,
-        borderRadius: 20,
-        backgroundColor: '#FFF7ED', // Light tint
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 24,
@@ -212,12 +209,12 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 28,
         fontWeight: 'bold',
-        color: '#1F2937',
+        color: colors.text,
         marginBottom: 8,
     },
     subtitle: {
         fontSize: 16,
-        color: '#6B7280',
+        color: colors.textSecondary,
     },
     buttonStack: {
         gap: 12,
@@ -246,11 +243,11 @@ const styles = StyleSheet.create({
     line: {
         flex: 1,
         height: 1,
-        backgroundColor: '#E5E7EB',
+        backgroundColor: colors.border,
     },
     orText: {
         marginHorizontal: 16,
-        color: '#9CA3AF',
+        color: colors.textTertiary,
         fontSize: 14,
         fontWeight: '500',
     },
