@@ -73,7 +73,7 @@ const Dashboard = ({ adminToken, onAuthError }) => {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+            <div className="dashboard-heading-row">
                 <div>
                     <h1 style={{ fontSize: '1.8rem', marginBottom: '0.25rem' }}>대시보드</h1>
                     <p style={{ color: 'var(--text-secondary)' }}>사용자, 활동, 결제 상태를 확인합니다.</p>
@@ -94,9 +94,9 @@ const Dashboard = ({ adminToken, onAuthError }) => {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
-                    color: '#B91C1C',
-                    background: '#FEF2F2',
-                    border: '1px solid #FECACA',
+                    color: 'var(--danger)',
+                    background: 'var(--danger-soft)',
+                    border: '1px solid var(--danger)',
                     padding: '0.75rem 1rem',
                     borderRadius: '8px',
                 }}>
@@ -118,11 +118,7 @@ const Dashboard = ({ adminToken, onAuthError }) => {
                 <MetricCard icon={<Server size={20} />} label="AI 예상 비용" value={currencyFormatter.format(stats.apiCost)} />
             </section>
 
-            <section style={{
-                display: 'grid',
-                gridTemplateColumns: 'minmax(0, 1.4fr) minmax(280px, 0.8fr)',
-                gap: '1rem'
-            }}>
+            <section className="dashboard-split">
                 <div style={panelStyle}>
                     <h2 style={panelTitleStyle}>일별 결제</h2>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
@@ -131,7 +127,7 @@ const Dashboard = ({ adminToken, onAuthError }) => {
                             return (
                                 <div key={item.date} style={{ display: 'grid', gridTemplateColumns: '64px 1fr 96px', gap: '12px', alignItems: 'center' }}>
                                     <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{item.date}</span>
-                                    <div style={{ height: '10px', background: '#F1F5F9', borderRadius: '999px', overflow: 'hidden' }}>
+                                    <div style={{ height: '10px', background: 'var(--surface-alt)', borderRadius: '999px', overflow: 'hidden' }}>
                                         <div style={{ width: `${width}%`, height: '100%', background: 'var(--primary)' }} />
                                     </div>
                                     <strong style={{ textAlign: 'right', fontSize: '0.9rem' }}>{currencyFormatter.format(item.amount)}</strong>
@@ -151,8 +147,8 @@ const Dashboard = ({ adminToken, onAuthError }) => {
                             <div key={name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <span style={{ textTransform: 'capitalize' }}>{name}</span>
                                 <span style={{
-                                    color: status === 'healthy' ? '#047857' : '#B91C1C',
-                                    background: status === 'healthy' ? '#ECFDF5' : '#FEF2F2',
+                                    color: status === 'healthy' ? 'var(--success)' : 'var(--danger)',
+                                    background: status === 'healthy' ? 'var(--success-soft)' : 'var(--danger-soft)',
                                     padding: '0.2rem 0.55rem',
                                     borderRadius: '999px',
                                     fontSize: '0.78rem',
@@ -199,9 +195,9 @@ const PanelState = ({ icon, title, action }) => (
 const panelStyle = {
     background: 'var(--surface)',
     border: '1px solid var(--border)',
-    borderRadius: '8px',
+    borderRadius: 'var(--radius-md)',
     padding: '1rem',
-    boxShadow: '0 1px 3px rgba(28, 25, 23, 0.06)',
+    boxShadow: '0 1px 3px rgba(23, 35, 29, 0.06)',
 };
 
 const panelTitleStyle = {
