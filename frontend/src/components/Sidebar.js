@@ -2,19 +2,20 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Modal, Animated, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme/colors';
+import { colors, radii } from '../theme/colors';
 import axios from 'axios';
 import config from '../config';
 import SubscriptionModal from './SubscriptionModal';
+import { SalusLogoMark } from './SalusLogo';
 
 const MENU_ITEMS = [
-    { id: 'chat', label: 'AI 채팅', icon: 'chatbubbles', color: colors.secondary },
-    { id: 'community', label: '커뮤니티', icon: 'people', color: '#10B981' },
-    { id: 'fridge', label: '나의 냉장고', icon: 'nutrition', color: '#3B82F6' },
-    { id: 'calendar', label: '식단 캘린더', icon: 'calendar', color: colors.primary },
-    { id: 'health', label: '나의 건강정보', icon: 'heart', color: colors.health },
-    { id: 'health-checkup', label: '건강검진', icon: 'document-text', color: '#6366F1' },
-    { id: 'account-settings', label: '계정과 개인정보', icon: 'shield-checkmark', color: '#0F766E' },
+    { id: 'chat', label: 'AI 채팅', icon: 'chatbubbles' },
+    { id: 'community', label: '커뮤니티', icon: 'people' },
+    { id: 'fridge', label: '나의 냉장고', icon: 'nutrition' },
+    { id: 'calendar', label: '식단 캘린더', icon: 'calendar' },
+    { id: 'health', label: '나의 건강정보', icon: 'heart' },
+    { id: 'health-checkup', label: '건강검진', icon: 'document-text' },
+    { id: 'account-settings', label: '계정과 개인정보', icon: 'shield-checkmark' },
 ];
 
 import { useAuth } from '../context/AuthContext';
@@ -36,11 +37,11 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                     <View style={[styles.header, { marginTop: insets.top + 20 }]}>
 
                         <View style={styles.logoBox}>
-                            <Ionicons name="restaurant" size={24} color="white" />
+                            <SalusLogoMark size={40} />
                         </View>
                         <View>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Text style={styles.title}>{isLoggedIn && user ? user.name : 'Salus'}</Text>
+                                <Text style={styles.title}>{isLoggedIn && user ? user.name : 'SALUS'}</Text>
                                 {isLoggedIn && user?.grade === 'PLUS' && (
                                     <View style={styles.inlinePlusBadge}>
                                         <Text style={styles.inlinePlusBadgeText}>PLUS</Text>
@@ -49,8 +50,8 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                             </View>
                             <Text style={styles.subtitle}>{isLoggedIn && user ? user.email : '당신만의 AI 요리사'}</Text>
                         </View>
-                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                            <Ionicons name="close" size={24} color="#6B7280" />
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="메뉴 닫기" onPress={onClose} style={styles.closeButton}>
+                            <Ionicons name="close" size={24} color={colors.textTertiary} />
                         </TouchableOpacity>
                     </View>
 
@@ -58,10 +59,12 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                         {MENU_ITEMS.map((item) => (
                             <TouchableOpacity
                                 key={item.id}
+                                accessibilityRole="button"
+                                accessibilityLabel={item.label}
+                                accessibilityState={{ selected: currentScreen === item.id }}
                                 style={[
                                     styles.menuItem,
                                     currentScreen === item.id && styles.menuItemSelected,
-                                    currentScreen === item.id && { backgroundColor: item.color + '15' } // 10% 투명도로 배경색 처리
                                 ]}
                                 onPress={() => {
                                     onNavigate(item.id);
@@ -70,22 +73,22 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                             >
                                 <View style={[
                                     styles.iconBox,
-                                    { backgroundColor: currentScreen === item.id ? item.color : '#F3F4F6' }
+                                    currentScreen === item.id ? styles.iconBoxSelected : styles.iconBoxDefault,
                                 ]}>
                                     <Ionicons
                                         name={item.icon}
                                         size={20}
-                                        color={currentScreen === item.id ? 'white' : '#6B7280'}
+                                        color={currentScreen === item.id ? colors.onPrimary : colors.textTertiary}
                                     />
                                 </View>
                                 <Text style={[
                                     styles.menuLabel,
-                                    currentScreen === item.id && { color: item.color, fontWeight: 'bold' }
+                                    currentScreen === item.id && styles.menuLabelSelected,
                                 ]}>
                                     {item.label}
                                 </Text>
                                 {currentScreen === item.id && (
-                                    <View style={[styles.activeIndicator, { backgroundColor: item.color }]} />
+                                    <View style={styles.activeIndicator} />
                                 )}
                             </TouchableOpacity>
                         ))}
@@ -95,6 +98,8 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                             <TouchableOpacity
                                 style={styles.premiumBanner}
                                 onPress={() => setSubscriptionModalVisible(true)}
+                                accessibilityRole="button"
+                                accessibilityLabel="플러스로 업그레이드"
                             >
                                 <View style={styles.premiumBannerContent}>
                                     <Ionicons name="sparkles" size={18} color="white" />
@@ -106,26 +111,26 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                     </View>
 
                     <View style={styles.footer}>
-                        <TouchableOpacity style={[styles.accountButton, { marginBottom: 8 }]} onPress={() => { onNavigate('about'); onClose(); }}>
-                            <Ionicons name="information-circle-outline" size={24} color="#4B5563" />
+                        <TouchableOpacity accessibilityRole="button" style={[styles.accountButton, { marginBottom: 8 }]} onPress={() => { onNavigate('about'); onClose(); }}>
+                            <Ionicons name="information-circle-outline" size={24} color={colors.textSecondary} />
                             <Text style={styles.accountText}>Salus 정보</Text>
-                            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" style={{ marginLeft: 'auto' }} />
+                            <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} style={{ marginLeft: 'auto' }} />
                         </TouchableOpacity>
                         {isLoggedIn ? (
-                            <TouchableOpacity style={styles.accountButton} onPress={() => { logout(); onClose(); }}>
-                                <Ionicons name="log-out-outline" size={24} color="#EF4444" />
-                                <Text style={[styles.accountText, { color: '#EF4444' }]}>로그아웃</Text>
+                            <TouchableOpacity accessibilityRole="button" style={styles.accountButton} onPress={() => { logout(); onClose(); }}>
+                                <Ionicons name="log-out-outline" size={24} color={colors.error} />
+                                <Text style={[styles.accountText, { color: colors.error }]}>로그아웃</Text>
                             </TouchableOpacity>
                         ) : (
-                            <TouchableOpacity style={styles.accountButton} onPress={() => { onNavigate('login'); onClose(); }}>
-                                <Ionicons name="log-in-outline" size={24} color="#4B5563" />
+                            <TouchableOpacity accessibilityRole="button" style={styles.accountButton} onPress={() => { onNavigate('login'); onClose(); }}>
+                                <Ionicons name="log-in-outline" size={24} color={colors.textSecondary} />
                                 <Text style={styles.accountText}>로그인</Text>
-                                <Ionicons name="chevron-forward" size={16} color="#9CA3AF" style={{ marginLeft: 'auto' }} />
+                                <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} style={{ marginLeft: 'auto' }} />
                             </TouchableOpacity>
                         )}
                     </View>
                 </View>
-                <TouchableOpacity style={styles.overlayTouch} onPress={onClose} />
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="메뉴 닫기" style={styles.overlayTouch} onPress={onClose} />
             </View>
 
             {/* Subscription Modal */}
@@ -169,7 +174,7 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: colors.overlay,
         flexDirection: 'row',
     },
     overlayTouch: {
@@ -178,11 +183,11 @@ const styles = StyleSheet.create({
     sidebar: {
         width: '80%',
         maxWidth: 300,
-        backgroundColor: 'white',
+        backgroundColor: colors.surface,
         height: '100%',
         padding: 20,
         // 표준적인 슬라이드 메뉴 형태를 위해 테두리 둥글기 제거
-        shadowColor: "#000",
+        shadowColor: colors.text,
         shadowOffset: { width: 2, height: 0 },
         shadowOpacity: 0.1,
         shadowRadius: 10,
@@ -196,8 +201,6 @@ const styles = StyleSheet.create({
     logoBox: {
         width: 40,
         height: 40,
-        backgroundColor: colors.primary,
-        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 12,
@@ -205,11 +208,11 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#1F2937',
+        color: colors.text,
     },
     subtitle: {
         fontSize: 12,
-        color: '#6B7280',
+        color: colors.textSecondary,
     },
     closeButton: {
         marginLeft: 'auto',
@@ -222,48 +225,50 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         padding: 12,
-        borderRadius: 16,
+        borderRadius: radii.md,
         position: 'relative',
     },
-    menuItemSelected: {
-        // 배경색(Background)은 인라인으로 처리함
-    },
+    menuItemSelected: { backgroundColor: colors.primaryLight },
     iconBox: {
         width: 36,
         height: 36,
-        borderRadius: 10,
+        borderRadius: radii.sm,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 12,
     },
+    iconBoxDefault: { backgroundColor: colors.surfaceAlt },
+    iconBoxSelected: { backgroundColor: colors.primary },
     menuLabel: {
         fontSize: 16,
-        color: '#4B5563',
+        color: colors.textSecondary,
         fontWeight: '500',
     },
+    menuLabelSelected: { color: colors.primary, fontWeight: '800' },
     activeIndicator: {
         width: 4,
         height: 20,
         borderRadius: 2,
         position: 'absolute',
         right: 12,
+        backgroundColor: colors.primary,
     },
     footer: {
         marginTop: 'auto',
         paddingTop: 20,
         borderTopWidth: 1,
-        borderTopColor: '#F3F4F6',
+        borderTopColor: colors.divider,
     },
     accountButton: {
         flexDirection: 'row',
         alignItems: 'center',
         padding: 12,
-        backgroundColor: '#F9FAFB',
-        borderRadius: 12,
+        backgroundColor: colors.surfaceAlt,
+        borderRadius: radii.md,
     },
     accountText: {
         marginLeft: 12,
-        color: '#374151',
+        color: colors.textSecondary,
         fontWeight: '600',
         fontSize: 14,
     },
@@ -275,8 +280,8 @@ const styles = StyleSheet.create({
         marginLeft: 6,
     },
     inlinePlusBadgeText: {
-        color: 'white',
-        fontSize: 10,
+        color: colors.onPrimary,
+        fontSize: 11,
         fontWeight: 'bold',
     },
     premiumBanner: {
@@ -285,7 +290,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: 16,
-        borderRadius: 16,
+        borderRadius: radii.md,
         marginTop: 12,
         shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 4 },
@@ -299,7 +304,7 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     premiumBannerText: {
-        color: 'white',
+        color: colors.onPrimary,
         fontWeight: 'bold',
         fontSize: 14,
     }

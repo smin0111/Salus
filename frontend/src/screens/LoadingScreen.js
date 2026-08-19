@@ -1,8 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, Animated, Dimensions, Easing } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
-import { LinearGradient } from 'expo-linear-gradient';
+import { SalusLogoMark } from '../components/SalusLogo';
 
 const { width, height } = Dimensions.get('window');
 
@@ -42,7 +41,7 @@ export default function LoadingScreen() {
 
     return (
         <View style={styles.container}>
-            <View style={[styles.background, { backgroundColor: '#F9FAFB' }]} />
+            <View style={[styles.background, { backgroundColor: colors.background }]} />
 
             <Animated.View style={[
                 styles.logoContainer,
@@ -52,7 +51,7 @@ export default function LoadingScreen() {
                 }
             ]}>
                 <View style={styles.iconCircle}>
-                    <Ionicons name="restaurant" size={60} color={colors.primary} />
+                    <SalusLogoMark size={88} />
                     <Animated.View style={[
                         styles.spinner,
                         { transform: [{ rotate: rotation }] }
@@ -61,7 +60,7 @@ export default function LoadingScreen() {
                     </Animated.View>
                 </View>
 
-                <Text style={styles.brandName}>Salus</Text>
+                <Text style={styles.brandName}>SALUS</Text>
                 <Text style={styles.tagline}>당신을 위한 스마트 인공지능 셰프</Text>
             </Animated.View>
 
@@ -80,7 +79,7 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'white',
+        backgroundColor: colors.background,
     },
     background: {
         position: 'absolute',
@@ -96,7 +95,7 @@ const styles = StyleSheet.create({
         width: 120,
         height: 120,
         borderRadius: 60,
-        backgroundColor: 'white',
+        backgroundColor: colors.surface,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: colors.primary,
@@ -122,12 +121,12 @@ const styles = StyleSheet.create({
     brandName: {
         fontSize: 32,
         fontWeight: '900',
-        color: '#1F2937',
-        letterSpacing: -1,
+        color: colors.text,
+        letterSpacing: 2.8,
     },
     tagline: {
         fontSize: 14,
-        color: '#6B7280',
+        color: colors.textSecondary,
         marginTop: 8,
         fontWeight: '500',
     },
@@ -139,14 +138,14 @@ const styles = StyleSheet.create({
     },
     loadingText: {
         fontSize: 12,
-        color: '#9CA3AF',
+        color: colors.textTertiary,
         marginBottom: 12,
         fontWeight: '600',
     },
     progressBarContainer: {
         width: 200,
         height: 4,
-        backgroundColor: '#E5E7EB',
+        backgroundColor: colors.border,
         borderRadius: 2,
         overflow: 'hidden',
     },

@@ -124,8 +124,8 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
 
                 <View style={styles.benefitList}>
                     <View style={styles.benefitItem}>
-                        <View style={[styles.iconBox, { backgroundColor: '#EEF2FF' }]}>
-                            <Ionicons name="mic" size={24} color="#4F46E5" />
+                        <View style={[styles.iconBox, { backgroundColor: colors.infoLight }]}>
+                            <Ionicons name="mic" size={24} color={colors.info} />
                         </View>
                         <View style={styles.benefitText}>
                             <Text style={styles.benefitTitle}>무제한 STT 음성 인식</Text>
@@ -134,8 +134,8 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
                     </View>
 
                     <View style={styles.benefitItem}>
-                        <View style={[styles.iconBox, { backgroundColor: '#FFF7ED' }]}>
-                            <Ionicons name="volume-high" size={24} color="#EA580C" />
+                        <View style={[styles.iconBox, { backgroundColor: colors.primaryLight }]}>
+                            <Ionicons name="volume-high" size={24} color={colors.primary} />
                         </View>
                         <View style={styles.benefitText}>
                             <Text style={styles.benefitTitle}>고급 TTS 음성 출력</Text>
@@ -144,8 +144,8 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
                     </View>
 
                     <View style={styles.benefitItem}>
-                        <View style={[styles.iconBox, { backgroundColor: '#F0FDF4' }]}>
-                            <Ionicons name="flash" size={24} color="#16A34A" />
+                        <View style={[styles.iconBox, { backgroundColor: colors.successLight }]}>
+                            <Ionicons name="flash" size={24} color={colors.success} />
                         </View>
                         <View style={styles.benefitText}>
                             <Text style={styles.benefitTitle}>우선순위 응답</Text>
@@ -177,28 +177,28 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: 'white' },
-    header: { padding: 16, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F3F4F6', paddingTop: Platform.OS === 'android' ? 40 : 16 },
+    container: { flex: 1, backgroundColor: colors.background },
+    header: { padding: 16, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border, paddingTop: Platform.OS === 'android' ? 40 : 16 },
     backButton: { padding: 4, marginRight: 12 },
-    headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
+    headerTitle: { fontSize: 18, fontWeight: 'bold', color: colors.text },
     content: { padding: 24, alignItems: 'center' },
     badgeContainer: { marginBottom: 16 },
     plusBadge: { backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 },
     plusBadgeText: { color: 'white', fontWeight: '900', fontSize: 14 },
-    title: { fontSize: 28, fontWeight: 'bold', color: '#111827', textAlign: 'center', marginBottom: 16 },
-    subtitle: { fontSize: 16, color: '#6B7280', textAlign: 'center', marginBottom: 40 },
+    title: { fontSize: 28, fontWeight: 'bold', color: colors.text, textAlign: 'center', marginBottom: 16 },
+    subtitle: { fontSize: 16, color: colors.textSecondary, textAlign: 'center', marginBottom: 40 },
     benefitList: { width: '100%', marginBottom: 40 },
     benefitItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
     iconBox: { width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
     benefitText: { flex: 1 },
-    benefitTitle: { fontSize: 17, fontWeight: 'bold', color: '#1F2937', marginBottom: 4 },
-    benefitDesc: { fontSize: 14, color: '#6B7280' },
-    priceCard: { width: '100%', backgroundColor: '#F9FAFB', padding: 24, borderRadius: 24, borderWidth: 1, borderColor: '#F3F4F6' },
-    priceLabel: { fontSize: 14, color: '#6B7280', marginBottom: 8 },
+    benefitTitle: { fontSize: 17, fontWeight: 'bold', color: colors.text, marginBottom: 4 },
+    benefitDesc: { fontSize: 14, color: colors.textSecondary },
+    priceCard: { width: '100%', backgroundColor: colors.surface, padding: 24, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
+    priceLabel: { fontSize: 14, color: colors.textSecondary, marginBottom: 8 },
     priceRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 24 },
-    priceValue: { fontSize: 32, fontWeight: 'bold', color: '#111827' },
-    priceUnit: { fontSize: 16, color: '#6B7280' },
+    priceValue: { fontSize: 32, fontWeight: 'bold', color: colors.text },
+    priceUnit: { fontSize: 16, color: colors.textSecondary },
     payButton: { backgroundColor: colors.primary, paddingVertical: 16, borderRadius: 16, alignItems: 'center' },
     payButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
-    footerNote: { fontSize: 12, color: '#9CA3AF', textAlign: 'center', marginTop: 12 }
+    footerNote: { fontSize: 12, color: colors.textTertiary, textAlign: 'center', marginTop: 12 }
 });

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Platform, TouchableOpacity, ScrollView, Text } from 'react-native';
+import { StyleSheet, View, Platform, TouchableOpacity, ScrollView, Text, useWindowDimensions } from 'react-native';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -24,7 +24,9 @@ import PaymentResultScreen from '../screens/PaymentResultScreen';
 import AccountSettingsScreen from '../screens/AccountSettingsScreen';
 
 import Sidebar from '../components/Sidebar';
+import SalusLogo, { SalusLogoMark } from '../components/SalusLogo';
 import { useAuth } from '../context/AuthContext';
+import { colors, radii, typography, controlStyles } from '../theme/colors';
 
 const WEB_SHELL_EXCLUDED_SCREENS = [
   'login',
@@ -38,12 +40,12 @@ const WEB_SHELL_EXCLUDED_SCREENS = [
 const PROTECTED_SCREENS = ['community', 'fridge', 'calendar', 'health', 'health-checkup', 'account-settings', 'create-post'];
 
 const WEB_NAV_ITEMS = [
-  { id: 'chat', label: 'AI 셰프', caption: '맞춤 레시피 상담', icon: 'sparkles', color: '#EA580C', path: '/chat' },
-  { id: 'community', label: '레시피 허브', caption: '추천과 커뮤니티', icon: 'grid', color: '#10B981', path: '/community' },
-  { id: 'fridge', label: '냉장고', caption: '재료와 유통기한', icon: 'nutrition', color: '#3B82F6', path: '/fridge' },
-  { id: 'calendar', label: '식단 캘린더', caption: '식사 기록', icon: 'calendar', color: '#8B5CF6', path: '/calendar' },
-  { id: 'health', label: '건강 프로필', caption: '알레르기와 식이조건', icon: 'heart', color: '#F43F5E', path: '/health' },
-  { id: 'health-checkup', label: '검진 분석', caption: '수치 기반 추천', icon: 'document-text', color: '#6366F1', path: '/health-checkup' },
+  { id: 'chat', label: 'AI 셰프', caption: '맞춤 레시피 상담', icon: 'sparkles', path: '/chat' },
+  { id: 'community', label: '레시피 허브', caption: '추천과 커뮤니티', icon: 'grid', path: '/community' },
+  { id: 'fridge', label: '냉장고', caption: '재료와 유통기한', icon: 'nutrition', path: '/fridge' },
+  { id: 'calendar', label: '식단 캘린더', caption: '식사 기록', icon: 'calendar', path: '/calendar' },
+  { id: 'health', label: '건강 프로필', caption: '알레르기와 식이조건', icon: 'heart', path: '/health' },
+  { id: 'health-checkup', label: '검진 분석', caption: '수치 기반 추천', icon: 'document-text', path: '/health-checkup' },
 ];
 
 const WEB_SCREEN_TITLES = {
@@ -110,10 +112,8 @@ function WebAppShell({ children, currentScreen, onNavigate, isLoggedIn, user, on
   return (
     <View style={styles.webShell}>
       <View style={styles.webSidebar}>
-        <TouchableOpacity style={styles.webBrand} onPress={() => onNavigate('chat')} activeOpacity={0.85}>
-          <View style={styles.webBrandMark}>
-            <Ionicons name="restaurant" size={21} color="#111827" />
-          </View>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="SALUS 홈" style={styles.webBrand} onPress={() => onNavigate('chat')} activeOpacity={0.85}>
+          <SalusLogoMark size={42} accessible={false} />
         </TouchableOpacity>
 
         <ScrollView style={styles.webNav} showsVerticalScrollIndicator={false}>
@@ -122,11 +122,14 @@ function WebAppShell({ children, currentScreen, onNavigate, isLoggedIn, user, on
             return (
               <TouchableOpacity
                 key={item.id}
+                accessibilityRole="button"
+                accessibilityLabel={item.label}
+                accessibilityState={{ selected: isActive }}
                 style={[styles.webNavItem, isActive && styles.webNavItemActive]}
                 onPress={() => onNavigate(item.id)}
                 activeOpacity={0.85}
               >
-                <Ionicons name={item.icon} size={21} color={isActive ? '#111827' : '#6B7280'} />
+                <Ionicons name={item.icon} size={21} color={isActive ? colors.primary : colors.textTertiary} />
                 {isActive && <View style={styles.webNavDot} />}
               </TouchableOpacity>
             );
@@ -135,23 +138,26 @@ function WebAppShell({ children, currentScreen, onNavigate, isLoggedIn, user, on
 
         <View style={styles.webSidebarFooter}>
           <TouchableOpacity 
+            accessibilityRole="button"
+            accessibilityLabel="서비스 소개"
+            accessibilityState={{ selected: currentScreen === 'about' }}
             style={[styles.webNavItem, currentScreen === 'about' && styles.webNavItemActive]} 
             onPress={() => onNavigate('about')}
             activeOpacity={0.85}
           >
-            <Ionicons name="information-circle-outline" size={22} color={currentScreen === 'about' ? '#111827' : '#6B7280'} />
+            <Ionicons name="information-circle-outline" size={22} color={currentScreen === 'about' ? colors.primary : colors.textTertiary} />
             {currentScreen === 'about' && <View style={styles.webNavDot} />}
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.webNavItem, currentScreen === 'account-settings' && styles.webNavItemActive]} onPress={() => onNavigate('account-settings')}>
-            <Ionicons name="shield-checkmark-outline" size={21} color={currentScreen === 'account-settings' ? '#111827' : '#6B7280'} />
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="계정과 개인정보" accessibilityState={{ selected: currentScreen === 'account-settings' }} style={[styles.webNavItem, currentScreen === 'account-settings' && styles.webNavItemActive]} onPress={() => onNavigate('account-settings')}>
+            <Ionicons name="shield-checkmark-outline" size={21} color={currentScreen === 'account-settings' ? colors.primary : colors.textTertiary} />
             {currentScreen === 'account-settings' && <View style={styles.webNavDot} />}
           </TouchableOpacity>
           {isLoggedIn && (
-            <TouchableOpacity style={styles.webNavItem} onPress={onLogout}>
-              <Ionicons name="log-out-outline" size={21} color="#6B7280" />
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="로그아웃" style={styles.webNavItem} onPress={onLogout}>
+              <Ionicons name="log-out-outline" size={21} color={colors.textTertiary} />
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.webAvatarButton} onPress={() => onNavigate(isLoggedIn ? 'account-settings' : 'login')}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={isLoggedIn ? '계정 설정' : '로그인'} style={styles.webAvatarButton} onPress={() => onNavigate(isLoggedIn ? 'account-settings' : 'login')}>
             <Text style={styles.webAvatarText}>{userName.slice(0, 1).toUpperCase()}</Text>
           </TouchableOpacity>
         </View>
@@ -159,16 +165,16 @@ function WebAppShell({ children, currentScreen, onNavigate, isLoggedIn, user, on
 
       <View style={styles.webMain}>
         <View style={styles.webTopbar}>
-          <TouchableOpacity style={styles.webTopBrand} onPress={() => onNavigate('chat')} activeOpacity={0.85}>
-            <Text style={styles.webTopBrandText}>Salus</Text>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="SALUS 홈" style={styles.webTopBrand} onPress={() => onNavigate('chat')} activeOpacity={0.85}>
+            <SalusLogo size={30} wordmarkStyle={styles.webTopBrandText} accessible={false} />
           </TouchableOpacity>
           <View style={styles.webTopTitleBlock}>
             <Text style={styles.webPageTitle}>{title}</Text>
             <Text style={styles.webPageSubtitle}>{subtitle}</Text>
           </View>
           <View style={styles.webTopActions}>
-            <TouchableOpacity style={styles.webIconButton} onPress={() => onNavigate('search')}>
-              <Ionicons name="search" size={19} color="#374151" />
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="검색" style={styles.webIconButton} onPress={() => onNavigate('search')}>
+              <Ionicons name="search" size={19} color={colors.textSecondary} />
             </TouchableOpacity>
             {!isLoggedIn && (
               <TouchableOpacity style={styles.webPrimaryAction} onPress={() => onNavigate('login')}>
@@ -187,6 +193,8 @@ function WebAppShell({ children, currentScreen, onNavigate, isLoggedIn, user, on
 }
 
 export default function AppNavigator() {
+  const { width: windowWidth } = useWindowDimensions();
+  const desktopWebMode = Platform.OS === 'web' && windowWidth >= 768;
   const [currentScreen, setCurrentScreen] = useState('chat');
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [recipeBackScreen, setRecipeBackScreen] = useState('community');
@@ -319,27 +327,27 @@ export default function AppNavigator() {
             isSidebarOpen={isSidebarOpen}
             onToggleSidebar={() => setIsSidebarOpen(true)}
             onLoginPress={() => handleNavigate('login')}
-            webMode={Platform.OS === 'web'}
+            webMode={desktopWebMode}
           />
         );
       case 'community':
-        return <CommunityScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} user={user} webMode={Platform.OS === 'web'} />;
+        return <CommunityScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} user={user} webMode={desktopWebMode} />;
       case 'create-post':
-        return <CreatePostScreen onNavigate={handleNavigate} user={user} webMode={Platform.OS === 'web'} />;
+        return <CreatePostScreen onNavigate={handleNavigate} user={user} webMode={desktopWebMode} />;
       case 'post-detail':
-        return <PostDetailScreen post={selectedPost} user={user} onNavigate={handleNavigate} onBack={() => handleNavigate('community')} webMode={Platform.OS === 'web'} />;
+        return <PostDetailScreen post={selectedPost} user={user} onNavigate={handleNavigate} onBack={() => handleNavigate('community')} webMode={desktopWebMode} />;
       case 'calendar':
-        return <CalendarScreen mealData={mealData} setMealData={setMealData} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={Platform.OS === 'web'} />;
+        return <CalendarScreen mealData={mealData} setMealData={setMealData} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
       case 'health':
-        return <HealthScreen healthProfile={healthProfile} setHealthProfile={setHealthProfile} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={Platform.OS === 'web'} />;
+        return <HealthScreen healthProfile={healthProfile} setHealthProfile={setHealthProfile} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
       case 'health-checkup':
-        return <HealthCheckupScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={Platform.OS === 'web'} />;
+        return <HealthCheckupScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
       case 'account-settings':
-        return <AccountSettingsScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={Platform.OS === 'web'} />;
+        return <AccountSettingsScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
       case 'fridge':
-        return <FridgeScreen fridgeItems={fridgeItems} setFridgeItems={setFridgeItems} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={Platform.OS === 'web'} />;
+        return <FridgeScreen fridgeItems={fridgeItems} setFridgeItems={setFridgeItems} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
       case 'search':
-        return <SearchScreen onBack={() => handleNavigate('community')} onNavigate={handleNavigate} user={user} webMode={Platform.OS === 'web'} />;
+        return <SearchScreen onBack={() => handleNavigate('community')} onNavigate={handleNavigate} user={user} webMode={desktopWebMode} />;
       case 'login':
         return <LoginScreen onLogin={() => handleNavigate('chat')} onGuest={() => handleNavigate('chat')} />;
       case 'upgrade':
@@ -361,7 +369,7 @@ export default function AppNavigator() {
     return <LoadingScreen />;
   }
 
-  const shouldUseWebShell = Platform.OS === 'web' && !WEB_SHELL_EXCLUDED_SCREENS.includes(currentScreen);
+  const shouldUseWebShell = desktopWebMode && !WEB_SHELL_EXCLUDED_SCREENS.includes(currentScreen);
   const screenContent = renderScreen();
 
   return (
@@ -382,7 +390,7 @@ export default function AppNavigator() {
         screenContent
       )}
 
-      {Platform.OS !== 'web' && (
+      {(Platform.OS !== 'web' || !desktopWebMode) && (
         <Sidebar
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
@@ -397,7 +405,7 @@ export default function AppNavigator() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
     ...Platform.select({
       web: {
         width: '100%',
@@ -410,13 +418,13 @@ const styles = StyleSheet.create({
     width: '100%',
     minHeight: '100vh',
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   webSidebar: {
     width: 76,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRightWidth: 1,
-    borderRightColor: '#EEF0F3',
+    borderRightColor: colors.border,
     paddingHorizontal: 12,
     paddingTop: 16,
     paddingBottom: 16,
@@ -427,14 +435,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 18,
   },
-  webBrandMark: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   webNav: {
     flex: 1,
     width: '100%',
@@ -444,12 +444,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: radii.md,
     marginBottom: 8,
     position: 'relative',
   },
   webNavItemActive: {
-    backgroundColor: '#F1F3F4',
+    backgroundColor: colors.primaryLight,
   },
   webNavDot: {
     position: 'absolute',
@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
     width: 3,
     height: 22,
     borderRadius: 2,
-    backgroundColor: '#111827',
+    backgroundColor: colors.primary,
   },
   webSidebarFooter: {
     width: '100%',
@@ -468,19 +468,19 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#111827',
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   webAvatarText: {
-    color: 'white',
+    color: colors.onPrimary,
     fontSize: 13,
     fontWeight: '800',
   },
   webMain: {
     flex: 1,
     minWidth: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   webTopbar: {
     height: 64,
@@ -489,28 +489,27 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 24,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F3F4',
+    borderBottomColor: colors.border,
   },
   webTopBrand: {
     width: 160,
   },
   webTopBrandText: {
-    color: '#202124',
+    color: colors.text,
     fontSize: 19,
-    fontWeight: '700',
+    fontWeight: '900',
+    letterSpacing: 1.4,
   },
   webTopTitleBlock: {
     flex: 1,
     alignItems: 'center',
   },
   webPageTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#202124',
+    ...typography.cardTitle,
   },
   webPageSubtitle: {
-    fontSize: 12,
-    color: '#5F6368',
+    ...typography.caption,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   webTopActions: {
@@ -521,30 +520,25 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   webIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FFFFFF',
+    width: 44,
+    height: 44,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   webPrimaryAction: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 36,
+    ...controlStyles.primaryButton,
     paddingHorizontal: 14,
-    borderRadius: 18,
-    backgroundColor: '#111827',
   },
   webPrimaryActionText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '700',
+    ...typography.button,
+    color: colors.onPrimary,
   },
   webContentFrame: {
     flex: 1,
     minHeight: 0,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
 });

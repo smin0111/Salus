@@ -289,12 +289,18 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
         <View style={styles.container}>
             {/* 헤더 */}
             {!webMode && <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 40 : 14) }]}>
-                <TouchableOpacity style={styles.headerIconButton} onPress={onBack}>
+                <TouchableOpacity
+                    style={styles.headerIconButton}
+                    onPress={onBack}
+                    accessibilityRole="button"
+                    accessibilityLabel="게시글 목록으로 돌아가기"
+                    hitSlop={8}
+                >
                     <Ionicons name="arrow-back" size={22} color={colors.primary} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>게시글</Text>
                 {isAuthor && (
-                    <TouchableOpacity onPress={async () => {
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="게시글 삭제" hitSlop={8} onPress={async () => {
                         const headers = requireAuthHeaders();
                         if (!headers) return;
 
@@ -319,11 +325,17 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
 
             {webMode && (
                 <View style={styles.webActionBar}>
-                    <TouchableOpacity style={styles.headerIconButton} onPress={onBack}>
+                    <TouchableOpacity
+                        style={styles.headerIconButton}
+                        onPress={onBack}
+                        accessibilityRole="button"
+                        accessibilityLabel="게시글 목록으로 돌아가기"
+                        hitSlop={8}
+                    >
                         <Ionicons name="arrow-back" size={22} color={colors.primary} />
                     </TouchableOpacity>
                     {isAuthor ? (
-                        <TouchableOpacity onPress={async () => {
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="게시글 삭제" hitSlop={8} onPress={async () => {
                             const headers = requireAuthHeaders();
                             if (!headers) return;
 
@@ -519,24 +531,24 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 20,
         paddingBottom: 14,
-        backgroundColor: '#FFF7ED',
+        backgroundColor: colors.surface,
         borderBottomWidth: 1,
-        borderBottomColor: '#FED7AA',
+        borderBottomColor: colors.border,
     },
     headerIconButton: {
         width: 40,
         height: 40,
-        borderRadius: 14,
-        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        backgroundColor: colors.surfaceAlt,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: '#FED7AA',
+        borderColor: colors.border,
     },
     headerTitle: {
         fontSize: 20,
         fontWeight: '800',
-        color: '#9A3412',
+        color: colors.text,
     },
     webActionBar: {
         flexDirection: 'row',
@@ -545,8 +557,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: 24,
         paddingVertical: 14,
         borderBottomWidth: 1,
-        borderBottomColor: '#EEF0F3',
-        backgroundColor: '#FFFFFF',
+        borderBottomColor: colors.border,
+        backgroundColor: colors.surface,
     },
     content: {
         flex: 1,
@@ -671,7 +683,7 @@ const styles = StyleSheet.create({
         borderRadius: 4,
     },
     replyButtonText: {
-        fontSize: 11,
+        fontSize: 12,
         color: colors.primary,
         fontWeight: '600',
     },
@@ -694,7 +706,7 @@ const styles = StyleSheet.create({
         color: colors.text,
     },
     commentTime: {
-        fontSize: 11,
+        fontSize: 12,
         color: colors.textSecondary,
     },
     commentText: {

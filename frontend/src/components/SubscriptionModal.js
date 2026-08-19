@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme/colors';
+import { colors, radii } from '../theme/colors';
 import { PORTONE_IMP_CODE, SUBSCRIPTION_AMOUNT, SUBSCRIPTION_PRICE_LABEL } from '../constants/subscription';
+import SalusLogo from './SalusLogo';
 
 const SubscriptionModal = ({ visible, onClose, onSubscribe, user }) => {
 
@@ -69,15 +70,12 @@ const SubscriptionModal = ({ visible, onClose, onSubscribe, user }) => {
         >
             <View style={styles.centeredView}>
                 <View style={[styles.modalView, Platform.OS === 'web' && { maxWidth: 400 }]}>
-                    <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-                        <Ionicons name="close" size={24} color="#6B7280" />
+                    <TouchableOpacity accessibilityLabel="구독 안내 닫기" style={styles.closeButton} onPress={onClose}>
+                        <Ionicons name="close" size={24} color={colors.textTertiary} />
                     </TouchableOpacity>
 
                     <View style={styles.headerContainer}>
-                        <View style={styles.iconContainer}>
-                            <Ionicons name="star" size={32} color={colors.primary} />
-                        </View>
-                        <Text style={styles.modalTitle}>Salus <Text style={styles.plusText}>Plus</Text></Text>
+                        <SalusLogo size={52} suffix="PLUS" wordmarkStyle={styles.modalTitle} />
                         <Text style={styles.modalSubtitle}>프리미엄 요리 비서를 만나보세요</Text>
                     </View>
 
@@ -129,15 +127,15 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: colors.overlay,
     },
     modalView: {
         margin: 20,
-        backgroundColor: 'white',
-        borderRadius: 24,
+        backgroundColor: colors.surface,
+        borderRadius: radii.sheet,
         padding: 24,
         alignItems: 'center',
-        boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
+        boxShadow: '0px 8px 28px rgba(23, 35, 29, 0.12)',
         elevation: 5,
         width: '90%',
     },
@@ -152,28 +150,15 @@ const styles = StyleSheet.create({
         marginBottom: 24,
         marginTop: 12,
     },
-    iconContainer: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: '#FFF0ED',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
     modalTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: '#1F2937',
-        marginBottom: 8,
-    },
-    plusText: {
-        color: colors.primary,
-        fontStyle: 'italic',
+        color: colors.text,
     },
     modalSubtitle: {
         fontSize: 15,
-        color: '#6B7280',
+        color: colors.textSecondary,
+        marginTop: 12,
     },
     featuresContainer: {
         width: '100%',
@@ -194,12 +179,12 @@ const styles = StyleSheet.create({
     featureTitle: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#374151',
+        color: colors.text,
         marginBottom: 4,
     },
     featureDesc: {
         fontSize: 14,
-        color: '#6B7280',
+        color: colors.textSecondary,
         lineHeight: 20,
     },
     priceContainer: {
@@ -207,22 +192,22 @@ const styles = StyleSheet.create({
         marginBottom: 24,
         paddingTop: 20,
         borderTopWidth: 1,
-        borderTopColor: '#F3F4F6',
+        borderTopColor: colors.divider,
         width: '100%',
     },
     priceText: {
         fontSize: 28,
         fontWeight: 'bold',
-        color: '#1F2937',
+        color: colors.text,
     },
     monthText: {
         fontSize: 16,
-        color: '#6B7280',
+        color: colors.textSecondary,
         fontWeight: 'normal',
     },
     taxDescText: {
         fontSize: 12,
-        color: '#9CA3AF',
+        color: colors.textTertiary,
         marginTop: 4,
     },
     subscribeButton: {

@@ -18,7 +18,12 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
         return (
             <View style={styles.container}>
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                    <TouchableOpacity
+                        onPress={onBack}
+                        style={styles.backButton}
+                        accessibilityRole="button"
+                        accessibilityLabel="레시피 목록으로 돌아가기"
+                    >
                         <Ionicons name="arrow-back" size={24} color="white" />
                     </TouchableOpacity>
                 </View>
@@ -88,10 +93,20 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
         <View style={styles.container}>
             {/* 상단 영역에는 뒤로가기와 공유 버튼처럼 화면 이동에 필요한 버튼만 둡니다. */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                <TouchableOpacity
+                    onPress={onBack}
+                    style={styles.backButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="레시피 목록으로 돌아가기"
+                >
                     <Ionicons name="arrow-back" size={24} color="white" />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={openShareModal} style={styles.shareButton}>
+                <TouchableOpacity
+                    onPress={openShareModal}
+                    style={styles.shareButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="레시피 공유"
+                >
                     <Ionicons name="share-social-outline" size={24} color="white" />
                 </TouchableOpacity>
             </View>
@@ -121,7 +136,7 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
                             <Text style={styles.statText}>{recipe.calories || 400} kcal</Text>
                         </View>
                         <View style={styles.stat}>
-                            <Ionicons name="star" size={18} color="#F59E0B" />
+                            <Ionicons name="star" size={18} color={colors.warning} />
                             <Text style={styles.statText}>{recipe.rating || recipe.averageRating || 4.5}</Text>
                         </View>
                     </View>
@@ -230,7 +245,7 @@ const toStringList = (value) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: 'white',
+        backgroundColor: colors.background,
     },
     header: {
         position: 'absolute',
@@ -270,11 +285,11 @@ const styles = StyleSheet.create({
     heroPlaceholder: {
         width: '100%',
         height: 220,
-        backgroundColor: '#FFF7ED',
+        backgroundColor: colors.primaryLight,
         alignItems: 'center',
         justifyContent: 'center',
         borderBottomWidth: 1,
-        borderBottomColor: '#FED7AA',
+        borderBottomColor: colors.primary,
     },
     emptyDetail: {
         flex: 1,
@@ -383,8 +398,8 @@ const styles = StyleSheet.create({
         padding: 24,
     },
     modalContent: {
-        backgroundColor: 'white',
-        borderRadius: 24,
+        backgroundColor: colors.surface,
+        borderRadius: 20,
         padding: 24,
     },
     modalTitle: {
@@ -401,8 +416,10 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     input: {
-        backgroundColor: colors.surfaceAlt,
-        borderRadius: 16,
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.borderHighlight,
+        borderRadius: 12,
         padding: 16,
         height: 120,
         textAlignVertical: 'top',
