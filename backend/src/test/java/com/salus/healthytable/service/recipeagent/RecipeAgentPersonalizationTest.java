@@ -34,6 +34,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class RecipeAgentPersonalizationTest {
+    private static com.salus.healthytable.service.allergen.AllergenMatcher sharedAllergenMatcher() {
+        com.salus.healthytable.service.allergen.AllergenDictionary dictionary =
+                new com.salus.healthytable.service.allergen.AllergenDictionary();
+        dictionary.load();
+        return new com.salus.healthytable.service.allergen.AllergenMatcher(dictionary);
+    }
+
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-16T00:00:00Z"), ZoneId.of("Asia/Seoul"));
 
@@ -607,7 +614,7 @@ class RecipeAgentPersonalizationTest {
 
     private RecipePersonalizationPolicyEngine engine(MedicationFoodInteractionPort interactionPort) {
         return new RecipePersonalizationPolicyEngine(List.of(
-                new AllergyPolicy(),
+                new AllergyPolicy(sharedAllergenMatcher()),
                 new MedicationInteractionPolicy(interactionPort),
                 new ChronicConditionPolicy(),
                 new DietaryRestrictionPolicy(),

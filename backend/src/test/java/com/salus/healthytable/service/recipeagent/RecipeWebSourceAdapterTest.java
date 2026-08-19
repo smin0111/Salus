@@ -26,6 +26,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class RecipeWebSourceAdapterTest {
+    private static com.salus.healthytable.service.allergen.AllergenMatcher sharedAllergenMatcher() {
+        com.salus.healthytable.service.allergen.AllergenDictionary dictionary =
+                new com.salus.healthytable.service.allergen.AllergenDictionary();
+        dictionary.load();
+        return new com.salus.healthytable.service.allergen.AllergenMatcher(dictionary);
+    }
+
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-19T00:00:00Z"), ZoneId.of("Asia/Seoul"));
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -315,7 +322,7 @@ class RecipeWebSourceAdapterTest {
 
     private RecipePersonalizationPolicyEngine engine() {
         return new RecipePersonalizationPolicyEngine(List.of(
-                new AllergyPolicy(),
+                new AllergyPolicy(sharedAllergenMatcher()),
                 new MedicationInteractionPolicy(new UnknownMedicationFoodInteractionAdapter()),
                 new ChronicConditionPolicy(),
                 new DietaryRestrictionPolicy(),
