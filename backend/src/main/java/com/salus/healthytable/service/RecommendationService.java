@@ -16,6 +16,12 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * 냉장고 재료와 건강 프로필을 바탕으로 커뮤니티 추천 레시피를 계산하는 서비스입니다.
+ *
+ * 점수 계산은 단순 규칙입니다: 냉장고 재료와 겹치는 레시피 재료 1건당 10점.
+ * 주의: 여기의 알레르기 제외는 문자열 포함 비교만 사용하며, 레시피 생성 경로의 AllergenMatcher(파생 재료 사전 포함)를 거치지 않습니다.
+ */
 @Service
 @RequiredArgsConstructor
 public class RecommendationService {
@@ -45,6 +51,7 @@ public class RecommendationService {
                 ? normalizeValues(healthProfile.getAllergies())
                 : new ArrayList<>();
 
+        // 추천을 다시 계산하므로 이전 추천 기록을 먼저 지웁니다.
         // 기존 추천 삭제
         recommendationRepository.deleteByUserId(userId);
 
@@ -53,6 +60,7 @@ public class RecommendationService {
         for (Recipe recipe : allRecipes) {
             double score = calculateScore(recipe, fridgeItemNames, allergies);
 
+            // 점수가 0 이하(겹치는 재료 없음 또는 알레르기 재료 포함)인 레시피는 추천하지 않습니다.
             if (score > 0) {
                 Recommendation recommendation = new Recommendation();
                 recommendation.setUserId(userId);
@@ -66,6 +74,10 @@ public class RecommendationService {
         return recommendations;
     }
 
+    /**
+     * 레시피 하나의 추천 점수를 계산합니다.
+     * 알레르기 재료 이름이 포함된 재료가 하나라도 있으면 즉시 -100을 반환해 추천에서 빠지게 합니다.
+     */
     private double calculateScore(Recipe recipe, List<String> userIngredients, List<String> allergies) {
         double score = 0;
         List<String> recipeIngredients = normalizeValues(recipe.getIngredients());
@@ -94,6 +106,7 @@ public class RecommendationService {
         return score;
     }
 
+    // 겹치는 냉장고 재료 중 최대 2개를 넣어 추천 이유 문장을 만듭니다.
     private String generateReason(Recipe recipe, List<String> userIngredients) {
         Set<String> matched = new LinkedHashSet<>();
         List<String> recipeIngredients = normalizeValues(recipe.getIngredients());
@@ -114,6 +127,9 @@ public class RecommendationService {
         return "냉장고 속 " + String.join(", ", matched.stream().limit(2).collect(Collectors.toList())) + "을(를) 활용한 레시피예요!";
     }
 
+    /**
+     * 저장된 추천을 점수순으로 조회합니다. 아직 추천이 없으면 먼저 계산해서 저장한 뒤 조회합니다.
+     */
     public List<RecommendationDTO> getRecommendations(Long userId) {
         validateUserId(userId);
 
@@ -149,6 +165,7 @@ public class RecommendationService {
         }
     }
 
+    // null/빈 값을 제거하고 공백을 정리한 뒤 중복 없이 순서를 유지한 목록으로 만듭니다.
     private List<String> normalizeValues(List<String> values) {
         if (values == null || values.isEmpty()) {
             return List.of();
@@ -163,6 +180,7 @@ public class RecommendationService {
                         List::copyOf));
     }
 
+    // 대소문자를 무시하고 source 안에 keyword가 포함되는지 확인합니다.
     private boolean containsIgnoreCase(String source, String keyword) {
         if (source == null || keyword == null || source.isBlank() || keyword.isBlank()) {
             return false;

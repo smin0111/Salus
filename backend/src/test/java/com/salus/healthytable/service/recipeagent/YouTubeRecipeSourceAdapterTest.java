@@ -32,7 +32,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+/**
+ * Recipe Agent YouTube 출처 경로 테스트입니다.
+ * API 호출 파라미터, 크리에이터 확인, 설명란 파싱, 링크 분류, 자막, 점수, 정책 연계, 캐시를 확인합니다.
+ */
 class YouTubeRecipeSourceAdapterTest {
+    // 실제 알레르겐 사전으로 만든 Matcher를 테스트 전체에서 공유합니다.
     private static com.salus.healthytable.service.allergen.AllergenMatcher sharedAllergenMatcher() {
         com.salus.healthytable.service.allergen.AllergenDictionary dictionary =
                 new com.salus.healthytable.service.allergen.AllergenDictionary();
@@ -44,6 +49,7 @@ class YouTubeRecipeSourceAdapterTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-19T00:00:00Z"), ZoneId.of("Asia/Seoul"));
 
+    // YouTube API 검색은 동영상/한국 지역/자막 조건을 쓰고, 메타데이터는 한 번에 묶어 조회해야 합니다.
     @Test
     void youtubeApiSearchUsesVideoKoreanRegionCaptionAndMetadataBatch() throws Exception {
         AtomicReference<String> searchQuery = new AtomicReference<>("");
@@ -95,6 +101,7 @@ class YouTubeRecipeSourceAdapterTest {
         }
     }
 
+    // API 키가 없으면 서버를 호출하지 않아야 합니다.
     @Test
     void blankApiKeyDisablesApiWithoutCallingServer() throws Exception {
         AtomicInteger calls = new AtomicInteger();
@@ -118,6 +125,7 @@ class YouTubeRecipeSourceAdapterTest {
         }
     }
 
+    // 크리에이터 확인 결과를 채널 ID 확인/별칭만 일치/미확인/불일치로 구분해야 합니다.
     @Test
     void creatorResolverDistinguishesVerifiedAliasUnverifiedAndMismatch() {
         RegistryCreatorIdentityResolver resolver = new RegistryCreatorIdentityResolver(List.of(
@@ -133,6 +141,7 @@ class YouTubeRecipeSourceAdapterTest {
                 .isEqualTo(CreatorMatchStatus.MISMATCH);
     }
 
+    // 설명란의 완전한 레시피를 파싱하되 없는 양을 지어내지 않아야 합니다.
     @Test
     void descriptionExtractorParsesCompleteRecipeAndDoesNotInventAmounts() {
         YouTubeDescriptionEvidence evidence = new YouTubeDescriptionEvidenceExtractor().extract("""
@@ -157,6 +166,7 @@ class YouTubeRecipeSourceAdapterTest {
         assertThat(evidence.timestamps()).contains("00:10");
     }
 
+    // 설명란 근거 상태(완전/재료만/조리만/링크만/비어 있음)를 구분해야 합니다.
     @Test
     void descriptionEvidenceStatusesAreSeparated() {
         YouTubeDescriptionEvidenceExtractor extractor = new YouTubeDescriptionEvidenceExtractor();
@@ -167,6 +177,7 @@ class YouTubeRecipeSourceAdapterTest {
         assertThat(extractor.extract("").status()).isEqualTo(DescriptionEvidenceStatus.EMPTY);
     }
 
+    // 레시피 링크는 남기고 쇼핑/제휴/SNS/단축 URL은 제외해야 합니다.
     @Test
     void externalLinkResolverKeepsRecipeLinksAndExcludesShoppingAffiliateSocialAndUnknown() {
         YouTubeDescriptionEvidence evidence = new YouTubeDescriptionEvidence(
@@ -194,6 +205,7 @@ class YouTubeRecipeSourceAdapterTest {
         assertThat(resolver.recipeEvidenceUrls(evidence)).containsExactly("https://recipes.example.com/tofu-recipe");
     }
 
+    // 자막 기능이 꺼져 있으면 "자막 있음" 표시만으로 자막 본문을 쓴 것처럼 처리하지 않아야 합니다.
     @Test
     void transcriptDisabledDoesNotUseCaptionDeclarationAsTranscriptBody() {
         YouTubeVideoMetadata video = video("v1", "참치김밥", "UC", "채널", completeTunaDescription(), true, 100L);
@@ -204,6 +216,7 @@ class YouTubeRecipeSourceAdapterTest {
         assertThat(result.segments()).isEmpty();
     }
 
+    // 완전한 설명란으로 후보를 만들고, 검색 결과 요약(snippet)은 근거로 쓰지 않아야 합니다.
     @Test
     void discoveryCreatesCandidateFromCompleteDescriptionAndNeverUsesSearchSnippetAsEvidence() {
         RecordingSearchPort search = new RecordingSearchPort(List.of(new YouTubeVideoSearchResult(
@@ -232,6 +245,7 @@ class YouTubeRecipeSourceAdapterTest {
         });
     }
 
+    // 크리에이터를 지정한 요청은 채널 ID로 확인된 영상만 사용해야 합니다.
     @Test
     void creatorSpecificRequestRequiresVerifiedChannelId() {
         RecordingSearchPort search = new RecordingSearchPort(List.of(
@@ -254,6 +268,7 @@ class YouTubeRecipeSourceAdapterTest {
         assertThat(sources).singleElement().satisfies(source -> assertThat(source.sourceId()).contains("v-verified"));
     }
 
+    // 조회수만 높고 레시피 근거가 없는 영상이 조회수 낮은 완전한 레시피 영상보다 앞서면 안 됩니다.
     @Test
     void metadataOnlyHighViewVideoDoesNotBeatLowViewCompleteRecipe() {
         RecordingSearchPort search = new RecordingSearchPort(List.of(result("popular"), result("official")));
@@ -268,6 +283,7 @@ class YouTubeRecipeSourceAdapterTest {
         assertThat(sources).singleElement().satisfies(source -> assertThat(source.sourceId()).contains("official"));
     }
 
+    // 설명란의 공식 레시피 링크는 안전한 fetcher와 구조화 웹 어댑터로 처리해야 합니다.
     @Test
     void externalOfficialRecipeLinkUsesStructuredWebAdapterThroughSafeFetcher() {
         String linkedRecipe = recipeHtml("두부조림", "공식 채널", List.of("두부 1모", "간장 2큰술"), List.of("두부를 굽습니다.", "양념을 넣고 조립니다."));
@@ -289,6 +305,7 @@ class YouTubeRecipeSourceAdapterTest {
         });
     }
 
+    // 쇼핑 링크만 있거나 SSRF 방어로 차단된 링크는 후보를 만들지 않아야 합니다.
     @Test
     void shoppingOnlyOrSsrDefenseBlockedLinkDoesNotCreateCandidate() {
         RecordingSearchPort search = new RecordingSearchPort(List.of(result("shopping"), result("ssrf")));
@@ -305,6 +322,7 @@ class YouTubeRecipeSourceAdapterTest {
         assertThat(adapter.search(plan("두부조림", "", List.of("두부조림 레시피")), UserRecipeContext.empty(1L))).isEmpty();
     }
 
+    // YouTube에서 찾은 원본 레시피도 기존 알레르기/당뇨 정책을 똑같이 거쳐야 합니다.
     @Test
     void youtubeOriginalRecipeFeedsExistingAllergyAndDiabetesPolicies() {
         RecipeCandidateBuilder builder = new RecipeCandidateBuilder();
@@ -344,6 +362,7 @@ class YouTubeRecipeSourceAdapterTest {
         assertThat(engine.evaluate(brulee, diabetes).decisionType()).isEqualTo(RecipeDecisionType.RECOMMEND_ALTERNATIVE);
     }
 
+    // YouTube 실패가 검증된 웹 출처 사용을 막지 않고, 출처가 전혀 없으면 자유 생성으로 대신하지 않아야 합니다.
     @Test
     void youtubeFailureDoesNotPreventVerifiedWebSourceAndNoSourcesDoNotFallback() {
         RecipeRepository recipes = mock(RecipeRepository.class);
@@ -372,6 +391,7 @@ class YouTubeRecipeSourceAdapterTest {
         assertThat(sources.get(0).content()).contains("김치 200g");
     }
 
+    // YouTube 캐시에 사용자 건강 정보나 개인화 결과를 저장하지 않아야 합니다.
     @Test
     void youtubeCacheDoesNotStoreUserHealthOrPersonalization() throws Exception {
         InMemoryYouTubeRecipeSourceCache cache = new InMemoryYouTubeRecipeSourceCache();
@@ -396,6 +416,7 @@ class YouTubeRecipeSourceAdapterTest {
     }
 
 
+    // 아래 private 메서드들은 가짜 포트/영상/설명란/HTML 등 테스트 데이터를 만드는 도우미입니다.
     private YouTubeRecipeSourceDiscoveryAdapter adapter(
             YouTubeSearchPort searchPort,
             YouTubeVideoMetadataPort metadataPort,

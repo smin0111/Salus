@@ -7,6 +7,8 @@ import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
 import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
+// "저장된 내 데이터" 목록: [서버 응답 필드 이름, 화면에 표시할 이름]
+// 서버 응답 예: { healthProfiles: 1, mealLogs: 12, ... } (GET /api/users/me/data-summary)
 const SUMMARY_LABELS = [
     ['healthProfiles', '건강정보'],
     ['healthCheckups', '건강검진'],
@@ -23,6 +25,10 @@ const SUMMARY_LABELS = [
     ['chatMessages', '대화 메시지'],
 ];
 
+/**
+ * 계정과 개인정보 화면입니다.
+ * 멤버십 등급 안내, 저장된 개인 데이터 개수 요약, 개인정보 처리 원칙/고지 문구, 계정 삭제 기능을 제공합니다.
+ */
 export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, webMode = false }) {
     const { user, token, logout } = useAuth();
     const [summary, setSummary] = useState(null);
@@ -35,6 +41,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
         }
     }, [token]);
 
+    // 내 데이터 종류별 개수를 불러옵니다. 로그인 만료 오류는 AuthContext가 처리하므로 조용히 넘어갑니다.
     const fetchSummary = async () => {
         if (!token) return;
         setLoading(true);
@@ -51,6 +58,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
         }
     };
 
+    // 되돌릴 수 없는 작업이므로 확인 창을 먼저 띄웁니다.
     const confirmDeleteAccount = () => {
         Alert.alert(
             '계정 삭제',
@@ -62,6 +70,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
         );
     };
 
+    // 서버에서 계정과 개인 데이터를 삭제한 뒤, 앱의 로그인 정보도 지우고 채팅 화면으로 이동합니다.
     const deleteAccount = async () => {
         if (!token) return;
         setDeleting(true);
@@ -213,6 +222,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
     );
 }
 
+// 개인정보 처리 원칙 한 줄(아이콘 + 설명)
 function PolicyRow({ icon, text }) {
     return (
         <View style={styles.policyRow}>

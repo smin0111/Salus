@@ -14,8 +14,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * {@link OAuthService} 테스트입니다.
+ */
 class OAuthServiceTest {
 
+    // 네이버 client 설정이 없으면 외부 HTTP 호출 전에 실패해야 합니다.
     @Test
     void naverCodeExchangeFailsBeforeHttpCallWhenClientConfigMissing() {
         AtomicBoolean called = new AtomicBoolean(false);
@@ -33,6 +37,7 @@ class OAuthServiceTest {
         assertThat(called).isFalse();
     }
 
+    // 네이버 코드 교환 요청에 client_id/secret, code, state, redirect_uri가 포함되어야 합니다.
     @Test
     void naverCodeExchangeIncludesRedirectUriWhenProvided() {
         AtomicReference<URI> requestedUri = new AtomicReference<>();

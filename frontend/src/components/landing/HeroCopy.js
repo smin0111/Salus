@@ -5,12 +5,17 @@ import { LandingButton } from './LandingControls';
 import { landingColors, landingType } from './landingTheme';
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
+// 히어로 제목을 줄과 단어 단위로 나눈 것(단어마다 순서대로 등장 애니메이션을 주기 위해)
 const HERO_LINES = [
     ['같은', '재료라도,'],
     ['나에게', '필요한', '한 끼는'],
     ['다르니까.'],
 ];
 
+/**
+ * 히어로 제목을 단어 하나씩 아래에서 위로 떠오르게 보여 주는 컴포넌트입니다.
+ * 스크린 리더에는 애니메이션과 상관없이 전체 문장을 한 번에 읽어 주도록 accessibilityLabel을 지정합니다.
+ */
 function HeroTitleReveal({ heroType, reducedMotion }) {
     const wordCount = HERO_LINES.reduce((total, line) => total + line.length, 0);
     const values = useRef(
@@ -24,6 +29,7 @@ function HeroTitleReveal({ heroType, reducedMotion }) {
         }
 
         values.forEach(value => value.setValue(0));
+        // stagger: 단어별 애니메이션을 66ms 간격으로 차례대로 시작합니다.
         const animation = Animated.stagger(
             66,
             values.map(value => Animated.timing(value, {
@@ -84,6 +90,9 @@ function HeroTitleReveal({ heroType, reducedMotion }) {
     );
 }
 
+/**
+ * 히어로 영역의 글 부분(작은 윗글, 제목, 설명, 시작/더 알아보기 버튼, 의료 판단 대체 아님 안내)입니다.
+ */
 export default function HeroCopy({
     desktop,
     mobile,

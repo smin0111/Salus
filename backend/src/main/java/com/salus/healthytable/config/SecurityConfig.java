@@ -21,6 +21,12 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Spring Security 설정 클래스입니다.
+ *
+ * 어떤 URL을 로그인 없이 열어 둘지(permitAll), 어떤 URL에 인증/관리자 권한이 필요한지,
+ * 그리고 요청이 컨트롤러에 도달하기 전에 어떤 필터(JWT, IP 제한, COOP 헤더)를 거칠지 정의합니다.
+ */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -30,6 +36,7 @@ public class SecurityConfig {
     private final CoopHeaderFilter coopHeaderFilter;
     private final ApiSecurityErrorHandler apiSecurityErrorHandler;
 
+    // 쉼표로 구분된 허용 도메인 목록 (예: http://localhost:8081,https://salus.example)
     @Value("${app.cors.allowed-origins}")
     private String allowedOrigins;
 
@@ -43,9 +50,14 @@ public class SecurityConfig {
         this.apiSecurityErrorHandler = apiSecurityErrorHandler;
     }
 
+    /**
+     * 보안 필터 체인을 구성합니다.
+     * 규칙은 위에서 아래 순서로 검사되므로, 더 구체적인 규칙을 먼저 적어야 합니다.
+     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
+                // 쿠키 세션 대신 Authorization 헤더의 JWT를 쓰므로 CSRF 보호와 세션 기반 기능은 끕니다.
                 .csrf(AbstractHttpConfigurer::disable)
                 .requestCache(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
@@ -81,6 +93,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
+                // 커스텀 필터들을 스프링 기본 로그인 필터보다 앞에 끼워 넣어, 인증 정보가 먼저 준비되게 합니다.
                 .addFilterBefore(coopHeaderFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(ipWhitelistFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -88,12 +101,17 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * CORS(다른 도메인의 브라우저 요청 허용) 정책을 정의합니다.
+     * 프론트엔드(Expo 웹)와 관리자 웹이 백엔드와 다른 주소에서 실행되므로 필요합니다.
+     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(parseAllowedOrigins());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
+        // 브라우저가 사전 확인(preflight) 결과를 1시간 동안 캐시하도록 합니다.
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -101,6 +119,7 @@ public class SecurityConfig {
         return source;
     }
 
+    // "a, b ,c" 형태의 설정 문자열을 공백 없는 목록으로 바꿉니다.
     private List<String> parseAllowedOrigins() {
         return Arrays.stream(allowedOrigins.split(","))
                 .map(String::trim)

@@ -28,6 +28,7 @@ import {
 import useResponsive from '../hooks/useResponsive';
 import { color, radius, shadow, spacing, typography } from '../theme/tokens';
 
+// 재료 카테고리, 수량 단위, 정렬 옵션, 보관 위치 필터 목록
 const CATEGORIES = ['전체', '채소', '과일', '육류', '유제품', '달걀', '기타'];
 const UNITS = ['개', 'g', 'kg', 'ml', '팩', '봉', '모'];
 const SORTS = [
@@ -43,8 +44,10 @@ const FILTERS = [
   { id: '냉동', label: '냉동' },
   { id: '실온', label: '실온' },
 ];
+// 하루를 밀리초로 나타낸 값(24 * 60 * 60 * 1000)
 const DAY_MS = 86400000;
 
+// Date 객체를 "YYYY-MM-DD" 문자열로 바꿉니다(기기 현지 시간 기준).
 const dateOnly = date => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -52,6 +55,7 @@ const dateOnly = date => {
   return `${year}-${month}-${day}`;
 };
 
+// 오늘로부터 days일 뒤 날짜 문자열. 시간을 정오(12시)로 맞춰 서머타임/시간대 경계에서 날짜가 밀리는 문제를 피합니다.
 const addDays = days => {
   const date = new Date();
   date.setHours(12, 0, 0, 0);
@@ -59,6 +63,7 @@ const addDays = days => {
   return dateOnly(date);
 };
 
+// 유통기한까지 남은 일수(지났으면 음수). 날짜가 없거나 형식이 잘못되면 null을 반환합니다.
 const daysUntil = value => {
   if (!value) return null;
   const expiry = new Date(`${value}T12:00:00`);
@@ -68,6 +73,7 @@ const daysUntil = value => {
   return Math.round((expiry - today) / DAY_MS);
 };
 
+// 남은 일수에 따라 유통기한 배지의 문구/색상 단계(tone)/아이콘을 정합니다. 3일 이내면 "임박"으로 봅니다.
 const expiryMeta = value => {
   const days = daysUntil(value);
   if (days == null) return { label: '기한 미설정', tone: 'neutral', icon: 'calendar-outline' };
@@ -77,11 +83,13 @@ const expiryMeta = value => {
   return { label: `${days}일 남음`, tone: 'fresh', icon: 'leaf-outline' };
 };
 
+// "2.5kg" 같은 수량 문자열을 { amount: '2.5', unit: 'kg' }로 나눕니다. 숫자로 시작하지 않으면 원래 값을 그대로 amount에 둡니다.
 const splitQuantity = value => {
   const match = String(value || '').trim().match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
   return match ? { amount: match[1], unit: match[2] || '개' } : { amount: value || '1', unit: '개' };
 };
 
+// 유통기한 빠른 선택 칩(오늘/3일 후/7일 후/14일 후/기본값). 기본값은 서버가 카테고리별 기본 기한을 사용합니다.
 const ExpiryPicker = ({ value, onChange }) => (
   <View style={styles.fieldGroup}>
     <Text style={styles.fieldLabel}>유통기한</Text>
@@ -95,6 +103,14 @@ const ExpiryPicker = ({ value, onChange }) => (
   </View>
 );
 
+/**
+ * 냉장고(보유 재료) 화면입니다.
+ * - 재료 목록 조회/추가/수정/삭제, 수량 +/- 조절
+ * - 유통기한 임박 요약, 필터(임박/보관 위치)·정렬·카테고리 선택
+ * - 재료를 선택해 AI 채팅에 "이 재료로 만들 요리" 질문하기
+ * - 영수증 사진을 분석해 식재료를 한꺼번에 등록(등록 전 사용자 검토 단계 포함)
+ * fridgeItems 상태는 부모(AppNavigator)가 가지고 있어 다른 화면과 공유됩니다.
+ */
 export default function FridgeScreen({ fridgeItems, setFridgeItems, onToggleSidebar, onNavigate, webMode = false }) {
   const { token, loading: authLoading } = useAuth();
   const { isTablet, isDesktop } = useResponsive();
@@ -105,6 +121,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, onToggleSide
   const [sortBy, setSortBy] = useState('expiry');
   const [selectedIds, setSelectedIds] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
+  // 재료 추가/수정 모달 상태. editingId가 있으면 수정, 없으면 새로 추가합니다.
   const [modalVisible, setModalVisible] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState('');
@@ -112,10 +129,12 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, onToggleSide
   const [unit, setUnit] = useState('개');
   const [category, setCategory] = useState('기타');
   const [expiryDate, setExpiryDate] = useState('');
+  // 영수증 스캔 상태와 분석 결과 검토 목록
   const [scanning, setScanning] = useState(false);
   const [receiptReviewVisible, setReceiptReviewVisible] = useState(false);
   const [scannedItems, setScannedItems] = useState([]);
 
+  // 서버에서 냉장고 재료 목록을 불러옵니다.
   const fetchItems = async () => {
     if (!token) return;
     setLoading(true);
@@ -130,6 +149,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, onToggleSide
     }
   };
 
+  // 로그인 상태 확인이 끝난 뒤, 로그인했으면 목록을 불러오고 아니면 비웁니다.
   useEffect(() => {
     if (authLoading) return;
     if (!token) {
@@ -140,6 +160,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, onToggleSide
     fetchItems();
   }, [authLoading, token]);
 
+  // 카테고리 → 필터(임박/보관 위치) 순서로 거른 뒤 정렬합니다. 기본 정렬은 유통기한이 가까운 순이며, 기한 없는 재료는 뒤로 보냅니다.
   const sortedItems = useMemo(() => {
     const next = fridgeItems.filter(item => selectedCategory === '전체' || item.category === selectedCategory).filter(item => {
       if (activeFilter === 'all') return true;
@@ -160,12 +181,14 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, onToggleSide
     return next;
   }, [activeFilter, fridgeItems, selectedCategory, sortBy]);
 
+  // 유통기한이 0~3일 남은 재료 목록과, 가장 먼저 써야 할 재료(기한이 지나지 않은 것 중 가장 빠른 것)
   const urgentItems = fridgeItems.filter(item => {
     const days = daysUntil(item.expiryDate);
     return days != null && days >= 0 && days <= 3;
   });
   const firstUse = [...fridgeItems].filter(item => daysUntil(item.expiryDate) != null && daysUntil(item.expiryDate) >= 0).sort((a, b) => daysUntil(a.expiryDate) - daysUntil(b.expiryDate))[0];
 
+  // 추가/수정 폼을 초기값으로 되돌립니다.
   const resetForm = () => {
     setEditingId(null);
     setName('');
@@ -180,6 +203,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, onToggleSide
     setModalVisible(true);
   };
 
+  // 기존 재료 값으로 폼을 채우고 수정 모달을 엽니다.
   const openEdit = item => {
     const quantity = splitQuantity(item.quantity);
     setEditingId(item.id);
@@ -192,6 +216,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, onToggleSide
     setExpandedId(null);
   };
 
+  // editingId가 있으면 수정(PUT), 없으면 새로 추가(POST)하고 목록 상태를 갱신합니다.
   const saveItem = async () => {
     if (!name.trim()) {
       Alert.alert('확인 필요', '재료 이름을 입력해 주세요.');
@@ -208,6 +233,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, onToggleSide
     }
   };
 
+  // 수량을 delta만큼 바꿉니다. 숫자가 아닌 수량은 무시하고, 0 이하가 되면 삭제 확인 창을 띄웁니다.
   const adjustQuantity = async (item, delta) => {
     const parsed = splitQuantity(item.quantity);
     const current = Number(parsed.amount);
@@ -225,6 +251,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, onToggleSide
     }
   };
 
+  // 서버에서 삭제한 뒤 목록/선택/펼침 상태에서도 제거합니다.
   const removeItem = async item => {
     try {
       await deleteFridgeItem(item.id, token);
@@ -243,12 +270,14 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, onToggleSide
 
   const toggleSelected = id => setSelectedIds(previous => previous.includes(id) ? previous.filter(value => value !== id) : [...previous, id]);
 
+  // 선택한 재료 이름으로 질문 문장을 만들어 AI 채팅 화면으로 이동합니다.
   const askWithSelected = () => {
     const names = fridgeItems.filter(item => selectedIds.includes(item.id)).map(item => item.name);
     if (!names.length) return;
     onNavigate?.('chat', { prompt: `${names.join(', ')} 재료를 먼저 사용해서 만들 수 있는 요리를 추천해줘`, selectedIngredients: names });
   };
 
+  // 영수증 이미지 가져오기: 웹은 파일 선택만, 앱은 촬영/갤러리 중에서 고릅니다.
   const chooseReceipt = () => {
     if (Platform.OS === 'web') return processReceiptImage('gallery');
     Alert.alert('영수증 스캔', '영수증 이미지를 어떻게 가져올까요?', [
@@ -258,6 +287,11 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, onToggleSide
     ]);
   };
 
+  /**
+   * 이미지를 base64로 읽어 서버에 영수증 분석을 요청합니다.
+   * 분석 결과는 바로 저장하지 않고 검토 목록(scannedItems)에 넣어, 사용자가 확인 후 등록하게 합니다.
+   * reviewId는 검토 목록 안에서만 쓰는 임시 key입니다.
+   */
   const processReceiptImage = async source => {
     const options = { mediaTypes: ['images'], allowsEditing: true, quality: 0.5, base64: true };
     if (source === 'camera') {
@@ -287,8 +321,13 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, onToggleSide
     }
   };
 
+  // 검토 목록의 항목 하나를 부분 수정합니다(선택 여부, 이름, 수량 등).
   const updateScanned = (reviewId, patch) => setScannedItems(previous => previous.map(item => item.reviewId === reviewId ? { ...item, ...patch } : item));
 
+  /**
+   * 선택한 항목만 냉장고에 등록합니다.
+   * Promise.allSettled로 일부가 실패해도 나머지는 등록하고, 성공 개수를 안내합니다.
+   */
   const confirmScannedItems = async () => {
     const selected = scannedItems.filter(item => item.selected && item.name?.trim());
     if (!selected.length) {
@@ -305,6 +344,7 @@ export default function FridgeScreen({ fridgeItems, setFridgeItems, onToggleSide
     Alert.alert(successCount === selected.length ? '등록 완료' : '일부 등록 완료', `${selected.length}개 중 ${successCount}개를 냉장고에 등록했습니다.`);
   };
 
+  // 재료 카드 하나(선택 체크박스, 이름/카테고리, 수량 조절, 유통기한 배지, 더보기 메뉴)
   const renderIngredient = item => {
     const meta = expiryMeta(item.expiryDate);
     const selected = selectedIds.includes(item.id);

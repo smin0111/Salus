@@ -22,6 +22,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/*
+ * YouTube 출처 처리의 세부 구성 요소(크리에이터 등록부, 크리에이터 확인, 설명란 파싱, 링크 분류, 자막, 품질 평가, 캐시)를 모아 둔 파일입니다.
+ */
+
+/**
+ * application.properties의 recipe.agent.creators 목록(이름, 별칭, 공식 채널 ID)을 읽어 오는 설정 클래스입니다.
+ * {@code @ConfigurationProperties}는 prefix 아래 설정값을 필드에 자동으로 채워 줍니다(setter 필요).
+ */
 @Component
 @ConfigurationProperties(prefix = "recipe.agent")
 class CreatorRegistryProperties {
@@ -42,6 +50,7 @@ class CreatorRegistryProperties {
         this.creators = creators == null ? new ArrayList<>() : creators;
     }
 
+    // 설정 파일의 크리에이터 한 명 항목
     public static class CreatorEntry {
         private String name = "";
         private List<String> aliases = new ArrayList<>();
@@ -73,6 +82,10 @@ class CreatorRegistryProperties {
     }
 }
 
+/**
+ * 등록된 크리에이터 정보로 "요청한 크리에이터의 공식 채널 영상인지" 판단합니다.
+ * 채널 ID가 등록부와 일치할 때만 VERIFIED_CHANNEL_ID이고, 채널 이름/제목만 비슷하면 확정하지 않습니다(사칭 채널 방지).
+ */
 @Component
 class RegistryCreatorIdentityResolver implements CreatorIdentityResolver {
 
@@ -88,6 +101,12 @@ class RegistryCreatorIdentityResolver implements CreatorIdentityResolver {
     }
 
     @Override
+    /**
+     * 판단 순서:
+     * 1) 크리에이터 요청 없음 → NO_CREATOR_REQUEST
+     * 2) 등록부에 있는 크리에이터: 채널 ID 일치 → VERIFIED, 채널 제목만 별칭 일치 → ALIAS_MATCH_ONLY, 그 외 → MISMATCH
+     * 3) 등록부에 없는 크리에이터: 채널 제목 일치 → ALIAS_MATCH_ONLY, 영상 제목에만 이름 → UNVERIFIED, 그 외 → MISMATCH
+     */
     public CreatorIdentityResolution resolve(String requestedCreatorName, YouTubeVideoMetadata video) {
         String requested = normalize(requestedCreatorName);
         if (requested.isBlank()) {
@@ -150,6 +169,7 @@ class RegistryCreatorIdentityResolver implements CreatorIdentityResolver {
                 "요청 제작자와 채널 근거가 일치하지 않습니다.");
     }
 
+    // 요청 이름이 등록된 이름 또는 별칭과 정확히 같은지 확인합니다.
     private boolean profileMatches(CreatorIdentityProfile profile, String requested) {
         if (profile == null || requested.isBlank()) {
             return false;
@@ -160,6 +180,7 @@ class RegistryCreatorIdentityResolver implements CreatorIdentityResolver {
         return profile.aliases().stream().map(this::normalize).anyMatch(alias -> alias.equals(requested));
     }
 
+    // 채널 제목에 등록된 이름이나 별칭이 포함되어 있는지 확인합니다.
     private boolean aliasMatchesChannelTitle(CreatorIdentityProfile profile, String channelTitle) {
         String channel = normalize(channelTitle);
         if (channel.isBlank()) {
@@ -179,6 +200,10 @@ class RegistryCreatorIdentityResolver implements CreatorIdentityResolver {
     }
 }
 
+/**
+ * 영상 설명란 텍스트에서 레시피 근거(재료 구역, 조리 순서 구역, 외부 링크, 타임스탬프)를 추출합니다.
+ * "재료", "만드는법" 같은 제목 줄을 기준으로 구역을 나누고, 구독/광고/링크 같은 잡음 줄은 건너뜁니다.
+ */
 @Component
 class YouTubeDescriptionEvidenceExtractor {
 
@@ -190,6 +215,7 @@ class YouTubeDescriptionEvidenceExtractor {
 
     private final RecipeIngredientLineParser ingredientLineParser = new RecipeIngredientLineParser();
 
+    // 설명란을 한 줄씩 읽으며 현재 구역(재료/조리 순서)에 맞게 줄을 모은 뒤, 재료는 파싱하고 상태를 판정합니다.
     YouTubeDescriptionEvidence extract(String description) {
         String original = description == null ? "" : description;
         if (original.isBlank()) {
@@ -247,6 +273,7 @@ class YouTubeDescriptionEvidenceExtractor {
         return new YouTubeDescriptionEvidence(original, ingredients, steps, externalLinks, timestamps, status, warnings);
     }
 
+    // 재료와 조리 순서가 모두 있으면 완전한 레시피, 한쪽만 있으면 부분, 링크만 있으면 LINKS_ONLY입니다.
     private DescriptionEvidenceStatus status(List<ExtractedIngredientLine> ingredients, List<ExtractedInstructionStep> steps, List<String> links) {
         boolean hasIngredients = !ingredients.isEmpty();
         boolean hasSteps = !steps.isEmpty();
@@ -265,6 +292,7 @@ class YouTubeDescriptionEvidenceExtractor {
         return DescriptionEvidenceStatus.INSUFFICIENT;
     }
 
+    // 줄이 재료/조리 순서 구역의 제목인지 판단합니다. "재료: 양파, 대파"처럼 제목 뒤에 내용이 붙은 경우도 처리합니다.
     private String headerType(String line) {
         String normalized = RecipeCandidate.normalize(line.replaceAll("[:：\\[\\]▶]", ""));
         if (INGREDIENT_HEADERS.stream().anyMatch(header -> normalized.equals(RecipeCandidate.normalize(header)))) {
@@ -286,6 +314,7 @@ class YouTubeDescriptionEvidenceExtractor {
         return "";
     }
 
+    // "재료: 양파 1개"에서 콜론 뒤 내용을 꺼냅니다.
     private String inlineAfterHeader(String line) {
         if (!line.contains(":") && !line.contains("：")) {
             return "";
@@ -317,6 +346,7 @@ class YouTubeDescriptionEvidenceExtractor {
         return NOISE_TERMS.stream().anyMatch(term -> normalized.contains(term.toLowerCase(Locale.ROOT)));
     }
 
+    // 줄 앞의 목록 기호(-, *, •), 번호(1.), 타임스탬프(01:23)를 제거합니다.
     private String cleanListLine(String line) {
         return line == null ? "" : line
                 .replaceFirst("^[-*•]\\s*", "")
@@ -326,6 +356,10 @@ class YouTubeDescriptionEvidenceExtractor {
     }
 }
 
+/**
+ * 설명란 링크를 종류별로 분류하고, 레시피 근거로 쓸 수 있는 링크만 골라냅니다.
+ * 단축 URL(최종 목적지 불명), SNS, 쇼핑몰, 제휴/추적 링크는 레시피 근거에서 제외합니다.
+ */
 @Component
 class YouTubeExternalLinkResolver {
 
@@ -338,6 +372,7 @@ class YouTubeExternalLinkResolver {
                 .toList();
     }
 
+    // 공식 레시피 페이지, 크리에이터 공식 사이트, 일반 웹 페이지로 분류된 링크의 URL만 반환합니다.
     List<String> recipeEvidenceUrls(YouTubeDescriptionEvidence evidence) {
         return resolve(evidence).stream()
                 .filter(link -> link.type() == YouTubeExternalLinkType.OFFICIAL_RECIPE_PAGE
@@ -347,6 +382,7 @@ class YouTubeExternalLinkResolver {
                 .toList();
     }
 
+    // 호스트와 URL 문자열로 링크 종류를 분류합니다. "recipe"나 "레시피"(URL 인코딩 포함)가 있으면 공식 레시피 페이지로 봅니다.
     YouTubeExternalLinkType classify(String url) {
         String normalized = url == null ? "" : url.toLowerCase(Locale.ROOT);
         String host = host(normalized);
@@ -405,6 +441,9 @@ class YouTubeExternalLinkResolver {
     }
 }
 
+/**
+ * 영상 자막 조회 기본 구현입니다. 기능이 꺼져 있으면 DISABLED, 켜져 있어도 권한 있는 자막 제공자가 없어 UNSUPPORTED를 반환합니다.
+ */
 @Component
 class DefaultYouTubeTranscriptAdapter implements YouTubeTranscriptPort {
 
@@ -423,9 +462,17 @@ class DefaultYouTubeTranscriptAdapter implements YouTubeTranscriptPort {
     }
 }
 
+/**
+ * YouTube 출처 후보의 품질 점수와 근거 상태를 계산합니다.
+ */
 @Component
 class YouTubeSourceQualityEvaluator {
 
+    /**
+     * 최종 점수 = 관련도 15% + 크리에이터 신뢰도 25% + 근거 완성도 45% + 최신성 10% + 인기도 5%
+     * 차단 사유: 크리에이터 지정 요청인데 채널 ID로 확인되지 않음, 외부 레시피 검증 없이 설명란 근거가 불완전함
+     * 조회수가 높아도 레시피 근거가 없으면 사용하지 않습니다.
+     */
     YouTubeRecipeSourceScore score(
             RecipeResearchPlan plan,
             YouTubeVideoMetadata video,
@@ -480,6 +527,7 @@ class YouTubeSourceQualityEvaluator {
                 blocking);
     }
 
+    // 크리에이터 확인 → 외부 레시피 → 설명란 → 자막 → 부분 근거 순서로 근거 상태를 판정합니다.
     YouTubeRecipeEvidenceStatus status(
             RecipeResearchPlan plan,
             CreatorIdentityResolution creator,
@@ -512,6 +560,7 @@ class YouTubeSourceQualityEvaluator {
         return YouTubeRecipeEvidenceStatus.NO_RECIPE_EVIDENCE;
     }
 
+    // 크리에이터 확인 상태별 신뢰도 점수
     private double creatorScore(CreatorIdentityResolution creator) {
         return switch (creator.status()) {
             case VERIFIED_CHANNEL_ID -> 1.0;
@@ -522,6 +571,7 @@ class YouTubeSourceQualityEvaluator {
         };
     }
 
+    // 근거 종류별 완성도 점수(외부 레시피 1.0 > 설명란 완전 레시피 0.9 > 자막 0.75 > 부분 근거 0.35)
     private double evidenceScore(YouTubeDescriptionEvidence description, YouTubeTranscriptResult transcript, boolean externalRecipeVerified) {
         if (externalRecipeVerified) {
             return 1.0;
@@ -539,6 +589,7 @@ class YouTubeSourceQualityEvaluator {
         return 0.0;
     }
 
+    // 영상 제목/설명에 요리 이름이 있으면 1.0, 없으면 0.3입니다(요리 이름을 모르면 0.7).
     private double dishRelevance(RecipeResearchPlan plan, YouTubeVideoMetadata video) {
         String dish = RecipeCandidate.normalize(plan == null ? "" : plan.dishName());
         if (dish.isBlank()) {
@@ -548,6 +599,7 @@ class YouTubeSourceQualityEvaluator {
         return text.contains(dish) ? 1.0 : 0.3;
     }
 
+    // 게시일 기준 최신성 점수(90일 이내 1.0, 1년 이내 0.75, 3년 이내 0.5, 그 이상 0.25)
     private double recencyScore(LocalDateTime publishedAt) {
         if (publishedAt == null) {
             return 0.3;
@@ -565,6 +617,7 @@ class YouTubeSourceQualityEvaluator {
         return 0.25;
     }
 
+    // 조회수/좋아요 수를 로그 스케일로 0~1 점수로 바꿉니다(1천만 조회, 10만 좋아요에서 최대).
     private double popularityScore(Long viewCount, Long likeCount) {
         long views = viewCount == null ? 0L : Math.max(0L, viewCount);
         long likes = likeCount == null ? 0L : Math.max(0L, likeCount);
@@ -578,6 +631,9 @@ class YouTubeSourceQualityEvaluator {
     }
 }
 
+/**
+ * YouTube 메타데이터와 출처 근거를 서버 메모리에 6시간 보관하는 캐시입니다(API 할당량 절약용).
+ */
 @Component
 class InMemoryYouTubeRecipeSourceCache {
 
@@ -618,6 +674,7 @@ class InMemoryYouTubeRecipeSourceCache {
                 now.plus(DEFAULT_TTL)));
     }
 
+    // 근거 캐시 키: 요리 이름|크리에이터|영상 ID
     String evidenceKey(RecipeResearchPlan plan, YouTubeVideoMetadata video) {
         return String.join("|",
                 RecipeCandidate.normalize(plan == null ? "" : plan.dishName()),

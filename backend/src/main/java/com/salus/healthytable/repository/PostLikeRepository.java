@@ -9,6 +9,9 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * {@link PostLike} 엔티티의 DB 접근 인터페이스입니다.
+ */
 @Repository
 public interface PostLikeRepository extends JpaRepository<PostLike, Long> {
 

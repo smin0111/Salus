@@ -22,10 +22,16 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * {@link MfdsDrugProductPermitAdapter}와 약 식별 흐름 테스트입니다.
+ * 식약처 응답 JSON의 다양한 형태 파싱, 성분 조회 페이지 처리, 코드 불일치 차단, 후보 선택 규칙을 확인합니다.
+ * 모든 응답은 합성(가짜) 데이터이며 실제 API 키나 실제 응답을 포함하지 않습니다.
+ */
 class MfdsDrugProductPermitAdapterTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
+    // 목록 API의 결과 1건이 제품 후보로 파싱되어야 합니다.
     @Test
     void productPermitListSingleResultIsParsed() {
         MfdsDrugProductSearchResult result = adapter().parseSearchResponse("""
@@ -40,6 +46,7 @@ class MfdsDrugProductPermitAdapterTest {
         });
     }
 
+    // 품목기준코드는 숫자로 바꾸지 않고 문자열 그대로 보존해야 합니다(앞자리 0 손실 방지).
     @Test
     void productPermitItemSequenceIsPreservedAsString() {
         MfdsDrugProductSearchResult result = adapter().parseSearchResponse("""
@@ -53,6 +60,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(result.ingredientDiagnostics().candidatesWithProductCode()).isEqualTo(1);
     }
 
+    // 결과가 여러 건이면 MULTIPLE_RESULTS로 구분해야 합니다.
     @Test
     void productPermitListMultipleResultIsSeparated() {
         MfdsDrugProductSearchResult result = adapter().parseSearchResponse("""
@@ -66,6 +74,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(result.candidates()).hasSize(2);
     }
 
+    // 상세 API 결과로 후보 정보를 보강할 수 있어야 합니다.
     @Test
     void productDetailResultCanEnrichCandidate() {
         MfdsDrugProductCandidate fallback = candidate("A1", "테스트정", "A사", "", List.of());
@@ -79,6 +88,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(detailed.permitDate()).isEqualTo("20240101");
     }
 
+    // 상세 정보의 단순한 성분 텍스트는 성분으로 구조화할 수 있어야 합니다.
     @Test
     void clearProductDetailIngredientTextCanBeStructured() {
         MfdsDrugProductCandidate fallback = candidate("A1", "테스트정", "A사", "", List.of());
@@ -95,6 +105,7 @@ class MfdsDrugProductPermitAdapterTest {
         });
     }
 
+    // 여러 성분이 섞인 애매한 텍스트는 구조화하지 않아야 합니다.
     @Test
     void unclearProductDetailIngredientTextStaysUnstructured() {
         MfdsDrugProductCandidate fallback = candidate("A1", "테스트정", "A사", "", List.of());
@@ -106,6 +117,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(detailed.activeIngredients()).isEmpty();
     }
 
+    // 주성분 1건이 파싱되어야 합니다.
     @Test
     void singleMainIngredientIsParsed() {
         List<MfdsActiveIngredient> ingredients = adapter().parseIngredientResponse("""
@@ -120,6 +132,7 @@ class MfdsDrugProductPermitAdapterTest {
         });
     }
 
+    // 배열이 아닌 단일 객체 형태의 주성분도 파싱되어야 합니다.
     @Test
     void singleMainIngredientObjectIsParsed() {
         List<MfdsActiveIngredient> ingredients = adapter().parseIngredientResponse("""
@@ -133,6 +146,7 @@ class MfdsDrugProductPermitAdapterTest {
         });
     }
 
+    // 주성분 항목이 null이면 빈 결과로 처리해야 합니다.
     @Test
     void nullMainIngredientItemIsHandledAsEmpty() {
         List<MfdsActiveIngredient> ingredients = adapter().parseIngredientResponse("""
@@ -142,6 +156,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(ingredients).isEmpty();
     }
 
+    // 이름 없는 성분은 만들지 않고 진단 정보에 기록해야 합니다.
     @Test
     void ingredientWithoutNameIsNotCreatedAndIsDiagnosed() {
         MfdsDrugProductPermitAdapter adapter = adapter();
@@ -161,6 +176,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(diagnostics.statuses()).contains(MfdsIngredientDiagnosticStatus.INGREDIENT_FIELD_UNRECOGNIZED);
     }
 
+    // 목록 단계의 성분 힌트는 확정된 성분으로 취급하지 않아야 합니다.
     @Test
     void productCandidateIngredientHintIsNotStructuredIngredient() {
         MfdsDrugProductSearchResult result = adapter().parseSearchResponse("""
@@ -176,6 +192,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(result.ingredientDiagnostics().structuredIngredientCount()).isZero();
     }
 
+    // 성분 함량/단위가 없으면 추측하지 않아야 합니다.
     @Test
     void missingIngredientAmountAndUnitAreNotGuessed() {
         List<MfdsActiveIngredient> ingredients = adapter().parseIngredientResponse("""
@@ -189,6 +206,7 @@ class MfdsDrugProductPermitAdapterTest {
         });
     }
 
+    // 복합제의 여러 주성분을 모두 보존해야 합니다.
     @Test
     void compoundMainIngredientsArePreserved() {
         List<MfdsActiveIngredient> ingredients = adapter().parseIngredientResponse("""
@@ -201,6 +219,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(ingredients).extracting(MfdsActiveIngredient::koreanName).containsExactly("성분A", "성분B");
     }
 
+    // 총량/일련번호 필드가 있으면 파싱해야 합니다.
     @Test
     void totalAmountSerialFieldsAreParsedWhenPresent() {
         List<MfdsActiveIngredient> ingredients = adapter().parseIngredientResponse("""
@@ -215,6 +234,7 @@ class MfdsDrugProductPermitAdapterTest {
         });
     }
 
+    // API 버전 07의 성분 필드 이름을 올바르게 매핑해야 합니다.
     @Test
     void service07IngredientFieldNamesAreMapped() {
         List<MfdsActiveIngredient> ingredients = adapter().parseIngredientResponse("""
@@ -233,6 +253,7 @@ class MfdsDrugProductPermitAdapterTest {
         });
     }
 
+    // 다른 제품의 성분이 섞인 응답은 후보에 합치지 않아야 합니다.
     @Test
     void mixedProductIngredientResponseIsNotMerged() throws Exception {
         try (TestMfdsServer server = TestMfdsServer.startWithIngredients(200, List.of("""
@@ -260,6 +281,7 @@ class MfdsDrugProductPermitAdapterTest {
         }
     }
 
+    // 제품 코드가 일치하는 성분만 합쳐야 합니다.
     @Test
     void productFilterSuccessMergesOnlyMatchingProductCodeIngredients() throws Exception {
         try (TestMfdsServer server = TestMfdsServer.startWithIngredients(200, List.of("""
@@ -280,6 +302,7 @@ class MfdsDrugProductPermitAdapterTest {
         }
     }
 
+    // 같은 제품의 성분이 10개를 넘으면 여러 페이지를 조회해 모아야 합니다.
     @Test
     void ingredientPaginationCollectsMoreThanTenItemsForSameProduct() throws Exception {
         try (TestMfdsServer server = TestMfdsServer.startWithIngredients(200, List.of(
@@ -296,6 +319,7 @@ class MfdsDrugProductPermitAdapterTest {
         }
     }
 
+    // 페이지 한도에 도달하면 결과가 잘렸다는 진단 상태를 남겨야 합니다.
     @Test
     void ingredientPaginationLimitMarksResultAsTruncated() throws Exception {
         try (TestMfdsServer server = TestMfdsServer.startWithIngredients(200, List.of(
@@ -321,6 +345,7 @@ class MfdsDrugProductPermitAdapterTest {
         }
     }
 
+    // 후보가 여러 개인 상태에서는 어떤 약인지 확정되기 전까지 성분 조회를 확정하지 않아야 합니다.
     @Test
     void multipleResultsDoNotRequestIngredientsUntilExplicitlyResolved() throws Exception {
         try (TestMfdsServer server = TestMfdsServer.startWithList("""
@@ -337,6 +362,7 @@ class MfdsDrugProductPermitAdapterTest {
         }
     }
 
+    // 허가 취소 표시를 보존해야 합니다.
     @Test
     void canceledProductMarkerIsPreserved() throws Exception {
         MfdsDrugProductCandidate candidate = adapter().parseCandidate(objectMapper.readTree("""
@@ -346,6 +372,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(candidate.canceled()).isTrue();
     }
 
+    // null/누락 필드가 있어도 파싱이 깨지지 않아야 합니다.
     @Test
     void nullAndMissingFieldsDoNotBreakParsing() {
         MfdsDrugProductSearchResult result = adapter().parseSearchResponse("""
@@ -359,6 +386,7 @@ class MfdsDrugProductPermitAdapterTest {
         });
     }
 
+    // items가 단일 객체인 응답도 처리해야 합니다.
     @Test
     void itemsSingleObjectIsAccepted() {
         MfdsDrugProductSearchResult result = adapter().parseSearchResponse("""
@@ -369,6 +397,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(result.candidates()).hasSize(1);
     }
 
+    // items가 배열인 응답을 처리해야 합니다.
     @Test
     void itemsArrayIsAccepted() {
         MfdsDrugProductSearchResult result = adapter().parseSearchResponse("""
@@ -379,6 +408,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(result.candidates()).singleElement().extracting(MfdsDrugProductCandidate::productName).isEqualTo("배열정");
     }
 
+    // 응답 코드 오류는 "찾지 못함"이 아니라 API 실패여야 합니다.
     @Test
     void resultCodeErrorIsApiFailedNotNotFound() {
         MfdsDrugProductSearchResult result = adapter().parseSearchResponse("""
@@ -389,6 +419,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(result.warnings()).anyMatch(warning -> warning.contains("INVALID KEY"));
     }
 
+    // JSON 파싱 오류는 "찾지 못함"이 아니라 파싱 실패여야 합니다.
     @Test
     void jsonParsingErrorIsParsingFailedNotNotFound() {
         MfdsDrugProductSearchResult result = adapter().parseSearchResponse("{bad-json", new MedicationInput("테스트정", "", ""));
@@ -396,6 +427,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(result.status()).isEqualTo(MedicationDataStatus.PARSING_FAILED);
     }
 
+    // 공식 상세 API 경로를 사용하고, 상세 조회 404가 성분 병합을 막지 않아야 합니다.
     @Test
     void officialDetailPathIsUsedAndDetail404DoesNotBlockIngredientMerge() throws Exception {
         try (TestMfdsServer server = TestMfdsServer.start(404)) {
@@ -428,6 +460,7 @@ class MfdsDrugProductPermitAdapterTest {
         }
     }
 
+    // 테스트 데이터에 실제 API 키나 실제 응답 덤프가 포함되지 않아야 합니다.
     @Test
     void syntheticFixturesDoNotContainApiKeysOrLiveResponseDumps() throws Exception {
         String source = Files.readString(Path.of("src/test/java/com/salus/healthytable/service/recipeagent/MfdsDrugProductPermitAdapterTest.java"));
@@ -437,6 +470,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(source).doesNotContain("NORMAL " + "SERVICE.");
     }
 
+    // 허가정보로 식별에 성공했다면 e약은요 결과가 없어도 약은 식별된 상태여야 합니다.
     @Test
     void productIdentificationSuccessWithNoEasyDrugResultStillIdentifiesMedication() {
         MedicationNormalizer normalizer = new MedicationNormalizer(
@@ -450,6 +484,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(normalized.normalizedIngredientName()).contains("성분A");
     }
 
+    // openFDA 결과가 없다고 "약 식별 실패"로 처리하면 안 됩니다.
     @Test
     void productIdentificationSuccessWithNoOpenFdaResultIsNotMedicationNotIdentified() {
         OfficialMedicationFoodInteractionAdapter adapter = adapter(
@@ -465,6 +500,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(result.notices()).contains("상호작용이 없다는 의미는 아닙니다.");
     }
 
+    // 모든 설명서 출처에 결과가 없어도 "안전"이 되면 안 됩니다.
     @Test
     void allLabelSourcesMissingDoesNotBecomeSafe() {
         OfficialMedicationFoodInteractionAdapter adapter = adapter(
@@ -480,6 +516,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(result.status()).isNotEqualTo(InteractionStatus.SAFE);
     }
 
+    // 제품 후보가 여러 개면 자동으로 고르지 않아야 합니다.
     @Test
     void multipleProductCandidatesAreNotAutoSelected() {
         MedicationNormalizer normalizer = new MedicationNormalizer(
@@ -495,6 +532,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(normalized.status()).isEqualTo(MedicationNormalizationStatus.MULTIPLE_MATCHES);
     }
 
+    // 제품명과 제형으로 후보를 좁힐 수 있어야 합니다.
     @Test
     void productNameAndDosageFormCanNarrowCandidates() {
         MedicationNormalizer normalizer = new MedicationNormalizer(
@@ -511,6 +549,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(normalized.mfdsItemSequence()).isEqualTo("F1");
     }
 
+    // 제품명과 용량으로 후보를 좁힐 수 있어야 합니다.
     @Test
     void productNameAndDosageCanNarrowCandidates() {
         MedicationInput input = new MedicationInput("테스트", "10mg", "");
@@ -527,6 +566,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(normalized.mfdsItemSequence()).isEqualTo("D1");
     }
 
+    // 국내 제품은 RxNorm보다 식약처 허가정보를 먼저 사용해야 합니다.
     @Test
     void domesticProductUsesProductPermitBeforeRxNorm() {
         FakeRxNormPort rxNorm = new FakeRxNormPort().with(new RxNormNormalizationResult(
@@ -548,6 +588,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(rxNorm.calls).isZero();
     }
 
+    // 식약처의 영문 성분명으로 RxNorm 보조 식별자(RXCUI)를 얻을 수 있어야 합니다.
     @Test
     void mfdsEnglishIngredientUsesRxNormForAuxiliaryRxcui() {
         FakeRxNormPort rxNorm = new FakeRxNormPort().with(new RxNormNormalizationResult(
@@ -575,6 +616,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(normalized.normalizedProductName()).isEqualTo("영문성분정");
     }
 
+    // 확정되지 않은 성분 힌트로 RxNorm을 조회하면 안 됩니다.
     @Test
     void productCandidateHintIsNotUsedForRxNormLookup() {
         FakeRxNormPort rxNorm = new FakeRxNormPort().with(new RxNormNormalizationResult(
@@ -602,6 +644,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(normalized.matchedAliases()).contains("후보성분");
     }
 
+    // 국내 출처로 식별되지 않는 영문 제품은 RxNorm을 사용할 수 있어야 합니다.
     @Test
     void englishProductCanUseRxNormWhenDomesticSourcesDoNotIdentifyIt() {
         MedicationNormalizer normalizer = new MedicationNormalizer(
@@ -622,6 +665,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(normalized.rxcui()).isEqualTo("11289");
     }
 
+    // "약 식별 성공"과 "음식 근거 없음"은 별개의 상태로 구분해야 합니다.
     @Test
     void identifiedMedicationAndMissingFoodEvidenceAreSeparated() {
         OfficialMedicationFoodInteractionAdapter adapter = adapter(
@@ -637,6 +681,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(result.evidences()).isEmpty();
     }
 
+    // 조사 결과에서 식별 상태와 음식 근거 상태를 분리해 기록해야 합니다.
     @Test
     void medicationResearchResultSeparatesIdentificationAndFoodEvidenceStatus() {
         OfficialMedicationFoodInteractionAdapter adapter = adapter(
@@ -653,6 +698,7 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(research.foodEvidence()).isEmpty();
     }
 
+    // 아래 private 메서드/클래스들은 가짜 식약처 서버, 테스트 후보, 가짜 포트를 만드는 도우미입니다.
     private MfdsDrugProductPermitAdapter adapter() {
         return new MfdsDrugProductPermitAdapter(
                 WebClient.builder(),

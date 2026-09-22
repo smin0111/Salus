@@ -7,6 +7,10 @@ import lombok.AllArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * 게시글 좋아요 기록 엔티티입니다(post_likes 테이블).
+ * 한 행이 "어떤 사용자가 어떤 글에 좋아요를 눌렀는지"를 의미합니다.
+ */
 @Entity
 @Table(name = "post_likes")
 @Data

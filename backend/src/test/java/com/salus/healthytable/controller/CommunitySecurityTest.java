@@ -33,6 +33,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * 커뮤니티 API의 보안 규칙을 실제 SecurityConfig로 검증하는 테스트입니다.
+ * {@code @WebMvcTest}는 웹 계층(컨트롤러, 필터)만 띄우고 서비스는 Mock으로 대체합니다.
+ */
 @WebMvcTest(CommunityController.class)
 @Import({
         SecurityConfig.class,
@@ -71,6 +75,7 @@ class CommunitySecurityTest {
     @MockBean
     private UserRepository userRepository;
 
+    // 게스트는 개인화 추천을 조회할 수 없고, 401 JSON 오류를 받아야 합니다.
     @Test
     void guestCannotReadPersonalRecommendations() throws Exception {
         mockMvc.perform(get("/api/community/recommendations"))
@@ -84,6 +89,7 @@ class CommunitySecurityTest {
         verifyNoInteractions(recommendationService);
     }
 
+    // 게스트도 공개 게시글 목록은 조회할 수 있어야 합니다.
     @Test
     void guestCanReadPublicCommunityPosts() throws Exception {
         when(authenticatedUserProvider.getCurrentUserId()).thenReturn(Optional.empty());

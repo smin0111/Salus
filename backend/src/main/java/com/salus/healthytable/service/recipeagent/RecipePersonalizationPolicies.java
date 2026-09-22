@@ -12,6 +12,16 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 
+/*
+ * Recipe Agent의 개인화 정책들을 모아 둔 파일입니다.
+ * 각 정책은 RecipePersonalizationPolicy를 구현하고, @Order 숫자가 작은 순서대로 실행됩니다.
+ * (10 알레르기 → 20 약물 → 30 만성질환 → 40 식단 제한 → 50 사용자 제외 → 60 냉장고 활용)
+ */
+
+/**
+ * 모든 개인화 정책을 실행하고 결과를 합쳐 최종 판정(RecipePersonalizationDecision)을 만드는 엔진입니다.
+ * 스프링이 RecipePersonalizationPolicy 구현 Bean들을 List로 주입해 줍니다.
+ */
 @Service
 @RequiredArgsConstructor
 class RecipePersonalizationPolicyEngine {
@@ -35,6 +45,7 @@ class RecipePersonalizationPolicyEngine {
         }
 
         RecipeDecisionType decisionType = decide(conflicts, modifications, notices);
+        // 차단(BLOCKING) 충돌이 난 재료는 "냉장고에서 사용한 재료" 목록에서도 제거합니다.
         List<String> unsafeFridgeIngredients = conflicts.stream()
                 .filter(conflict -> conflict.severity() == ConflictSeverity.BLOCKING)
                 .map(RecipeConflict::ingredient)
@@ -52,6 +63,13 @@ class RecipePersonalizationPolicyEngine {
     }
 
     private RecipeDecisionType decide(List<RecipeConflict> conflicts, List<RecipeModification> modifications, List<String> notices) {
+        /*
+         * 판정 우선순위:
+         * 1) 차단 수준의 알레르기 또는 공식 근거가 있는 약물 충돌 → BLOCK
+         * 2) 만성질환 HIGH → 수정 내역이 있으면 MODIFY, 없으면 RECOMMEND_ALTERNATIVE
+         * 3) 식단 제한 HIGH → BLOCK
+         * 4) 수정 내역 있음 → MODIFY / 주의 또는 안내 있음 → ALLOW_WITH_NOTICE / 그 외 → ALLOW
+         */
         boolean blockingAllergy = conflicts.stream()
                 .anyMatch(conflict -> conflict.type() == RecipeConflictType.ALLERGY && conflict.severity() == ConflictSeverity.BLOCKING);
         if (blockingAllergy) {
@@ -84,6 +102,11 @@ class RecipePersonalizationPolicyEngine {
     }
 }
 
+/**
+ * 알레르기 정책입니다. 판정은 반드시 AllergenMatcher를 사용합니다(채팅 경로와 같은 규칙).
+ * - 알레르기 재료 이름이 그대로 있고 핵심 재료가 아니면: 제거(REMOVE) 후 제공
+ * - 핵심 재료이거나 파생 재료로만 매칭되면: 차단(BLOCKING)
+ */
 @Component
 @Order(10)
 @RequiredArgsConstructor
@@ -137,6 +160,10 @@ class AllergyPolicy implements RecipePersonalizationPolicy {
     }
 }
 
+/**
+ * 복용 약물 정책입니다.
+ * 공식 근거로 확인된 충돌만 재료 제거로 반영하고, 확인하지 못한 상태(UNKNOWN, API 실패 등)는 "안전"으로 보지 않고 안내 문구만 전달합니다.
+ */
 @Component
 @Order(20)
 @RequiredArgsConstructor
@@ -171,6 +198,7 @@ class MedicationInteractionPolicy implements RecipePersonalizationPolicy {
         return PolicyEvaluation.empty();
     }
 
+    // 약물 상호작용 충돌이 난 재료마다 제거(REMOVE) 수정 내역을 만듭니다.
     private List<RecipeModification> medicationModifications(List<RecipeConflict> conflicts) {
         if (conflicts == null || conflicts.isEmpty()) {
             return List.of();
@@ -182,6 +210,12 @@ class MedicationInteractionPolicy implements RecipePersonalizationPolicy {
     }
 }
 
+/**
+ * 만성질환/건강 목표 정책입니다(규칙 기반 참고 안내이며 의학적 판단이 아닙니다).
+ * - 당뇨/저당 목표: 추가당 재료가 있으면 감량/대체, 설탕이 요리의 정체성이면 대체 메뉴 우선
+ * - 고혈압/저염 목표: 짠 양념 감량 안내
+ * - 신장질환: 칼륨이 많을 수 있는 재료 섭취량 확인 안내
+ */
 @Component
 @Order(30)
 class ChronicConditionPolicy implements RecipePersonalizationPolicy {
@@ -234,6 +268,7 @@ class ChronicConditionPolicy implements RecipePersonalizationPolicy {
         return new PolicyEvaluation(conflicts, modifications, notices, List.of(), List.of());
     }
 
+    // 추가당 여부와, 설탕이 요리의 핵심(브륄레, 달고나 등)인지에 따라 심각도를 HIGH 또는 CAUTION으로 정합니다.
     private void evaluateDiabetes(
             RecipeCandidate recipe,
             List<RecipeConflict> conflicts,
@@ -268,6 +303,10 @@ class ChronicConditionPolicy implements RecipePersonalizationPolicy {
     }
 }
 
+/**
+ * 식단 제한 정책입니다. 채식/비건/육류 제외 사용자에게 육류·해산물 재료가 있으면 HIGH 충돌로 차단합니다.
+ * 검증된 대체 레시피가 없으면 임의로 재료를 바꾸지 않습니다.
+ */
 @Component
 @Order(40)
 class DietaryRestrictionPolicy implements RecipePersonalizationPolicy {
@@ -304,6 +343,9 @@ class DietaryRestrictionPolicy implements RecipePersonalizationPolicy {
     }
 }
 
+/**
+ * 사용자가 메시지로 명시한 제외 재료 정책입니다. 제외 재료가 핵심 재료면 HIGH, 아니면 CAUTION으로 기록하고 제거합니다.
+ */
 @Component
 @Order(50)
 class ExplicitExclusionPolicy implements RecipePersonalizationPolicy {
@@ -333,6 +375,10 @@ class ExplicitExclusionPolicy implements RecipePersonalizationPolicy {
     }
 }
 
+/**
+ * 냉장고 재료 활용 정책입니다.
+ * 알레르기/제외 재료를 뺀 냉장고 재료로 레시피 재료와 겹치는 것, 부족한 핵심 재료, 유통기한 임박 재료를 계산합니다.
+ */
 @Component
 @Order(60)
 @RequiredArgsConstructor
@@ -375,6 +421,7 @@ class FridgeAdaptationPolicy implements RecipePersonalizationPolicy {
                 score.availableIngredients());
     }
 
+    // 레시피 재료마다 냉장고 재료와 이름을 비교합니다. 호환 점수 = 보유 재료 수 / 핵심 재료 수(최대 1.0)
     FridgeCompatibilityScore score(RecipeCandidate recipe, List<FridgeIngredientContext> fridgeIngredients) {
         LinkedHashSet<String> available = new LinkedHashSet<>();
         LinkedHashSet<String> missing = new LinkedHashSet<>();
@@ -410,6 +457,7 @@ class FridgeAdaptationPolicy implements RecipePersonalizationPolicy {
                 List.copyOf(expiringSoon));
     }
 
+    // 재료 문자열에서 수량과 단위를 제거합니다.
     private String stripQuantity(String ingredient) {
         return ingredient == null ? "" : ingredient.replaceAll("\\d+(?:\\.\\d+)?\\s*[^\\s]*", "").trim();
     }

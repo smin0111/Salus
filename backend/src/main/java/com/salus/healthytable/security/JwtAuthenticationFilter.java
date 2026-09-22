@@ -19,6 +19,13 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * 요청 헤더의 JWT(Authorization: Bearer 토큰)를 확인해 로그인 사용자를 식별하는 필터입니다.
+ *
+ * 흐름: 헤더에서 토큰 추출 → 서명/만료 검증 → 토큰 속 사용자 ID로 DB 조회
+ * → 사용자의 role로 권한(ROLE_USER, ROLE_ADMIN)을 만들어 SecurityContext에 저장.
+ * 토큰이 없거나 잘못되어도 여기서 요청을 막지 않고, 막을지 여부는 SecurityConfig 규칙이 결정합니다.
+ */
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -48,6 +55,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         if (user.isPresent()) {
                             String role = user.get().getRole() != null ? user.get().getRole().name() : "USER";
                             List<SimpleGrantedAuthority> authorities = List.of(
+                                    // 스프링 시큐리티의 hasRole("ADMIN")은 내부적으로 "ROLE_ADMIN" 권한을 찾으므로 접두사를 붙입니다.
                                     new SimpleGrantedAuthority("ROLE_" + role));
 
                             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
@@ -55,6 +63,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                             authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
+                            // 이후 컨트롤러나 AuthenticatedUserProvider가 이 인증 정보를 읽어 사용자 ID를 알 수 있습니다.
                             SecurityContextHolder.getContext().setAuthentication(authentication);
                         }
                     }
@@ -72,6 +81,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    // 토큰의 subject(사용자 ID 문자열)를 숫자로 바꿉니다. 숫자가 아니면 인증하지 않은 것으로 처리합니다.
     private Optional<Long> parseUserId(String userId) {
         try {
             return Optional.of(Long.parseLong(userId));
@@ -83,6 +93,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
     }
 
+    // "Bearer " 접두사(7글자)를 떼고 순수 토큰 문자열만 반환합니다.
     private String getJwtFromRequest(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {

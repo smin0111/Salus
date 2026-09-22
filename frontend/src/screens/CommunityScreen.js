@@ -28,6 +28,7 @@ import {
 import useResponsive from '../hooks/useResponsive';
 import { color, radius, shadow, spacing, typography } from '../theme/tokens';
 
+// 화면 상단 탭(추천/레시피/이야기), 레시피 필터, 정렬 옵션
 const TAB_ITEMS = [{ id: 'recommendation', label: '추천' }, { id: 'recipes', label: '레시피' }, { id: 'stories', label: '이야기' }];
 const FILTERS = [
   { id: 'all', label: '전체' },
@@ -40,6 +41,7 @@ const FILTERS = [
 ];
 const SORTS = [{ id: 'recent', label: '최신순' }, { id: 'rating', label: '평점순' }, { id: 'time', label: '조리시간순' }];
 
+// 작성 시각을 "방금", "5분 전", "3일 전"처럼 상대 시간으로 바꿉니다(7일 이상은 날짜로 표시).
 const timeAgo = value => {
   if (!value) return '';
   const diff = Date.now() - new Date(value).getTime();
@@ -52,6 +54,7 @@ const timeAgo = value => {
   return days < 7 ? `${days}일 전` : new Date(value).toLocaleDateString('ko-KR');
 };
 
+// 추천 카드에 표시할 추천 이유. 서버가 준 이유가 없으면 점수 구간에 따라 문구를 고릅니다.
 const recommendationLabel = item => {
   if (item.reason) return item.reason;
   if (Number(item.score) >= 70) return '추천 적합도 높음';
@@ -59,12 +62,20 @@ const recommendationLabel = item => {
   return '새로운 식탁 아이디어';
 };
 
+// 이미지 주소가 없거나 불러오기에 실패하면 기본 아이콘 영역을 보여 주는 이미지 컴포넌트
 const SafeImage = ({ uri, style, label }) => {
   const [failed, setFailed] = useState(false);
   if (!uri || failed) return <View style={[style, styles.imageFallback]} accessibilityLabel={`${label || '레시피'} 이미지 없음`}><Ionicons name="leaf-outline" size={28} color={color.brand} /><Text style={styles.imageFallbackText}>이미지 준비 중</Text></View>;
   return <Image source={{ uri }} style={style} onError={() => setFailed(true)} accessibilityLabel={`${label || '레시피'} 이미지`} />;
 };
 
+/**
+ * 커뮤니티(피드) 화면입니다.
+ * - 추천 탭: 로그인 사용자 맞춤 추천과 인기 게시글
+ * - 레시피 탭: 공개 레시피를 검색/필터/정렬
+ * - 이야기 탭: 사용자 게시글과 레시피 공유 카드, 글쓰기 버튼
+ * webMode=true(웹 사이드바 레이아웃)면 모바일 헤더를 숨깁니다.
+ */
 export default function CommunityScreen({ onToggleSidebar, onNavigate, user, webMode = false }) {
   const { token } = useAuth();
   const insets = useSafeAreaInsets();
@@ -83,6 +94,11 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user, web
   const [sort, setSort] = useState('recent');
   const hasPersonalization = Boolean(user?.id && token);
 
+  /**
+   * 화면에 필요한 목록들을 동시에 불러옵니다.
+   * Promise.allSettled는 요청 하나가 실패해도 나머지 결과를 사용할 수 있게 해 줍니다(부분 실패 안내 표시).
+   * 로그인 만료(401) 오류는 AuthContext가 처리하므로 오류 목록에 넣지 않습니다.
+   */
   const load = async () => {
     setErrors([]);
     if (!refreshing) setLoading(true);
@@ -105,6 +121,7 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user, web
 
   useEffect(() => { load(); }, [token, user?.id]);
 
+  // 검색어/필터/정렬 조건이 바뀔 때만 레시피 목록을 다시 계산합니다(useMemo로 불필요한 재계산 방지).
   const filteredRecipes = useMemo(() => {
     const search = query.trim().toLowerCase();
     const next = publicRecipes.filter(recipe => {
@@ -124,6 +141,7 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user, web
     return next;
   }, [filter, publicRecipes, query, sort]);
 
+  // 글쓰기 버튼: 로그인하지 않았으면 안내만 띄웁니다.
   const createPost = () => {
     if (!token) {
       Alert.alert('로그인 필요', '이야기 작성은 로그인 후 사용할 수 있습니다.');
@@ -132,6 +150,7 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user, web
     onNavigate?.('create-post');
   };
 
+  // 레시피 카드(누르면 레시피 상세로 이동)
   const RecipeCard = ({ item, recommendation = false }) => (
     <Card interactive onPress={() => onNavigate?.('recipe-detail', { ...item, id: item.recipeId || item.id })} style={styles.recipeCard} accessibilityRole="button">
       <SafeImage uri={item.imageUrl || item.image} style={styles.recipeImage} label={item.title} />
@@ -148,6 +167,7 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user, web
     </Card>
   );
 
+  // 이야기 카드. shared=true면 레시피 공유 기록, 아니면 일반 게시글로 필드 이름을 맞춰 표시합니다.
   const StoryCard = ({ item, shared = false }) => {
     const id = shared ? item.shareId : item.id;
     const title = shared ? item.recipeTitle : item.title;

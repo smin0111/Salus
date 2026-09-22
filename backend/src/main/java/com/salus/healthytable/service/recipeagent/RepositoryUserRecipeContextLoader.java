@@ -12,10 +12,17 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * DB(건강 프로필, 냉장고 재료)에서 Recipe Agent용 사용자 맥락을 읽는 구현체입니다.
+ *
+ * 프로필과 냉장고를 따로 조회해, 각각의 실패 여부를 상태로 남깁니다.
+ * - 둘 다 실패: LOAD_FAILED / 하나만 실패: PARTIALLY_LOADED / 둘 다 비어 있음: NOT_REGISTERED / 그 외: LOADED
+ */
 @Service
 @RequiredArgsConstructor
 class RepositoryUserRecipeContextLoader implements UserRecipeContextLoader {
 
+    // 냉장고 수량 문자열("2개", "300g")에서 숫자와 단위를 분리하는 정규식
     private static final Pattern QUANTITY_PATTERN = Pattern.compile("^\\s*(\\d+(?:\\.\\d+)?)?\\s*([^\\d\\s]+)?.*$");
 
     private final HealthProfileRepository healthProfileRepository;
@@ -79,6 +86,7 @@ class RepositoryUserRecipeContextLoader implements UserRecipeContextLoader {
                 fridgeFailed ? ContextSectionLoadStatus.LOAD_FAILED : ContextSectionLoadStatus.LOADED);
     }
 
+    // 냉장고 엔티티를 Recipe Agent용 재료 맥락으로 변환합니다.
     private FridgeIngredientContext toContext(FridgeItem item) {
         ParsedQuantity parsed = parseQuantity(item.getQuantity());
         return new FridgeIngredientContext(

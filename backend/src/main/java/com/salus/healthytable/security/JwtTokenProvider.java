@@ -10,13 +10,19 @@ import java.security.Key;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
+/**
+ * JWT(JSON Web Token)를 발급하고 검증하는 클래스입니다.
+ *
+ * JWT는 "누가 로그인했는지"를 서버 세션 없이 담아 두는 서명된 문자열입니다.
+ * 비밀 키(jwt.secret)로 HS256 서명을 하므로, 키를 모르는 사람은 토큰 내용을 위조할 수 없습니다.
+ */
 @Component
 public class JwtTokenProvider {
 
     @Value("${jwt.secret}")
     private String secretKey;
 
-    private final long VALIDITY_IN_MS = 3600000; // 1h
+    private final long VALIDITY_IN_MS = 3600000; // 1시간
     private static final int MIN_SECRET_BYTES = 32;
 
     @PostConstruct
@@ -52,6 +58,9 @@ public class JwtTokenProvider {
         }
     }
 
+    /**
+     * 사용자 ID를 subject로 담은 토큰을 발급합니다. 유효기간은 발급 시점부터 1시간입니다.
+     */
     public String createToken(String userId) {
         Date now = new Date();
         Date validity = new Date(now.getTime() + VALIDITY_IN_MS);
@@ -64,6 +73,9 @@ public class JwtTokenProvider {
                 .compact();
     }
 
+    /**
+     * 토큰의 서명과 만료 시간을 검사해 유효하면 true를 반환합니다.
+     */
     public boolean validateToken(String token) {
         try {
             Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token);
@@ -75,11 +87,15 @@ public class JwtTokenProvider {
         }
     }
 
+    /**
+     * 검증된 토큰에서 사용자 ID(subject)를 꺼냅니다. 호출 전에 validateToken으로 검증해야 합니다.
+     */
     public String getUserId(String token) {
         return Jwts.parserBuilder().setSigningKey(getSigningKey()).build()
                 .parseClaimsJws(token).getBody().getSubject();
     }
 
+    // Authorization 헤더에서 "Bearer " 뒤의 토큰 문자열만 추출합니다. 없으면 null입니다.
     public String resolveToken(jakarta.servlet.http.HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {

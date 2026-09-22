@@ -38,6 +38,10 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+/**
+ * {@link PaymentService}와 {@link PaymentTxHelper}를 함께 연결한 결제 검증 테스트입니다.
+ * MockRestServiceServer로 포트원 API 응답을 흉내 내고, 로그에 결제 식별자 같은 민감 정보가 남지 않는지도 확인합니다.
+ */
 @ExtendWith(OutputCaptureExtension.class)
 class PaymentServiceTest {
 
@@ -91,6 +95,7 @@ class PaymentServiceTest {
         server.verify();
     }
 
+    // 외부 결제 조회 메서드에는 @Transactional이 없고, DB 저장 도우미에만 있어야 합니다.
     @Test
     void providerVerificationIsOutsideTransactionAndOnlyDatabaseWriteHelperIsTransactional() throws Exception {
         Method providerVerification = PaymentService.class.getMethod(
@@ -102,6 +107,7 @@ class PaymentServiceTest {
         assertThat(databaseWrite.isAnnotationPresent(Transactional.class)).isTrue();
     }
 
+    // 결제 식별자의 앞뒤 공백은 외부 조회와 저장 전에 제거해야 합니다.
     @Test
     void paymentIdentifiersAreTrimmedBeforeExternalLookupAndSave() {
         User user = new User();
@@ -127,6 +133,7 @@ class PaymentServiceTest {
         server.verify();
     }
 
+    // URL 경로에 쓰일 수 없는 문자가 있는 식별자는 포트원 호출 전에 거부해야 합니다.
     @Test
     void invalidPaymentIdentifierIsRejectedBeforeCallingProvider() {
         assertThatThrownBy(() -> paymentService.verifyAndSavePayment("imp/123", "mid_123", 1L))
@@ -137,6 +144,7 @@ class PaymentServiceTest {
         server.verify();
     }
 
+    // 결제 상태가 paid가 아니면 저장하지 않아야 합니다.
     @Test
     void nonPaidPaymentIsRejectedBeforeSaving(CapturedOutput output) {
         expectIamportToken();
@@ -157,6 +165,7 @@ class PaymentServiceTest {
         server.verify();
     }
 
+    // 주문번호가 다르면 거부해야 합니다.
     @Test
     void mismatchedMerchantUidIsRejected(CapturedOutput output) {
         expectIamportToken();
@@ -177,6 +186,7 @@ class PaymentServiceTest {
         server.verify();
     }
 
+    // 결제 금액이 다르면 거부하고, 로그에 결제 식별자를 남기지 않아야 합니다.
     @Test
     void mismatchedAmountIsRejectedAndLoggedWithoutPaymentIdentifiers(CapturedOutput output) {
         expectIamportToken();
@@ -197,6 +207,7 @@ class PaymentServiceTest {
         server.verify();
     }
 
+    // 금액 값이 없어도 500이 아니라 검증 실패로 처리해야 합니다.
     @Test
     void missingAmountIsRejectedWithoutServerError(CapturedOutput output) {
         expectIamportToken();
@@ -217,6 +228,7 @@ class PaymentServiceTest {
         server.verify();
     }
 
+    // 결제는 확인됐지만 사용자가 없으면 404여야 합니다.
     @Test
     void missingUserIsReportedAsNotFound() {
         when(paymentRepository.findByImpUid("imp_123")).thenReturn(Optional.empty());
@@ -261,6 +273,7 @@ class PaymentServiceTest {
         server.verify();
     }
 
+    // 이미 처리된 주문번호는 409여야 합니다.
     @Test
     void duplicateMerchantUidIsReportedAsConflict() {
         when(paymentRepository.findByImpUid("imp_123")).thenReturn(Optional.empty());
@@ -282,6 +295,7 @@ class PaymentServiceTest {
         server.verify();
     }
 
+    // DB unique 제약 위반도 409로 응답해야 합니다.
     @Test
     void databaseDuplicateConstraintIsReportedAsConflict(CapturedOutput output) {
         User user = new User();
@@ -313,6 +327,7 @@ class PaymentServiceTest {
         server.verify();
     }
 
+    // 포트원 토큰 발급 실패 시 502를 반환하고 결제사 응답 본문을 로그에 남기지 않아야 합니다.
     @Test
     void iamportTokenFailureDoesNotLogProviderResponseBody(CapturedOutput output) {
         server.expect(requestTo("https://api.iamport.kr/users/getToken"))
@@ -334,6 +349,7 @@ class PaymentServiceTest {
         server.verify();
     }
 
+    // 결제 내역 조회 실패 시 502를 반환하고 결제사 응답 본문을 로그에 남기지 않아야 합니다.
     @Test
     void paymentDetailFailureDoesNotLogProviderResponseBody(CapturedOutput output) {
         expectIamportToken();
@@ -356,6 +372,7 @@ class PaymentServiceTest {
         server.verify();
     }
 
+    // 포트원 토큰 발급 API의 가짜 성공 응답을 등록합니다.
     private void expectIamportToken() {
         server.expect(requestTo("https://api.iamport.kr/users/getToken"))
                 .andExpect(method(HttpMethod.POST))
@@ -364,6 +381,7 @@ class PaymentServiceTest {
                         """, MediaType.APPLICATION_JSON));
     }
 
+    // 포트원 결제 조회 API의 가짜 응답을 등록합니다.
     private void expectPaymentDetail(String body) {
         server.expect(requestTo("https://api.iamport.kr/payments/imp_123"))
                 .andExpect(method(HttpMethod.GET))

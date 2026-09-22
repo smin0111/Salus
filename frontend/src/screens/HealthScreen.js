@@ -17,6 +17,11 @@ import {
 } from '../features/health/profileModel';
 import { color, radius, size, spacing, typography } from '../theme/tokens';
 
+/**
+ * 건강 프로필 화면입니다.
+ * 알레르기/건강 상태/식단 제한/복용약/건강 목표를 보고, 편집 모드에서 추가·삭제한 뒤 한 번에 저장합니다.
+ * 편집 중 변경 내용은 draft(임시 사본)에만 반영되고, 저장해야 서버와 앱 상태에 반영됩니다.
+ */
 export default function HealthScreen({ healthProfile, setHealthProfile, onToggleSidebar, onNavigate, webMode = false }) {
   const { isLoggedIn, token } = useAuth();
   const { isTablet, isDesktop } = useResponsive();
@@ -27,6 +32,7 @@ export default function HealthScreen({ healthProfile, setHealthProfile, onToggle
   const [error, setError] = useState(null);
   const [toast, setToast] = useState('');
 
+  // 서버에서 건강 프로필을 불러와 정리된 형태로 앱 상태와 draft에 넣습니다.
   const loadProfile = async () => {
     if (!isLoggedIn || !token) {
       setLoading(false);
@@ -50,16 +56,19 @@ export default function HealthScreen({ healthProfile, setHealthProfile, onToggle
     loadProfile();
   }, [isLoggedIn, token]);
 
+  // 편집 중이 아닐 때는 외부 프로필이 바뀌면 draft도 최신 값으로 맞춥니다.
   useEffect(() => {
     if (!editing) setDraft(normalizeHealthProfile(healthProfile));
   }, [editing, healthProfile]);
 
+  // 저장 완료 토스트를 2.6초 뒤 자동으로 숨깁니다.
   useEffect(() => {
     if (!toast) return undefined;
     const timeout = setTimeout(() => setToast(''), 2600);
     return () => clearTimeout(timeout);
   }, [toast]);
 
+  // 편집 중이면 draft를, 아니면 저장된 프로필을 화면에 보여 줍니다.
   const visibleProfile = editing ? draft : normalizeHealthProfile(healthProfile);
   const stats = useMemo(() => getProfileStats(visibleProfile), [visibleProfile]);
   const completedSections = PROFILE_SECTIONS.filter(section => visibleProfile[section.key]?.length);
@@ -74,6 +83,7 @@ export default function HealthScreen({ healthProfile, setHealthProfile, onToggle
     setEditing(false);
   };
 
+  // 항목을 추가합니다. 빈 값, 길이 초과, 중복(대소문자 무시), 개수 초과면 안내 후 false를 반환합니다.
   const addItem = (section, rawValue) => {
     const value = typeof rawValue === 'string' ? rawValue.replace(/\s+/g, ' ').trim() : '';
     if (!value) return false;
@@ -101,6 +111,7 @@ export default function HealthScreen({ healthProfile, setHealthProfile, onToggle
     }));
   };
 
+  // 변경 내용을 저장합니다. 로그인하지 않았으면 서버 저장 없이 앱 상태에만 반영합니다.
   const persistProfile = async () => {
     const nextProfile = normalizeHealthProfile(draft);
     if (!isLoggedIn || !token) {

@@ -9,6 +9,11 @@ import { debugLog } from '../utils/logger';
 import { PORTONE_IMP_CODE, SUBSCRIPTION_AMOUNT, SUBSCRIPTION_PRICE_LABEL } from '../constants/subscription';
 import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
+/**
+ * PLUS 멤버십 업그레이드 화면입니다.
+ * 웹에서 포트원 결제창(카카오페이 테스트)으로 결제한 뒤, 백엔드에 결제 검증을 요청해 등급을 올립니다.
+ * 앱(iOS/Android) 결제는 아직 지원하지 않습니다.
+ */
 export default function UpgradeScreen({ onBack, onSuccess }) {
     const { user, token, isLoggedIn, refreshUser } = useAuth();
     const [loading, setLoading] = useState(false);
@@ -40,6 +45,7 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
         }
     }, []);
 
+    // 결제 버튼: 로그인/플랫폼/SDK 준비 상태를 확인한 뒤 결제창을 띄웁니다.
     const handlePayment = () => {
         if (!isLoggedIn || !token) {
             Alert.alert("로그인 필요", "멤버십 업그레이드는 로그인 후 가능합니다.");
@@ -59,6 +65,7 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
 
         IMP.init(PORTONE_IMP_CODE);
 
+        // 주문 번호(현재 시각 기반으로 중복 방지)
         const merchantUid = `mid_${new Date().getTime()}`;
 
         IMP.request_pay({

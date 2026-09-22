@@ -15,12 +15,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link PaymentController} 테스트입니다.
+ */
 class PaymentControllerTest {
 
     private final PaymentService paymentService = mock(PaymentService.class);
     private final AuthenticatedUserProvider authenticatedUserProvider = mock(AuthenticatedUserProvider.class);
     private final PaymentController controller = new PaymentController(paymentService, authenticatedUserProvider);
 
+    // 결제 검증 성공 시 PLUS 등급 응답을 반환하고, 서비스에 인증 사용자 ID를 넘겨야 합니다.
     @Test
     void successfulPaymentVerificationReturnsPlusGrade() {
         PaymentRequestDto request = new PaymentRequestDto();
@@ -41,6 +45,7 @@ class PaymentControllerTest {
         verify(paymentService).verifyAndSavePayment("imp_123", "mid_123", 1L);
     }
 
+    // 결제 검증 실패 예외는 컨트롤러가 삼키지 않고 그대로 전파해야 합니다.
     @Test
     void validationFailureIsPropagatedToGlobalExceptionHandler() {
         PaymentRequestDto request = new PaymentRequestDto();
@@ -57,6 +62,7 @@ class PaymentControllerTest {
                 .hasMessage("결제 고유번호가 누락되었습니다.");
     }
 
+    // 요청 본문이 없으면 인증 조회나 서비스 호출 전에 거부해야 합니다.
     @Test
     void nullPaymentRequestIsRejectedBeforeAuthAndServiceCall() {
         // 요청 body 자체가 없으면 인증 조회나 외부 결제 검증을 시작할 이유가 없습니다.

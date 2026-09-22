@@ -38,6 +38,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * 건강 프로필 API 보안 규칙 테스트입니다.
+ */
 @WebMvcTest(HealthProfileController.class)
 @Import({
         SecurityConfig.class,
@@ -66,6 +69,7 @@ class HealthProfileSecurityTest {
     @MockBean
     private UserRepository userRepository;
 
+    // 게스트는 건강 프로필을 조회할 수 없어야 합니다.
     @Test
     void guestCannotReadHealthProfile() throws Exception {
         mockMvc.perform(get("/api/users/me/health-profile"))
@@ -79,6 +83,7 @@ class HealthProfileSecurityTest {
         verifyNoInteractions(healthProfileRepository);
     }
 
+    // 게스트는 건강 프로필을 저장할 수 없어야 합니다.
     @Test
     void guestCannotSaveHealthProfile() throws Exception {
         mockMvc.perform(put("/api/users/me/health-profile")
@@ -94,6 +99,7 @@ class HealthProfileSecurityTest {
         verifyNoInteractions(healthProfileRepository);
     }
 
+    // 로그인 사용자는 정리된 값으로 건강 프로필을 저장할 수 있어야 합니다.
     @Test
     void authenticatedUserCanSaveCleanedHealthProfile() throws Exception {
         when(healthProfileRepository.findByUserId(1L)).thenReturn(Optional.empty());
@@ -125,6 +131,7 @@ class HealthProfileSecurityTest {
         assertThat(captor.getValue().getAllergies()).containsExactly("수박", "복숭아");
     }
 
+    // 항목이 너무 길면 로그인 사용자에게도 400 JSON 오류를 반환해야 합니다.
     @Test
     void authenticatedUserGetsJsonErrorWhenProfileItemIsTooLong() throws Exception {
         mockMvc.perform(put("/api/users/me/health-profile")
@@ -139,6 +146,7 @@ class HealthProfileSecurityTest {
                 .andExpect(jsonPath("$.path").value("/api/users/me/health-profile"));
     }
 
+    // 테스트용 로그인 사용자(ID 1, ROLE_USER) 인증 정보를 만듭니다.
     private UsernamePasswordAuthenticationToken userAuthentication() {
         return new UsernamePasswordAuthenticationToken(
                 "1",

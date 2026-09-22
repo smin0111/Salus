@@ -8,6 +8,10 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 
+/**
+ * 커뮤니티 게시글 작성 요청 DTO입니다.
+ * {@code @NotBlank}, {@code @Size} 규칙은 컨트롤러의 {@code @Valid}에 의해 자동으로 검사됩니다.
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

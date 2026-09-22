@@ -1,8 +1,13 @@
+// 건강 프로필 화면에서 쓰는 섹션 정의와 값 정리 함수 모음입니다.
+
+// 건강 프로필의 항목 키(백엔드 HealthProfileDto 필드 이름과 같음)
 export const PROFILE_KEYS = ['allergies', 'chronicConditions', 'dietaryRestrictions', 'medications', 'goals'];
 
+// 항목당 최대 개수와 최대 글자 수(백엔드 검증 기준과 같음)
 export const MAX_PROFILE_ITEMS = 30;
 export const MAX_PROFILE_ITEM_LENGTH = 80;
 
+// 화면에 표시할 섹션 정보(제목, 아이콘, 강조 색 톤, 설명 문구)
 export const PROFILE_SECTIONS = [
   {
     key: 'allergies',
@@ -56,6 +61,7 @@ export const PROFILE_SECTIONS = [
   },
 ];
 
+// 문자열 목록의 공백을 정리하고, 빈 값과 대소문자만 다른 중복 값을 제거합니다.
 export const compactStringList = values => {
   if (!Array.isArray(values)) return [];
   const seen = new Set();
@@ -70,11 +76,13 @@ export const compactStringList = values => {
     });
 };
 
+// 프로필의 모든 항목을 정리된 목록으로 바꿉니다(없는 항목은 빈 배열).
 export const normalizeHealthProfile = (profile = {}) => PROFILE_KEYS.reduce((next, key) => {
   next[key] = compactStringList(profile[key]);
   return next;
 }, {});
 
+// 입력 완료된 섹션 수, 전체 항목 수, 진행률(0~1)을 계산합니다.
 export const getProfileStats = profile => {
   const normalized = normalizeHealthProfile(profile);
   const completedSections = PROFILE_KEYS.filter(key => normalized[key].length > 0).length;

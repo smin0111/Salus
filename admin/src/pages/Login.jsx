@@ -3,6 +3,11 @@ import { AlertTriangle, KeyRound, Shield } from 'lucide-react';
 import config from '../config';
 import SalusLogo from '../components/SalusLogo';
 
+/**
+ * 관리자 로그인 화면입니다.
+ * 아이디/비밀번호 대신 ADMIN 권한이 있는 JWT를 직접 입력하고,
+ * 백엔드 auth-check API로 권한을 확인한 뒤에만 onLogin을 호출합니다.
+ */
 const Login = ({ onLogin, authNotice = '' }) => {
     const [token, setToken] = useState('');
     const [error, setError] = useState('');
@@ -11,6 +16,7 @@ const Login = ({ onLogin, authNotice = '' }) => {
     const normalizedToken = token.trim();
     const tokenNotice = 'ADMIN 권한 JWT만 입력하세요. 운영 토큰은 공유하거나 문서에 남기지 마세요.';
 
+    // 폼 제출: 토큰 권한 확인(401/403은 권한 없음, 그 밖의 실패는 연결 문제로 안내)
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!normalizedToken || submitting) {
@@ -119,6 +125,7 @@ const Login = ({ onLogin, authNotice = '' }) => {
                         </div>
                     )}
 
+                    {/* 입력 오류가 없을 때만 세션 만료 안내(App에서 전달)를 보여 줍니다. */}
                     {!error && authNotice && (
                         <div style={{
                             display: 'flex',

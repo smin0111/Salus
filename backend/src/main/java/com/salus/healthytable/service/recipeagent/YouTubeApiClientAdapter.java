@@ -15,6 +15,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * YouTube Data API v3(search, videos)를 호출하는 어댑터입니다.
+ * API 키가 없거나 호출이 실패하면 예외 대신 빈 목록을 반환해, YouTube 출처 없이도 전체 흐름이 계속되게 합니다.
+ */
 @Slf4j
 @Component
 class YouTubeApiClientAdapter implements YouTubeSearchPort, YouTubeVideoMetadataPort {
@@ -24,6 +28,7 @@ class YouTubeApiClientAdapter implements YouTubeSearchPort, YouTubeVideoMetadata
     private final WebClient webClient;
     private final String apiKey;
 
+    // 스프링용 생성자(실제 YouTube API 주소 사용)와, 테스트에서 가짜 서버 주소를 넣는 생성자입니다.
     @Autowired
     YouTubeApiClientAdapter(
             WebClient.Builder webClientBuilder,
@@ -38,6 +43,7 @@ class YouTubeApiClientAdapter implements YouTubeSearchPort, YouTubeVideoMetadata
         this.apiKey = apiKey == null ? "" : apiKey.trim();
     }
 
+    // 검색어로 영상을 검색합니다. 자막 선호 시 자막이 있는 영상만 요청합니다.
     @Override
     public List<YouTubeVideoSearchResult> search(YouTubeRecipeSearchQuery query) {
         if (apiKey.isBlank() || query == null || query.query() == null || query.query().isBlank()) {
@@ -87,6 +93,7 @@ class YouTubeApiClientAdapter implements YouTubeSearchPort, YouTubeVideoMetadata
         }
     }
 
+    // 영상 ID 목록(중복 제거, 최대 50개)으로 설명, 길이, 통계 등 상세 정보를 한 번에 조회합니다.
     @Override
     public List<YouTubeVideoMetadata> findByVideoIds(List<String> videoIds) {
         List<String> distinctIds = videoIds == null ? List.<String>of() : videoIds.stream()
@@ -126,6 +133,7 @@ class YouTubeApiClientAdapter implements YouTubeSearchPort, YouTubeVideoMetadata
         }
     }
 
+    // API 응답 항목을 내부 메타데이터 record로 변환합니다. 숫자 통계는 문자열로 오므로 Long으로 바꿉니다.
     private YouTubeVideoMetadata toMetadata(YouTubeVideoItem item) {
         YouTubeSnippet snippet = item.snippet();
         YouTubeContentDetails contentDetails = item.contentDetails();
@@ -187,6 +195,7 @@ class YouTubeApiClientAdapter implements YouTubeSearchPort, YouTubeVideoMetadata
         return value == null || value.isBlank() ? fallback : value.trim();
     }
 
+    // 아래 record들은 YouTube API 응답 JSON 구조 중 필요한 필드만 매핑합니다.
     @JsonIgnoreProperties(ignoreUnknown = true)
     record YouTubeSearchResponse(List<YouTubeSearchItem> items) {
     }

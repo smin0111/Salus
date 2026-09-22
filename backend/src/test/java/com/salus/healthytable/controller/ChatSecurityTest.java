@@ -41,6 +41,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * 채팅 API 보안 규칙 테스트입니다(실제 SecurityConfig 적용, 서비스는 Mock).
+ */
 @WebMvcTest(ChatController.class)
 @Import({
         SecurityConfig.class,
@@ -82,6 +85,7 @@ class ChatSecurityTest {
     @MockBean
     private UserRepository userRepository;
 
+    // 게스트도 채팅 메시지는 보낼 수 있어야 합니다(비동기 응답).
     @Test
     void guestCanSendChatMessage() throws Exception {
         when(authenticatedUserProvider.getCurrentUserId()).thenReturn(Optional.empty());
@@ -99,6 +103,7 @@ class ChatSecurityTest {
                 .andExpect(jsonPath("$.reply").value("안녕하세요."));
     }
 
+    // 게스트는 채팅방 목록을 볼 수 없고 401 JSON 오류를 받아야 합니다.
     @Test
     void guestCannotReadChatSessions() throws Exception {
         mockMvc.perform(get("/api/chat/sessions"))
@@ -112,6 +117,7 @@ class ChatSecurityTest {
         verifyNoInteractions(chatSessionRepository);
     }
 
+    // 게스트는 음성 파일 업로드(STT)를 할 수 없어야 합니다.
     @Test
     void guestCannotUploadSpeechAudio() throws Exception {
         MockMultipartFile audio = new MockMultipartFile(

@@ -30,6 +30,9 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+/**
+ * {@link CommunityController} 테스트입니다. MockMvc(standalone)로 요청 검증 흐름을 확인합니다.
+ */
 class CommunityControllerTest {
 
     private CommunityService communityService;
@@ -86,6 +89,7 @@ class CommunityControllerTest {
         verifyNoInteractions(communityPostService);
     }
 
+    // 게시글 작성 시 제목/내용 공백을 정리하고 현재 사용자 ID로 저장해야 합니다.
     @Test
     void createPostNormalizesContentAndUsesCurrentUser() throws Exception {
         CreatePostRequestDTO request = new CreatePostRequestDTO();
@@ -109,6 +113,7 @@ class CommunityControllerTest {
         assertThat(saved.getContent()).isEqualTo("본문입니다.");
     }
 
+    // 요청 본문이 없으면 서비스 호출 전에 400이어야 합니다.
     @Test
     void createPostRejectsNullBodyBeforeServiceCall() throws Exception {
         mockMvc.perform(post("/api/community/posts")
@@ -119,6 +124,7 @@ class CommunityControllerTest {
         verifyNoInteractions(communityPostService);
     }
 
+    // 레시피 공유 시 공개 범위를 대문자로 정규화하고 메시지 공백을 정리해야 합니다.
     @Test
     void shareRecipeNormalizesVisibilityAndMessage() throws Exception {
         RecipeShareRequestDTO request = new RecipeShareRequestDTO();
@@ -152,6 +158,7 @@ class CommunityControllerTest {
         verifyNoInteractions(communityService);
     }
 
+    // 댓글 작성 요청 본문이 없으면 400이어야 합니다.
     @Test
     void createCommentRejectsNullBodyBeforeServiceCall() throws Exception {
         mockMvc.perform(post("/api/community/posts/7/comments")
@@ -162,6 +169,7 @@ class CommunityControllerTest {
         verifyNoInteractions(postCommentService);
     }
 
+    // 댓글 작성 시 내용 공백을 정리하고 현재 사용자 ID를 사용해야 합니다.
     @Test
     void createCommentNormalizesContentAndUsesCurrentUser() throws Exception {
         CreateCommentRequestDTO request = new CreateCommentRequestDTO();
@@ -183,6 +191,7 @@ class CommunityControllerTest {
         assertThat(saved.getContent()).isEqualTo("댓글입니다.");
     }
 
+    // 댓글 수정 요청 본문이 없으면 400이어야 합니다.
     @Test
     void updateCommentRejectsNullBodyBeforeServiceCall() throws Exception {
         mockMvc.perform(put("/api/community/comments/3")
@@ -193,6 +202,7 @@ class CommunityControllerTest {
         verifyNoInteractions(postCommentService);
     }
 
+    // 댓글 수정 내용의 공백을 정리해야 합니다.
     @Test
     void updateCommentNormalizesContent() throws Exception {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -206,6 +216,7 @@ class CommunityControllerTest {
         verify(postCommentService).updateComment(3L, 1L, "수정 댓글");
     }
 
+    // 인기글 조회 기간 값을 소문자로 정규화해야 합니다.
     @Test
     void getPopularPostsNormalizesTimeframe() throws Exception {
         when(authenticatedUserProvider.getCurrentUserId()).thenReturn(Optional.of(1L));
@@ -219,6 +230,7 @@ class CommunityControllerTest {
         verify(communityPostService).getPopularPosts(1L, 10, "weekly");
     }
 
+    // 잘못된 조회 개수는 서비스 호출 전에 400이어야 합니다.
     @Test
     void getPopularPostsRejectsInvalidLimitBeforeServiceCall() throws Exception {
         mockMvc.perform(get("/api/community/posts/popular")
@@ -230,6 +242,7 @@ class CommunityControllerTest {
         verifyNoInteractions(communityPostService);
     }
 
+    // 잘못된 조회 기간은 서비스 호출 전에 400이어야 합니다.
     @Test
     void getPopularPostsRejectsInvalidTimeframeBeforeServiceCall() throws Exception {
         mockMvc.perform(get("/api/community/posts/popular")
@@ -241,6 +254,7 @@ class CommunityControllerTest {
         verifyNoInteractions(communityPostService);
     }
 
+    // 검색어 앞뒤 공백을 정리해야 합니다.
     @Test
     void searchPostsNormalizesKeyword() throws Exception {
         when(authenticatedUserProvider.getCurrentUserId()).thenReturn(Optional.of(1L));
@@ -253,6 +267,7 @@ class CommunityControllerTest {
         verify(communityPostService).searchPosts("수박", 1L);
     }
 
+    // 빈 검색어는 서비스 호출 전에 400이어야 합니다.
     @Test
     void searchPostsRejectsBlankKeywordBeforeServiceCall() throws Exception {
         mockMvc.perform(get("/api/community/posts/search")
@@ -263,6 +278,7 @@ class CommunityControllerTest {
         verifyNoInteractions(communityPostService);
     }
 
+    // 서비스의 404 예외는 그대로 404 JSON 응답이 되어야 합니다.
     @Test
     void toggleLikePropagatesServiceNotFoundException() throws Exception {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);

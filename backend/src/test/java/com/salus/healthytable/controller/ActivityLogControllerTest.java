@@ -21,6 +21,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link ActivityLogController} 테스트입니다.
+ */
 class ActivityLogControllerTest {
 
     private final ActivityLogService activityLogService = mock(ActivityLogService.class);
@@ -31,6 +34,7 @@ class ActivityLogControllerTest {
             authenticatedUserProvider,
             userRepository);
 
+    // 활동 기록 조회는 현재 사용자 기준이어야 합니다.
     @Test
     void getActivityLogsUsesCurrentUser() {
         User user = user(1L);
@@ -47,6 +51,7 @@ class ActivityLogControllerTest {
         verify(activityLogService).getActivityLogs(user);
     }
 
+    // 요청 본문의 isAi 값이 서비스에 전달되어야 합니다.
     @Test
     void logActivityUsesCurrentUserAndAiFlag() {
         User user = user(1L);
@@ -63,6 +68,7 @@ class ActivityLogControllerTest {
         verify(activityLogService).logActivity(user, true);
     }
 
+    // isAi 값이 없으면 false로 처리해야 합니다.
     @Test
     void logActivityDefaultsMissingAiFlagToFalse() {
         User user = user(1L);
@@ -78,6 +84,7 @@ class ActivityLogControllerTest {
         verify(activityLogService).logActivity(user, false);
     }
 
+    // 요청 본문 자체가 없어도 false로 처리해야 합니다.
     @Test
     void logActivityDefaultsNullBodyToFalse() {
         User user = user(1L);
@@ -93,6 +100,7 @@ class ActivityLogControllerTest {
         verify(activityLogService).logActivity(user, false);
     }
 
+    // 토큰의 사용자가 DB에 없으면 404를 반환해야 합니다.
     @Test
     void currentUserMissingFromDatabaseReturnsNotFound() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(404L);

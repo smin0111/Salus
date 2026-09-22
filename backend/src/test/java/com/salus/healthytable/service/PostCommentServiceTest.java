@@ -23,6 +23,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link PostCommentService} 테스트입니다.
+ */
 class PostCommentServiceTest {
 
     private final PostCommentRepository commentRepository = mock(PostCommentRepository.class);
@@ -35,6 +38,7 @@ class PostCommentServiceTest {
             userRepository,
             clock);
 
+    // 댓글 작성 시각은 주입한 Clock 기준이어야 합니다.
     @Test
     void creatingCommentUsesConfiguredClockForTimestamps() {
         CreateCommentRequestDTO request = new CreateCommentRequestDTO();
@@ -54,6 +58,7 @@ class PostCommentServiceTest {
         assertThat(saved.getUpdatedAt()).isEqualTo(LocalDateTime.of(2026, 7, 6, 0, 30));
     }
 
+    // 댓글 수정 시 작성 시각은 유지하고 수정 시각만 Clock 기준으로 바뀌어야 합니다.
     @Test
     void updatingCommentUsesConfiguredClockForUpdatedAt() {
         PostComment comment = new PostComment();
@@ -71,6 +76,7 @@ class PostCommentServiceTest {
         assertThat(response.getUpdatedAt()).isEqualTo(LocalDateTime.of(2026, 7, 6, 0, 30));
     }
 
+    // 없는 게시글에 댓글을 달면 404여야 합니다.
     @Test
     void creatingCommentOnMissingPostThrowsNotFound() {
         CreateCommentRequestDTO request = new CreateCommentRequestDTO();
@@ -85,6 +91,7 @@ class PostCommentServiceTest {
                 });
     }
 
+    // 다른 사용자의 댓글 수정은 403이어야 합니다.
     @Test
     void updatingAnotherUsersCommentThrowsForbidden() {
         PostComment comment = new PostComment();
@@ -99,6 +106,7 @@ class PostCommentServiceTest {
                 });
     }
 
+    // 없는 댓글 삭제는 404여야 합니다.
     @Test
     void deletingMissingCommentThrowsNotFound() {
         when(commentRepository.findById(99L)).thenReturn(Optional.empty());
@@ -110,6 +118,7 @@ class PostCommentServiceTest {
                 });
     }
 
+    // 다른 사용자의 댓글 삭제는 403이어야 합니다.
     @Test
     void deletingAnotherUsersCommentThrowsForbidden() {
         PostComment comment = new PostComment();
@@ -124,6 +133,7 @@ class PostCommentServiceTest {
                 });
     }
 
+    // 본인 댓글은 삭제되어야 합니다.
     @Test
     void deletingOwnCommentDeletesFoundComment() {
         PostComment comment = new PostComment();

@@ -13,9 +13,14 @@ import reactor.netty.http.client.HttpClient;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 외부 HTTP 호출(Ollama, 검색 API 등)에 사용할 비동기 HTTP 클라이언트 {@link WebClient}를 설정합니다.
+ * 타임아웃과 응답 버퍼 크기를 한곳에서 정해, 느린 외부 서비스 때문에 서버 스레드가 무한정 묶이지 않게 합니다.
+ */
 @Configuration
 public class WebClientConfig {
 
+    // 각 타임아웃 값은 application.properties에서 바꿀 수 있고, 없으면 콜론(:) 뒤 기본값을 사용합니다.
     @Value("${webclient.response-timeout-seconds:240}")
     private long responseTimeoutSeconds;
 

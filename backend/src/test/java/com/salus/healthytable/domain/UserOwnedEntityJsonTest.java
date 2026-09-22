@@ -5,10 +5,14 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * 사용자 소유 엔티티를 JSON으로 응답할 때 User 정보가 노출되지 않는지 확인하는 테스트입니다(@JsonIgnore 검증).
+ */
 class UserOwnedEntityJsonTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    // 식단 기록 JSON에 사용자 객체나 이메일이 포함되지 않아야 합니다.
     @Test
     void mealLogJsonDoesNotExposeUser() throws Exception {
         User user = new User();
@@ -27,6 +31,7 @@ class UserOwnedEntityJsonTest {
         assertThat(json).doesNotContain("user@example.com");
     }
 
+    // 활동 기록 JSON에 사용자 객체나 이메일이 포함되지 않아야 합니다.
     @Test
     void activityLogJsonDoesNotExposeUser() throws Exception {
         User user = new User();

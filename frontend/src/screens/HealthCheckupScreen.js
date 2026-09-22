@@ -18,11 +18,17 @@ import {
 } from '../features/health/checkupModel';
 import { color, radius, size, spacing, typography } from '../theme/tokens';
 
+// 화면 보기 전환 탭(분석 결과 / 입력)
 const VIEW_ITEMS = [
   { id: 'analysis', label: '분석 결과' },
   { id: 'input', label: '검진 수치 입력' },
 ];
 
+/**
+ * 건강검진 분석 화면입니다.
+ * - 분석 결과 탭: 최신 검진 수치와 서버 분석 결과(CheckupAnalysis)
+ * - 입력 탭: 검진 수치 입력 폼. 키/몸무게를 입력하면 BMI를 자동 계산합니다(사용자가 BMI를 직접 입력한 경우는 제외).
+ */
 export default function HealthCheckupScreen({ onToggleSidebar, onNavigate, webMode = false }) {
   const { token } = useAuth();
   const { isTablet, isDesktop } = useResponsive();
@@ -34,8 +40,10 @@ export default function HealthCheckupScreen({ onToggleSidebar, onNavigate, webMo
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [toast, setToast] = useState('');
+  // BMI를 사용자가 직접 입력했는지 여부. true면 키/몸무게가 바뀌어도 BMI를 덮어쓰지 않습니다.
   const [bmiManuallyEdited, setBmiManuallyEdited] = useState(false);
 
+  // 최신 검진과 분석 결과를 동시에 불러옵니다. 검진 기록이 없으면(204) 입력 탭으로 바로 보냅니다.
   const loadCheckup = async () => {
     if (!token) {
       setLoading(false);
@@ -80,6 +88,7 @@ export default function HealthCheckupScreen({ onToggleSidebar, onNavigate, webMo
     return () => clearTimeout(timeout);
   }, [toast]);
 
+  // 입력값을 폼에 반영하고, 키/몸무게가 바뀌면 BMI를 다시 계산합니다.
   const updateField = (key, value) => {
     if (key === 'bmi') setBmiManuallyEdited(Boolean(value));
     setForm(previous => {
@@ -92,6 +101,7 @@ export default function HealthCheckupScreen({ onToggleSidebar, onNavigate, webMo
     });
   };
 
+  // 체험용 예시 수치로 폼을 채웁니다.
   const fillDemo = () => {
     const demo = createDemoCheckupForm();
     demo.bmi = String(calculateBmi(demo.height, demo.weight));
@@ -100,11 +110,13 @@ export default function HealthCheckupScreen({ onToggleSidebar, onNavigate, webMo
     setView('input');
   };
 
+  // 입력 내용을 마지막으로 저장된 검진 값(없으면 빈 폼)으로 되돌립니다.
   const resetForm = () => {
     setForm(latest ? checkupToForm(latest) : createEmptyCheckupForm());
     setBmiManuallyEdited(Boolean(latest?.bmi));
   };
 
+  // 폼을 검증한 뒤 저장하고, 새 분석 결과를 다시 불러와 분석 탭으로 전환합니다.
   const persist = async () => {
     const validationError = validateCheckupForm(form);
     if (validationError) {

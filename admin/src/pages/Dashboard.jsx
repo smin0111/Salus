@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Activity, AlertTriangle, CreditCard, RefreshCcw, Server, Users } from 'lucide-react';
 import config from '../config';
 
+// 숫자(1,234)와 원화 금액(₩1,234) 표시용 포맷터
 const numberFormatter = new Intl.NumberFormat('ko-KR');
 const currencyFormatter = new Intl.NumberFormat('ko-KR', {
     style: 'currency',
@@ -10,11 +11,16 @@ const currencyFormatter = new Intl.NumberFormat('ko-KR', {
     maximumFractionDigits: 0,
 });
 
+/**
+ * 관리자 대시보드입니다.
+ * 사용자 수, PLUS 사용자, DAU, 매출, AI 예상 비용, 일별 결제, 서버 상태를 보여 주며 60초마다 자동으로 새로 고칩니다.
+ */
 const Dashboard = ({ adminToken, onAuthError }) => {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
+    // 통계를 불러옵니다. silent=true(자동 새로고침)면 로딩 표시 없이 조용히 갱신합니다.
     const loadStats = async ({ silent = false } = {}) => {
         if (!silent) {
             setLoading(true);
@@ -47,6 +53,7 @@ const Dashboard = ({ adminToken, onAuthError }) => {
         }
     };
 
+    // 처음 열릴 때 한 번 불러오고, 60초 간격 자동 새로고침을 등록합니다(화면을 벗어나면 타이머 해제).
     useEffect(() => {
         loadStats();
         const refreshTimer = window.setInterval(() => {
@@ -56,6 +63,7 @@ const Dashboard = ({ adminToken, onAuthError }) => {
         return () => window.clearInterval(refreshTimer);
     }, [adminToken]);
 
+    // 일별 결제 막대그래프의 기준이 되는 최대 금액
     const maxDailyAmount = useMemo(() => {
         if (!stats?.dailyPaymentStats?.length) {
             return 0;
@@ -123,6 +131,7 @@ const Dashboard = ({ adminToken, onAuthError }) => {
                     <h2 style={panelTitleStyle}>일별 결제</h2>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                         {(stats.dailyPaymentStats || []).map((item) => {
+                            // 최대 금액 대비 비율(%)로 막대 길이를 정합니다. 0원이 아니면 최소 8%로 보이게 합니다.
                             const width = maxDailyAmount > 0 ? Math.max(8, Math.round((item.amount / maxDailyAmount) * 100)) : 0;
                             return (
                                 <div key={item.date} style={{ display: 'grid', gridTemplateColumns: '64px 1fr 96px', gap: '12px', alignItems: 'center' }}>
@@ -165,6 +174,7 @@ const Dashboard = ({ adminToken, onAuthError }) => {
     );
 };
 
+// 지표 카드 하나(라벨, 아이콘, 값, 보조 설명)
 const MetricCard = ({ icon, label, value, helper }) => (
     <motion.div
         initial={{ opacity: 0, y: 8 }}
@@ -180,6 +190,7 @@ const MetricCard = ({ icon, label, value, helper }) => (
     </motion.div>
 );
 
+// 로딩/오류 상태를 보여 주는 패널(action이 있으면 "다시 시도" 버튼 표시)
 const PanelState = ({ icon, title, action }) => (
     <div style={{ ...panelStyle, display: 'flex', alignItems: 'center', gap: '12px' }}>
         <span style={{ color: 'var(--primary)' }}>{icon}</span>
@@ -192,6 +203,7 @@ const PanelState = ({ icon, title, action }) => (
     </div>
 );
 
+// 패널 공통 스타일
 const panelStyle = {
     background: 'var(--surface)',
     border: '1px solid var(--border)',

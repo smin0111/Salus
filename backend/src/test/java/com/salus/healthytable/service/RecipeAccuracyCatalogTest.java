@@ -12,8 +12,12 @@ import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * 레시피 정확도 평가용 카탈로그 파일의 구성 규칙을 확인하는 테스트입니다.
+ */
 class RecipeAccuracyCatalogTest {
 
+    // 카탈로그는 10개 카테고리에 각 10개씩, 중복 없는 100개 요리로 구성되어야 합니다.
     @Test
     void evaluationCatalogContainsOneHundredUniqueDishesAcrossTenCategories() throws Exception {
         InputStream stream = getClass().getResourceAsStream("/레시피-정확도/평가목록.tsv");
@@ -41,6 +45,7 @@ class RecipeAccuracyCatalogTest {
                 .containsExactlyInAnyOrder("김치찌개", "된장찌개", "제육볶음");
     }
 
+    // 카탈로그 JSON 항목(제목, 카테고리, 준비 상태)
     private record CatalogItem(String title, String category, String status) {
     }
 }

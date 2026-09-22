@@ -40,6 +40,10 @@ public class ExpiryDateCalculator {
         return calculateExpiryDate(category, Clock.systemDefaultZone());
     }
 
+    /**
+     * 주입받은 Clock 기준으로 유통기한 날짜를 계산합니다.
+     * 테스트에서는 고정된 Clock을 넘겨 "오늘"을 원하는 날짜로 만들 수 있습니다.
+     */
     public static LocalDate calculateExpiryDate(String category, Clock clock) {
         int days = getDaysForCategory(category);
         return LocalDate.now(requireClock(clock)).plusDays(days);
@@ -55,10 +59,12 @@ public class ExpiryDateCalculator {
         return getDaysUntilExpiry(expiryDate, Clock.systemDefaultZone());
     }
 
+    // 주입받은 Clock 기준으로 유통기한까지 남은 일수를 계산합니다.
     public static long getDaysUntilExpiry(LocalDate expiryDate, Clock clock) {
         return ChronoUnit.DAYS.between(LocalDate.now(requireClock(clock)), expiryDate);
     }
 
+    // Clock이 null이면 시스템 기본 시간대의 Clock을 사용합니다.
     private static Clock requireClock(Clock clock) {
         return clock == null ? Clock.systemDefaultZone() : clock;
     }

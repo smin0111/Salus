@@ -7,6 +7,10 @@ import lombok.AllArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * 커뮤니티 게시글의 댓글 엔티티입니다(post_comments 테이블).
+ * parentId가 있으면 다른 댓글에 단 답글(대댓글)입니다.
+ */
 @Entity
 @Table(name = "post_comments")
 @Data
@@ -23,6 +27,7 @@ public class PostComment {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    // 부모 댓글 ID. 일반 댓글이면 null입니다.
     @Column(name = "parent_id")
     private Long parentId;
 
@@ -35,6 +40,7 @@ public class PostComment {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    // 저장 직전에 생성/수정 시각이 비어 있으면 현재 시각으로 채웁니다.
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now();
@@ -46,6 +52,7 @@ public class PostComment {
         }
     }
 
+    // 수정 시각이 비어 있을 때만 채웁니다. 실제 수정 시각 갱신은 서비스 코드에서 직접 설정합니다.
     @PreUpdate
     protected void onUpdate() {
         if (updatedAt == null) {

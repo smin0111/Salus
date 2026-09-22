@@ -3,6 +3,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { Ionicons } from '@expo/vector-icons';
 import { color, radius, shadow, size, spacing, typography, zIndex } from '../../theme/tokens';
 
+// 하단 탭(모바일)과 사이드바(웹)에 공통으로 보여 줄 주요 메뉴 목록
 export const PRIMARY_NAV_ITEMS = [
   { id: 'chat', label: 'AI 셰프', icon: 'sparkles-outline', activeIcon: 'sparkles' },
   { id: 'fridge', label: '냉장고', icon: 'nutrition-outline', activeIcon: 'nutrition' },
@@ -11,13 +12,19 @@ export const PRIMARY_NAV_ITEMS = [
   { id: 'my', label: 'MY', icon: 'person-circle-outline', activeIcon: 'person-circle' },
 ];
 
+// 메뉴에 직접 없는 하위 화면도 어떤 메뉴를 활성으로 표시할지 정합니다(예: 게시글 상세 → 피드 메뉴).
 const ACTIVE_ALIASES = {
   community: ['community', 'search', 'create-post', 'post-detail', 'recipe-detail'],
   my: ['my', 'health', 'health-checkup', 'account-settings', 'upgrade'],
 };
 
+// 현재 화면이 해당 메뉴(또는 그 하위 화면)인지 확인합니다.
 const isItemActive = (itemId, currentScreen) => itemId === currentScreen || ACTIVE_ALIASES[itemId]?.includes(currentScreen);
 
+/**
+ * 모바일 화면 하단 탭 내비게이션입니다.
+ * safeBottom: 아이폰 홈 인디케이터 영역만큼 아래 여백을 추가하기 위한 값
+ */
 export function BottomNavigation({ currentScreen, onNavigate, safeBottom = 0 }) {
   return (
     <View style={[styles.bottomNav, { paddingBottom: Math.max(safeBottom, 6), height: size.bottomNav + Math.max(safeBottom, 6) }]} accessibilityRole="tablist">
@@ -43,6 +50,10 @@ export function BottomNavigation({ currentScreen, onNavigate, safeBottom = 0 }) 
   );
 }
 
+/**
+ * 넓은 화면(웹/태블릿)용 왼쪽 사이드바 내비게이션입니다.
+ * compact=true면 아이콘만 보이는 좁은 형태로 표시합니다.
+ */
 export function WebSidebar({ currentScreen, onNavigate, isLoggedIn, user, onLogout, compact = false }) {
   const userName = isLoggedIn && user?.name ? user.name : '게스트';
   return (
@@ -87,6 +98,7 @@ export function WebSidebar({ currentScreen, onNavigate, isLoggedIn, user, onLogo
   );
 }
 
+// 컴포넌트 스타일 정의
 const styles = StyleSheet.create({
   bottomNav: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-around', paddingTop: 7, paddingHorizontal: 4, backgroundColor: color.surface, borderTopWidth: 1, borderTopColor: color.borderSubtle, zIndex: zIndex.navigation, ...shadow.raised },
   bottomItem: { flex: 1, minWidth: 52, minHeight: 54, alignItems: 'center', justifyContent: 'center', gap: 2, borderRadius: radius.md },

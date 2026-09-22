@@ -18,12 +18,16 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link ActivityLogService} 테스트입니다.
+ */
 class ActivityLogServiceTest {
 
     private final ActivityLogRepository activityLogRepository = mock(ActivityLogRepository.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-05T03:00:00Z"), ZoneId.of("Asia/Seoul"));
     private final ActivityLogService service = new ActivityLogService(activityLogRepository, clock);
 
+    // 활동 기록 조회는 해당 사용자의 기록만 읽어야 합니다.
     @Test
     void getActivityLogsReadsOnlyCurrentUsersLogs() {
         User user = user(1L);
@@ -36,6 +40,7 @@ class ActivityLogServiceTest {
         verify(activityLogRepository).findByUser(user);
     }
 
+    // 오늘 기록이 없으면 새 기록을 만들어야 합니다.
     @Test
     void logActivityCreatesTodayLogForCurrentUser() {
         User user = user(1L);
@@ -51,6 +56,7 @@ class ActivityLogServiceTest {
         assertThat(saved.getHasAiInteraction()).isFalse();
     }
 
+    // 기존 기록에 AI 사용이 발생하면 hasAiInteraction을 true로 바꿔야 합니다.
     @Test
     void logActivityMarksExistingLogAsAiWhenAiInteractionOccurs() {
         User user = user(1L);
@@ -70,6 +76,7 @@ class ActivityLogServiceTest {
         verify(activityLogRepository).save(existing);
     }
 
+    // 이미 AI 사용으로 표시된 기록은 일반 활동이 와도 false로 되돌리지 않아야 합니다.
     @Test
     void logActivityDoesNotDowngradeExistingAiLog() {
         User user = user(1L);
@@ -87,6 +94,7 @@ class ActivityLogServiceTest {
         assertThat(saved.getHasAiInteraction()).isTrue();
     }
 
+    // "오늘" 날짜는 주입한 Clock의 시간대(서울) 기준으로 계산해야 합니다.
     @Test
     void logActivityUsesConfiguredClockZoneForActivityDate() {
         User user = user(1L);

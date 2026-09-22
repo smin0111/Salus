@@ -21,13 +21,18 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link JwtAuthenticationFilter} 테스트입니다.
+ */
 class JwtAuthenticationFilterTest {
 
+    // 테스트끼리 인증 정보가 섞이지 않도록 SecurityContext를 비웁니다.
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
     }
 
+    // 관리자 사용자의 토큰은 ROLE_ADMIN 권한을 받아야 합니다.
     @Test
     void authenticatedAdminTokenGetsAdminAuthority() throws Exception {
         JwtTokenProvider tokenProvider = mock(JwtTokenProvider.class);
@@ -56,6 +61,7 @@ class JwtAuthenticationFilterTest {
                 .containsExactly("ROLE_ADMIN");
     }
 
+    // role 값이 없는 예전 사용자는 ROLE_USER로 처리해야 합니다.
     @Test
     void legacyUserWithoutRoleGetsUserAuthority() throws Exception {
         JwtTokenProvider tokenProvider = mock(JwtTokenProvider.class);
@@ -82,6 +88,7 @@ class JwtAuthenticationFilterTest {
                 .containsExactly("ROLE_USER");
     }
 
+    // 같은 토큰이라도 요청마다 DB의 최신 role을 기준으로 권한을 정해야 합니다.
     @Test
     void existingTokenUsesLatestDatabaseRoleOnEachRequest() throws Exception {
         JwtTokenProvider tokenProvider = mock(JwtTokenProvider.class);
@@ -121,6 +128,7 @@ class JwtAuthenticationFilterTest {
                 .containsExactly("ROLE_USER");
     }
 
+    // 탈퇴한(DB에 없는) 사용자의 토큰은 인증되지 않아야 합니다.
     @Test
     void tokenForDeletedUserDoesNotAuthenticateUser() throws Exception {
         JwtTokenProvider tokenProvider = mock(JwtTokenProvider.class);
@@ -141,6 +149,7 @@ class JwtAuthenticationFilterTest {
         verify(userRepository).findById(7L);
     }
 
+    // 유효하지 않은 토큰은 DB 조회 없이 인증되지 않아야 합니다.
     @Test
     void invalidTokenDoesNotAuthenticateUser() throws Exception {
         JwtTokenProvider tokenProvider = mock(JwtTokenProvider.class);
@@ -159,6 +168,7 @@ class JwtAuthenticationFilterTest {
         verify(userRepository, never()).findById(anyLong());
     }
 
+    // subject가 숫자가 아닌 토큰은 인증되지 않아야 합니다.
     @Test
     void tokenWithNonNumericSubjectDoesNotAuthenticateUser() throws Exception {
         JwtTokenProvider tokenProvider = mock(JwtTokenProvider.class);

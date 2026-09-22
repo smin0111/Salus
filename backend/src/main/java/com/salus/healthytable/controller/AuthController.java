@@ -17,11 +17,20 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Map;
 
+/**
+ * 소셜 로그인(Google, Kakao, Naver) API입니다.
+ *
+ * 공통 흐름:
+ * 1) 클라이언트가 소셜 로그인 후 받은 토큰(또는 인가 코드)을 보냅니다.
+ * 2) 서버가 해당 소셜 서비스에 토큰을 다시 확인해 사용자 정보를 받습니다(위조 방지).
+ * 3) 이메일로 회원을 찾거나 새로 가입시킨 뒤, Salus 전용 JWT를 발급합니다.
+ */
 @RestController
 @RequiredArgsConstructor
 @Slf4j
 public class AuthController {
 
+    // 실패 원인과 상관없이 사용자에게는 같은 메시지를 보여 주고, 자세한 원인은 서버 로그에만 남깁니다.
     private static final String LOGIN_FAILED_MESSAGE = "소셜 로그인 인증에 실패했습니다.";
 
     private final UserRepository userRepository;
@@ -30,6 +39,9 @@ public class AuthController {
     private final com.salus.healthytable.service.OAuthService oAuthService;
     private final Clock clock;
 
+    /**
+     * Google 로그인: 클라이언트가 받은 액세스 토큰을 검증합니다.
+     */
     @PostMapping("/api/auth/google")
     public ResponseEntity<?> loginGoogle(@RequestBody LoginRequestDTO request) {
         try {
@@ -50,6 +62,10 @@ public class AuthController {
         }
     }
 
+    /**
+     * Kakao 로그인: 액세스 토큰으로 사용자 정보를 조회합니다.
+     * 이메일 제공에 동의하지 않은 사용자는 "kakao_{카카오 ID}"를 이메일 대신 식별자로 사용합니다.
+     */
     @PostMapping("/api/auth/kakao")
     @SuppressWarnings("unchecked")
     public ResponseEntity<?> loginKakao(@RequestBody LoginRequestDTO request) {
@@ -82,6 +98,10 @@ public class AuthController {
         }
     }
 
+    /**
+     * Naver 로그인: 인가 코드(code)를 액세스 토큰으로 교환한 뒤 사용자 정보를 조회합니다.
+     * state 값은 로그인 요청 위조(CSRF)를 막기 위해 필요합니다.
+     */
     @PostMapping("/api/auth/naver")
     @SuppressWarnings("unchecked")
     public ResponseEntity<?> loginNaver(@RequestBody LoginRequestDTO request) {
@@ -136,6 +156,9 @@ public class AuthController {
         return ResponseEntity.ok(UserResponseDTO.from(user));
     }
 
+    /**
+     * 이메일로 회원을 찾고, 없으면 새로 가입시킨 뒤 JWT와 회원 정보를 응답합니다.
+     */
     private ResponseEntity<?> issueLoginResponse(String email, String name) {
         User user = userRepository.findByEmail(email).orElseGet(() -> {
             User newUser = new User();
@@ -144,6 +167,7 @@ public class AuthController {
             // 가입 시각도 Clock을 통해 기록하면 테스트에서 시간값을 고정할 수 있습니다.
             // 운영에서는 app.time-zone 정책과 같은 기준으로 사용자 생성일을 해석할 수 있습니다.
             newUser.setCreatedAt(LocalDateTime.now(clock));
+            // 소셜 로그인 전용 회원이라 비밀번호는 사용하지 않습니다.
             newUser.setPassword("");
             return userRepository.save(newUser);
         });
@@ -157,6 +181,7 @@ public class AuthController {
                 "user", UserResponseDTO.from(user)));
     }
 
+    // 예외 메시지에는 민감한 정보가 섞일 수 있어, 로그에는 예외 클래스 이름만 남깁니다.
     private ResponseEntity<Map<String, Object>> unauthorizedLoginResponse(String provider, String path, Exception exception) {
         return unauthorizedLoginResponse(provider, path, "exception_" + exception.getClass().getSimpleName());
     }
@@ -166,6 +191,7 @@ public class AuthController {
         return apiError(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", LOGIN_FAILED_MESSAGE, path);
     }
 
+    // 값이 비어 있으면 로그인 실패 예외를 던집니다. reason은 로그에 남길 실패 원인 코드입니다.
     private String requireText(Object value, String reason) {
         String text = optionalText(value, "");
         if (text.isBlank()) {
@@ -174,6 +200,7 @@ public class AuthController {
         return text;
     }
 
+    // 값이 비어 있으면 기본값(fallback)을 반환합니다.
     private String optionalText(Object value, String fallback) {
         if (value == null) {
             return fallback;
@@ -190,6 +217,7 @@ public class AuthController {
                 "path", path));
     }
 
+    // 로그인 실패 원인 코드를 담아 catch 블록까지 전달하기 위한 내부 전용 예외입니다.
     private static class OAuthLoginException extends RuntimeException {
         private final String reason;
 

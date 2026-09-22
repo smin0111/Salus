@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class OllamaModelDefaultTest {
 
+    // application.properties와 지정한 환경 변수 값으로 스프링 Environment를 만듭니다.
     private StandardEnvironment environmentWith(Map<String, Object> overrides) throws Exception {
         Properties properties = new Properties();
         try (InputStream input = new ClassPathResource("application.properties").getInputStream()) {

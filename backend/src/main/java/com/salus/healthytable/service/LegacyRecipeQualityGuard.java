@@ -2,9 +2,16 @@ package com.salus.healthytable.service;
 
 import org.springframework.stereotype.Component;
 
+/**
+ * 이전 버전의 레시피 답변 품질 보정 규칙을 모아 둔 클래스입니다.
+ *
+ * RecipeResponseSanitizer.applyRecipeQualityGuards와 거의 같은 규칙에, 무가열 메뉴의 불필요한 문구 제거가 추가되어 있습니다.
+ * 참고: 현재 main/test 코드 어디에서도 이 클래스를 참조하지 않습니다.
+ */
 @Component
 public class LegacyRecipeQualityGuard {
 
+    // 답변 텍스트에 품질 보정 규칙을 순서대로 적용합니다. 규칙 설명은 RecipeResponseSanitizer.applyRecipeQualityGuards를 참고하세요.
     public String apply(String reply, String title) {
         if (reply == null || reply.isBlank()) {
             return "";
@@ -100,6 +107,7 @@ public class LegacyRecipeQualityGuard {
                 .trim();
     }
 
+    // 무가열 메뉴 답변에 자동으로 붙은 "불은 사용하지 않습니다" 류의 안내 문장을 제거합니다.
     private String removeNoHeatRecipeArtifacts(String text) {
         if (text == null || text.isBlank()) {
             return "";
@@ -114,6 +122,7 @@ public class LegacyRecipeQualityGuard {
                 .trim();
     }
 
+    // 음료/차가운 음식 표현은 있고 가열 표현은 없으면 무가열 메뉴 답변으로 봅니다.
     private boolean looksLikeNoHeatRecipeText(String text) {
         String normalized = nullToBlank(text);
         boolean beverageOrColdFood = containsTextAny(normalized,

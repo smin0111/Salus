@@ -13,15 +13,20 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * {@link AuthenticatedUserProvider} 테스트입니다.
+ */
 class AuthenticatedUserProviderTest {
 
     private final AuthenticatedUserProvider provider = new AuthenticatedUserProvider();
 
+    // 테스트끼리 인증 정보가 섞이지 않도록 SecurityContext를 비웁니다.
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
     }
 
+    // 인증된 principal의 사용자 ID를 반환해야 합니다.
     @Test
     void returnsCurrentUserIdFromAuthenticatedPrincipal() {
         SecurityContextHolder.getContext().setAuthentication(
@@ -31,6 +36,7 @@ class AuthenticatedUserProviderTest {
         assertThat(provider.requireUserId()).isEqualTo(42L);
     }
 
+    // 익명 사용자는 로그인하지 않은 것으로 보고, requireUserId는 401 예외를 던져야 합니다.
     @Test
     void anonymousUserIsNotAuthenticatedForApplicationUse() {
         SecurityContextHolder.getContext().setAuthentication(
@@ -43,6 +49,7 @@ class AuthenticatedUserProviderTest {
                 .hasMessageContaining("로그인이 필요합니다");
     }
 
+    // 숫자가 아닌 principal은 무시해야 합니다.
     @Test
     void malformedPrincipalIsIgnored() {
         SecurityContextHolder.getContext().setAuthentication(

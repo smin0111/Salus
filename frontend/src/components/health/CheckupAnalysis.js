@@ -5,8 +5,10 @@ import { Button, Card, Chip, EmptyState, SectionHeader } from '../common';
 import { SNAPSHOT_GROUPS } from '../../features/health/checkupModel';
 import { color, radius, spacing, typography } from '../../theme/tokens';
 
+// 배열이면 빈 값을 걸러 반환하고, 배열이 아니면 빈 배열을 반환합니다.
 const list = value => Array.isArray(value) ? value.filter(Boolean) : [];
 
+// 최근 검진 주요 수치를 항목별 카드(체격, 혈압, 혈당, 지질, 간 기능)로 보여 줍니다.
 export function CheckupSnapshot({ latest, wide = false }) {
   if (!latest) return null;
   return (
@@ -33,6 +35,11 @@ export function CheckupSnapshot({ latest, wide = false }) {
   );
 }
 
+/**
+ * 건강검진 분석 결과 화면 영역입니다.
+ * 검진 기록이 없으면 입력 유도 화면을, 있으면 요약/주의 항목/수치 스냅샷/추천 정책/식재료 가이드를 보여 줍니다.
+ * 의료 진단이 아니라는 안내 문구를 항상 함께 표시합니다.
+ */
 export default function CheckupAnalysis({ latest, analysis, onStartInput, onAskAi, wide = false }) {
   const risks = list(analysis?.risks);
   const policies = list(analysis?.recommendationPolicies);
