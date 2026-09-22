@@ -1,0 +1,24 @@
+{
+  "note": "검증기 v2.0을 온전히 통과해야 하는 기준 응답. 채점 체인이 정상 출력을 실패로 잡지 않는지 확인한다.",
+  "draft": {
+    "title": "김치찌개",
+    "description": "잘 익은 신김치와 돼지고기를 볶아 깊은 국물을 낸 기본 김치찌개입니다.",
+    "servings": 2,
+    "cookingTimeMinutes": 25,
+    "difficulty": 1,
+    "ingredients": [
+      {"name": "신김치", "amount": 300, "unit": "g", "preparation": "한입 크기로 썬 것"},
+      {"name": "돼지고기", "amount": 200, "unit": "g", "preparation": "한입 크기로 썬 것"},
+      {"name": "두부", "amount": 150, "unit": "g", "preparation": "1cm 두께로 썬 것"},
+      {"name": "대파", "amount": 1, "unit": "대", "preparation": "어슷 썬 것"},
+      {"name": "물", "amount": 500, "unit": "ml"},
+      {"name": "고춧가루", "amount": 1, "unit": "큰술"}
+    ],
+    "steps": [
+      {"order": 1, "instruction": "냄비에 돼지고기와 신김치를 넣고 중불에서 볶는다.", "heatLevel": "중불", "minutes": 5, "completionCue": "김치가 투명해지고 고기 겉면이 하얗게 변한 상태", "ingredientNames": ["돼지고기", "신김치"]},
+      {"order": 2, "instruction": "물을 붓고 고춧가루를 풀어 강불에서 끓인다.", "heatLevel": "강불", "minutes": 5, "completionCue": "국물이 전체적으로 끓어오르는 상태", "ingredientNames": ["물", "고춧가루"]},
+      {"order": 3, "instruction": "중약불로 줄이고 고기가 중심까지 익도록 끓인다.", "heatLevel": "중약불", "minutes": 10, "completionCue": "고기를 갈랐을 때 중심까지 익어 분홍색이 없는 상태", "ingredientNames": []},
+      {"order": 4, "instruction": "두부와 대파를 넣고 중불에서 한소끔 더 끓인다.", "heatLevel": "중불", "minutes": 3, "completionCue": "두부가 국물에 잠겨 속까지 데워진 상태", "ingredientNames": ["두부", "대파"]}
+    ]
+  }
+}

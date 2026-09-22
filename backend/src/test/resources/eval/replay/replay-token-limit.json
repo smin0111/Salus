@@ -1,0 +1,10 @@
+{
+  "note": "num_predict 한도에서 잘린 응답. thinking이 예산을 먹고 답변이 잘리던 사고(be415ea)의 감시 케이스.",
+  "response": {
+    "model": "qwen3:8b",
+    "done": true,
+    "done_reason": "length",
+    "eval_count": 900,
+    "message": {"role": "assistant", "content": "{\"title\":\"김치찌개\",\"description\":\"신김치와 돼지고기를 넣고\",\"ingredients\":[{\"name\":\"신김치\",\"amount\":300,\"unit\":\"g\"},{\"name\":\"돼지고"}
+  }
+}
