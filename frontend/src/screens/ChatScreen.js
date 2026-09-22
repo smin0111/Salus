@@ -9,8 +9,14 @@ import { useAuth } from '../context/AuthContext';
 import { debugLog } from '../utils/logger';
 import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
+/*
+ * AI 셰프 채팅 화면입니다.
+ * 사용자가 메시지를 보내면 백엔드(POST /api/chat/message)가 건강 프로필/냉장고 재료를 반영해 답변하고,
+ * 레시피가 포함되면 레시피 카드로 보여 줍니다. 로그인 사용자는 대화 세션 관리, 음성 읽기(TTS), 식단 저장을 쓸 수 있습니다.
+ */
 // 백엔드가 구조화된 recipe를 주지 못한 경우를 대비해 텍스트 레시피도 화면용으로 정리합니다.
 // AI 응답 원문을 그대로 보여주면 Markdown 기호가 말풍선에 섞여 가독성이 떨어질 수 있습니다.
+// 굵게(**), 제목(###), 목록(* ), 코드(`) 같은 Markdown 기호를 지우거나 "•"로 바꿉니다.
 const cleanAiResponse = (text) => {
     return text
         .replace(/\*\*/g, '')
@@ -23,11 +29,14 @@ const cleanAiResponse = (text) => {
 const parseRecipeFromText = (text) => {
     // 구조화된 RecipeCard가 없을 때만 fallback으로 텍스트를 파싱합니다.
     // 프론트 파서는 보조 수단이고, 안전 검증과 레시피 신뢰 판단은 백엔드에서 끝내는 것이 원칙입니다.
-    if (!text || !text.includes('[재료]') || !text.includes('[조리 순서]')) {
+    // "[재료]" 또는 "[재료 - 2인분]" 헤더와 "[조리 순서]" 헤더가 모두 있어야 레시피 텍스트로 봅니다.
+    const ingredientHeader = text?.match(/\[재료(?:\s*-\s*\d+인분)?\]/)?.[0];
+    if (!text || !ingredientHeader || !text.includes('[조리 순서]')) {
         return null;
     }
 
     const title = (text.split('\n').find(line => line.trim()) || '')
+        .replace(/\s+\d+인분\s+레시피입니다\.$/, '')
         .replace(' 레시피입니다.', '')
         .trim();
     const description = text
@@ -35,8 +44,7 @@ const parseRecipeFromText = (text) => {
         .map(line => line.trim())
         .filter(Boolean)
         .find(line => !line.includes('레시피입니다.') && !line.includes('조리 시간:') && !line.startsWith('[') && !line.startsWith('- ') && !/^\d+\./.test(line));
-    const summaryLine = text.split('\n').find(line => line.includes('조리 시간:') || line.includes('열량:') || line.includes('난이도:')) || '';
-    const ingredientsBlock = text.split('[재료]')[1]?.split('[조리 순서]')[0] || '';
+    const ingredientsBlock = text.split(ingredientHeader)[1]?.split('[조리 순서]')[0] || '';
     const stepsBlock = text.split('[조리 순서]')[1]?.split('위 내용은')[0] || '';
     const safetyBlock = text.includes('[건강 주의]')
         ? text.split('[건강 주의]')[1]?.split('[재료]')[0] || ''
@@ -55,9 +63,12 @@ const parseRecipeFromText = (text) => {
         .map(line => line.replace(/^- /, '').trim())
         .filter(Boolean);
 
-    const calories = summaryLine.match(/열량:\s*(\d+)/)?.[1];
-    const cookingTime = summaryLine.match(/조리 시간:\s*(\d+)/)?.[1];
-    const difficulty = summaryLine.match(/난이도:\s*(\d+)/)?.[1];
+    // 본문에서 인분/열량/조리 시간/난이도 숫자를 정규식으로 찾습니다. 못 찾으면 null로 둡니다(추측하지 않음).
+    const servings = text.match(/(?:^|\s|\[재료\s*-\s*|인분:\s*)(\d+)인분/)?.[1];
+    const calories = text.match(/열량:\s*(?:1인분당\s*약\s*)?(\d+)/)?.[1];
+    const cookingTime = text.match(/조리 시간:\s*(?:약\s*)?(\d+)/)?.[1];
+    const difficulty = text.match(/난이도:\s*(\d+)/)?.[1];
+    const isPerServingCalories = /열량:\s*1인분당/.test(text);
 
     return {
         title,
@@ -65,12 +76,15 @@ const parseRecipeFromText = (text) => {
         ingredients,
         steps,
         safetyNotes,
+        servings: servings ? Number(servings) : null,
         calories: calories ? Number(calories) : null,
+        caloriesPerServing: calories && isPerServingCalories ? Number(calories) : null,
         cookingTime: cookingTime ? Number(cookingTime) : null,
         difficulty: difficulty ? Number(difficulty) : null,
     };
 };
 
+// 배열의 문자열 앞뒤 공백을 지우고 빈 값은 제거합니다. 배열이 아니면 빈 배열을 반환합니다.
 const compactStringList = (values) => {
     if (!Array.isArray(values)) return [];
     return values
@@ -78,6 +92,7 @@ const compactStringList = (values) => {
         .filter(Boolean);
 };
 
+// 서버로 보낼 건강 프로필(알레르기, 질환, 식단 제한, 복용약, 목표)을 정리합니다.
 const buildHealthProfilePayload = (profile = {}) => ({
     allergies: compactStringList(profile.allergies),
     chronicConditions: compactStringList(profile.chronicConditions),
@@ -86,12 +101,14 @@ const buildHealthProfilePayload = (profile = {}) => ({
     goals: compactStringList(profile.goals),
 });
 
+// 새 대화를 시작할 때 보여 주는 첫 인사 메시지
 const initialGreeting = {
     id: 1,
     text: '안녕하세요! 건강한 식탁을 위한 Salus입니다.\n알레르기나 건강 정보를 알려주시면 더 안전한 레시피를 추천해드려요.',
     sender: 'ai'
 };
 
+// AI 답변을 20ms마다 한 글자씩 보여 주는 타자기 효과. 다 보여 주면 onComplete를 호출합니다.
 const Typewriter = ({ text, onComplete }) => {
     const [displayedText, setDisplayedText] = useState('');
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -111,12 +128,18 @@ const Typewriter = ({ text, onComplete }) => {
     return <Text style={[styles.messageText, styles.aiText]} selectable={true}>{displayedText}</Text>;
 };
 
+// 레시피 답변을 카드 형태(제목, 요약 정보, 건강 주의, 재료, 조리 순서)로 보여 주는 컴포넌트
 const RecipeMessageCard = ({ recipe }) => {
     if (!recipe) return null;
 
+    // 열량은 "1인분 기준"이 확인된 값만 1인분 칼로리로 표시하고, 기준을 모르면 "기준 미확인"을 붙입니다.
+    const servings = recipe.servings || recipe.baseServings || null;
+    const caloriesPerServing = recipe.caloriesPerServing ?? null;
     const metaItems = [
         recipe.cookingTime ? `${recipe.cookingTime}분` : null,
-        recipe.calories ? `${recipe.calories}kcal` : null,
+        servings ? `${servings}인분` : null,
+        caloriesPerServing ? `1인분 약 ${caloriesPerServing}kcal` : null,
+        !caloriesPerServing && recipe.calories ? `열량 약 ${recipe.calories}kcal · 기준 미확인` : null,
         recipe.difficulty ? `난이도 ${recipe.difficulty}` : null,
     ].filter(Boolean);
 
@@ -178,6 +201,7 @@ const RecipeMessageCard = ({ recipe }) => {
     );
 };
 
+// 레시피 카드를 보여 주기 직전에 잠깐 표시하는 "정리 중" 안내
 const RecipePreparing = () => (
     <View style={styles.recipePreparingBox}>
         <ActivityIndicator size="small" color={colors.primary} />
@@ -185,6 +209,10 @@ const RecipePreparing = () => (
     </View>
 );
 
+/**
+ * 메시지 말풍선 하나입니다. 처음 나타날 때 서서히 보이며 살짝 커지는 애니메이션을 줍니다.
+ * AI 답변이면 레시피 카드/타자기 효과/일반 텍스트 중 하나로 보여 주고, 복사·음성 읽기·식단 추가 버튼을 붙입니다.
+ */
 const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, openPlanModal, handleStreamingComplete, copiedMessageId, setCopiedMessageId }) => {
     const scaleAnim = useRef(new Animated.Value(0.95)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -206,6 +234,7 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
         ]).start();
     }, []);
 
+    // 웹 마우스 hover 애니메이션. 현재는 들어올 때/나갈 때 모두 크기 1로 설정되어 있어 눈에 보이는 변화는 없습니다.
     const handleMouseEnter = () => {
         if (Platform.OS === 'web') {
             Animated.spring(isHovered, {
@@ -226,6 +255,7 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
         }
     };
 
+    // 서버가 준 구조화 레시피를 우선 사용하고, 없으면 텍스트에서 파싱을 시도합니다.
     const recipe = item.sender === 'ai' && !item.isPreparingRecipe ? (item.recipe || parseRecipeFromText(item.text)) : null;
     const isAiRecipeLayout = item.sender === 'ai' && (recipe || item.isPreparingRecipe);
 
@@ -333,6 +363,10 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
     );
 };
 
+/**
+ * 채팅 화면 본체입니다.
+ * messages/healthProfile은 부모(AppNavigator)가 가진 상태이며, 식단 저장 결과는 setMealData로 캘린더 상태에 반영합니다.
+ */
 export default function ChatScreen({ messages, setMessages, healthProfile, setMealData, isSidebarOpen, onToggleSidebar, onLoginPress, webMode = false }) {
     const { isLoggedIn, user, token } = useAuth();
     const [inputText, setInputText] = useState('');
@@ -351,6 +385,9 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     const [renameModalVisible, setRenameModalVisible] = useState(false);
     const [editingSession, setEditingSession] = useState(null);
     const [editingSessionTitle, setEditingSessionTitle] = useState('');
+    // authEpochRef: 로그인 사용자가 바뀔 때마다 증가하는 번호
+    // requestSeqRef: 메시지 전송/새 대화/세션 삭제 때마다 증가하는 번호
+    // 응답이 도착했을 때 두 번호가 요청 시점과 다르면 오래된 응답으로 보고 버립니다.
     const flatListRef = useRef(null);
     const authEpochRef = useRef(0);
     const requestSeqRef = useRef(0);
@@ -370,6 +407,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     // 복사 상태
     const [copiedMessageId, setCopiedMessageId] = useState(null);
 
+    // 기기에서 사용할 수 있는 음성 목록 중 가장 좋은 한국어 음성을 한 번 찾아 둡니다.
     useEffect(() => {
         const findBestVoice = async () => {
             try {
@@ -433,6 +471,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     }, [isLoggedIn, token]);
 
+    // 내 대화 세션 목록을 불러옵니다(실패해도 채팅은 계속 쓸 수 있으므로 로그만 남깁니다).
     const fetchChatSessions = async () => {
         if (!token) return;
         try {
@@ -445,6 +484,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // 선택한 세션의 메시지를 불러와 화면 메시지 형식({ id, text, sender })으로 바꿉니다.
     const loadChatSession = async (sessionId) => {
         if (!token) return;
         try {
@@ -466,6 +506,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // 새 대화 시작. 진행 중인 요청의 응답이 새 대화에 끼어들지 않도록 요청 번호를 올립니다.
     const startNewChat = () => {
         requestSeqRef.current += 1;
         setChatSessionId(null);
@@ -478,12 +519,14 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // 대화 제목 수정 모달을 엽니다.
     const openRenameSession = (session) => {
         setEditingSession(session);
         setEditingSessionTitle(session.title || '');
         setRenameModalVisible(true);
     };
 
+    // 제목을 서버에 저장하고 세션 목록에서 해당 항목만 교체합니다.
     const confirmRenameSession = async () => {
         const title = editingSessionTitle.trim();
         if (!editingSession || !title) {
@@ -510,6 +553,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // 대화 삭제 확인(웹은 브라우저 confirm, 앱은 Alert)
     const confirmDeleteSession = (session) => {
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
             const confirmed = window.confirm(`'${session.title || '대화'}' 대화를 삭제할까요?`);
@@ -533,6 +577,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         );
     };
 
+    // 대화를 삭제하고, 보고 있던 대화였다면 새 대화로 전환합니다.
     const deleteSession = async (session) => {
         try {
             await axios.delete(`${config.API_BASE_URL}/chat/sessions/${session.id}`, {
@@ -550,11 +595,17 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // 요리 모드 버튼은 아직 준비 중이라 안내만 띄웁니다.
     const showCookingModeUnavailable = () => {
         Alert.alert("준비 중", "요리 모드는 안정적인 음성 인식으로 교체한 뒤 제공할 예정입니다.");
     };
 
 
+    /**
+     * 메시지를 보내고 AI 답변을 받아 화면에 추가합니다.
+     * text를 넘기면 그 문장을, 아니면 입력창 내용을 보냅니다.
+     * 요청 시점의 authEpoch/requestSeq를 저장해 두었다가, 응답 도착 시 값이 바뀌었으면 그 응답을 버립니다.
+     */
     const sendMessage = async (text = null) => {
         const messageText = typeof text === 'string' ? text : inputText;
         if (!messageText.trim()) return;
@@ -615,6 +666,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 return;
             }
 
+            // 서버 응답 예: { reply, sessionId, recipe(레시피일 때), mealSaved(대화 중 식단 저장이 처리됐을 때) }
             const rawAiText = response.data.reply;
             const cleanedText = cleanAiResponse(rawAiText);
             if (response.data.sessionId) {
@@ -636,6 +688,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 return [...nextMessages, aiMessage];
             });
 
+            // 레시피 답변은 "정리 중" 표시를 650ms 보여 준 뒤 레시피 카드로 바꿉니다.
             if (response.data.recipe) {
                 setTimeout(() => {
                     setMessages(prev => prev.map(message =>
@@ -666,6 +719,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // 웹: Enter는 전송, Shift+Enter는 줄바꿈
     const handleKeyPress = (e) => {
         if (Platform.OS === 'web') {
             // IME 조합 중이면 전송 방지 (중복 전송 버그 해결)
@@ -678,16 +732,19 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // 메시지가 추가되면 목록 맨 아래로 스크롤합니다.
     useEffect(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
     }, [messages]);
 
+    // 타자기 효과가 끝난 메시지는 isTyping을 false로 바꿔 버튼들이 보이게 합니다.
     const handleStreamingComplete = (messageId) => {
         setMessages(prev => prev.map(msg =>
             msg.id === messageId ? { ...msg, isTyping: false } : msg
         ));
     };
 
+    // 음성 읽기(TTS) 토글. 같은 메시지를 다시 누르면 멈추고, 다른 메시지를 누르면 이전 읽기를 멈춘 뒤 새로 읽습니다.
     const speak = (text, id) => {
         if (!isLoggedIn) {
             Alert.alert("멤버십 기능", "음성 듣기 기능은 로그인 후 이용 가능합니다.");
@@ -720,6 +777,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // 대화 중 식단 저장이 처리된 경우, 아직 저장 표시가 없는 가장 최근 AI 메시지에 "저장됨" 표시를 합니다.
     const markLatestAiRecipeSaved = (messageList) => {
         const latestRecipeIndex = [...messageList]
             .map((message, index) => ({ message, index }))
@@ -735,6 +793,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         );
     };
 
+    // "식단에 추가" 모달을 엽니다. 메뉴 이름은 레시피 제목(없으면 첫 줄)을 30자 이내로 줄여 기본값으로 넣습니다.
     const openPlanModal = (message) => {
         const text = message.text;
         const recipe = message.recipe || parseRecipeFromText(text);
@@ -749,6 +808,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         setModalVisible(true);
     };
 
+    // 선택한 날짜/끼니로 식단 기록을 저장하고, 캘린더 화면 상태(mealData)에도 바로 반영합니다.
     const confirmAddToPlan = async () => {
 
 
@@ -757,6 +817,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             return;
         }
 
+        // "YYYY-MM-DD" 날짜 키. 참고: toISOString()은 UTC 기준이라 한국 시간 오전 9시 이전에는 전날 날짜가 될 수 있습니다.
         const dateKey = targetDate.toISOString().split('T')[0];
 
         // "120kcal", "120 kcal", "120 칼로리" 형식 탐색
@@ -819,6 +880,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // FlatList가 메시지 한 개를 그릴 때 사용하는 함수
     const renderItem = ({ item }) => (
         <AnimatedMessageBubble
             item={item}
@@ -891,6 +953,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 </View>
             </View>}
 
+            {/* 대화 세션 바: 새 대화 버튼 + 이전 대화 목록(열기, 이름 변경, 삭제) */}
             {isLoggedIn && (
                 <View style={[styles.sessionBar, webMode && styles.webSessionBar]}>
                     <TouchableOpacity
@@ -1010,6 +1073,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
                 style={styles.inputContainerWrapper}
             >
+                {/* 냉장고 재료 사용 토글(로그인 시), 입력창, 음성 입력(준비 중), 전송 버튼 */}
                 <View style={styles.inputFloatingContainer}>
                     <View style={styles.inputWrapper}>
                         {isLoggedIn && (
@@ -1049,6 +1113,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                             onKeyPress={handleKeyPress}
                             multiline={true}
                             numberOfLines={1}
+                            // 입력 내용 높이에 맞춰 입력창 높이를 늘립니다(최대 120).
                             onContentSizeChange={(e) => {
                                 const height = e.nativeEvent.contentSize.height;
                                 const baseHeight = Platform.OS === 'web' ? 26 : 36;
@@ -1077,6 +1142,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 </View>
             </KeyboardAvoidingView>
 
+            {/* 대화 제목 수정 모달 */}
             <Modal
                 animationType="slide"
                 transparent={true}
@@ -1115,6 +1181,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 </View>
             </Modal>
 
+            {/* 식단 기록 모달: 메뉴 이름, 날짜(오늘/내일), 끼니(아침/점심/저녁) 선택 */}
             <Modal
                 animationType="slide"
                 transparent={true}

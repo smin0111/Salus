@@ -8,12 +8,19 @@ import config from '../config';
 import { useAuth } from '../context/AuthContext';
 import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
+/**
+ * 레시피 상세 화면입니다.
+ * 대표 이미지, 제목/요약 지표(조리 시간, 인분, 칼로리, 난이도, 평점), 재료, 조리 순서를 보여 주고
+ * 로그인 사용자는 레시피를 커뮤니티에 공유할 수 있습니다.
+ * 재료/조리 순서가 없고 전체 본문(fullText)만 있는 레시피는 본문을 그대로 보여 줍니다.
+ */
 export default function RecipeDetailScreen({ recipe, onBack }) {
     const { token, isLoggedIn } = useAuth();
     const [shareModalVisible, setShareModalVisible] = useState(false);
     const [shareMessage, setShareMessage] = useState('');
     const [sharing, setSharing] = useState(false);
 
+    // 레시피 데이터가 없으면(잘못된 이동 등) 뒤로가기 버튼과 안내만 보여 줍니다.
     if (!recipe) {
         return (
             <View style={styles.container}>
@@ -40,9 +47,15 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
     const steps = toStringList(recipe.steps);
     const fullText = typeof recipe.fullText === 'string' ? recipe.fullText.trim() : '';
     const hasStructuredRecipe = ingredients.length > 0 || steps.length > 0;
+    // 데이터 출처(홈 예시, 채팅 결과, 커뮤니티)마다 필드 이름이 달라 여러 이름을 순서대로 확인합니다.
     const heroImage = recipe.image || recipe.imageUrl;
     const canShareRecipe = recipe.shareable !== false && Boolean(recipe.id);
+    const servings = recipe.servings || recipe.baseServings || null;
+    const caloriesPerServing = recipe.caloriesPerServing ?? null;
+    const cookingTime = recipe.time || recipe.cookingTime || null;
+    const rating = recipe.rating || recipe.averageRating || null;
 
+    // 공유 모달 열기: id가 없는 예시 레시피나 비로그인 상태에서는 안내만 띄웁니다.
     const openShareModal = () => {
         if (!canShareRecipe) {
             Alert.alert('공유 불가', '이 레시피는 홈 화면 예시라서 커뮤니티에 공유할 수 없습니다.');
@@ -57,6 +70,7 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
         setShareModalVisible(true);
     };
 
+    // 입력한 메시지와 함께 레시피를 커뮤니티에 전체 공개로 공유합니다.
     const handleShare = async () => {
         if (!isLoggedIn || !token) {
             Alert.alert('로그인 필요', '레시피 공유는 로그인 후 사용할 수 있습니다.');
@@ -127,18 +141,30 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
                     {!!recipe.description && <Text style={styles.description}>{recipe.description}</Text>}
 
                     <View style={styles.statsRow}>
-                        <View style={styles.stat}>
+                        {!!cookingTime && <View style={styles.stat}>
                             <Ionicons name="time-outline" size={18} color={colors.primary} />
-                            <Text style={styles.statText}>{recipe.time || recipe.cookingTime || 20}분</Text>
-                        </View>
-                        <View style={styles.stat}>
+                            <Text style={styles.statText}>{cookingTime}분</Text>
+                        </View>}
+                        {!!servings && <View style={styles.stat}>
+                            <Ionicons name="people-outline" size={18} color={colors.primary} />
+                            <Text style={styles.statText}>{servings}인분</Text>
+                        </View>}
+                        {!!caloriesPerServing && <View style={styles.stat}>
                             <Ionicons name="flame-outline" size={18} color={colors.primary} />
-                            <Text style={styles.statText}>{recipe.calories || 400} kcal</Text>
-                        </View>
-                        <View style={styles.stat}>
+                            <Text style={styles.statText}>1인분 약 {caloriesPerServing} kcal</Text>
+                        </View>}
+                        {!caloriesPerServing && !!recipe.calories && <View style={styles.stat}>
+                            <Ionicons name="flame-outline" size={18} color={colors.primary} />
+                            <Text style={styles.statText}>약 {recipe.calories} kcal · 기준 미확인</Text>
+                        </View>}
+                        {!!recipe.difficulty && <View style={styles.stat}>
+                            <Ionicons name="speedometer-outline" size={18} color={colors.primary} />
+                            <Text style={styles.statText}>난이도 {recipe.difficulty}</Text>
+                        </View>}
+                        {!!rating && <View style={styles.stat}>
                             <Ionicons name="star" size={18} color={colors.warning} />
-                            <Text style={styles.statText}>{recipe.rating || recipe.averageRating || 4.5}</Text>
-                        </View>
+                            <Text style={styles.statText}>{rating}</Text>
+                        </View>}
                     </View>
                 </View>
 
@@ -225,6 +251,8 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
     );
 }
 
+// 배열이면 그대로, JSON 배열 문자열이면 파싱한 배열로, 그 밖의 문자열이면 한 줄짜리 배열로 바꿉니다.
+// 비어 있거나 문자열이 아니면 빈 배열을 반환합니다.
 const toStringList = (value) => {
     if (Array.isArray(value)) {
         return value;
@@ -323,7 +351,8 @@ const styles = StyleSheet.create({
     },
     statsRow: {
         flexDirection: 'row',
-        gap: 20,
+        flexWrap: 'wrap',
+        gap: 10,
     },
     stat: {
         flexDirection: 'row',

@@ -8,6 +8,7 @@ import config from '../config';
 import SubscriptionModal from './SubscriptionModal';
 import { SalusLogoMark } from './SalusLogo';
 
+// 사이드바 메뉴 목록(id는 AppNavigator의 화면 이름과 같음)
 const MENU_ITEMS = [
     { id: 'chat', label: 'AI 채팅', icon: 'chatbubbles' },
     { id: 'community', label: '커뮤니티', icon: 'people' },
@@ -23,6 +24,10 @@ import { useAuth } from '../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
+/**
+ * 모바일에서 햄버거 메뉴로 여는 슬라이드형 사이드바입니다.
+ * 사용자 정보, 화면 이동 메뉴, PLUS 업그레이드 배너, 로그인/로그아웃을 제공합니다.
+ */
 export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) {
     const insets = useSafeAreaInsets();
     const { user, token, isLoggedIn, logout, refreshUser } = useAuth();
@@ -93,7 +98,7 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                             </TouchableOpacity>
                         ))}
 
-                        {/* Premium CTA Banner */}
+                        {/* 프리미엄(PLUS) 업그레이드 유도 배너: 로그인했지만 PLUS가 아닌 사용자에게만 표시 */}
                         {isLoggedIn && user?.grade !== 'PLUS' && (
                             <TouchableOpacity
                                 style={styles.premiumBanner}
@@ -133,11 +138,12 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel="메뉴 닫기" style={styles.overlayTouch} onPress={onClose} />
             </View>
 
-            {/* Subscription Modal */}
+            {/* 구독 결제 모달 */}
             <SubscriptionModal
                 visible={subscriptionModalVisible}
                 onClose={() => setSubscriptionModalVisible(false)}
                 user={user}
+                // 결제창에서 결제가 끝나면 서버에 결제 검증을 요청합니다. 검증에 성공해야 PLUS 등급이 적용됩니다.
                 onSubscribe={async (impUid, merchantUid) => {
                     setSubscriptionModalVisible(false);
                     if (!token) {
