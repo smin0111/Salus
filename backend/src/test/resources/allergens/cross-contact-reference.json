@@ -1,0 +1,744 @@
+{
+  "scope": "WEB_VERIFIED_STRICT",
+  "provenance": "사용자 제공 원본 Excel Accepted_20!I2:I21의 웹 라벨 전사 Reference. 실물 검증 아님. 작성자 설명은 raw와 분리. S020 버전 충돌 미해결.",
+  "sourceWorkbook": "Salus_Strict_Web_Reference_20_2026-09-09.xlsx",
+  "sourceSha256": "ad5e41e3c8366dd9b45571186f3ad95683e93395a48bb4c639b9cb283213d8fb",
+  "cases": [
+    {
+      "id": "S001",
+      "gtin": "8801115114154",
+      "productName": "서울우유",
+      "source": {
+        "workbookCell": "Accepted_20!I2",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "별도 교차접촉 문구 표시 없음(확인 라벨 기준)",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801115114154&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801115114154/details",
+        "labelImageUrl": null,
+        "referenceNote": "현행 유통 라벨의 원재료·알레르기·제조소와 동일 GTIN 판매정보 교차확인.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": null,
+        "note": "별도 교차접촉 문구 표시 없음(확인 라벨 기준)",
+        "availability": "NOT_FOUND",
+        "normalized": null,
+        "expectedState": "CROSS_CONTACT_NOT_FOUND",
+        "expectedAllergens": [],
+        "expectedExplicitChildren": {},
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": []
+      }
+    },
+    {
+      "id": "S002",
+      "gtin": "8801115134237",
+      "productName": "서울 초코우유",
+      "source": {
+        "workbookCell": "Accepted_20!I3",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "별도 교차접촉 문구 표시 없음(확인 라벨 기준)",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801115134237&strCode=4006",
+        "independentUrl": "https://www.beepscan.com/barcode/8801115134237",
+        "labelImageUrl": "https://images.emarteveryday.co.kr/images/product/8801115134237/T2VckWBCXSbFeUZF.png",
+        "referenceNote": "라벨 이미지에서 원재료·우유 함유·공장/품목보고번호를 직접 판독하고 독립 GTIN DB로 재확인.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": null,
+        "note": "별도 교차접촉 문구 표시 없음(확인 라벨 기준)",
+        "availability": "NOT_FOUND",
+        "normalized": null,
+        "expectedState": "CROSS_CONTACT_NOT_FOUND",
+        "expectedAllergens": [],
+        "expectedExplicitChildren": {},
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": []
+      }
+    },
+    {
+      "id": "S003",
+      "gtin": "8801121767122",
+      "productName": "매일 바이오 PROBIOTIC 드링킹요거트 플레인",
+      "source": {
+        "workbookCell": "Accepted_20!I4",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "대두, 계란, 복숭아, 밀을 사용한 제품과 같은 제조시설",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801121767122&strCode=4006",
+        "independentUrl": "https://www.beepscan.com/barcode/8801121767122",
+        "labelImageUrl": null,
+        "referenceNote": "현행 라벨의 원재료·우유 함유·같은 제조시설 문구와 단품 GTIN을 독립 출처에서 교차확인.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": "대두, 계란, 복숭아, 밀을 사용한 제품과 같은 제조시설",
+        "note": null,
+        "availability": "READABLE",
+        "normalized": "대두, 계란, 복숭아, 밀을 사용한 제품과 같은 제조시설",
+        "expectedState": "CROSS_CONTACT_PRESENT",
+        "expectedAllergens": [
+          "SOY",
+          "EGG",
+          "PEACH",
+          "WHEAT"
+        ],
+        "expectedExplicitChildren": {},
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": [
+          "대두",
+          "계란",
+          "복숭아",
+          "밀"
+        ]
+      }
+    },
+    {
+      "id": "S004",
+      "gtin": "8801007037783",
+      "productName": "햇반",
+      "source": {
+        "workbookCell": "Accepted_20!I5",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "별도 교차접촉 문구 표시 없음(확인 라벨 기준)",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801007037783&strCode=4006",
+        "independentUrl": "https://www.ssg.com/item/itemView.ssg?itemId=1000024049958",
+        "labelImageUrl": null,
+        "referenceNote": "단순 원재료 음성 대조군. 현행 라벨과 SSG 모델번호 8801007037783 일치.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": null,
+        "note": "별도 교차접촉 문구 표시 없음(확인 라벨 기준)",
+        "availability": "NOT_FOUND",
+        "normalized": null,
+        "expectedState": "CROSS_CONTACT_NOT_FOUND",
+        "expectedAllergens": [],
+        "expectedExplicitChildren": {},
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": []
+      }
+    },
+    {
+      "id": "S005",
+      "gtin": "8801007512259",
+      "productName": "스팸 클래식",
+      "source": {
+        "workbookCell": "Accepted_20!I6",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "알류, 대두, 밀, 우유, 닭고기, 쇠고기를 사용한 제품과 같은 제조시설",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801007512259&strCode=4006",
+        "independentUrl": "https://dept.sfcmall.com/item/itemView.ssg?itemId=1000024006397&salestrNo=1009&siteNo=6009",
+        "labelImageUrl": null,
+        "referenceNote": "현행 라벨과 SSG 모델번호 8801007512259 교차확인.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": "알류, 대두, 밀, 우유, 닭고기, 쇠고기를 사용한 제품과 같은 제조시설",
+        "note": "2.5단계 HIERARCHY_GAP 해결: 알류를 EGG_GROUP으로 보존. 원본 전사 변경 없음.",
+        "availability": "READABLE",
+        "normalized": "알류, 대두, 밀, 우유, 닭고기, 쇠고기를 사용한 제품과 같은 제조시설",
+        "expectedState": "CROSS_CONTACT_PRESENT",
+        "expectedAllergens": [
+          "EGG_GROUP",
+          "SOY",
+          "WHEAT",
+          "MILK",
+          "CHICKEN",
+          "BEEF"
+        ],
+        "expectedExplicitChildren": {},
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": [
+          "알류",
+          "대두",
+          "밀",
+          "우유",
+          "닭고기",
+          "쇠고기"
+        ]
+      }
+    },
+    {
+      "id": "S006",
+      "gtin": "8801114120958",
+      "productName": "특등급 국산콩 두부 2입 기획",
+      "source": {
+        "workbookCell": "Accepted_20!I7",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "별도 교차접촉 문구 표시 없음(확인 라벨 기준)",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801114120958&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801114120958/details",
+        "labelImageUrl": null,
+        "referenceNote": "대두 100% 제품이지만 응고제·유지까지 실제 라벨 기준으로 보존.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": null,
+        "note": "별도 교차접촉 문구 표시 없음(확인 라벨 기준)",
+        "availability": "NOT_FOUND",
+        "normalized": null,
+        "expectedState": "CROSS_CONTACT_NOT_FOUND",
+        "expectedAllergens": [],
+        "expectedExplicitChildren": {},
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": []
+      }
+    },
+    {
+      "id": "S007",
+      "gtin": "8801043035989",
+      "productName": "새우깡",
+      "source": {
+        "workbookCell": "Accepted_20!I8",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "쇠고기, 돼지고기, 토마토, 게, 닭고기, 오징어, 땅콩, 계란, 조개류(굴, 전복, 홍합 포함)를 사용한 제품과 같은 제조시설",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801043035989&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801043035989/details",
+        "labelImageUrl": null,
+        "referenceNote": "복합 알레르겐 + 교차접촉 검증용.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": "쇠고기, 돼지고기, 토마토, 게, 닭고기, 오징어, 땅콩, 계란, 조개류(굴, 전복, 홍합 포함)를 사용한 제품과 같은 제조시설",
+        "note": null,
+        "availability": "READABLE",
+        "normalized": "쇠고기, 돼지고기, 토마토, 게, 닭고기, 오징어, 땅콩, 계란, 조개류(굴, 전복, 홍합 포함)를 사용한 제품과 같은 제조시설",
+        "expectedState": "CROSS_CONTACT_PRESENT",
+        "expectedAllergens": [
+          "BEEF",
+          "PORK",
+          "TOMATO",
+          "CRAB",
+          "CHICKEN",
+          "SQUID",
+          "PEANUT",
+          "EGG",
+          "SHELLFISH"
+        ],
+        "expectedExplicitChildren": {
+          "SHELLFISH": [
+            "OYSTER",
+            "ABALONE",
+            "MUSSEL"
+          ]
+        },
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": [
+          "쇠고기",
+          "돼지고기",
+          "토마토",
+          "게",
+          "닭고기",
+          "오징어",
+          "땅콩",
+          "계란",
+          "조개류(굴, 전복, 홍합 포함)"
+        ]
+      }
+    },
+    {
+      "id": "S008",
+      "gtin": "8801117534912",
+      "productName": "초코파이 정",
+      "source": {
+        "workbookCell": "Accepted_20!I9",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "게, 조개류, 땅콩, 복숭아 혼입가능",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801117534912&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801117534912/details",
+        "labelImageUrl": null,
+        "referenceNote": "다중 함유 알레르겐과 '혼입가능' 문구가 동시에 있는 복합 케이스.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": "게, 조개류, 땅콩, 복숭아 혼입가능",
+        "note": null,
+        "availability": "READABLE",
+        "normalized": "게, 조개류, 땅콩, 복숭아 혼입가능",
+        "expectedState": "CROSS_CONTACT_PRESENT",
+        "expectedAllergens": [
+          "CRAB",
+          "SHELLFISH",
+          "PEANUT",
+          "PEACH"
+        ],
+        "expectedExplicitChildren": {},
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": [
+          "게",
+          "조개류",
+          "땅콩",
+          "복숭아"
+        ]
+      }
+    },
+    {
+      "id": "S009",
+      "gtin": "8801062870455",
+      "productName": "빠다코코낫",
+      "source": {
+        "workbookCell": "Accepted_20!I10",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "별도 교차접촉 문구 표시 없음(확인 라벨 기준)",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801062870455&strCode=4006",
+        "independentUrl": "https://www.lollol.co.kr/shop/goods_list.php?ps_ctid=10080000",
+        "labelImageUrl": null,
+        "referenceNote": "현행 라벨 원재료를 보존하고 독립 유통목록에서 GTIN 8801062870455 재확인.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": null,
+        "note": "별도 교차접촉 문구 표시 없음(확인 라벨 기준)",
+        "availability": "NOT_FOUND",
+        "normalized": null,
+        "expectedState": "CROSS_CONTACT_NOT_FOUND",
+        "expectedAllergens": [],
+        "expectedExplicitChildren": {},
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": []
+      }
+    },
+    {
+      "id": "S010",
+      "gtin": "8808244201045",
+      "productName": "제주삼다수",
+      "source": {
+        "workbookCell": "Accepted_20!I11",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "해당사항 없음",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8808244201045",
+        "independentUrl": "https://www.cvslove.com/product/product_view.asp?pcode=8808244201045",
+        "labelImageUrl": null,
+        "referenceNote": "알레르겐 음성 대조군. 현행 2L 라벨과 독립 상품코드 8808244201045 일치.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": null,
+        "note": "Excel의 '해당사항 없음'은 작성자 설명으로 취급. 실제 교차접촉 부재 선언으로 확정하지 않음.",
+        "availability": "NOT_FOUND",
+        "normalized": null,
+        "expectedState": "CROSS_CONTACT_NOT_FOUND",
+        "expectedAllergens": [],
+        "expectedExplicitChildren": {},
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": []
+      }
+    },
+    {
+      "id": "S011",
+      "gtin": "8801037088168",
+      "productName": "오레오 화이트크림",
+      "source": {
+        "workbookCell": "Accepted_20!I12",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "달걀, 메밀, 땅콩, 고등어, 게, 새우, 돼지고기, 복숭아, 토마토, 아황산류, 호두, 닭고기, 쇠고기, 오징어, 조개류(굴, 전복, 홍합 포함), 잣을 사용한 제품과 같은 제조시설",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801037088168&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801037088168/details",
+        "labelImageUrl": null,
+        "referenceNote": "교차접촉 목록이 긴 난이도 높은 케이스.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": "달걀, 메밀, 땅콩, 고등어, 게, 새우, 돼지고기, 복숭아, 토마토, 아황산류, 호두, 닭고기, 쇠고기, 오징어, 조개류(굴, 전복, 홍합 포함), 잣을 사용한 제품과 같은 제조시설",
+        "note": null,
+        "availability": "READABLE",
+        "normalized": "달걀, 메밀, 땅콩, 고등어, 게, 새우, 돼지고기, 복숭아, 토마토, 아황산류, 호두, 닭고기, 쇠고기, 오징어, 조개류(굴, 전복, 홍합 포함), 잣을 사용한 제품과 같은 제조시설",
+        "expectedState": "CROSS_CONTACT_PRESENT",
+        "expectedAllergens": [
+          "EGG",
+          "BUCKWHEAT",
+          "PEANUT",
+          "MACKEREL",
+          "CRAB",
+          "SHRIMP",
+          "PORK",
+          "PEACH",
+          "TOMATO",
+          "SULFITE",
+          "WALNUT",
+          "CHICKEN",
+          "BEEF",
+          "SQUID",
+          "SHELLFISH",
+          "PINE_NUT"
+        ],
+        "expectedExplicitChildren": {
+          "SHELLFISH": [
+            "OYSTER",
+            "ABALONE",
+            "MUSSEL"
+          ]
+        },
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": [
+          "달걀",
+          "메밀",
+          "땅콩",
+          "고등어",
+          "게",
+          "새우",
+          "돼지고기",
+          "복숭아",
+          "토마토",
+          "아황산류",
+          "호두",
+          "닭고기",
+          "쇠고기",
+          "오징어",
+          "조개류(굴, 전복, 홍합 포함)",
+          "잣"
+        ]
+      }
+    },
+    {
+      "id": "S012",
+      "gtin": "8801045100210",
+      "productName": "토마토 케찹",
+      "source": {
+        "workbookCell": "Accepted_20!I13",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "대두, 밀, 우유, 계란, 쇠고기, 조개류(굴), 닭고기를 사용한 제품과 같은 제조시설",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801045100210&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801045100210/details",
+        "labelImageUrl": null,
+        "referenceNote": "소스류의 숨은 교차접촉 검증용.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": "대두, 밀, 우유, 계란, 쇠고기, 조개류(굴), 닭고기를 사용한 제품과 같은 제조시설",
+        "note": null,
+        "availability": "READABLE",
+        "normalized": "대두, 밀, 우유, 계란, 쇠고기, 조개류(굴), 닭고기를 사용한 제품과 같은 제조시설",
+        "expectedState": "CROSS_CONTACT_PRESENT",
+        "expectedAllergens": [
+          "SOY",
+          "WHEAT",
+          "MILK",
+          "EGG",
+          "BEEF",
+          "SHELLFISH",
+          "CHICKEN"
+        ],
+        "expectedExplicitChildren": {
+          "SHELLFISH": [
+            "OYSTER"
+          ]
+        },
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": [
+          "대두",
+          "밀",
+          "우유",
+          "계란",
+          "쇠고기",
+          "조개류(굴)",
+          "닭고기"
+        ]
+      }
+    },
+    {
+      "id": "S013",
+      "gtin": "8801039202395",
+      "productName": "해표 맑고 신선한 식용유(콩기름)",
+      "source": {
+        "workbookCell": "Accepted_20!I14",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "별도 교차접촉 문구 표시 없음(확인 라벨 기준)",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801039202395&strCode=4006",
+        "independentUrl": "https://www.beepscan.com/barcode/8801039202395",
+        "labelImageUrl": null,
+        "referenceNote": "단일 주원료 + 대두 알레르겐 양성 대조군.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": null,
+        "note": "별도 교차접촉 문구 표시 없음(확인 라벨 기준)",
+        "availability": "NOT_FOUND",
+        "normalized": null,
+        "expectedState": "CROSS_CONTACT_NOT_FOUND",
+        "expectedAllergens": [],
+        "expectedExplicitChildren": {},
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": []
+      }
+    },
+    {
+      "id": "S014",
+      "gtin": "8801111922722",
+      "productName": "참쌀설병",
+      "source": {
+        "workbookCell": "Accepted_20!I15",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "별도 교차접촉 문구 표시 없음(확인 라벨 기준)",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801111922722&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801111922722/details",
+        "labelImageUrl": null,
+        "referenceNote": "쌀과자지만 젤라틴 때문에 돼지고기 표시가 존재하는 비직관적 케이스.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": null,
+        "note": "별도 교차접촉 문구 표시 없음(확인 라벨 기준)",
+        "availability": "NOT_FOUND",
+        "normalized": null,
+        "expectedState": "CROSS_CONTACT_NOT_FOUND",
+        "expectedAllergens": [],
+        "expectedExplicitChildren": {},
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": []
+      }
+    },
+    {
+      "id": "S015",
+      "gtin": "8801007100838",
+      "productName": "백설 하얀설탕",
+      "source": {
+        "workbookCell": "Accepted_20!I16",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "별도 교차접촉 문구 표시 없음(확인 라벨 기준)",
+        "labelUrl": "https://lottemartzetta.com/products/OS8801007100838/details",
+        "independentUrl": "https://m.gsshop.com/prd/prd.gs?bnclick=prd-b02_prdb02A_apiPrdBrand&iid=W-1ERibq_6ne6&mseq=437159&prdid=1044124089",
+        "labelImageUrl": null,
+        "referenceNote": "원당 100%와 '알레르기 해당사항 없음'을 복수 현행 유통정보로 확인한 음성 대조군.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": null,
+        "note": "별도 교차접촉 문구 표시 없음(확인 라벨 기준)",
+        "availability": "NOT_FOUND",
+        "normalized": null,
+        "expectedState": "CROSS_CONTACT_NOT_FOUND",
+        "expectedAllergens": [],
+        "expectedExplicitChildren": {},
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": []
+      }
+    },
+    {
+      "id": "S016",
+      "gtin": "8801094012403",
+      "productName": "코카-콜라",
+      "source": {
+        "workbookCell": "Accepted_20!I17",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "메밀, 땅콩, 대두, 밀, 복숭아, 토마토를 사용한 제품과 같은 제조시설",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801094012403&strCode=4006",
+        "independentUrl": "https://www.alpha.co.kr/product/productView.do?PS_IDX=&productCode=139245",
+        "labelImageUrl": null,
+        "referenceNote": "직접 함유 알레르겐은 없지만 같은 제조시설 문구가 있는 음료 케이스.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": "메밀, 땅콩, 대두, 밀, 복숭아, 토마토를 사용한 제품과 같은 제조시설",
+        "note": null,
+        "availability": "READABLE",
+        "normalized": "메밀, 땅콩, 대두, 밀, 복숭아, 토마토를 사용한 제품과 같은 제조시설",
+        "expectedState": "CROSS_CONTACT_PRESENT",
+        "expectedAllergens": [
+          "BUCKWHEAT",
+          "PEANUT",
+          "SOY",
+          "WHEAT",
+          "PEACH",
+          "TOMATO"
+        ],
+        "expectedExplicitChildren": {},
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": [
+          "메밀",
+          "땅콩",
+          "대두",
+          "밀",
+          "복숭아",
+          "토마토"
+        ]
+      }
+    },
+    {
+      "id": "S017",
+      "gtin": "8801045290300",
+      "productName": "3분 카레 순한맛",
+      "source": {
+        "workbookCell": "Accepted_20!I18",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "계란, 새우, 돼지고기, 닭고기, 오징어, 조개류(굴, 전복, 홍합 포함), 메추리알을 사용한 제품과 같은 제조시설",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801045290300&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801045290300/details",
+        "labelImageUrl": "https://images.emarteveryday.co.kr/images/app/webapps/evd_web2/share/SKU/mall/00/03/8801045290300_3.png",
+        "referenceNote": "현행 라벨 이미지에서 바코드·원재료·함유·같은시설·품목보고번호를 한 화면에서 직접 확인하고 롯데마트 판매코드로 재확인.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": "계란, 새우, 돼지고기, 닭고기, 오징어, 조개류(굴, 전복, 홍합 포함), 메추리알을 사용한 제품과 같은 제조시설",
+        "note": "2.5단계 REGISTRY_MISSING 해결: 메추리알을 QUAIL_EGG으로 보존. 원본 전사 변경 없음.",
+        "availability": "READABLE",
+        "normalized": "계란, 새우, 돼지고기, 닭고기, 오징어, 조개류(굴, 전복, 홍합 포함), 메추리알을 사용한 제품과 같은 제조시설",
+        "expectedState": "CROSS_CONTACT_PRESENT",
+        "expectedAllergens": [
+          "EGG",
+          "SHRIMP",
+          "PORK",
+          "CHICKEN",
+          "SQUID",
+          "SHELLFISH",
+          "QUAIL_EGG"
+        ],
+        "expectedExplicitChildren": {
+          "SHELLFISH": [
+            "OYSTER",
+            "ABALONE",
+            "MUSSEL"
+          ]
+        },
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": [
+          "계란",
+          "새우",
+          "돼지고기",
+          "닭고기",
+          "오징어",
+          "조개류(굴, 전복, 홍합 포함)",
+          "메추리알"
+        ]
+      }
+    },
+    {
+      "id": "S018",
+      "gtin": "8801037075649",
+      "productName": "포스트 콘푸라이트",
+      "source": {
+        "workbookCell": "Accepted_20!I19",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "밀, 호두, 우유, 돼지고기, 메밀, 달걀, 땅콩, 잣, 닭고기, 쇠고기, 토마토, 복숭아를 사용한 제품과 같은 제조시설",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801037075649&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801037075649/details",
+        "labelImageUrl": null,
+        "referenceNote": "직접 함유는 대두 1종이지만 교차접촉 목록이 넓은 케이스.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": "밀, 호두, 우유, 돼지고기, 메밀, 달걀, 땅콩, 잣, 닭고기, 쇠고기, 토마토, 복숭아를 사용한 제품과 같은 제조시설",
+        "note": null,
+        "availability": "READABLE",
+        "normalized": "밀, 호두, 우유, 돼지고기, 메밀, 달걀, 땅콩, 잣, 닭고기, 쇠고기, 토마토, 복숭아를 사용한 제품과 같은 제조시설",
+        "expectedState": "CROSS_CONTACT_PRESENT",
+        "expectedAllergens": [
+          "WHEAT",
+          "WALNUT",
+          "MILK",
+          "PORK",
+          "BUCKWHEAT",
+          "EGG",
+          "PEANUT",
+          "PINE_NUT",
+          "CHICKEN",
+          "BEEF",
+          "TOMATO",
+          "PEACH"
+        ],
+        "expectedExplicitChildren": {},
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": [
+          "밀",
+          "호두",
+          "우유",
+          "돼지고기",
+          "메밀",
+          "달걀",
+          "땅콩",
+          "잣",
+          "닭고기",
+          "쇠고기",
+          "토마토",
+          "복숭아"
+        ]
+      }
+    },
+    {
+      "id": "S019",
+      "gtin": "8801047123729",
+      "productName": "동원 고추참치",
+      "source": {
+        "workbookCell": "Accepted_20!I20",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "쇠고기, 닭고기, 돼지고기, 우유, 호두, 새우를 사용한 제품과 같은 제조시설",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801047123729&strCode=4006",
+        "independentUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801047834021&strCode=4006",
+        "labelImageUrl": null,
+        "referenceNote": "90g×4 판매 라벨에도 내부 단품 바코드 8801047123729가 인쇄되어 있고 원재료·알레르기 문구가 동일함을 재확인.",
+        "issue": null,
+        "reviewImageUrl": null
+      },
+      "crossContact": {
+        "raw": "쇠고기, 닭고기, 돼지고기, 우유, 호두, 새우를 사용한 제품과 같은 제조시설",
+        "note": null,
+        "availability": "READABLE",
+        "normalized": "쇠고기, 닭고기, 돼지고기, 우유, 호두, 새우를 사용한 제품과 같은 제조시설",
+        "expectedState": "CROSS_CONTACT_PRESENT",
+        "expectedAllergens": [
+          "BEEF",
+          "CHICKEN",
+          "PORK",
+          "MILK",
+          "WALNUT",
+          "SHRIMP"
+        ],
+        "expectedExplicitChildren": {},
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": [
+          "쇠고기",
+          "닭고기",
+          "돼지고기",
+          "우유",
+          "호두",
+          "새우"
+        ]
+      }
+    },
+    {
+      "id": "S020",
+      "gtin": "8801047224617",
+      "productName": "양반 들기름&올리브 혼합김",
+      "source": {
+        "workbookCell": "Accepted_20!I21",
+        "referenceDate": "2026-09-09",
+        "originalCrossContact": "별도 교차접촉 문구 표시 없음(확인 라벨 기준)",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801047224617&strCode=4006",
+        "independentUrl": "https://www.beepscan.com/barcode/8801047224617",
+        "labelImageUrl": null,
+        "referenceNote": "두 종류 김이 한 묶음인 구성품 케이스. 두 구성의 원재료·품목보고번호를 각각 보존.",
+        "issue": "REFERENCE_VERSION_CONFLICT",
+        "reviewImageUrl": "https://images.emarteveryday.co.kr/images/product/8801047224617/OKZaYwtw5EOIxtcT.jpg"
+      },
+      "crossContact": {
+        "raw": null,
+        "note": "Excel과 공개 이미지의 배합·품목보고번호·교차접촉 정보 충돌. 라벨 버전이 확정되지 않아 raw=null, NOT_FOUND는 검증 가능한 문구 미확보를 뜻함. 어느 쪽도 현재 정답으로 선택하지 않음.",
+        "availability": "NOT_FOUND",
+        "normalized": null,
+        "expectedState": "CROSS_CONTACT_NOT_FOUND",
+        "expectedAllergens": [],
+        "expectedExplicitChildren": {},
+        "expectedUnsupportedTokens": [],
+        "expectedMatchedTexts": []
+      }
+    }
+  ]
+}

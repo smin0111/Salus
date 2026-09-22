@@ -7,6 +7,9 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * {@link AllergenMatcher} 테스트입니다. 실제 ko-allergens.yaml 사전으로 판정 규칙을 확인합니다.
+ */
 class AllergenMatcherTest {
 
     private final AllergenMatcher matcher = matcher();
@@ -92,6 +95,24 @@ class AllergenMatcherTest {
     void unknownAllergyStillMatchesLiterally() {
         assertThat(matcher.conflicts("키위", "키위 2개")).isTrue();
         assertThat(matcher.conflicts("키위", "사과 2개")).isFalse();
+    }
+
+    @Test
+    @DisplayName("굴의 기존 shellfish 탐지와 미등록 한 글자 literal fallback을 보존한다")
+    void oysterRetainsExistingShellfishTermsAndUnknownSingleCharacterUsesLiteralFallback() {
+        AllergenDictionary dictionary = new AllergenDictionary();
+        dictionary.load();
+        assertThat(dictionary.matchTermsFor("굴")).containsExactly(
+                "조개", "조개류", "shellfish", "굴", "전복", "홍합", "바지락", "모시조개", "가리비", "소라", "굴소스", "조개육수");
+        assertThat(matcher.conflicts("굴", "굴 100g")).isTrue();
+        assertThat(matcher.conflicts("굴", "굴소스 1큰술")).isTrue();
+        assertThat(matcher.conflicts("굴", "조개육수 200ml")).isTrue();
+        assertThat(matcher.conflicts("굴", "소금 1g")).isFalse();
+        assertThat(dictionary.isKnown("김")).isFalse();
+        assertThat(new AllergenRegistry(dictionary).findExactAliases("김")).isEmpty();
+        assertThat(dictionary.matchTermsFor("김")).containsExactly("김");
+        assertThat(matcher.conflicts("김", "김 2장")).isTrue();
+        assertThat(matcher.conflicts("김", "김치 100g")).isFalse();
     }
 
     @Test
