@@ -2,6 +2,7 @@ package com.salus.healthytable.controller;
 
 import com.salus.healthytable.config.CoopHeaderFilter;
 import com.salus.healthytable.config.SecurityConfig;
+import com.salus.healthytable.domain.RecipeApprovalStatus;
 import com.salus.healthytable.exception.GlobalExceptionHandler;
 import com.salus.healthytable.repository.RecipeRepository;
 import com.salus.healthytable.repository.UserRepository;
@@ -40,6 +41,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * 레시피 API 보안 규칙 테스트입니다.
+ */
 @WebMvcTest(RecipeController.class)
 @Import({
         SecurityConfig.class,
@@ -76,14 +80,17 @@ class RecipeSecurityTest {
     @MockBean
     private UserRepository userRepository;
 
+    // 게스트도 공개 레시피 목록은 조회할 수 있어야 합니다.
     @Test
     void guestCanReadPublicRecipes() throws Exception {
-        when(recipeRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
+        when(recipeRepository.findByApprovalStatus(any(RecipeApprovalStatus.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
 
         mockMvc.perform(get("/api/recipes"))
                 .andExpect(status().isOk());
     }
 
+    // 게스트도 재료 기반 레시피 추천은 요청할 수 있어야 합니다.
     @Test
     void guestCanRequestRecipeRecommendation() throws Exception {
         when(authenticatedUserProvider.getCurrentUserId()).thenReturn(Optional.empty());
@@ -101,6 +108,7 @@ class RecipeSecurityTest {
                 .andExpect(content().string("추천 결과"));
     }
 
+    // 잘못된 추천 요청은 400 JSON 오류로 응답해야 합니다(@Valid 검증).
     @Test
     void invalidRecipeRecommendationRequestReturnsJsonBadRequest() throws Exception {
         mockMvc.perform(post("/api/recipes/recommend")
@@ -116,6 +124,7 @@ class RecipeSecurityTest {
         verifyNoInteractions(geminiService, authenticatedUserProvider, chatRateLimitService);
     }
 
+    // 공개로 열어 둔 API 외의 레시피 쓰기 API는 게스트에게 401이어야 합니다.
     @Test
     void guestCannotUseOtherRecipeWriteEndpoints() throws Exception {
         mockMvc.perform(put("/api/recipes/1")

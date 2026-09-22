@@ -6,6 +6,9 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import java.time.LocalDateTime;
 
+/**
+ * 사용자에게 추천한 레시피 기록 엔티티입니다(recommendations 테이블).
+ */
 @Entity
 @Table(name = "recommendations")
 @Data
@@ -23,10 +26,10 @@ public class Recommendation {
     private Long recipeId;
 
     @Column(nullable = false)
-    private Double score; // AI score for relevance
+    private Double score; // 추천 관련도 점수
 
     @Column(length = 255)
-    private String reason; // Why this was recommended
+    private String reason; // 추천 이유
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

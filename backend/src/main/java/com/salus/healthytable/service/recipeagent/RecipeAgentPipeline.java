@@ -6,6 +6,16 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 
+/*
+ * Recipe Agent 파이프라인의 후반부 단계들(재료 수정 → 최종 검증 → 답변 조립)을 모아 둔 파일입니다.
+ */
+
+/**
+ * 개인화 판단(RecipePersonalizationDecision)에 따라 후보 레시피의 재료와 조리 단계를 수정합니다.
+ * - REMOVE: 재료 줄과 조리 단계 속 해당 재료 언급 제거
+ * - SUBSTITUTE_OR_REDUCE: 당류 재료를 "알룰로스 소량"으로 대체
+ * - RECOMMEND_ALTERNATIVE 판정: 대체 메뉴 구성
+ */
 @Component
 class RecipeModificationService {
 
@@ -39,6 +49,7 @@ class RecipeModificationService {
         return candidate.withIngredientsAndSteps(ingredients, steps);
     }
 
+    // 재료 이름에서 수량/단위를 떼고, 조리 문장에서 그 재료와 조사를 지웁니다. 남는 내용이 없으면 단계를 없앱니다.
     private String removeIngredientFromStep(String step, String ingredient) {
         if (step == null || step.isBlank() || ingredient == null || ingredient.isBlank()) {
             return step == null ? "" : step.trim();
@@ -62,6 +73,7 @@ class RecipeModificationService {
         return cleaned;
     }
 
+    // 설탕/시럽/꿀 같은 당류 재료를 "알룰로스 소량"으로 바꿉니다.
     private RecipeCandidate reduceOrSubstitute(RecipeCandidate candidate, RecipeModification modification) {
         List<String> ingredients = new ArrayList<>();
         boolean changed = false;
@@ -79,6 +91,7 @@ class RecipeModificationService {
         return candidate.withIngredientsAndSteps(ingredients, candidate.steps());
     }
 
+    // 바나나가 들어간 레시피면 미리 정한 무설탕 대체 메뉴를, 아니면 당류 재료만 뺀 레시피를 반환합니다.
     private RecipeCandidate buildAlternative(RecipeCandidate candidate, RecipePersonalizationDecision decision) {
         if (AgentText.containsAnyNormalized(candidate.title() + " " + String.join(" ", candidate.ingredients()), List.of("바나나"))) {
             return new RecipeCandidate(
@@ -101,6 +114,10 @@ class RecipeModificationService {
     }
 }
 
+/**
+ * 개인화된 최종 레시피를 마지막으로 검증합니다.
+ * 알레르기 재료나 사용자가 제외한 재료가 남아 있거나, 재료/조리 순서가 비어 있으면 실패입니다.
+ */
 @Component
 class RecipeValidationPipeline {
 
@@ -129,6 +146,11 @@ class RecipeValidationPipeline {
     }
 }
 
+/**
+ * Recipe Agent 결과를 사용자에게 보여 줄 답변 텍스트와 레시피 카드로 조립합니다.
+ * 원본 레시피 → 출처 → 개인화 판단 → (복용약) → 변경 재료 → 냉장고 활용 → 최종 판단 → 레시피 순으로 구성합니다.
+ * 차단(BLOCK)이거나 검증에 실패하면 레시피 본문 대신 제공 제한 이유만 보여 줍니다.
+ */
 @Component
 class RecipeResponseComposer {
 
@@ -206,6 +228,7 @@ class RecipeResponseComposer {
         return reply.toString().trim();
     }
 
+    // 개인화된 레시피로 레시피 카드를 만듭니다. 안내 문구(userNotices)를 주의 문구 자리에 넣습니다.
     ChatDto.RecipeCard toRecipeCard(RecipeCandidate candidate, RecipePersonalizationDecision decision) {
         return new ChatDto.RecipeCard(
                 null,
@@ -213,13 +236,16 @@ class RecipeResponseComposer {
                 candidate.description(),
                 candidate.ingredients(),
                 candidate.steps(),
+                null,
                 candidate.calories(),
+                null,
                 candidate.difficulty(),
                 candidate.cookingTime(),
                 null,
                 decision.userNotices());
     }
 
+    // 판정 enum을 사용자용 한국어 문구로 바꿉니다.
     private String toKoreanDecision(RecipeDecisionType decisionType) {
         return switch (decisionType) {
             case ALLOW -> "그대로 추천";
@@ -234,6 +260,7 @@ class RecipeResponseComposer {
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    // 약물 상호작용 충돌이 있거나 복용약 관련 안내가 있으면 [복용약 반영] 섹션을 표시합니다.
     private boolean hasMedicationEvidence(RecipePersonalizationDecision decision) {
         return decision.conflicts().stream().anyMatch(conflict -> conflict.type() == RecipeConflictType.MEDICATION_INTERACTION)
                 || decision.userNotices().stream().anyMatch(notice -> notice.contains("복용약") || notice.contains("복약정보") || notice.contains("약 이름"));

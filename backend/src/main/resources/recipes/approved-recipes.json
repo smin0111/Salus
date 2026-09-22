@@ -1,0 +1,403 @@
+{
+  "catalogVersion": 3,
+  "verifiedBy": "salus-recipe-review-v3",
+  "recipes": [
+    {
+      "key": "kimchi-jjigae",
+      "version": 2,
+      "title": "김치찌개",
+      "aliases": ["김치 찌개"],
+      "description": "충분히 익은 김치와 돼지고기를 볶은 뒤 육수로 끓여 신맛·감칠맛·지방의 균형을 맞춘 기본형입니다.",
+      "baseServings": 2,
+      "cookingTime": 40,
+      "difficulty": 2,
+      "caloriesPerServing": 360,
+      "ingredients": [
+        {"key":"pork","name":"돼지고기 목살","amount":200,"unit":"g","preparation":"한입 크기"},
+        {"key":"kimchi","name":"익은 배추김치","amount":300,"unit":"g","preparation":"4cm 길이"},
+        {"key":"kimchi_juice","name":"김치 국물","amount":60,"unit":"ml","preparation":"체에 거르지 않음"},
+        {"key":"stock","name":"멸치다시마 육수","amount":500,"unit":"ml","preparation":"무염"},
+        {"key":"tofu","name":"두부","amount":150,"unit":"g","preparation":"1.5cm 두께"},
+        {"key":"onion","name":"양파","amount":100,"unit":"g","preparation":"0.7cm 채"},
+        {"key":"green_onion","name":"대파","amount":30,"unit":"g","preparation":"어슷썰기"},
+        {"key":"garlic","name":"다진 마늘","amount":10,"unit":"g","preparation":""},
+        {"key":"gochugaru","name":"고춧가루","amount":6,"unit":"g","preparation":"중간 매운맛"},
+        {"key":"soup_soy","name":"국간장","amount":10,"unit":"ml","preparation":""},
+        {"key":"oil","name":"식용유","amount":5,"unit":"ml","preparation":""},
+        {"key":"chili","name":"청양고추","amount":0,"unit":"g","preparation":"송송 썰기"}
+      ],
+      "steps": [
+        {"number":1,"instruction":"돼지고기, 김치, 양파, 두부와 대파를 표시된 크기로 썬다.","heat":"불 사용 안 함","duration":"7분","doneness":"재료 크기가 고르게 준비된 상태","ingredientKeys":["pork","kimchi","onion","tofu","green_onion","chili"],"instructionOverrides":{"SPICY":"돼지고기, 김치, 양파, 두부, 대파와 청양고추를 표시된 크기로 썬다.","EXTREME":"돼지고기, 김치, 양파, 두부, 대파와 청양고추를 표시된 크기로 썬다."}},
+        {"number":2,"instruction":"두꺼운 냄비에 식용유와 돼지고기를 넣어 볶는다.","heat":"중강불","duration":"4~5분","doneness":"고기 겉면의 붉은색이 사라지고 가장자리가 옅게 갈색인 상태","ingredientKeys":["oil","pork"]},
+        {"number":3,"instruction":"김치, 김치 국물, 양파, 다진 마늘, 고춧가루를 넣고 바닥이 타지 않게 저어 볶는다.","heat":"중불","duration":"3분","doneness":"김치 숨이 약간 죽고 붉은 기름이 고르게 밴 상태","ingredientKeys":["kimchi","kimchi_juice","onion","garlic","gochugaru"]},
+        {"number":4,"instruction":"육수와 국간장을 붓고 끓기 시작하면 뚜껑을 반쯤 덮어 끓인다.","heat":"강불에서 끓인 뒤 중약불","duration":"20분","doneness":"김치 줄기가 부드러워지고 돼지고기가 속까지 익어 국물에 맛이 충분히 우러난 상태","ingredientKeys":["stock","soup_soy","pork","kimchi"]},
+        {"number":5,"instruction":"두부와 대파를 넣고 한 번 더 끓인 뒤 불을 끈다.","heat":"중불","duration":"5분","doneness":"두부 중심까지 뜨겁고 국물이 가볍게 끓는 상태","ingredientKeys":["tofu","green_onion","chili"],"instructionOverrides":{"SPICY":"두부, 대파와 청양고추를 넣고 한 번 더 끓인 뒤 불을 끈다.","EXTREME":"두부, 대파와 청양고추를 넣고 한 번 더 끓인 뒤 불을 끈다."}}
+      ],
+      "spiceProfiles": {
+        "MILD":{"label":"순한맛","overrides":{"gochugaru":2,"chili":0}},
+        "NORMAL":{"label":"기본 매운맛","overrides":{"gochugaru":6,"chili":0}},
+        "SPICY":{"label":"매운맛","overrides":{"gochugaru":10,"chili":10}},
+        "EXTREME":{"label":"불닭 수준을 목표로 한 매우 매운맛","overrides":{"gochugaru":14,"chili":20}}
+      },
+      "safetyChecks": [
+        {"ingredientKey":"pork","minimumInternalTemperatureC":63,"minimumHoldMinutes":3}
+      ],
+      "sources": [
+        {"type":"REFERENCE","name":"Maangchi - Kimchi stew","url":"https://www.maangchi.com/recipe/kimchi-jjigae","retrievedAt":"2026-08-21"},
+        {"type":"REFERENCE","name":"Korean Bapsang - Kimchi Jjigae","url":"https://www.koreanbapsang.com/kimchi-jjigae-kimchi-stew/","retrievedAt":"2026-08-21"}
+      ]
+    },
+    {
+      "key": "doenjang-jjigae",
+      "version": 2,
+      "title": "된장찌개",
+      "aliases": ["된장 찌개"],
+      "description": "멸치다시마 육수에 된장을 완전히 풀고 단단한 채소부터 익혀 텁텁하지 않게 마무리한 기본형입니다.",
+      "baseServings": 2,
+      "cookingTime": 30,
+      "difficulty": 1,
+      "caloriesPerServing": 210,
+      "ingredients": [
+        {"key":"stock","name":"멸치다시마 육수","amount":500,"unit":"ml","preparation":"무염"},
+        {"key":"doenjang","name":"재래식 된장","amount":40,"unit":"g","preparation":""},
+        {"key":"potato","name":"감자","amount":100,"unit":"g","preparation":"1.5cm 깍둑썰기"},
+        {"key":"zucchini","name":"애호박","amount":100,"unit":"g","preparation":"1.5cm 깍둑썰기"},
+        {"key":"onion","name":"양파","amount":80,"unit":"g","preparation":"1.5cm 크기"},
+        {"key":"tofu","name":"두부","amount":150,"unit":"g","preparation":"1.5cm 깍둑썰기"},
+        {"key":"garlic","name":"다진 마늘","amount":6,"unit":"g","preparation":""},
+        {"key":"green_onion","name":"대파","amount":20,"unit":"g","preparation":"송송 썰기"}
+      ],
+      "steps": [
+        {"number":1,"instruction":"감자, 애호박, 양파, 두부와 대파를 표시된 크기로 준비한다.","heat":"불 사용 안 함","duration":"7분","doneness":"채소와 두부 크기가 고른 상태","ingredientKeys":["potato","zucchini","onion","tofu","green_onion"]},
+        {"number":2,"instruction":"냄비에 육수를 붓고 된장을 체나 국자에서 완전히 풀어 덩어리를 없앤다.","heat":"중불","duration":"3분","doneness":"된장 덩어리 없이 국물이 균일한 상태","ingredientKeys":["stock","doenjang"]},
+        {"number":3,"instruction":"감자와 양파를 넣고 끓기 시작하면 거품을 걷으며 익힌다.","heat":"중불","duration":"8분","doneness":"감자 겉면이 반투명하고 젓가락이 절반 정도 들어가는 상태","ingredientKeys":["potato","onion"]},
+        {"number":4,"instruction":"애호박, 두부, 다진 마늘을 넣고 국물이 세게 넘치지 않게 끓인다.","heat":"중약불","duration":"7분","doneness":"감자에 젓가락이 저항 없이 들어가고 애호박 모양이 유지된 상태","ingredientKeys":["zucchini","tofu","garlic","potato"]},
+        {"number":5,"instruction":"대파를 넣어 짧게 끓이고 불을 끈다.","heat":"중불","duration":"2분","doneness":"파 향이 나고 국물이 가볍게 끓는 상태","ingredientKeys":["green_onion"]}
+      ],
+      "spiceProfiles": {"NORMAL":{"label":"기본맛","overrides":{}}},
+      "safetyChecks": [],
+      "sources": [
+        {"type":"REFERENCE","name":"Maangchi - Fermented soybean paste stew","url":"https://www.maangchi.com/recipe/doenjang-jjigae","retrievedAt":"2026-08-21"},
+        {"type":"REFERENCE","name":"Korean Bapsang - Doenjang Jjigae","url":"https://www.koreanbapsang.com/doenjang-jjigae-korean-soy-bean-paste/","retrievedAt":"2026-08-21"}
+      ]
+    },
+    {
+      "key": "jeyuk-bokkeum",
+      "version": 3,
+      "title": "제육볶음",
+      "aliases": ["제육 볶음", "제육불고기", "돼지불고기", "돼지고기 고추장볶음"],
+      "description": "얇은 돼지고기를 계량한 고추장 양념에 재운 뒤 넓은 팬에서 수분을 날려 볶는 기본형입니다.",
+      "baseServings": 2,
+      "cookingTime": 40,
+      "difficulty": 2,
+      "caloriesPerServing": 520,
+      "ingredients": [
+        {"key":"pork","name":"돼지고기 앞다리살","amount":300,"unit":"g","preparation":"두께 3mm"},
+        {"key":"onion","name":"양파","amount":100,"unit":"g","preparation":"1cm 채"},
+        {"key":"cabbage","name":"양배추","amount":100,"unit":"g","preparation":"4cm 크기"},
+        {"key":"green_onion","name":"대파","amount":40,"unit":"g","preparation":"어슷썰기"},
+        {"key":"gochujang","name":"고추장","amount":30,"unit":"g","preparation":""},
+        {"key":"gochugaru","name":"고춧가루","amount":8,"unit":"g","preparation":"중간 매운맛"},
+        {"key":"soy","name":"양조간장","amount":15,"unit":"ml","preparation":""},
+        {"key":"sugar","name":"설탕","amount":10,"unit":"g","preparation":""},
+        {"key":"rice_wine","name":"맛술","amount":15,"unit":"ml","preparation":""},
+        {"key":"garlic","name":"다진 마늘","amount":10,"unit":"g","preparation":""},
+        {"key":"sesame_oil","name":"참기름","amount":5,"unit":"ml","preparation":""},
+        {"key":"oil","name":"식용유","amount":10,"unit":"ml","preparation":""},
+        {"key":"chili","name":"청양고추","amount":0,"unit":"g","preparation":"어슷썰기"}
+      ],
+      "steps": [
+        {"number":1,"instruction":"고추장, 고춧가루, 간장, 설탕, 맛술, 다진 마늘, 참기름을 섞어 양념장을 만든다.","heat":"불 사용 안 함","duration":"2분","doneness":"고추장 덩어리 없이 균일한 상태","ingredientKeys":["gochujang","gochugaru","soy","sugar","rice_wine","garlic","sesame_oil"]},
+        {"number":2,"instruction":"돼지고기에 양념장을 고루 버무려 냉장고에서 재운다. 그동안 양파, 양배추와 대파를 썬다.","heat":"불 사용 안 함","duration":"20분","doneness":"모든 고기 면에 양념이 묻고 채소가 고르게 준비된 상태","ingredientKeys":["pork","onion","cabbage","green_onion","chili"],"instructionOverrides":{"SPICY":"돼지고기에 양념장을 고루 버무려 냉장고에서 재운다. 그동안 양파, 양배추, 대파와 청양고추를 썬다.","EXTREME":"돼지고기에 양념장을 고루 버무려 냉장고에서 재운다. 그동안 양파, 양배추, 대파와 청양고추를 썬다."}},
+        {"number":3,"instruction":"충분히 달군 넓은 팬에 식용유와 양념한 돼지고기를 넣어 겹치지 않게 펼쳐 볶는다.","heat":"중강불","duration":"4분","doneness":"고기 겉면의 붉은색이 대부분 사라진 상태","ingredientKeys":["oil","pork"]},
+        {"number":4,"instruction":"양파와 양배추를 넣고 팬 바닥의 양념을 긁어가며 볶는다.","heat":"중강불","duration":"3~4분","doneness":"가장 두꺼운 고기 조각까지 속이 익고 채소 가장자리가 투명해진 상태","ingredientKeys":["onion","cabbage","pork"]},
+        {"number":5,"instruction":"대파를 넣어 1분 볶고 불을 끈 뒤 팬에 3분 그대로 둔다.","heat":"중불 후 불 끄기","duration":"4분","doneness":"대파 숨이 살짝 죽고 가장 두꺼운 고기 조각까지 속이 완전히 익은 상태","ingredientKeys":["green_onion","chili","pork"],"instructionOverrides":{"SPICY":"대파와 청양고추를 넣어 1분 볶고 불을 끈 뒤 팬에 3분 그대로 둔다.","EXTREME":"대파와 청양고추를 넣어 1분 볶고 불을 끈 뒤 팬에 3분 그대로 둔다."}}
+      ],
+      "spiceProfiles": {
+        "MILD":{"label":"순한맛","overrides":{"gochujang":22,"gochugaru":2,"chili":0}},
+        "NORMAL":{"label":"기본 매운맛","overrides":{"gochujang":30,"gochugaru":8,"chili":0}},
+        "SPICY":{"label":"매운맛","overrides":{"gochujang":34,"gochugaru":12,"chili":10}},
+        "EXTREME":{"label":"불닭 수준을 목표로 한 매우 매운맛","overrides":{"gochujang":38,"gochugaru":18,"chili":20}}
+      },
+      "safetyChecks": [
+        {"ingredientKey":"pork","minimumInternalTemperatureC":63,"minimumHoldMinutes":3}
+      ],
+      "sources": [
+        {"type":"REFERENCE","name":"Korean Bapsang - Spicy pork BBQ","url":"https://www.koreanbapsang.com/dweji-bulgogi-korean-spicy-pork-bbq/","retrievedAt":"2026-08-21"},
+        {"type":"REFERENCE","name":"Maangchi - Spicy stir-fried pork","url":"https://www.maangchi.com/recipe/dwaejigogi-bokkeum","retrievedAt":"2026-08-21"}
+      ]
+    },
+    {
+      "key": "beef-bulgogi",
+      "version": 3,
+      "title": "소불고기",
+      "aliases": ["소 불고기", "불고기"],
+      "description": "배즙을 넣은 간장 양념으로 얇은 소고기를 짧게 재운 뒤 센 불에서 나눠 볶아 질겨지지 않게 만든 기본형입니다.",
+      "baseServings": 2,
+      "cookingTime": 40,
+      "difficulty": 2,
+      "caloriesPerServing": 470,
+      "ingredients": [
+        {"key":"beef","name":"불고기용 소고기","amount":300,"unit":"g","preparation":"두께 2mm"},
+        {"key":"onion","name":"양파","amount":100,"unit":"g","preparation":"0.5cm 채"},
+        {"key":"mushroom","name":"표고버섯","amount":80,"unit":"g","preparation":"0.5cm 채"},
+        {"key":"green_onion","name":"대파","amount":40,"unit":"g","preparation":"어슷썰기"},
+        {"key":"soy","name":"양조간장","amount":40,"unit":"ml","preparation":""},
+        {"key":"pear","name":"배즙","amount":60,"unit":"g","preparation":"무가당"},
+        {"key":"sugar","name":"설탕","amount":12,"unit":"g","preparation":""},
+        {"key":"garlic","name":"다진 마늘","amount":10,"unit":"g","preparation":""},
+        {"key":"sesame_oil","name":"참기름","amount":8,"unit":"ml","preparation":""},
+        {"key":"pepper","name":"후춧가루","amount":0.5,"unit":"g","preparation":""},
+        {"key":"oil","name":"식용유","amount":5,"unit":"ml","preparation":""}
+      ],
+      "steps": [
+        {"number":1,"instruction":"간장, 배즙, 설탕, 다진 마늘, 참기름, 후춧가루를 설탕이 녹을 때까지 섞는다.","heat":"불 사용 안 함","duration":"2분","doneness":"바닥에 설탕 알갱이가 거의 남지 않은 상태","ingredientKeys":["soy","pear","sugar","garlic","sesame_oil","pepper"]},
+        {"number":2,"instruction":"소고기를 한 장씩 떼어 양념과 버무린 뒤 냉장고에서 재운다. 양파, 표고버섯, 대파를 썬다.","heat":"불 사용 안 함","duration":"20분","doneness":"고기 사이마다 양념이 들어가고 채소가 고르게 준비된 상태","ingredientKeys":["beef","onion","mushroom","green_onion"]},
+        {"number":3,"instruction":"넓은 팬을 충분히 달군 뒤 식용유를 두르고 양념한 고기의 절반을 겹치지 않게 펴서 볶는다.","heat":"강불","duration":"2~3분","doneness":"고기 가장자리가 갈색이고 팬에 물이 고이지 않은 상태","ingredientKeys":["oil","beef"]},
+        {"number":4,"instruction":"첫 고기를 덜어 두고 남은 고기와 양파, 표고버섯을 같은 방식으로 볶는다.","heat":"강불","duration":"3분","doneness":"얇은 소고기가 속까지 익고 양파가 투명해지기 시작한 상태","ingredientKeys":["beef","onion","mushroom"]},
+        {"number":5,"instruction":"덜어 둔 고기와 대파를 합쳐 1분 볶고 불을 끈 뒤 팬에 3분 그대로 둔다.","heat":"중강불 후 불 끄기","duration":"4분","doneness":"대파 숨이 살짝 죽고 얇은 소고기가 전체적으로 속까지 익은 상태","ingredientKeys":["beef","green_onion"]}
+      ],
+      "spiceProfiles": {"NORMAL":{"label":"기본맛","overrides":{}}},
+      "safetyChecks": [
+        {"ingredientKey":"beef","minimumInternalTemperatureC":63,"minimumHoldMinutes":3}
+      ],
+      "sources": [
+        {"type":"REFERENCE","name":"Korean Bapsang - Bulgogi","url":"https://www.koreanbapsang.com/bulgogi-korean-bbq-beef/","retrievedAt":"2026-08-21"},
+        {"type":"REFERENCE","name":"Maangchi - Bulgogi","url":"https://www.maangchi.com/recipe/bulgogi","retrievedAt":"2026-08-21"}
+      ]
+    },
+    {
+      "key": "dakbokkeumtang",
+      "version": 2,
+      "title": "닭볶음탕",
+      "aliases": ["닭 볶음탕", "닭도리탕"],
+      "description": "뼈 있는 닭과 단단한 채소를 계량한 고추장 양념 국물에 끓여 닭을 속까지 익히면서 채소 식감을 살린 기본형입니다.",
+      "baseServings": 2,
+      "cookingTime": 50,
+      "difficulty": 2,
+      "caloriesPerServing": 610,
+      "ingredients": [
+        {"key":"chicken","name":"볶음탕용 닭","amount":600,"unit":"g","preparation":"뼈 포함, 관절 단위로 절단된 것"},
+        {"key":"potato","name":"감자","amount":200,"unit":"g","preparation":"4cm 크기"},
+        {"key":"carrot","name":"당근","amount":100,"unit":"g","preparation":"3cm 크기"},
+        {"key":"onion","name":"양파","amount":100,"unit":"g","preparation":"4등분"},
+        {"key":"green_onion","name":"대파","amount":30,"unit":"g","preparation":"4cm 길이"},
+        {"key":"water","name":"물","amount":500,"unit":"ml","preparation":""},
+        {"key":"gochujang","name":"고추장","amount":30,"unit":"g","preparation":""},
+        {"key":"gochugaru","name":"고춧가루","amount":10,"unit":"g","preparation":"중간 매운맛"},
+        {"key":"soy","name":"양조간장","amount":30,"unit":"ml","preparation":""},
+        {"key":"sugar","name":"설탕","amount":12,"unit":"g","preparation":""},
+        {"key":"garlic","name":"다진 마늘","amount":12,"unit":"g","preparation":""},
+        {"key":"ginger","name":"다진 생강","amount":3,"unit":"g","preparation":""},
+        {"key":"chili","name":"청양고추","amount":0,"unit":"g","preparation":"어슷썰기"}
+      ],
+      "steps": [
+        {"number":1,"instruction":"닭은 흐르는 물에 씻지 말고 표면의 물기와 뼛조각만 종이타월로 제거한다. 감자, 당근, 양파와 대파를 썬다.","heat":"불 사용 안 함","duration":"10분","doneness":"닭 표면에 뼛조각이 없고 채소 크기가 고른 상태","ingredientKeys":["chicken","potato","carrot","onion","green_onion","chili"],"instructionOverrides":{"SPICY":"닭은 흐르는 물에 씻지 말고 표면의 물기와 뼛조각만 종이타월로 제거한다. 감자, 당근, 양파, 대파와 청양고추를 썬다.","EXTREME":"닭은 흐르는 물에 씻지 말고 표면의 물기와 뼛조각만 종이타월로 제거한다. 감자, 당근, 양파, 대파와 청양고추를 썬다."}},
+        {"number":2,"instruction":"고추장, 고춧가루, 간장, 설탕, 다진 마늘, 다진 생강과 전체 물의 5분의 1을 섞어 양념물을 만든다.","heat":"불 사용 안 함","duration":"2분","doneness":"고추장 덩어리 없이 균일한 상태","ingredientKeys":["gochujang","gochugaru","soy","sugar","garlic","ginger","water"]},
+        {"number":3,"instruction":"냄비에 닭, 남은 물, 양념물을 넣고 끓으면 떠오르는 거품을 걷는다.","heat":"강불","duration":"8분","doneness":"국물이 전체적으로 끓고 표면 거품을 걷어낸 상태","ingredientKeys":["chicken","water"]},
+        {"number":4,"instruction":"감자와 당근을 넣고 뚜껑을 반쯤 덮어 끓인다.","heat":"중불","duration":"18분","doneness":"닭의 가장 두꺼운 부위를 잘랐을 때 뼈 주변까지 익고 감자에 젓가락이 절반 이상 들어가는 상태","ingredientKeys":["potato","carrot","chicken"]},
+        {"number":5,"instruction":"양파와 대파를 넣고 국물을 끼얹으며 졸인다.","heat":"중강불","duration":"7분","doneness":"감자에 젓가락이 저항 없이 들어가고 국물이 재료에 걸쭉하게 묻는 상태","ingredientKeys":["onion","green_onion","chili","potato"],"instructionOverrides":{"SPICY":"양파, 대파와 청양고추를 넣고 국물을 끼얹으며 졸인다.","EXTREME":"양파, 대파와 청양고추를 넣고 국물을 끼얹으며 졸인다."}}
+      ],
+      "spiceProfiles": {
+        "MILD":{"label":"순한맛","overrides":{"gochujang":22,"gochugaru":3,"chili":0}},
+        "NORMAL":{"label":"기본 매운맛","overrides":{"gochujang":30,"gochugaru":10,"chili":0}},
+        "SPICY":{"label":"매운맛","overrides":{"gochujang":34,"gochugaru":14,"chili":10}},
+        "EXTREME":{"label":"불닭 수준을 목표로 한 매우 매운맛","overrides":{"gochujang":38,"gochugaru":20,"chili":20}}
+      },
+      "safetyChecks": [
+        {"ingredientKey":"chicken","minimumInternalTemperatureC":74,"minimumHoldMinutes":0}
+      ],
+      "sources": [
+        {"type":"REFERENCE","name":"Korean Bapsang - Dakdoritang","url":"https://www.koreanbapsang.com/dak-doritang-korean-spicy-chicken-stew/","retrievedAt":"2026-08-21"},
+        {"type":"REFERENCE","name":"Maangchi - Spicy chicken stew","url":"https://www.maangchi.com/recipe/dakbokkeumtang","retrievedAt":"2026-08-21"}
+      ]
+    },
+    {
+      "key": "kimchi-fried-rice",
+      "version": 2,
+      "title": "김치볶음밥",
+      "aliases": ["김치 볶음밥", "김치밥"],
+      "description": "차가운 밥과 익은 김치를 센 불에서 수분이 고이지 않게 볶아 밥알이 뭉치지 않는 기본형입니다.",
+      "baseServings": 2,
+      "cookingTime": 20,
+      "difficulty": 1,
+      "caloriesPerServing": 480,
+      "ingredients": [
+        {"key":"rice","name":"찬밥","amount":400,"unit":"g","preparation":"덩어리를 미리 풀기"},
+        {"key":"kimchi","name":"익은 배추김치","amount":200,"unit":"g","preparation":"1cm 크기"},
+        {"key":"kimchi_juice","name":"김치 국물","amount":30,"unit":"ml","preparation":""},
+        {"key":"green_onion","name":"대파","amount":30,"unit":"g","preparation":"송송 썰기"},
+        {"key":"gochujang","name":"고추장","amount":12,"unit":"g","preparation":""},
+        {"key":"soy","name":"양조간장","amount":5,"unit":"ml","preparation":""},
+        {"key":"oil","name":"식용유","amount":15,"unit":"ml","preparation":""},
+        {"key":"sesame_oil","name":"참기름","amount":5,"unit":"ml","preparation":""},
+        {"key":"sesame","name":"볶은 참깨","amount":4,"unit":"g","preparation":""},
+        {"key":"gim","name":"김가루","amount":4,"unit":"g","preparation":""},
+        {"key":"chili","name":"청양고추","amount":0,"unit":"g","preparation":"송송 썰기"}
+      ],
+      "steps": [
+        {"number":1,"instruction":"찬밥 덩어리를 주걱으로 풀고 김치와 대파를 썬다.","heat":"불 사용 안 함","duration":"5분","doneness":"밥알이 큰 덩어리 없이 풀리고 재료가 고르게 썰린 상태","ingredientKeys":["rice","kimchi","green_onion","chili"],"instructionOverrides":{"SPICY":"찬밥 덩어리를 주걱으로 풀고 김치, 대파와 청양고추를 썬다.","EXTREME":"찬밥 덩어리를 주걱으로 풀고 김치, 대파와 청양고추를 썬다."}},
+        {"number":2,"instruction":"넓은 팬을 달군 뒤 식용유와 대파를 넣어 볶는다.","heat":"중강불","duration":"1분","doneness":"대파 향이 나지만 갈색으로 타지 않은 상태","ingredientKeys":["oil","green_onion"]},
+        {"number":3,"instruction":"김치, 김치 국물과 고추장을 넣어 볶는다.","heat":"중강불","duration":"3분","doneness":"팬 바닥에 묽은 국물이 거의 남지 않고 김치 숨이 죽은 상태","ingredientKeys":["kimchi","kimchi_juice","gochujang","chili"],"instructionOverrides":{"SPICY":"김치, 김치 국물, 고추장과 청양고추를 넣어 볶는다.","EXTREME":"김치, 김치 국물, 고추장과 청양고추를 넣어 볶는다."}},
+        {"number":4,"instruction":"밥을 넣어 자르듯 풀어가며 볶고 팬 가장자리에 간장을 둘러 30초 뒤 섞는다.","heat":"강불","duration":"4분","doneness":"밥알이 고르게 붉고 팬 바닥에 수분이 고이지 않은 상태","ingredientKeys":["rice","soy"]},
+        {"number":5,"instruction":"불을 끄고 참기름, 볶은 참깨, 김가루를 넣어 섞는다.","heat":"불 끄기","duration":"1분","doneness":"참기름 향이 나고 고명이 고르게 섞인 상태","ingredientKeys":["sesame_oil","sesame","gim"]}
+      ],
+      "spiceProfiles": {
+        "MILD":{"label":"순한맛","overrides":{"gochujang":5,"chili":0}},
+        "NORMAL":{"label":"기본 매운맛","overrides":{"gochujang":12,"chili":0}},
+        "SPICY":{"label":"매운맛","overrides":{"gochujang":20,"chili":8}},
+        "EXTREME":{"label":"불닭 수준을 목표로 한 매우 매운맛","overrides":{"gochujang":28,"chili":18}}
+      },
+      "safetyChecks": [],
+      "sources": [
+        {"type":"REFERENCE","name":"Maangchi - Kimchi fried rice","url":"https://www.maangchi.com/recipe/kimchi-bokkeumbap","retrievedAt":"2026-08-21"},
+        {"type":"REFERENCE","name":"Korean Bapsang - Kimchi fried rice","url":"https://www.koreanbapsang.com/kimchi-fried-rice/","retrievedAt":"2026-08-21"}
+      ]
+    },
+    {
+      "key": "gyeranjjim",
+      "version": 2,
+      "title": "계란찜",
+      "aliases": ["달걀찜", "계란 찜"],
+      "description": "달걀과 육수를 체에 내려 약한 열로 천천히 익혀 기포와 질긴 층을 줄인 부드러운 기본형입니다.",
+      "baseServings": 2,
+      "cookingTime": 20,
+      "difficulty": 1,
+      "caloriesPerServing": 150,
+      "ingredients": [
+        {"key":"egg","name":"달걀","amount":150,"unit":"g","preparation":"껍데기 제외, 중간 크기 1개당 약 50g"},
+        {"key":"stock","name":"다시마 육수","amount":180,"unit":"ml","preparation":"식힌 것"},
+        {"key":"salt","name":"소금","amount":2,"unit":"g","preparation":""},
+        {"key":"fish_sauce","name":"액젓","amount":5,"unit":"ml","preparation":""},
+        {"key":"green_onion","name":"쪽파","amount":10,"unit":"g","preparation":"송송 썰기"},
+        {"key":"sesame_oil","name":"참기름","amount":2,"unit":"ml","preparation":"그릇 코팅용"}
+      ],
+      "steps": [
+        {"number":1,"instruction":"달걀을 흰자와 노른자가 완전히 섞일 때까지만 젓고 식힌 육수, 소금, 액젓을 넣어 섞는다.","heat":"불 사용 안 함","duration":"2분","doneness":"흰자 덩어리와 소금 알갱이가 보이지 않는 상태","ingredientKeys":["egg","stock","salt","fish_sauce"]},
+        {"number":2,"instruction":"달걀물을 고운체에 한 번 내려 알끈과 큰 기포를 제거한다.","heat":"불 사용 안 함","duration":"2분","doneness":"표면에 큰 거품이 거의 없는 균일한 달걀물 상태","ingredientKeys":["egg"]},
+        {"number":3,"instruction":"뚜껑 있는 내열 그릇 안쪽에 참기름을 얇게 바르고 달걀물을 붓는다.","heat":"불 사용 안 함","duration":"1분","doneness":"달걀물이 그릇 높이의 70%를 넘지 않는 상태","ingredientKeys":["sesame_oil","egg"]},
+        {"number":4,"instruction":"냄비에 그릇 높이의 3분의 1까지 물을 붓고 끓인 뒤 그릇을 넣어 뚜껑을 덮고 중탕한다.","heat":"물이 끓은 뒤 약불","duration":"10~12분","doneness":"가운데를 흔들면 전체가 푸딩처럼 함께 흔들리고 기울여도 익지 않은 달걀물이 흐르지 않는 상태","ingredientKeys":["egg"]},
+        {"number":5,"instruction":"불을 끄고 쪽파를 올린 뒤 뚜껑을 덮은 채 잔열로 마무리한다.","heat":"불 끄기","duration":"2분","doneness":"쪽파 향이 나고 표면이 촉촉하게 굳은 상태","ingredientKeys":["green_onion"]}
+      ],
+      "spiceProfiles": {"NORMAL":{"label":"기본맛","overrides":{}}},
+      "safetyChecks": [
+        {"ingredientKey":"egg","minimumInternalTemperatureC":71,"minimumHoldMinutes":0}
+      ],
+      "sources": [
+        {"type":"REFERENCE","name":"Korean Bapsang - Gyeranjjim","url":"https://www.koreanbapsang.com/gyeranjjim-korean-steamed-eggs/","retrievedAt":"2026-08-21"},
+        {"type":"REFERENCE","name":"Maangchi - Steamed eggs","url":"https://www.maangchi.com/recipe/gyeranjjim","retrievedAt":"2026-08-21"}
+      ]
+    },
+    {
+      "key": "miyeokguk",
+      "version": 2,
+      "title": "미역국",
+      "aliases": ["미역 국", "소고기미역국", "소고기 미역국", "쇠고기미역국"],
+      "description": "불린 미역과 소고기를 참기름에 충분히 볶은 뒤 물을 나누어 넣어 국물 맛을 우린 기본형입니다.",
+      "baseServings": 2,
+      "cookingTime": 40,
+      "difficulty": 1,
+      "caloriesPerServing": 250,
+      "ingredients": [
+        {"key":"seaweed","name":"마른 미역","amount":10,"unit":"g","preparation":"찬물에 10분 불리기"},
+        {"key":"beef","name":"소고기 양지","amount":120,"unit":"g","preparation":"2cm 크기"},
+        {"key":"water","name":"물","amount":900,"unit":"ml","preparation":""},
+        {"key":"soup_soy","name":"국간장","amount":15,"unit":"ml","preparation":""},
+        {"key":"fish_sauce","name":"액젓","amount":5,"unit":"ml","preparation":""},
+        {"key":"garlic","name":"다진 마늘","amount":8,"unit":"g","preparation":""},
+        {"key":"sesame_oil","name":"참기름","amount":8,"unit":"ml","preparation":""}
+      ],
+      "steps": [
+        {"number":1,"instruction":"마른 미역을 넉넉한 찬물에 불린 뒤 두세 번 헹구고 물기를 꼭 짜서 4cm 길이로 자른다.","heat":"불 사용 안 함","duration":"12분","doneness":"미역이 부드럽게 펴지고 모래나 이물감이 없는 상태","ingredientKeys":["seaweed"]},
+        {"number":2,"instruction":"냄비에 참기름과 소고기를 넣어 볶는다.","heat":"중불","duration":"3분","doneness":"고기 겉면의 붉은색이 사라진 상태","ingredientKeys":["sesame_oil","beef"]},
+        {"number":3,"instruction":"불린 미역과 국간장을 넣어 미역이 냄비 바닥에 붙지 않게 볶는다.","heat":"중불","duration":"3분","doneness":"미역 색이 진해지고 윤기가 도는 상태","ingredientKeys":["seaweed","soup_soy"]},
+        {"number":4,"instruction":"전체 물의 3분의 1을 먼저 붓고 끓으면 5분 끓인 뒤 남은 물과 다진 마늘을 넣는다.","heat":"강불에서 끓인 뒤 중약불","duration":"20분","doneness":"소고기가 속까지 익고 국물에 미역과 소고기 맛이 충분히 우러난 상태","ingredientKeys":["water","garlic","beef"]},
+        {"number":5,"instruction":"액젓을 넣고 2분 더 끓인 뒤 불을 끈다.","heat":"중약불","duration":"2분","doneness":"미역이 부드럽고 국물 간이 전체적으로 균일한 상태","ingredientKeys":["fish_sauce"]}
+      ],
+      "spiceProfiles": {"NORMAL":{"label":"기본맛","overrides":{}}},
+      "safetyChecks": [
+        {"ingredientKey":"beef","minimumInternalTemperatureC":63,"minimumHoldMinutes":3}
+      ],
+      "sources": [
+        {"type":"REFERENCE","name":"Maangchi - Seaweed soup","url":"https://www.maangchi.com/recipe/miyeokguk","retrievedAt":"2026-08-21"},
+        {"type":"REFERENCE","name":"Korean Bapsang - Miyeok Guk","url":"https://www.koreanbapsang.com/miyeok-guk-beef-seaweed-soup/","retrievedAt":"2026-08-21"}
+      ]
+    },
+    {
+      "key": "tteokbokki",
+      "version": 2,
+      "title": "떡볶이",
+      "aliases": ["떡 볶이", "국물떡볶이"],
+      "description": "멸치다시마 육수에 양념을 먼저 풀고 떡과 어묵을 졸여 소스 농도와 떡의 식감을 맞춘 기본형입니다.",
+      "baseServings": 2,
+      "cookingTime": 30,
+      "difficulty": 1,
+      "caloriesPerServing": 590,
+      "ingredients": [
+        {"key":"rice_cake","name":"떡볶이 떡","amount":300,"unit":"g","preparation":"굳었으면 찬물에 10분 담그기"},
+        {"key":"fish_cake","name":"사각 어묵","amount":100,"unit":"g","preparation":"한입 크기"},
+        {"key":"stock","name":"멸치다시마 육수","amount":500,"unit":"ml","preparation":"무염, 10분의 1은 농도 조절용으로 남기기"},
+        {"key":"cabbage","name":"양배추","amount":100,"unit":"g","preparation":"4cm 크기"},
+        {"key":"green_onion","name":"대파","amount":30,"unit":"g","preparation":"5cm 길이"},
+        {"key":"gochujang","name":"고추장","amount":35,"unit":"g","preparation":""},
+        {"key":"gochugaru","name":"고춧가루","amount":8,"unit":"g","preparation":"중간 매운맛"},
+        {"key":"sugar","name":"설탕","amount":20,"unit":"g","preparation":""},
+        {"key":"soy","name":"양조간장","amount":10,"unit":"ml","preparation":""},
+        {"key":"chili","name":"청양고추","amount":0,"unit":"g","preparation":"어슷썰기"}
+      ],
+      "steps": [
+        {"number":1,"instruction":"굳은 떡은 찬물에 담가 풀고 어묵, 양배추와 대파를 썬다.","heat":"불 사용 안 함","duration":"10분","doneness":"떡이 서로 떨어지고 재료 크기가 고른 상태","ingredientKeys":["rice_cake","fish_cake","cabbage","green_onion","chili"],"instructionOverrides":{"SPICY":"굳은 떡은 찬물에 담가 풀고 어묵, 양배추, 대파와 청양고추를 썬다.","EXTREME":"굳은 떡은 찬물에 담가 풀고 어묵, 양배추, 대파와 청양고추를 썬다."}},
+        {"number":2,"instruction":"넓은 냄비에 농도 조절용 육수 10분의 1을 제외한 나머지 육수, 고추장, 고춧가루, 설탕과 간장을 넣고 고추장이 완전히 풀릴 때까지 젓는다.","heat":"중불","duration":"3분","doneness":"양념 덩어리 없이 국물이 끓기 시작한 상태","ingredientKeys":["stock","gochujang","gochugaru","sugar","soy"]},
+        {"number":3,"instruction":"떡과 양배추를 넣고 바닥에 붙지 않도록 1분마다 저어가며 끓인다.","heat":"중불","duration":"6분","doneness":"떡 중심이 말랑해지기 시작하고 양배추 숨이 절반쯤 죽은 상태","ingredientKeys":["rice_cake","cabbage"]},
+        {"number":4,"instruction":"어묵과 대파를 넣어 계속 저으며 졸인다.","heat":"중불","duration":"5분","doneness":"떡을 잘랐을 때 단단한 흰 심이 없고 소스가 주걱에 얇게 묻는 상태","ingredientKeys":["fish_cake","green_onion","chili","rice_cake"],"instructionOverrides":{"SPICY":"어묵, 대파와 청양고추를 넣어 계속 저으며 졸인다.","EXTREME":"어묵, 대파와 청양고추를 넣어 계속 저으며 졸인다."}},
+        {"number":5,"instruction":"불을 끄고 2분 두어 소스 농도를 안정시킨다. 너무 되면 남겨 둔 뜨거운 육수를 15ml씩 섞는다.","heat":"불 끄기","duration":"2분","doneness":"소스가 떡 표면에 흐르지 않고 고르게 묻는 상태","ingredientKeys":["rice_cake","stock"]}
+      ],
+      "spiceProfiles": {
+        "MILD":{"label":"순한맛","overrides":{"gochujang":25,"gochugaru":2,"chili":0}},
+        "NORMAL":{"label":"기본 매운맛","overrides":{"gochujang":35,"gochugaru":8,"chili":0}},
+        "SPICY":{"label":"매운맛","overrides":{"gochujang":40,"gochugaru":13,"chili":10}},
+        "EXTREME":{"label":"불닭 수준을 목표로 한 매우 매운맛","overrides":{"gochujang":45,"gochugaru":18,"chili":20}}
+      },
+      "safetyChecks": [],
+      "sources": [
+        {"type":"REFERENCE","name":"Maangchi - Tteokbokki","url":"https://www.maangchi.com/recipe/tteokbokki","retrievedAt":"2026-08-21"},
+        {"type":"REFERENCE","name":"Korean Bapsang - Tteokbokki","url":"https://www.koreanbapsang.com/tteokbokki-spicy-stir-fried-rice-cakes/","retrievedAt":"2026-08-21"}
+      ]
+    },
+    {
+      "key": "tomato-pasta",
+      "version": 2,
+      "title": "토마토 파스타",
+      "aliases": ["토마토파스타", "토마토 스파게티", "스파게티 알 포모도로", "포모도로"],
+      "description": "통토마토를 충분히 졸인 소스와 알덴테로 삶은 스파게티를 팬에서 마저 익혀 소스가 면에 붙게 만든 기본형입니다.",
+      "baseServings": 2,
+      "cookingTime": 35,
+      "difficulty": 2,
+      "caloriesPerServing": 610,
+      "ingredients": [
+        {"key":"pasta","name":"건조 스파게티","amount":200,"unit":"g","preparation":""},
+        {"key":"tomato","name":"캔 홀토마토","amount":400,"unit":"g","preparation":"손으로 으깨기"},
+        {"key":"olive_oil","name":"엑스트라버진 올리브유","amount":30,"unit":"ml","preparation":""},
+        {"key":"garlic","name":"마늘","amount":10,"unit":"g","preparation":"얇게 썰기"},
+        {"key":"basil","name":"생바질","amount":10,"unit":"g","preparation":"잎만"},
+        {"key":"salt","name":"소금","amount":16,"unit":"g","preparation":"4분의 3은 면수용, 4분의 1은 소스용"},
+        {"key":"water","name":"면 삶을 물","amount":2000,"unit":"ml","preparation":""},
+        {"key":"parmesan","name":"파르미자노 레지아노","amount":20,"unit":"g","preparation":"곱게 갈기"},
+        {"key":"pepper","name":"후춧가루","amount":0.5,"unit":"g","preparation":""}
+      ],
+      "steps": [
+        {"number":1,"instruction":"홀토마토는 손으로 으깨고 마늘은 얇게 썰며 바질 잎을 준비한다.","heat":"불 사용 안 함","duration":"4분","doneness":"큰 토마토 덩어리가 2cm 이하이고 마늘 두께가 고른 상태","ingredientKeys":["tomato","garlic","basil"]},
+        {"number":2,"instruction":"팬에 올리브유와 마늘을 넣고 차가운 상태에서 가열해 향을 낸다.","heat":"약불","duration":"3분","doneness":"마늘 가장자리가 옅은 금색이고 갈색으로 타지 않은 상태","ingredientKeys":["olive_oil","garlic"]},
+        {"number":3,"instruction":"으깬 토마토, 전체 소금의 4분의 1, 후춧가루, 바질 절반을 넣고 뚜껑 없이 졸인다.","heat":"중불에서 끓인 뒤 중약불","duration":"15분","doneness":"주걱으로 팬 바닥을 그었을 때 길이 2초간 유지되는 농도","ingredientKeys":["tomato","salt","pepper","basil"]},
+        {"number":4,"instruction":"냄비에 표시된 양의 물과 남은 소금을 끓이고 스파게티를 넣어 포장지 권장 시간보다 2분 짧게 삶는다. 사용한 물의 약 6%를 면수로 남기고 면을 건진다.","heat":"강불에서 끓인 뒤 중강불","duration":"약 8~10분(포장지 권장 시간보다 2분 짧게)","doneness":"면 중심에 가느다란 흰 심이 남은 상태","ingredientKeys":["water","salt","pasta"]},
+        {"number":5,"instruction":"소스 팬에 면과 남긴 면수의 절반을 넣어 계속 섞고, 부족하면 남은 면수를 조금씩 더한다. 불을 끄고 남은 바질과 파르미자노를 섞는다.","heat":"중강불 2분 후 불 끄기","duration":"3분","doneness":"면을 씹었을 때 단단한 심은 없지만 탄력이 있고 소스가 물처럼 고이지 않고 면에 붙은 상태","ingredientKeys":["pasta","water","basil","parmesan"]}
+      ],
+      "spiceProfiles": {"NORMAL":{"label":"기본맛","overrides":{}}},
+      "safetyChecks": [],
+      "sources": [
+        {"type":"REFERENCE","name":"GialloZafferano - Spaghetti with tomato sauce","url":"https://www.giallozafferano.com/recipes/Spaghetti-with-tomato-sauce.html","retrievedAt":"2026-08-21"},
+        {"type":"REFERENCE","name":"Serious Eats - Easy Italian tomato sauce","url":"https://www.seriouseats.com/easy-italian-amercian-red-sauce-recipe","retrievedAt":"2026-08-21"}
+      ]
+    }
+  ]
+}

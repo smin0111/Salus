@@ -13,14 +13,19 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * {@link OllamaRecipeGenerationClient} 테스트입니다. 가짜 HTTP 응답으로 JSON 파싱과 실패 코드를 확인합니다.
+ */
 class OllamaRecipeGenerationClientTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    // 정상 JSON 응답은 레시피 초안으로 변환되어야 합니다.
     @Test
     void normalJsonRecipeDeserializesToDraft() throws Exception {
         OllamaRecipeGenerationClient client = clientWithExchange(request -> Mono.just(okResponse("""
@@ -45,6 +50,7 @@ class OllamaRecipeGenerationClientTest {
         assertThat(draft.steps().get(0).heatLevel()).isNull();
     }
 
+    // 마크다운 코드 블록으로 감싼 JSON은 순수 JSON이 아니므로 실패로 처리해야 합니다.
     @Test
     void markdownWrappedJsonFailsAsInvalidStructuredOutput() {
         OllamaRecipeGenerationClient client = clientWithExchange(request -> Mono.just(okResponse("""
@@ -58,6 +64,7 @@ class OllamaRecipeGenerationClientTest {
                 .hasMessageContaining("순수 JSON");
     }
 
+    // Ollama 응답의 thinking(추론 과정)은 content와 분리해서 읽어야 합니다.
     @Test
     void ollamaMessageDeserializesThinkingSeparatelyFromContent() throws Exception {
         OllamaLlmService.OllamaResponse response = objectMapper.readValue("""
@@ -75,6 +82,36 @@ class OllamaRecipeGenerationClientTest {
         assertThat(response.getMessage().getThinking()).isEqualTo("private reasoning");
     }
 
+    // 2차 주소 설정이 없으면 가짜 대체 경로를 호출하지 않고 1번만 요청해야 합니다.
+    @Test
+    void missingSecondaryConfigurationDoesNotCallFakeFallbackPort() {
+        AtomicInteger calls = new AtomicInteger();
+        OllamaRecipeGenerationClient client = clientWithExchange(request -> {
+            calls.incrementAndGet();
+            return Mono.error(new IllegalStateException("primary unavailable"));
+        });
+        ReflectionTestUtils.setField(client, "secondaryUrl", "");
+
+        assertThatThrownBy(() -> client.generate(minimalRequest()).block())
+                .isInstanceOf(RecipeGenerationException.class)
+                .hasMessageContaining("구조화 레시피 생성 호출에 실패");
+        assertThat(calls).hasValue(1);
+    }
+
+    // 출력 토큰 한도로 잘린 응답은 OUTPUT_TOKEN_LIMIT 실패 코드로 보고해야 합니다.
+    @Test
+    void outputTokenLimitIsReportedWithAStableFailureCode() {
+        OllamaRecipeGenerationClient client = clientWithExchange(request -> Mono.just(okResponse(
+                "{\"title\":\"고등어무조림\"",
+                "length",
+                800)));
+
+        assertThatThrownBy(() -> client.generate(minimalRequest()).block())
+                .isInstanceOfSatisfying(RecipeGenerationException.class, error ->
+                        assertThat(error.getFailureCode()).isEqualTo("OUTPUT_TOKEN_LIMIT"));
+    }
+
+    // 가짜 ExchangeFunction을 쓰는 WebClient로 클라이언트를 만듭니다.
     private OllamaRecipeGenerationClient clientWithExchange(ExchangeFunction exchangeFunction) {
         WebClient webClient = WebClient.builder()
                 .exchangeFunction(exchangeFunction)
@@ -85,6 +122,7 @@ class OllamaRecipeGenerationClientTest {
         ReflectionTestUtils.setField(client, "recipeTemperature", 0.15);
         ReflectionTestUtils.setField(client, "recipeTopP", 0.8);
         ReflectionTestUtils.setField(client, "recipeNumPredict", 1200);
+        ReflectionTestUtils.setField(client, "recipeNumCtx", 8192);
         ReflectionTestUtils.setField(client, "recipeTimeoutSeconds", 5L);
         ReflectionTestUtils.setField(client, "primaryUrl", "http://primary.example/api/chat");
         ReflectionTestUtils.setField(client, "secondaryUrl", "http://secondary.example/api/chat");
@@ -108,10 +146,20 @@ class OllamaRecipeGenerationClientTest {
     }
 
     private ClientResponse okResponse(String content) {
+        return okResponse(content, "stop", null);
+    }
+
+    // 지정한 content/doneReason을 가진 Ollama 응답을 만듭니다.
+    private ClientResponse okResponse(String content, String doneReason, Integer evalCount) {
         try {
-            String body = objectMapper.writeValueAsString(Map.of(
-                    "message", Map.of("role", "assistant", "content", content),
-                    "done", true));
+            Map<String, Object> response = new java.util.LinkedHashMap<>();
+            response.put("message", Map.of("role", "assistant", "content", content));
+            response.put("done", true);
+            response.put("done_reason", doneReason);
+            if (evalCount != null) {
+                response.put("eval_count", evalCount);
+            }
+            String body = objectMapper.writeValueAsString(response);
             return ClientResponse.create(HttpStatus.OK)
                     .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                     .body(body)

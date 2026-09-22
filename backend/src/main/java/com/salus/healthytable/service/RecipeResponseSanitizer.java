@@ -1,6 +1,7 @@
 package com.salus.healthytable.service;
 
 import com.salus.healthytable.domain.Recipe;
+import com.salus.healthytable.domain.RecipeApprovalStatus;
 import com.salus.healthytable.dto.ChatDto;
 import org.springframework.stereotype.Service;
 
@@ -8,11 +9,23 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * LLM 답변과 레시피 텍스트를 사용자에게 보여 주기 좋게 정리하는 도우미 클래스입니다.
+ *
+ * 주요 역할:
+ * - 불필요한 인사/자기소개 문장 제거, 중국어·일본어 "적량" 표기 교정
+ * - 레시피 답변 텍스트/레시피 카드(ChatDto.RecipeCard) 조립
+ * - 초보자용 조리 팁 보강, 무가열 메뉴에 섞인 가열 팁 제거
+ * - 재료 제외 요청 시 재료/조리 단계에서 해당 재료 제거
+ * 대부분 문자열 치환 규칙이라, 규칙을 추가할 때는 다른 요리 답변에 영향을 주지 않는지 테스트로 확인해야 합니다.
+ */
 @Service
 public class RecipeResponseSanitizer {
 
+    // 레시피 필드 하나를 텍스트로 붙일 때의 최대 길이
     private static final int MAX_RECIPE_FIELD_LENGTH = 900;
 
+    // "안녕하세요, 저는 Salus입니다" 같은 인사/소개 줄을 지우고, 3줄 이상 연속된 빈 줄을 정리합니다.
     String sanitizeRecipeReply(String reply) {
         if (reply == null || reply.isBlank()) {
             return "";
@@ -33,6 +46,7 @@ public class RecipeResponseSanitizer {
                 .trim();
     }
 
+    // 한 줄 안에 섞여 있는 Salus 자기소개 문장 조각을 제거합니다.
     String removeSalusIntroFragments(String line) {
         if (line == null || line.isBlank()) {
             return "";
@@ -45,6 +59,7 @@ public class RecipeResponseSanitizer {
                 .trim();
     }
 
+    // 영어 근거의 "pastry"를 "파스타"로 잘못 번역한 흔적을 페이스트리로 바로잡습니다.
     String normalizeSearchBasedTranslationArtifacts(String reply, String searchContext, String title) {
         if (reply == null || reply.isBlank()) {
             return "";
@@ -65,6 +80,12 @@ public class RecipeResponseSanitizer {
                 .replace("파스타 반죽", "페이스트리 생지");
     }
 
+    /**
+     * 상세 설명 답변에서 자주 발견된 오류를 규칙으로 보정합니다.
+     * 예) 파이가 아닌 요리의 "파이 크러스트" → 퍼프 페이스트리, 감싸는 요리의 프로슈토/베이컨 수량 보정,
+     * 조리 순서에 쓰였지만 재료 목록에 없는 기본 재료(올리브유, 버터, 계란, 소금, 후추) 추가 등
+     * 특정 요리(비프 웰링턴 등)에서 관찰된 문제를 고치기 위한 규칙이 많습니다.
+     */
     String applyRecipeQualityGuards(String reply, String title) {
         if (reply == null || reply.isBlank()) {
             return "";
@@ -156,6 +177,7 @@ public class RecipeResponseSanitizer {
                 .trim();
     }
 
+    // 겉을 감싸는 용도의 재료(프로슈토 등)가 속재료 다지기 단계에 잘못 들어간 문장을 고칩니다.
     String removeWrappingIngredientFromChoppedFilling(String text, String wrappingIngredient) {
         if (text == null || text.isBlank() || wrappingIngredient == null || wrappingIngredient.isBlank()) {
             return text;
@@ -171,6 +193,7 @@ public class RecipeResponseSanitizer {
                         "버섯을 푸드 프로세서에 넣고");
     }
 
+    // 설명에서 자기소개와 "OO 레시피 알려줘" 같은 사용자 요청 문구가 섞인 부분을 제거합니다.
     String sanitizeRecipeDescription(Recipe recipe) {
         if (recipe == null || recipe.getDescription() == null || recipe.getDescription().isBlank()) {
             return "";
@@ -187,6 +210,10 @@ public class RecipeResponseSanitizer {
                 .trim();
     }
 
+    /**
+     * 내부 레시피 DB의 레시피로 답변 텍스트를 만듭니다.
+     * 1인분 열량이 없고 전체 열량만 있으면 "(기준 미확인)"을 붙여 1인분 열량으로 오해하지 않게 합니다.
+     */
     String buildTrustedRecipeReply(Recipe recipe, List<String> safetyNotes) {
         StringBuilder reply = new StringBuilder();
         reply.append(nullToBlank(recipe.getTitle())).append(" 레시피입니다.\n\n");
@@ -200,8 +227,13 @@ public class RecipeResponseSanitizer {
         if (recipe.getCookingTime() != null) {
             summary.add("조리 시간: " + recipe.getCookingTime() + "분");
         }
-        if (recipe.getCalories() != null) {
-            summary.add("열량: " + recipe.getCalories() + "kcal");
+        if (recipe.getBaseServings() != null && recipe.getBaseServings() > 0) {
+            summary.add("인분: " + recipe.getBaseServings() + "인분");
+        }
+        if (recipe.getCaloriesPerServing() != null) {
+            summary.add("열량: 1인분당 약 " + recipe.getCaloriesPerServing() + "kcal");
+        } else if (recipe.getCalories() != null) {
+            summary.add("열량: " + recipe.getCalories() + "kcal (기준 미확인)");
         }
         if (recipe.getDifficulty() != null) {
             summary.add("난이도: " + recipe.getDifficulty());
@@ -236,6 +268,7 @@ public class RecipeResponseSanitizer {
         return reply.toString().trim();
     }
 
+    // 생성/변형 레시피로 답변 텍스트를 만듭니다(건강 주의 섹션과 출처 문구 없음).
     String buildGeneratedRecipeReply(Recipe recipe) {
         StringBuilder reply = new StringBuilder();
         reply.append(nullToBlank(recipe.getTitle())).append(" 레시피입니다.\n\n");
@@ -249,8 +282,13 @@ public class RecipeResponseSanitizer {
         if (recipe.getCookingTime() != null) {
             summary.add("조리 시간: " + recipe.getCookingTime() + "분");
         }
-        if (recipe.getCalories() != null) {
-            summary.add("열량: " + recipe.getCalories() + "kcal");
+        if (recipe.getBaseServings() != null && recipe.getBaseServings() > 0) {
+            summary.add("인분: " + recipe.getBaseServings() + "인분");
+        }
+        if (recipe.getCaloriesPerServing() != null) {
+            summary.add("열량: 1인분당 약 " + recipe.getCaloriesPerServing() + "kcal");
+        } else if (recipe.getCalories() != null) {
+            summary.add("열량: " + recipe.getCalories() + "kcal (기준 미확인)");
         }
         if (recipe.getDifficulty() != null) {
             summary.add("난이도: " + recipe.getDifficulty());
@@ -277,20 +315,30 @@ public class RecipeResponseSanitizer {
         return reply.toString().trim();
     }
 
+    /**
+     * 화면에 표시할 레시피 카드를 만듭니다.
+     * 승인(APPROVED) 레시피는 검수된 조리 순서를 그대로 쓰고, 그 외에는 초보자 팁을 보강한 조리 순서를 씁니다.
+     */
     ChatDto.RecipeCard buildRecipeCard(Recipe recipe, List<String> safetyNotes) {
+        List<String> steps = recipe.getApprovalStatus() == RecipeApprovalStatus.APPROVED
+                ? cleanRecipeValues(recipe.getSteps())
+                : beginnerFriendlySteps(recipe);
         return new ChatDto.RecipeCard(
                 recipe.getId(),
                 recipe.getTitle(),
                 sanitizeRecipeDescription(recipe),
                 cleanRecipeValues(recipe.getIngredients()),
-                beginnerFriendlySteps(recipe),
+                steps,
+                recipe.getBaseServings(),
                 recipe.getCalories(),
+                recipe.getCaloriesPerServing(),
                 recipe.getDifficulty(),
                 recipe.getCookingTime(),
                 recipe.getImageUrl(),
                 safetyNotes == null ? List.of() : safetyNotes);
     }
 
+    // 빈 값을 제거하고 앞뒤 공백과 "적량" 표기를 정리합니다.
     List<String> cleanRecipeValues(List<String> values) {
         if (values == null || values.isEmpty()) {
             return List.of();
@@ -303,6 +351,10 @@ public class RecipeResponseSanitizer {
                 .toList();
     }
 
+    /**
+     * 조리 순서를 초보자용으로 다듬습니다.
+     * 1) 재료 목록에 없는 선택 재료 제안 문장 제거 → 2) 무가열 메뉴의 가열 팁 제거 → 3) 설명이 부족한 단계에 팁 추가
+     */
     List<String> beginnerFriendlySteps(Recipe recipe) {
         if (recipe == null) {
             return List.of();
@@ -320,6 +372,7 @@ public class RecipeResponseSanitizer {
                 .toList();
     }
 
+    // 제목이 화채/샐러드 등이거나, 조리 순서에 가열 표현 없이 섞기/냉장 같은 표현만 있으면 무가열 메뉴로 봅니다.
     boolean isNoHeatRecipe(Recipe recipe) {
         String title = nullToBlank(recipe.getTitle()).replaceAll("\\s+", "");
         if (containsTextAny(title, "화채", "스무디", "요거트", "샐러드", "빙수", "주스", "에이드", "파르페")) {
@@ -334,6 +387,7 @@ public class RecipeResponseSanitizer {
         return hasColdPreparation && !hasHeatAction;
     }
 
+    // 무가열 메뉴에 자동으로 붙었던 가열용 팁 문장(beginnerTipForStep의 문구)을 제거합니다.
     String removeInappropriateHeatTipsForNoHeatRecipe(String step, boolean noHeatRecipe) {
         String cleaned = nullToBlank(step).trim();
         if (!noHeatRecipe || cleaned.isBlank()) {
@@ -347,6 +401,7 @@ public class RecipeResponseSanitizer {
                 .trim();
     }
 
+    // "원한다면 청양고추를 추가해도 좋아요"처럼 재료 목록에 없는 선택 재료를 권하는 문장을 제거합니다.
     String removeUnlistedOptionalIngredientSuggestions(String step, String ingredientText) {
         String trimmed = nullToBlank(step).trim();
         if (trimmed.isBlank()) {
@@ -372,6 +427,7 @@ public class RecipeResponseSanitizer {
         return cleaned.isBlank() ? trimmed : cleaned;
     }
 
+    // 문장에 언급된 재료 중 재료 목록에 없는 것이 하나라도 있으면 true입니다.
     boolean containsUnlistedIngredient(String sentence, String normalizedIngredients, String... ingredientNames) {
         for (String ingredientName : ingredientNames) {
             if (sentence.contains(ingredientName) && !normalizedIngredients.contains(ingredientName.toLowerCase())) {
@@ -381,6 +437,7 @@ public class RecipeResponseSanitizer {
         return false;
     }
 
+    // 단계 설명이 충분히 자세하지 않으면 단계 내용에 맞는 초보자 팁 한 문장을 덧붙입니다.
     String enrichBeginnerStep(String step, boolean noHeatRecipe) {
         String trimmed = nullToBlank(step).trim();
         if (trimmed.isBlank() || isBeginnerDetailedStep(trimmed, noHeatRecipe)) {
@@ -394,6 +451,11 @@ public class RecipeResponseSanitizer {
         return ensureSentence(trimmed) + " " + tip;
     }
 
+    /**
+     * 단계가 이미 충분히 자세한지 판단합니다.
+     * 가열 메뉴: 45자 이상이면서 불 세기/시간/상태/복구 방법 중 2가지 이상 포함
+     * 무가열 메뉴: 45자 이상이면서 손질 기준과 시간/상태 표현 포함
+     */
     boolean isBeginnerDetailedStep(String step, boolean noHeatRecipe) {
         if (noHeatRecipe) {
             boolean hasPrepDetail = containsTextAny(step, "한입", "먹기 좋은", "물기", "차갑", "냉장", "얼음", "으깨지");
@@ -423,6 +485,7 @@ public class RecipeResponseSanitizer {
         return step.length() >= 45 && detailScore >= 2;
     }
 
+    // 단계에 들어간 키워드(완성, 끓이기, 볶기, 손질 등)에 따라 붙일 초보자 팁 문장을 고릅니다.
     String beginnerTipForStep(String step, boolean noHeatRecipe) {
         if (noHeatRecipe) {
             if (containsTextAny(step, "완성", "마무리")) {
@@ -470,6 +533,7 @@ public class RecipeResponseSanitizer {
         return "불은 중불부터 시작하고, 타는 냄새가 나면 바로 약불로 낮춘 뒤 바닥을 긁듯이 저어주세요.";
     }
 
+    // 문장 끝에 마침표/느낌표/물음표가 없으면 마침표를 붙입니다.
     String ensureSentence(String value) {
         if (value.endsWith(".") || value.endsWith("!") || value.endsWith("?")) {
             return value;
@@ -477,6 +541,7 @@ public class RecipeResponseSanitizer {
         return value + ".";
     }
 
+    // 대소문자를 무시하고 키워드 중 하나라도 포함되면 true입니다.
     boolean containsTextAny(String value, String... keywords) {
         String normalized = nullToBlank(value).toLowerCase();
         for (String keyword : keywords) {
@@ -487,12 +552,14 @@ public class RecipeResponseSanitizer {
         return false;
     }
 
+    // 제외 재료가 들어간 재료 줄을 목록에서 뺍니다.
     List<String> removeExcludedIngredients(List<String> ingredients, List<String> excludedIngredients) {
         return cleanRecipeValues(ingredients).stream()
                 .filter(ingredient -> !containsExcludedIngredient(ingredient, excludedIngredients))
                 .toList();
     }
 
+    // 제목 앞의 "양파 없는 " 같은 기존 제외 접두어를 반복해서 제거합니다(접두어가 중복으로 쌓이지 않게).
     String removeExistingExclusionPrefix(String title, List<String> excludedIngredients) {
         String cleaned = nullToBlank(title).trim();
         for (String ingredient : excludedIngredients) {
@@ -509,6 +576,11 @@ public class RecipeResponseSanitizer {
         return cleaned.isBlank() ? "AI 추천 식단" : cleaned;
     }
 
+    /**
+     * 조리 단계에서 제외 재료를 제거합니다.
+     * 문장에서 재료 언급을 지운 뒤에도 재료가 남아 있으면 그 단계는 통째로 뺍니다.
+     * 모든 단계가 사라지거나 마지막 단계가 완성 단계가 아니면 기본 문장을 보충합니다.
+     */
     List<String> removeExcludedSteps(List<String> steps, List<String> excludedIngredients) {
         List<String> cleanedSteps = cleanRecipeValues(steps).stream()
                 .map(this::removeDetailedStepAnnotations)
@@ -529,6 +601,7 @@ public class RecipeResponseSanitizer {
         return cleanedSteps;
     }
 
+    // 마크다운 기호와 "/ 불 세기: ..." 같은 뒤쪽 부가 설명을 제거합니다.
     String removeDetailedStepAnnotations(String step) {
         if (step == null) {
             return "";
@@ -539,6 +612,7 @@ public class RecipeResponseSanitizer {
                 .trim();
     }
 
+    // 초보자 실수 정리, 주의사항, 목록 기호로 시작하는 줄처럼 실제 조리 단계가 아닌 문장이면 true입니다.
     boolean isNonCookingStepNote(String step) {
         if (step == null || step.isBlank()) {
             return true;
@@ -551,6 +625,7 @@ public class RecipeResponseSanitizer {
                 || compact.startsWith("주의");
     }
 
+    // 문장에서 "A, 양파를" / "양파와 A" 같은 형태의 제외 재료 언급과 조사를 지우고 남은 쉼표/공백을 정리합니다.
     String removeExcludedIngredientMentions(String step, List<String> excludedIngredients) {
         String cleaned = nullToBlank(step);
         for (String ingredient : excludedIngredients) {
@@ -569,6 +644,7 @@ public class RecipeResponseSanitizer {
                 .trim();
     }
 
+    // 기호/공백을 무시하고 제외 재료 이름이 텍스트에 포함되어 있으면 true입니다.
     boolean containsExcludedIngredient(String text, List<String> excludedIngredients) {
         String normalizedText = normalizeIngredientForMatching(text);
         for (String ingredient : excludedIngredients) {
@@ -585,6 +661,7 @@ public class RecipeResponseSanitizer {
                 .toLowerCase();
     }
 
+    // 값이 있을 때만 "라벨: 값" 줄을 추가합니다. 너무 긴 값은 잘라 냅니다.
     void appendRecipeField(StringBuilder builder, String label, String value) {
         if (value == null || value.isBlank()) {
             return;
@@ -601,6 +678,7 @@ public class RecipeResponseSanitizer {
                 .collect(Collectors.joining(", "));
     }
 
+    // 목록을 "1. a 2. b" 형태의 한 줄 문자열로 만듭니다.
     String joinNumberedRecipeList(List<String> values) {
         if (values == null || values.isEmpty()) {
             return "";
@@ -629,6 +707,7 @@ public class RecipeResponseSanitizer {
         return value == null ? "" : value;
     }
 
+    // 답변에 kcal/레시피/재료 같은 단어가 있으면 레시피 형태의 답변으로 봅니다(일반 대화 경로에서 사용).
     boolean looksLikeRecipeResponse(String reply) {
         if (reply == null) {
             return false;
@@ -636,6 +715,7 @@ public class RecipeResponseSanitizer {
         return reply.contains("kcal") || reply.contains("레시피") || reply.contains("재료");
     }
 
+    // OllamaLlmService가 LLM 장애 시 돌려주는 안내 문구인지 확인합니다.
     boolean isLlmUnavailableReply(String reply) {
         if (reply == null) {
             return false;
