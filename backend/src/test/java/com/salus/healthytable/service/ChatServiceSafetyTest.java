@@ -537,6 +537,24 @@ class ChatServiceSafetyTest {
         verify(searchEngine, never()).search(anyString());
     }
 
+    // 일반 대화 답변은 검증기를 거치지 않으므로, 등록 알레르겐이 보이면 차단 대신 주의 문구를 붙여야 합니다.
+    @Test
+    void generalChatReplyMentioningRegisteredAllergyGetsCautionNote() {
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("오늘 저녁 뭐 먹을지 추천해줘");
+        request.setHealthProfile(new ChatDto.HealthProfileContext(
+                List.of("새우"), List.of(), List.of(), List.of(), List.of()));
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        when(llmService.getChatResponse(anyString(), any())).thenReturn(Mono.just("새우볶음밥은 어떠세요?"));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getReply())
+                .startsWith("새우볶음밥은 어떠세요?")
+                .contains("※ 등록하신 알레르기(새우)");
+    }
+
     // 이전 대화에서 말한 알레르기도 반영해 차단해야 합니다.
     @Test
     void processChatBlocksRecipeWhenAllergyWasMentionedInHistory() {

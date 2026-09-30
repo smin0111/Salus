@@ -222,6 +222,26 @@ public class ChatSafetyContextService {
     }
 
     /**
+     * 일반 대화·메뉴 추천 답변에 등록 알레르겐이 나오면 주의 문구를 덧붙입니다.
+     *
+     * <p>이 경로의 답변은 구조화 레시피가 아니라서 검증기를 거치지 않습니다. 그렇다고 답변을
+     * 막으면 "새우 알레르기 없이 즐길 수 있는 전"처럼 알레르기를 피해 가는 정상 답변까지
+     * 막히므로, 차단 대신 확인을 요청하는 문구를 붙입니다. 판정은 레시피 경로와 같은
+     * AllergenMatcher를 씁니다. 등록 알레르기가 없으면 답변을 그대로 돌려줍니다.
+     */
+    public String appendAllergyCautionIfMentioned(SafetyContext safetyContext, String reply) {
+        if (safetyContext == null || safetyContext.allergies().isEmpty() || reply == null || reply.isBlank()) {
+            return reply;
+        }
+        List<String> conflicts = allergenMatcher.findConflicts(safetyContext.allergies(), List.of(reply));
+        if (conflicts.isEmpty()) {
+            return reply;
+        }
+        return reply + "\n\n※ 등록하신 알레르기(" + String.join(", ", conflicts)
+                + ")와 관련된 재료나 메뉴가 답변에 언급되어 있습니다. 드시기 전에 실제 재료와 원재료 표시를 꼭 확인해 주세요.";
+    }
+
+    /**
      * 레시피 카드에 표시할 주의 문구를 만듭니다.
      * 건강 프로필(알레르기, 만성질환, 식단 제한)과 최신 검진 수치를 재료 목록과 비교합니다.
      */

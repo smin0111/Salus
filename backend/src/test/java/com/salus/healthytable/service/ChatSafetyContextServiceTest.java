@@ -136,6 +136,52 @@ class ChatSafetyContextServiceTest {
     }
 
     // 실제 알레르겐 사전 파일을 읽어 Matcher를 만듭니다.
+    private static ChatSafetyContextService.SafetyContext allergyContext(String... allergies) {
+        return new ChatSafetyContextService.SafetyContext(
+                List.of(allergies), List.of(), List.of(), List.of(), List.of(), true);
+    }
+
+    // 일반 대화 답변에 등록 알레르겐이 나오면 차단하지 않고 확인 문구를 덧붙입니다.
+    @Test
+    void generalChatReplyMentioningRegisteredAllergenGetsCautionNote() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), mock(AllergenRegistry.class));
+        String reply = "해물파전 대신 새우전을 추천드려요.";
+
+        String result = service.appendAllergyCautionIfMentioned(allergyContext("새우"), reply);
+
+        assertThat(result).startsWith(reply).contains("※ 등록하신 알레르기(새우)");
+    }
+
+    // 파생 재료(버터)도 같은 매처로 잡습니다. 알레르겐 단어가 직접 나오지 않아도 확인 문구가 붙어야 합니다.
+    @Test
+    void generalChatReplyWithDerivedIngredientGetsCautionNote() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), mock(AllergenRegistry.class));
+
+        String result = service.appendAllergyCautionIfMentioned(allergyContext("우유"), "버터에 구운 감자를 추천해요.");
+
+        assertThat(result).contains("※ 등록하신 알레르기(우유)");
+    }
+
+    // 알레르겐과 무관한 답변, 한 글자 알레르겐의 부분 일치(밀 vs 밀크)는 그대로 둡니다.
+    @Test
+    void generalChatReplyWithoutAllergenStaysUnchanged() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), mock(AllergenRegistry.class));
+
+        assertThat(service.appendAllergyCautionIfMentioned(allergyContext("새우"), "김치전을 추천해요."))
+                .isEqualTo("김치전을 추천해요.");
+        assertThat(service.appendAllergyCautionIfMentioned(allergyContext("밀"), "밀크티를 곁들여 보세요."))
+                .isEqualTo("밀크티를 곁들여 보세요.");
+    }
+
+    // 등록 알레르기가 없으면 답변을 건드리지 않습니다.
+    @Test
+    void generalChatReplyWithoutRegisteredAllergyStaysUnchanged() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), mock(AllergenRegistry.class));
+
+        assertThat(service.appendAllergyCautionIfMentioned(allergyContext(), "새우전을 추천해요."))
+                .isEqualTo("새우전을 추천해요.");
+    }
+
     private static com.salus.healthytable.service.allergen.AllergenMatcher allergenMatcher() {
         com.salus.healthytable.service.allergen.AllergenDictionary dictionary =
                 new com.salus.healthytable.service.allergen.AllergenDictionary();

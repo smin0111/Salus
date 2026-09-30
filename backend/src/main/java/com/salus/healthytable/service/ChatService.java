@@ -361,6 +361,11 @@ public class ChatService {
                             logRequestFailure(intent.name(), request.getMessage(), "NON_RECIPE_INTENT_RECIPE_OUTPUT", null);
                             responseReply = buildNonRecipeIntentReply(intent, request.getMessage());
                         }
+                        // 일반 대화 답변은 검증기를 거치지 않으므로 등록 알레르겐이 보이면 주의 문구를 붙입니다.
+                        if (!isLlmUnavailableReply(reply)) {
+                            responseReply = chatSafetyContextService.appendAllergyCautionIfMentioned(
+                                    safetyContext, responseReply);
+                        }
                         if (chatSession != null) {
                             saveChatMessage(chatSession, "model", responseReply);
                         }
