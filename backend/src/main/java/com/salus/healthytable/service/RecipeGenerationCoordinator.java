@@ -56,6 +56,16 @@ public class RecipeGenerationCoordinator {
     private long repairTimeoutSeconds = 65;
 
     /**
+     * 복구까지 실패했을 때 마지막으로 시도할 다른 모델. 비어 있으면 폴백하지 않습니다.
+     *
+     * <p>같은 모델로 복구하면 같은 실패가 반복됩니다. repeat 3 측정에서 24개 (모델, 케이스)
+     * 조합이 전부 3/3 아니면 0/3으로 갈렸고, 두 모델의 실패 지점은 거의 겹치지 않았습니다.
+     * qwen3:8b 7/12, gemma3:4b 5/12, 둘 중 하나라도 통과 10/12.
+     */
+    @Value("${recipe.generation.fallback-model:}")
+    private String fallbackModel = "";
+
+    /**
      * 새 레시피 생성(CREATE 모드) 요청 객체를 만듭니다.
      * 메시지에서 제외 재료("양파 빼고")와 대체 재료("A 대신 B")를 추출해 함께 넣습니다.
      */
@@ -259,6 +269,54 @@ public class RecipeGenerationCoordinator {
      * 검증에 실패한 초안을 한 번만 복구합니다.
      * 이미 복구본(attempt >= 1)이면 더 시도하지 않고 실패를 반환합니다. 복구본도 validateStructuredDraft로 똑같이 검사합니다.
      */
+    /**
+     * 복구본까지 실패하면 다른 모델로 한 번만 새로 생성합니다.
+     *
+     * <p>복구 프롬프트가 아니라 새 생성 프롬프트를 씁니다. 실패한 초안을 고치는 게 아니라
+     * 다른 모델의 강점으로 처음부터 만드는 것이 목적입니다. 폴백본도 같은 검증기를 통과해야
+     * 하며, 여기서 실패하면 더 시도하지 않고 실패를 반환합니다.
+     *
+     * <p>attempt >= 2이면 이미 폴백을 쓴 것이므로 즉시 실패로 끝냅니다.
+     */
+    Mono<StructuredRecipeOutcome> fallbackModelOrFail(
+            RecipeGenerationRequest generationRequest,
+            List<String> reasons,
+            SafetyContext safetyContext,
+            Optional<Long> authenticatedUserId,
+            SearchEngine.SearchStatus ragStatus,
+            int attempt,
+            long deadlineNanos) {
+        if (attempt >= 2 || fallbackModel == null || fallbackModel.isBlank()) {
+            return Mono.just(StructuredRecipeOutcome.failure(reasons));
+        }
+        long fallbackStartedNanos = System.nanoTime();
+        log.info("[RECIPE_FALLBACK_MODEL] recipeName={}, fallbackModel={}, previousFailures={}",
+                generationRequest.requestedTitle(), fallbackModel, reasons);
+        return withinStageBudget(
+                recipeGenerationClient.generateWith(generationRequest, fallbackModel),
+                deadlineNanos,
+                initialTimeoutSeconds,
+                "FALLBACK_MODEL_GENERATION")
+                .flatMap(fallbackDraft -> validateStructuredDraft(
+                        generationRequest,
+                        fallbackDraft,
+                        safetyContext,
+                        authenticatedUserId,
+                        ragStatus,
+                        attempt + 1,
+                        deadlineNanos,
+                        elapsedMillis(fallbackStartedNanos)))
+                .onErrorResume(error -> {
+                    // 시간 초과는 상위로 올리고, 나머지는 원래 실패 이유를 유지합니다.
+                    if (error instanceof RecipeGenerationTimeoutException) {
+                        return Mono.error(error);
+                    }
+                    log.warn("[RECIPE_FALLBACK_MODEL_FAILED] recipeName={}, fallbackModel={}, category={}",
+                            generationRequest.requestedTitle(), fallbackModel, error.getClass().getSimpleName());
+                    return Mono.just(StructuredRecipeOutcome.failure(reasons));
+                });
+    }
+
     Mono<StructuredRecipeOutcome> repairOrFail(
             RecipeGenerationRequest generationRequest,
             GeneratedRecipeDraft invalidDraft,
@@ -269,7 +327,8 @@ public class RecipeGenerationCoordinator {
             int attempt,
             long deadlineNanos) {
         if (attempt >= 1) {
-            return Mono.just(StructuredRecipeOutcome.failure(reasons));
+            return fallbackModelOrFail(
+                    generationRequest, reasons, safetyContext, authenticatedUserId, ragStatus, attempt, deadlineNanos);
         }
         long repairStartedNanos = System.nanoTime();
         return withinStageBudget(

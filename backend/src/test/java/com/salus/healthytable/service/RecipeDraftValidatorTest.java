@@ -639,6 +639,148 @@ class RecipeDraftValidatorTest {
                 substitutions);
     }
 
+    // 기구 이름만 나오고 실제 가열이 아닌 취급 단계에는 온도·시간을 요구하지 않아야 합니다.
+    // "에어프라이어에서 꺼내어 식힌다"까지 가열 단계로 보면 정상 레시피가 실패합니다.
+    @Test
+    void applianceMentionWithoutHeatingActionDoesNotRequireTemperature() {
+        GeneratedRecipeDraft draft = draft(
+                "에어프라이어 감자구이",
+                List.of(new GeneratedIngredient("감자", "2개")),
+                List.of(
+                        new GeneratedCookingStep(1, "에어프라이어에 감자를 넣고 190도로 익힙니다",
+                                "무가열", 190, 20, "감자가 노릇하게 익은 상태", null, List.of("감자")),
+                        new GeneratedCookingStep(2, "에어프라이어에서 감자를 꺼내어 식힙니다",
+                                "무가열", null, 0, null, null, List.of("감자"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("에어프라이어 감자구이", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).doesNotContain(
+                "COOKING_TEMPERATURE_REQUIRED", "COOKING_MINUTES_REQUIRED", "COMPLETION_CUE_REQUIRED");
+    }
+
+    // 실제 가열 동작이 있는 오븐·에어프라이어 단계에는 온도를 계속 요구해야 합니다.
+    @Test
+    void applianceStepWithHeatingActionStillRequiresTemperature() {
+        GeneratedRecipeDraft draft = draft(
+                "에어프라이어 감자구이",
+                List.of(new GeneratedIngredient("감자", "2개")),
+                List.of(new GeneratedCookingStep(1, "에어프라이어에 감자를 넣고 굽습니다",
+                        "무가열", null, 20, "감자가 노릇하게 익은 상태", null, List.of("감자"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("에어프라이어 감자구이", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).contains("COOKING_TEMPERATURE_REQUIRED");
+    }
+
+    // 취급 표현이 섞여 있어도 가열 동작이 함께 있으면 가열 단계로 봅니다.
+    @Test
+    void heatingVerbWinsOverHandlingWordInApplianceStep() {
+        GeneratedRecipeDraft draft = draft(
+                "오븐 감자구이",
+                List.of(new GeneratedIngredient("감자", "2개")),
+                List.of(new GeneratedCookingStep(1, "오븐에 넣어 구운 뒤 꺼냅니다",
+                        "무가열", null, 15, "감자가 노릇하게 익은 상태", null, List.of("감자"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("오븐 감자구이", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).contains("COOKING_TEMPERATURE_REQUIRED");
+    }
+
+    // 기구를 언급하지 않은 단계의 temperatureC는 계속 금지해야 합니다.
+    @Test
+    void temperatureStillForbiddenWhenNoApplianceMentioned() {
+        GeneratedRecipeDraft draft = draft(
+                "감자볶음",
+                List.of(new GeneratedIngredient("감자", "2개")),
+                List.of(new GeneratedCookingStep(1, "감자를 팬에 볶습니다",
+                        "중불", 200, 5, "감자가 노릇하게 익은 상태", null, List.of("감자"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("감자볶음", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).contains("NON_OVEN_TEMPERATURE_FORBIDDEN");
+    }
+
+    // 통조림처럼 이미 가열된 형태는 "중심까지 익힘" 확인을 요구하지 않아야 합니다.
+    // "참치캔"이 "참치"에 부분 일치해 생선회처럼 취급되던 오탐입니다.
+    @Test
+    void precookedProteinDoesNotRequireDonenessCue() {
+        GeneratedRecipeDraft draft = draft(
+                "참치김치찌개",
+                List.of(new GeneratedIngredient("김치", "200g"), new GeneratedIngredient("참치캔", "1개")),
+                List.of(new GeneratedCookingStep(1, "김치를 볶다가 참치를 넣고 끓입니다",
+                        "중불", 10, "김치 색이 진해진 상태", null, List.of("김치", "참치캔"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("참치김치찌개", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).doesNotContain("PROTEIN_DONENESS_CUE_REQUIRED");
+    }
+
+    // 생참치는 그대로 "중심까지 익힘" 확인을 요구해야 합니다. 규칙이 약해지면 안 됩니다.
+    @Test
+    void rawFishStillRequiresDonenessCue() {
+        GeneratedRecipeDraft draft = draft(
+                "참치스테이크",
+                List.of(new GeneratedIngredient("참치", "200g")),
+                List.of(new GeneratedCookingStep(1, "참치를 팬에 굽습니다",
+                        "중불", 5, "겉면이 노릇해진 상태", null, List.of("참치"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("참치스테이크", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).contains("PROTEIN_DONENESS_CUE_REQUIRED");
+    }
+
+    // 생고기도 그대로 요구해야 합니다.
+    @Test
+    void rawPorkStillRequiresDonenessCue() {
+        GeneratedRecipeDraft draft = draft(
+                "김치찌개",
+                List.of(new GeneratedIngredient("돼지고기", "200g")),
+                // "익은 상태"는 검증기가 허용하는 표현이므로 일부러 쓰지 않습니다.
+                List.of(new GeneratedCookingStep(1, "돼지고기를 볶습니다",
+                        "중불", 7, "고기 색이 변한 상태", null, List.of("돼지고기"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("김치찌개", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).contains("PROTEIN_DONENESS_CUE_REQUIRED");
+    }
+
+    // "햄버거패티"는 "햄"을 포함하지만 생고기입니다. 가공품 예외로 익힘 확인이 빠지면 안 됩니다.
+    @Test
+    void rawHamburgerPattyStillRequiresDonenessCue() {
+        GeneratedRecipeDraft draft = draft(
+                "햄버그스테이크",
+                List.of(new GeneratedIngredient("햄버거패티", "2장")),
+                List.of(new GeneratedCookingStep(1, "햄버거패티를 팬에 굽습니다",
+                        "중불", 8, "겉면이 노릇해진 상태", null, List.of("햄버거패티"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("햄버그스테이크", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).contains("PROTEIN_DONENESS_CUE_REQUIRED");
+    }
+
+    // 베이컨은 가열 전 상태로 팔리는 경우가 많아 가공품 예외를 적용하지 않습니다.
+    @Test
+    void baconMadeFromPorkStillRequiresDonenessCue() {
+        GeneratedRecipeDraft draft = draft(
+                "베이컨볶음밥",
+                List.of(new GeneratedIngredient("돼지고기 베이컨", "100g")),
+                List.of(new GeneratedCookingStep(1, "돼지고기 베이컨을 팬에 볶습니다",
+                        "중불", 5, "노릇해진 상태", null, List.of("돼지고기 베이컨"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("베이컨볶음밥", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).contains("PROTEIN_DONENESS_CUE_REQUIRED");
+    }
+
     private GeneratedRecipeDraft draft(String title, List<GeneratedIngredient> ingredients, List<GeneratedCookingStep> steps) {
         return new GeneratedRecipeDraft(title, "설명", 1, 10, 100, 1, ingredients, steps, List.of());
     }

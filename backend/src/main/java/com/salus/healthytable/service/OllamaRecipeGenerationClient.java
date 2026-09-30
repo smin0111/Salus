@@ -61,7 +61,16 @@ public class OllamaRecipeGenerationClient implements RecipeGenerationClient {
     // 요청 조건으로 생성 프롬프트를 만들어 레시피 초안을 생성합니다.
     @Override
     public Mono<GeneratedRecipeDraft> generate(RecipeGenerationRequest request) {
-        return callStructuredRecipe(recipePromptFactory.buildGenerationPrompt(request));
+        return callStructuredRecipe(
+                recipePromptFactory.buildGenerationPrompt(request), recipeModel, recipePromptFactory.jsonSchema(request));
+    }
+
+    // 폴백 모델로 다시 생성합니다. 모델 이름이 비어 있으면 기본 모델을 씁니다.
+    @Override
+    public Mono<GeneratedRecipeDraft> generateWith(RecipeGenerationRequest request, String model) {
+        String target = (model == null || model.isBlank()) ? recipeModel : model.trim();
+        return callStructuredRecipe(
+                recipePromptFactory.buildGenerationPrompt(request), target, recipePromptFactory.jsonSchema(request));
     }
 
     // 검증 실패 초안과 실패 이유로 복구(repair) 프롬프트를 만들어 다시 생성합니다.
@@ -70,32 +79,34 @@ public class OllamaRecipeGenerationClient implements RecipeGenerationClient {
             RecipeGenerationRequest request,
             GeneratedRecipeDraft invalidDraft,
             List<String> validationReasons) {
-        return callStructuredRecipe(recipePromptFactory.buildRepairPrompt(request, invalidDraft, validationReasons));
+        return callStructuredRecipe(
+                recipePromptFactory.buildRepairPrompt(request, invalidDraft, validationReasons),
+                recipeModel, recipePromptFactory.jsonSchema(request));
     }
 
     /**
      * 프롬프트를 Ollama에 보내 JSON 레시피 초안을 받습니다.
      * 1차 인스턴스가 실패하면 2차 인스턴스로 재시도하고, 그래도 실패하면 RecipeGenerationException으로 감싸 던집니다.
      */
-    private Mono<GeneratedRecipeDraft> callStructuredRecipe(String prompt) {
+    private Mono<GeneratedRecipeDraft> callStructuredRecipe(String prompt, String model, Map<String, Object> schema) {
         OllamaLlmService.OllamaRequest request = new OllamaLlmService.OllamaRequest(
-                recipeModel,
+                model,
                 List.of(
                         new OllamaLlmService.OllamaMessage("system",
                                 "JSON Schema를 따르는 JSON 객체 하나만 출력하세요."),
                         new OllamaLlmService.OllamaMessage("user", prompt)),
                 false,
                 // qwen3 thinking 끄기 여부는 OllamaLlmService.thinkingSettingFor 한 곳에서만 결정합니다.
-                thinkValue(recipeModel),
+                thinkValue(model),
                 Map.of(
                         "temperature", recipeTemperature,
                         "top_p", recipeTopP,
                         "num_predict", recipeNumPredict,
                         "num_ctx", recipeNumCtx),
-                recipePromptFactory.jsonSchema());
+                schema);
 
         log.info("[OllamaRecipe] Initiating structured recipe request. model={}, promptChars={}, numCtx={}, numPredict={}",
-                recipeModel, prompt.length(), recipeNumCtx, recipeNumPredict);
+                model, prompt.length(), recipeNumCtx, recipeNumPredict);
         Mono<GeneratedRecipeDraft> response = post(primaryUrl, request);
         if (secondaryUrl != null && !secondaryUrl.isBlank() && !secondaryUrl.equals(primaryUrl)) {
             response = response.onErrorResume(primaryError -> {

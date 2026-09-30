@@ -56,7 +56,36 @@ public class RecipeAgentOrchestrator {
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
+    /**
+     * 구조화된 출처를 찾았을 때만 응답을 돌려줍니다. 못 찾았으면 {@code Optional.empty()}입니다.
+     *
+     * <p>근거 등급을 나누기 위한 것입니다. Agent 경로는 schema.org 같은 구조화 근거를 쓰므로
+     * 재료와 분량이 정확하지만, 마크업이 없는 요리는 출처를 못 찾습니다. 실측에서 요리 8개 중
+     * 7개는 구조화 근거를 찾았고 1개(마라샹궈)는 못 찾았습니다. 그 1개까지 거절해 버리면
+     * 커버리지가 떨어지므로, 호출자가 더 낮은 등급의 근거 경로로 내려갈 수 있게 신호를 줍니다.
+     *
+     * <p>낮은 등급으로 내려가도 근거 없이 지어내는 것은 아닙니다. 검색 스니펫이라는 약한 근거를
+     * 쓸 뿐이고, 알레르겐 검사와 레시피 검증기는 그대로 적용됩니다.
+     *
+     * <p>출처를 못 찾으면 개인화·검증·세션 저장을 모두 건너뜁니다. 탐색은 한 번만 합니다.
+     * 후속 요청은 이미 찾아 둔 출처를 재사용하므로 항상 응답합니다.
+     */
+    public Mono<Optional<ChatDto.Response>> handleIfSourceFound(
+            Long userId, Long chatSessionId, ChatDto.Request request) {
+        return Mono.fromCallable(() -> Optional.ofNullable(execute(userId, chatSessionId, request, true)))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
     private ChatDto.Response execute(Long userId, Long chatSessionId, ChatDto.Request request) {
+        return execute(userId, chatSessionId, request, false);
+    }
+
+    /**
+     * @param requireReliableSource true면 구조화 출처를 못 찾았을 때 null을 반환하고
+     *                              개인화·검증·세션 저장을 건너뜁니다.
+     */
+    private ChatDto.Response execute(
+            Long userId, Long chatSessionId, ChatDto.Request request, boolean requireReliableSource) {
         UserRecipeContextLoadResult contextLoadResult = contextLoader.loadWithStatus(userId);
         Optional<PreviousAgentState> previousState = previousAgentState(userId, chatSessionId);
         // 이전 세션이 있으면 이번에 로드에 실패한 부분만 이전 스냅샷 값으로 보완합니다.
@@ -77,6 +106,11 @@ public class RecipeAgentOrchestrator {
                         previous.sourceEvidence(),
                         RecipeResearchStatus.VERIFIED_SOURCE_FOUND))
                 .orElseGet(() -> discoverCandidate(plan, context));
+        // 구조화 출처가 없으면 여기서 멈춥니다. 호출자가 더 낮은 등급의 근거 경로로 내려갑니다.
+        if (requireReliableSource && discovery.status() != RecipeResearchStatus.VERIFIED_SOURCE_FOUND) {
+            log.info("[RecipeAgent] No verified source. Deferring to lower evidence tier. dish={}", plan.dishName());
+            return null;
+        }
         RecipeCandidate originalRecipe = discovery.recipe();
         RecipePersonalizationDecision decision = personalizationEnabled
                 ? policyEngine.evaluate(originalRecipe, context)

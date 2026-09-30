@@ -33,6 +33,9 @@ public class RecipeDraftValidator {
     // 조리 설명에 이 표현이 있으면 팬/냄비 가열 단계로 봅니다.
     private static final List<String> STOVETOP_ACTIONS = List.of(
             "끓", "볶", "굽", "삶", "데치", "튀", "졸", "찌", "익히", "팬에", "냄비에");
+    // 기구 이름만 나오고 실제 가열이 아닌 취급 동작. 이 표현만 있으면 온도·시간을 요구하지 않습니다.
+    private static final List<String> NON_HEATING_HANDLING = List.of(
+            "꺼내", "식히", "덜어", "담아", "접시", "그릇", "플레이팅");
     // 조리 설명에 이 표현이 있으면 오븐/에어프라이어 단계로 봅니다(온도 필수).
     private static final List<String> OVEN_ACTIONS = List.of(
             "오븐", "에어프라이어", "에어 프라이어", "에프에", "베이크");
@@ -44,6 +47,15 @@ public class RecipeDraftValidator {
     private static final List<String> SAFE_DONENESS_CUES = List.of(
             "중심까지", "속까지", "완전히 익", "충분히 익", "중심 온도", "중심온도",
             "핏물이 없", "분홍색이 없", "불투명", "살이 하얗", "응고", "굳", "익은 상태");
+    // 제조 과정에서 이미 가열·멸균된 형태. 생재료와 달리 "중심까지 익힘" 확인이 필요 없습니다.
+    // "참치캔"이 "참치"에 부분 일치해 생선회처럼 취급되는 오탐을 막습니다.
+    private static final List<String> PRECOOKED_FORMS = List.of(
+            "캔", "통조림", "훈제", "햄", "소시지", "어묵", "맛살", "게맛살", "액젓", "젓갈");
+    // 가공품 표현과 겹쳐도 생고기인 형태. 이 표현이 있으면 가공품 예외를 적용하지 않습니다.
+    // "햄버거패티"가 "햄"에 부분 일치해 익힘 확인에서 빠지던 문제를 막습니다. 베이컨은 대부분
+    // 가열 전 상태로 팔리므로 가공품 예외에 넣지 않습니다.
+    private static final List<String> RAW_FORM_MARKERS = List.of(
+            "햄버거", "패티", "다짐육", "간고기", "간 고기", "베이컨");
     // 육류식 "중심까지 익히기" 안전 문구가 필요 없는 재료
     private static final List<String> LOW_RISK_INGREDIENTS = List.of(
             "두부", "감자", "고구마", "당근", "양파", "애호박", "버섯", "대파", "쪽파", "마늘", "김치");
@@ -322,10 +334,16 @@ public class RecipeDraftValidator {
             if (step == null || isBlank(step.instruction())) {
                 continue;
             }
-            boolean ovenStep = containsAny(step.instruction(), OVEN_ACTIONS.toArray(String[]::new));
-            boolean stovetopStep = !ovenStep
-                    && containsAny(step.instruction(), STOVETOP_ACTIONS.toArray(String[]::new));
-            if (!ovenStep && step.temperatureC() != null) {
+            // 기구 언급과 실제 가열 동작을 구분합니다. "에어프라이어에서 꺼내어 식힌다"처럼 기구 이름만
+            // 나오고 가열 동작이 없는 단계까지 온도·시간을 요구하면 정상 레시피가 실패합니다.
+            boolean applianceMentioned = containsAny(step.instruction(), OVEN_ACTIONS.toArray(String[]::new));
+            boolean heatingVerb = containsAny(step.instruction(), STOVETOP_ACTIONS.toArray(String[]::new));
+            boolean nonHeatingHandling =
+                    containsAny(step.instruction(), NON_HEATING_HANDLING.toArray(String[]::new)) && !heatingVerb;
+            boolean ovenStep = applianceMentioned && !nonHeatingHandling;
+            boolean stovetopStep = !ovenStep && heatingVerb;
+            // 온도 금지 판정은 기구 언급 기준을 유지합니다. 좁히면 기존에 통과하던 단계가 새로 실패합니다.
+            if (!applianceMentioned && step.temperatureC() != null) {
                 add(codes, reasons, "NON_OVEN_TEMPERATURE_FORBIDDEN",
                         "temperatureC는 오븐·에어프라이어 단계에서만 사용할 수 있습니다. 문제 단계: " + step.order());
             }
@@ -470,6 +488,9 @@ public class RecipeDraftValidator {
         List<String> declared = declaredIngredientNames(draft);
         List<String> risky = declared.stream()
                 .filter(name -> containsAny(name, HIGH_RISK_PROTEINS.toArray(String[]::new)))
+                // 이미 가열된 형태는 제외합니다. 생참치는 그대로 요구하고 참치캔만 빠집니다.
+                .filter(name -> containsAny(name, RAW_FORM_MARKERS.toArray(String[]::new))
+                        || !containsAny(name, PRECOOKED_FORMS.toArray(String[]::new)))
                 .toList();
         if (risky.isEmpty()) {
             return;

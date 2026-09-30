@@ -447,6 +447,55 @@ class RecipeAgentPersonalizationTest {
         assertThat(response.getReply()).contains("제공 제한");
     }
 
+    // 구조화 출처를 못 찾으면 호출자가 더 낮은 근거 등급으로 내려갈 수 있게 빈 값을 줘야 합니다.
+    // 여기서 거절 응답을 만들어 버리면 마크업이 없는 요리의 커버리지가 통째로 사라집니다.
+    @Test
+    void handleIfSourceFoundReturnsEmptyWhenNoReliableSource() {
+        RecipeWorkSessionService workSessions = mock(RecipeWorkSessionService.class);
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                userId -> contextWithAllergy("깻잎"),
+                (plan, context) -> List.of(),
+                workSessions);
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", true);
+
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("마라샹궈 레시피 알려줘");
+
+        assertThat(orchestrator.handleIfSourceFound(1L, 10L, request).block()).isEmpty();
+        // 출처가 없으면 세션도 저장하지 않아야 합니다. 저장하면 다음 요청이 빈 상태를 재사용합니다.
+        verify(workSessions, never()).saveAgentSession(any(), any(), any(), any());
+    }
+
+    // 출처를 찾으면 평소대로 응답해야 합니다.
+    @Test
+    void handleIfSourceFoundReturnsResponseWhenSourceExists() {
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                userId -> contextWithAllergy("깻잎"),
+                (plan, context) -> List.of(sourceDocument()),
+                mock(RecipeWorkSessionService.class));
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", true);
+
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("김치찌개 레시피 알려줘");
+
+        assertThat(orchestrator.handleIfSourceFound(1L, 10L, request).block()).isPresent();
+    }
+
+    // 출처 검색이 꺼져 있으면 빈 값을 줘야 합니다. 켜지 않은 채로 Agent가 응답을 독점하면 안 됩니다.
+    @Test
+    void handleIfSourceFoundReturnsEmptyWhenDiscoveryDisabled() {
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                userId -> contextWithAllergy("깻잎"),
+                (plan, context) -> List.of(sourceDocument()),
+                mock(RecipeWorkSessionService.class));
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", false);
+
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("김치찌개 레시피 알려줘");
+
+        assertThat(orchestrator.handleIfSourceFound(1L, 10L, request).block()).isEmpty();
+    }
+
     // 후속 요청은 답변 텍스트를 다시 파싱하지 않고 저장된 구조화 Agent 세션을 사용해야 합니다.
     @Test
     void followUpUsesStructuredAgentSessionInsteadOfParsingReplyText() {
@@ -660,6 +709,18 @@ class RecipeAgentPersonalizationTest {
 
     private UserRecipeContext contextWithAllergy(String allergy) {
         return new UserRecipeContext(1L, List.of(allergy), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+    }
+
+    private RecipeSourceDocument sourceDocument() {
+        return new RecipeSourceDocument(
+                "fixture:source",
+                RecipeSourceType.INTERNAL_DB,
+                "김치찌개",
+                "fixture",
+                "",
+                "title: 김치찌개\ningredients:\n- 김치 200g\n- 두부 1모\nsteps:\n- 김치를 볶고 물을 부어 끓입니다.",
+                java.time.LocalDateTime.of(2026, 7, 1, 0, 0),
+                0.95);
     }
 
     private RecipeAgentOrchestrator orchestrator(
