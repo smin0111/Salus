@@ -65,6 +65,7 @@ SERVICE_READINESS_REVIEW.md
 
 # Local tool settings and files holding secrets
 .claude/settings.local.json*
+searxng/settings.yml
 
 # Private or legacy repository-root artifacts
 /ERD.md

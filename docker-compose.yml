@@ -14,5 +14,23 @@ services:
       timeout: 3s
       retries: 5
 
+  # 레시피 근거 수집용 메타검색. html.duckduckgo.com 스크래핑은 연속 호출 시 차단되므로
+  # 자체 인스턴스를 띄워 JSON API로 검색합니다. 사용하려면 SEARCH_PROVIDER=searxng로 켜세요.
+  searxng:
+    image: searxng/searxng:latest
+    container_name: salus-searxng
+    restart: unless-stopped
+    ports:
+      - "8888:8080"
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8888/
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
 volumes:
   salus-redis-data:
