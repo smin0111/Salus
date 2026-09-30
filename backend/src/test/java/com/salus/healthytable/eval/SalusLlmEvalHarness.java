@@ -287,7 +287,21 @@ class SalusLlmEvalHarness {
             repairPassed = validation != null && validation.valid();
         }
 
-        EvalRun.RecipeRun run = new EvalRun.RecipeRun(first, repair, firstDraftValid, repairPassed);
+        // 프로덕션 RecipeGenerationCoordinator.fallbackModelOrFail과 같은 단계다.
+        // repair까지 실패하면 다른 모델로 한 번만 새로 생성한다. 같은 모델로 고치는 것이 아니라
+        // 다른 모델의 강점으로 처음부터 만드는 것이 목적이므로 repair가 아니라 generate를 쓴다.
+        EvalRun.RecipeCall fallback = null;
+        boolean fallbackPassed = false;
+        String fallbackModel = System.getProperty("salus.eval.fallback-model", "");
+        boolean repairFailed = repair != null && !repairPassed;
+        if (!replay && !fallbackModel.isBlank() && repairFailed) {
+            fallback = callRecipe(() -> client.generateWith(request, fallbackModel).block());
+            validation = fallback.succeeded() ? recipeDraftValidator.validate(request, fallback.draft()) : null;
+            fallbackPassed = validation != null && validation.valid();
+        }
+
+        EvalRun.RecipeRun run = new EvalRun.RecipeRun(
+                first, repair, fallback, firstDraftValid, repairPassed, fallbackPassed);
         return grader.gradeRecipe(context, evalCase, run, validation);
     }
 

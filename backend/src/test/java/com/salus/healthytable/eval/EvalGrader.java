@@ -298,14 +298,18 @@ public class EvalGrader {
     private EvalResult.Dimension gradeConstraint(
             EvalCase evalCase, GeneratedRecipeDraft draft, List<String> codes) {
         List<String> problems = new ArrayList<>(codes.stream().filter(CONSTRAINT_CODES::contains).toList());
-        String fullText = fullText(draft).toLowerCase(Locale.ROOT);
+        // 금지어는 요리에 실제로 들어갔는지로 판정합니다. 제목·설명·안전문구까지 보면
+        // "돼지고기를 넣지 않는 김치찌개"처럼 회피를 설명한 문장이 위반으로 잡힙니다.
+        // 프로덕션 판정도 자유 서술이 아니라 재료·조리 단계를 봅니다.
+        String ingredientText = ingredientText(draft).toLowerCase(Locale.ROOT);
         for (String forbidden : evalCase.expectOrEmpty().forbiddenTermsOrEmpty()) {
-            if (fullText.contains(forbidden.toLowerCase(Locale.ROOT))) {
+            if (ingredientText.contains(forbidden.toLowerCase(Locale.ROOT))) {
                 problems.add("금지어 포함: " + forbidden);
             }
         }
+        // 필수어는 대체 재료가 실제로 쓰였는지를 보므로 같은 범위를 씁니다.
         for (String required : evalCase.expectOrEmpty().requiredTermsOrEmpty()) {
-            if (!fullText.contains(required.toLowerCase(Locale.ROOT))) {
+            if (!ingredientText.contains(required.toLowerCase(Locale.ROOT))) {
                 problems.add("필수어 누락: " + required);
             }
         }
@@ -401,6 +405,27 @@ public class EvalGrader {
     }
 
     // 초안의 모든 사용자 노출 텍스트를 하나로 합칩니다(금지/필수 표현 검사용).
+    /**
+     * 요리에 실제로 들어간 재료만 모읍니다. 재료 목록과 각 단계가 선언한 사용 재료만 보며,
+     * 제목·설명·안전문구·조리 서술은 제외합니다. 회피를 설명한 문장을 위반으로 세지 않기 위해서입니다.
+     */
+    private String ingredientText(GeneratedRecipeDraft draft) {
+        StringBuilder builder = new StringBuilder();
+        if (draft.ingredients() != null) {
+            draft.ingredients().stream().filter(java.util.Objects::nonNull).forEach(ingredient ->
+                    builder.append(nullToBlank(ingredient.name())).append(' ')
+                            .append(nullToBlank(ingredient.preparation())).append('\n'));
+        }
+        if (draft.steps() != null) {
+            draft.steps().stream().filter(java.util.Objects::nonNull)
+                    .filter(step -> step.ingredientNames() != null)
+                    .forEach(step -> step.ingredientNames().stream()
+                            .filter(java.util.Objects::nonNull)
+                            .forEach(name -> builder.append(name).append('\n')));
+        }
+        return builder.toString();
+    }
+
     private String fullText(GeneratedRecipeDraft draft) {
         StringBuilder builder = new StringBuilder();
         builder.append(nullToBlank(draft.title())).append('\n');

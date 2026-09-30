@@ -49,11 +49,21 @@ public final class EvalRun {
     public record RecipeRun(
             RecipeCall first,
             RecipeCall repair,
+            RecipeCall fallback,
             boolean firstDraftValid,
-            boolean repairPassed) {
+            boolean repairPassed,
+            boolean fallbackPassed) {
 
-        // repair를 했다면 repair 호출, 아니면 최초 호출이 최종 결과입니다.
+        // 폴백 모델을 쓰지 않는 기존 호출부를 위한 보조 생성자입니다.
+        public RecipeRun(RecipeCall first, RecipeCall repair, boolean firstDraftValid, boolean repairPassed) {
+            this(first, repair, null, firstDraftValid, repairPassed, false);
+        }
+
+        // 마지막으로 실행한 호출이 최종 결과입니다. 폴백 > repair > 최초 순입니다.
         public RecipeCall finalCall() {
+            if (fallback != null) {
+                return fallback;
+            }
             return repair == null ? first : repair;
         }
 
@@ -61,15 +71,21 @@ public final class EvalRun {
             return repair != null;
         }
 
+        public boolean fallbackAttempted() {
+            return fallback != null;
+        }
+
         public long totalLatencyMs() {
             return first.telemetry().latencyMs()
-                    + (repair == null ? 0 : repair.telemetry().latencyMs());
+                    + (repair == null ? 0 : repair.telemetry().latencyMs())
+                    + (fallback == null ? 0 : fallback.telemetry().latencyMs());
         }
 
         // 최종 호출이 시간 초과로 끝났는지 여부
         public boolean timedOut() {
             return first.telemetry().timeout()
-                    || (repair != null && repair.telemetry().timeout());
+                    || (repair != null && repair.telemetry().timeout())
+                    || (fallback != null && fallback.telemetry().timeout());
         }
     }
 
