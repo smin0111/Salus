@@ -1,0 +1,2 @@
+date,variant,task,run,grader,correctness_30,evidence_20,completion_20,context_eff_15,tool_eff_10,clarity_5,factual_errors,safety_critical_errors,constraint_violation,notes
+20260101,claude-after,A,1,,,,,,,,,,N,"context_eff_15/tool_eff_10: leave blank to use metrics.csv auto scores"
