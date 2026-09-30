@@ -105,7 +105,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
                     </TouchableOpacity>
                     <View>
                         <Text style={styles.headerTitle}>계정과 개인정보</Text>
-                        <Text style={styles.headerSubtitle}>{user?.email || '개인 데이터 관리'}</Text>
+                        <Text style={styles.headerSubtitle}>{user?.email || user?.name || '개인 데이터 관리'}</Text>
                     </View>
                 </View>
             </View>}

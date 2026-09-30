@@ -2,8 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, StatusBar, ActivityIndicator, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
+import config from '../config';
 import SalusLogo, { SalusLogoMark } from '../components/SalusLogo';
 
 // --- 로그인 화면에서 쓰는 작은 컴포넌트 ---
@@ -30,8 +32,8 @@ const SocialButton = ({ icon, text, bgColor, iconColor, textColor, onPress, load
     </TouchableOpacity>
 );
 
-// 로고, 소셜 로그인 버튼 3개, "로그인 없이 둘러보기" 링크로 구성된 로그인 폼
-const LoginForm = ({ onLogin, onGuest, loading, handleSocialLogin }) => {
+// 로고, 소셜 로그인 버튼(iOS에서는 Apple 포함), "로그인 없이 둘러보기" 링크로 구성된 로그인 폼
+const LoginForm = ({ onLogin, onGuest, loading, handleSocialLogin, appleAvailable }) => {
     return (
         <View style={styles.formContainer}>
             <View style={styles.header}>
@@ -68,6 +70,16 @@ const LoginForm = ({ onLogin, onGuest, loading, handleSocialLogin }) => {
                     onPress={() => handleSocialLogin('google')}
                     loading={loading}
                 />
+                {/* Apple 로그인은 Apple 디자인 가이드에 따라 공식 버튼을 사용합니다(iOS에서만 표시). */}
+                {appleAvailable && (
+                    <AppleAuthentication.AppleAuthenticationButton
+                        buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                        buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                        cornerRadius={12}
+                        style={styles.appleButton}
+                        onPress={() => handleSocialLogin('apple')}
+                    />
+                )}
             </View>
 
             <View style={styles.footer}>
@@ -97,9 +109,25 @@ export default function LoginScreen({ onLogin, onGuest }) {
     const { width, height } = useWindowDimensions();
     const isWeb = Platform.OS === 'web';
     const isSplitLayout = width > 700;
+    // Apple 로그인은 기능 스위치가 켜져 있고 iOS 13 이상일 때만 버튼을 보여 줍니다.
+    const [appleAvailable, setAppleAvailable] = useState(false);
+
+    useEffect(() => {
+        let mounted = true;
+        if (config.APPLE_LOGIN_ENABLED && Platform.OS === 'ios') {
+            AppleAuthentication.isAvailableAsync()
+                .then((available) => mounted && setAppleAvailable(available))
+                .catch(() => mounted && setAppleAvailable(false));
+        }
+        return () => {
+            mounted = false;
+        };
+    }, []);
 
     // AuthContext의 login으로 소셜 로그인을 진행하고, 성공하면 다음 화면으로 이동합니다.
     const handleSocialLogin = async (type) => {
+        // Apple 공식 버튼은 비활성화 속성이 없어 진행 중 중복 요청을 여기서 막습니다.
+        if (loading) return;
         setLoading(true);
         const success = await login(type, keepLoggedIn);
         setLoading(false);
@@ -128,6 +156,7 @@ export default function LoginScreen({ onLogin, onGuest }) {
                         onGuest={onGuest}
                         loading={loading}
                         handleSocialLogin={handleSocialLogin}
+                        appleAvailable={appleAvailable}
                     />
                 </View>
             </View>
@@ -144,6 +173,7 @@ export default function LoginScreen({ onLogin, onGuest }) {
                     onGuest={onGuest}
                     loading={loading}
                     handleSocialLogin={handleSocialLogin}
+                        appleAvailable={appleAvailable}
                 />
             </View>
         </SafeAreaView>
@@ -235,6 +265,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         elevation: 0,
+    },
+    appleButton: {
+        height: 52,
+        width: '100%',
     },
     buttonText: {
         fontSize: 16,

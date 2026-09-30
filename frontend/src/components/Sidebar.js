@@ -53,7 +53,7 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                                     </View>
                                 )}
                             </View>
-                            <Text style={styles.subtitle}>{isLoggedIn && user ? user.email : '당신만의 AI 요리사'}</Text>
+                            <Text style={styles.subtitle}>{isLoggedIn && user ? (user.email || user.name) : '당신만의 AI 요리사'}</Text>
                         </View>
                         <TouchableOpacity accessibilityRole="button" accessibilityLabel="메뉴 닫기" onPress={onClose} style={styles.closeButton}>
                             <Ionicons name="close" size={24} color={colors.textTertiary} />

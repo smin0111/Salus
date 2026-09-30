@@ -28,6 +28,12 @@ const API_BASE_URL = Platform.OS === 'web'
     ? getWebApiBaseUrl()
     : `http://${LOCAL_IP}:8080/api`;
 
+// Sign in with Apple은 유료 Apple Developer Program 계정의 권한(entitlement)이 있어야 동작합니다.
+// 켜려면 이 값을 true로 바꾸고 app.json에 "usesAppleSignIn": true와 expo-apple-authentication 플러그인을
+// 추가한 뒤 네이티브 빌드를 다시 해야 합니다. 백엔드는 OAUTH_APPLE_CLIENT_IDS가 필요합니다.
+const APPLE_LOGIN_ENABLED = false;
+
 export default {
     API_BASE_URL,
+    APPLE_LOGIN_ENABLED,
 };

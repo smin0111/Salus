@@ -50,4 +50,20 @@ class JwtTokenProviderTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("예시값");
     }
+
+    // 서명이 맞고 만료된 토큰만 만료로 판정해야 합니다. 유효한 토큰이나 위조 토큰은 만료가 아닙니다.
+    @Test
+    void detectsExpiredTokenOnlyWhenSignatureIsValid() {
+        JwtTokenProvider provider = new JwtTokenProvider();
+        ReflectionTestUtils.setField(provider, "secretKey", "local-test-secret-must-be-longer-than-32-bytes");
+
+        String validToken = provider.createToken("1");
+        ReflectionTestUtils.setField(provider, "accessTokenValiditySeconds", -60L);
+        String expiredToken = provider.createToken("1");
+
+        assertThat(provider.validateToken(expiredToken)).isFalse();
+        assertThat(provider.isExpired(expiredToken)).isTrue();
+        assertThat(provider.isExpired(validToken)).isFalse();
+        assertThat(provider.isExpired(expiredToken + "tampered")).isFalse();
+    }
 }

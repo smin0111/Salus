@@ -20,8 +20,8 @@ Three independently built subprojects; there is no root `package.json` or Makefi
 | `admin/` | Vite 6, React 19, react-router-dom 7 | `src/App.jsx`, `src/pages/*` |
 
 ## Backend packages (`backend/src/main/java/com/salus/healthytable/`)
-- `controller/` REST APIs: `/api/chat`, `/api/recipes`, `/api/meallogs`, `/api/fridge`, `/api/health-checkups`, `/api/users/me`, `/api/users/me/health-profile`, `/api/community`, `/api/payments`, `/api/activities`, `/api/admin/dashboard`; `AuthController` maps `/api/auth/{google,kakao,naver}` per method.
-- `security/` JWT filter/provider, `IpWhitelistFilter` (admin), `AuthenticatedUserProvider` (current user id).
+- `controller/` REST APIs: `/api/chat`, `/api/recipes`, `/api/meallogs`, `/api/fridge`, `/api/health-checkups`, `/api/users/me`, `/api/users/me/health-profile`, `/api/community`, `/api/payments`, `/api/activities`, `/api/admin/dashboard`; `AuthController` maps `/api/auth/{google,kakao,naver,apple}` per method; (WIP) users are identified by `social_accounts(provider, provider_user_id)` via `SocialLoginService`, not by email (same email on another provider = separate user); `OAuthService` checks Google `aud` / Kakao `app_id`, `AppleIdentityTokenVerifier` checks Apple JWKS signature/iss/aud/exp/nonce; all fail closed when `oauth.*` config is empty.
+- `security/` JWT filter/provider (access token 30 min; (WIP) a presented but expired/invalid Bearer token gets 401 `TOKEN_EXPIRED`/`UNAUTHORIZED` even on public APIs, except `/api/auth/**`; refresh tokens are hashed in `refresh_tokens` and rotated by `RefreshTokenService` via `/api/auth/refresh`, revoked via `/api/auth/logout`), `IpWhitelistFilter` (admin), `AuthenticatedUserProvider` (current user id).
 - `domain/` JPA entities; `repository/` one Spring Data JPA repository per entity; `dto/` request/response types.
 - `service/` flat business logic. Subpackages: `service/allergen/` (allergen dictionary/matching), `service/recipeagent/` (flag-gated Recipe Agent: web/YouTube/medication sources).
 - `config/` security, `WebClient`, `LlmConfig` (`@Primary LlmService` = `OllamaLlmService`), request-id and COOP filters.
@@ -66,7 +66,7 @@ Ollama settings live in `application.properties` (`ollama.*`: model `qwen3:8b`, 
 ## Data layer
 - Entities: `User`, `HealthProfile`, `HealthCheckup`, `FridgeItem`, `MealLog`, `Recipe`, `RecipeStats`, `RecipeShare`, `GeneratedRecipe`, `Recommendation`, `SearchCache`, `ChatSession`, `ChatMessage`, `CommunityPost`, `PostComment`, `PostLike`, `Payment`, `ActivityLog` (+ enums `UserRole`, `UserGrade`; `JsonStringListConverter` for JSON list columns).
 - Typical chain: `domain/X` -> `repository/XRepository` (derived queries) -> `service/XService` (`@Transactional` writes) -> `controller/XController`. Example: `MealLog` -> `MealLogRepository` -> `MealLogService.saveOrUpdateMealLog` -> `MealLogController` (`/api/meallogs`).
-- Flyway `db/migration`: V1 init schema, V2 users/payments hardening, V3 align existing schema, V4 recipe share visibility, V5 user foreign keys; (WIP) V6 approved recipe catalog, V7 servings/calories, V8 generation attempt audit. `backend/migrations/*.sql` are legacy manual scripts, not run by Flyway.
+- Flyway `db/migration`: V1 init schema, V2 users/payments hardening, V3 align existing schema, V4 recipe share visibility, V5 user foreign keys; (WIP) V6 approved recipe catalog, V7 servings/calories, V8 generation attempt audit, V9 social accounts (drops `users.email` UNIQUE), V10 refresh tokens. `backend/migrations/*.sql` are legacy manual scripts, not run by Flyway.
 - Redis: `RecipeWorkSessionService` only (JSON per user+chat session, TTL 6h, in-memory fallback). Chat rate limiting is in-memory, not Redis.
 - `spring.jpa.open-in-view=false`: load what you need inside services.
 

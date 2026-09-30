@@ -24,7 +24,8 @@ import java.util.Optional;
  *
  * 흐름: 헤더에서 토큰 추출 → 서명/만료 검증 → 토큰 속 사용자 ID로 DB 조회
  * → 사용자의 role로 권한(ROLE_USER, ROLE_ADMIN)을 만들어 SecurityContext에 저장.
- * 토큰이 없거나 잘못되어도 여기서 요청을 막지 않고, 막을지 여부는 SecurityConfig 규칙이 결정합니다.
+ * 토큰이 없으면 막지 않고 SecurityConfig 규칙에 맡깁니다(게스트 허용 API 등).
+ * 토큰이 있는데 만료·위조·탈퇴 사용자라 인증할 수 없으면 공개 API라도 401을 돌려줍니다.
  */
 @Component
 @RequiredArgsConstructor
@@ -32,53 +33,84 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
     private final UserRepository userRepository;
+    private final ApiSecurityErrorHandler errorHandler;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
+        String jwt = getJwtFromRequest(request);
+
+        // 로그인·갱신·로그아웃 API는 access token 없이도 동작해야 하므로, 오래된 헤더가 붙어 와도 검사하지 않습니다.
+        if (!StringUtils.hasText(jwt) || isAuthEndpoint(request)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        boolean authenticated;
         try {
-            String jwt = getJwtFromRequest(request);
-
-            if (StringUtils.hasText(jwt)) {
-                boolean isValid = tokenProvider.validateToken(jwt);
-
-                if (isValid) {
-                    String userId = tokenProvider.getUserId(jwt);
-                    Optional<Long> parsedUserId = parseUserId(userId);
-
-                    if (parsedUserId.isPresent()) {
-                        // JWT 서명이 맞아도 User를 DB에서 다시 확인합니다.
-                        // 탈퇴한 사용자나 role이 바뀐 사용자의 오래된 토큰이 계속 권한을 갖지 않게 하기 위해서입니다.
-                        Optional<User> user = userRepository.findById(parsedUserId.get());
-
-                        if (user.isPresent()) {
-                            String role = user.get().getRole() != null ? user.get().getRole().name() : "USER";
-                            List<SimpleGrantedAuthority> authorities = List.of(
-                                    // 스프링 시큐리티의 hasRole("ADMIN")은 내부적으로 "ROLE_ADMIN" 권한을 찾으므로 접두사를 붙입니다.
-                                    new SimpleGrantedAuthority("ROLE_" + role));
-
-                            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                                    String.valueOf(parsedUserId.get()), null, authorities);
-
-                            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                            // 이후 컨트롤러나 AuthenticatedUserProvider가 이 인증 정보를 읽어 사용자 ID를 알 수 있습니다.
-                            SecurityContextHolder.getContext().setAuthentication(authentication);
-                        }
-                    }
-                }
-            }
+            authenticated = authenticate(jwt, request);
         } catch (Exception ex) {
-            // 잘못된 토큰 하나 때문에 공개 API까지 500으로 실패하면 장애처럼 보입니다.
-            // 인증 설정이 필요한 엔드포인트는 이후 SecurityConfig에서 401/403으로 정리됩니다.
+            // DB 장애 같은 예외로 공개 API까지 500이 되지 않도록, 예외는 기존처럼 인증 없이 통과시킵니다.
+            // 인증이 필요한 엔드포인트는 이후 SecurityConfig에서 401/403으로 정리됩니다.
             logger.warn("JWT authentication was skipped: " + ex.getMessage());
             if (logger.isDebugEnabled()) {
                 logger.debug("JWT authentication failure details", ex);
             }
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        if (!authenticated) {
+            // 토큰을 보냈는데 인증할 수 없으면 공개 API라도 게스트로 조용히 넘기지 않고 401을 줍니다.
+            // 로그인 사용자의 채팅이 만료 토큰 때문에 게스트 요청(알레르기 미반영)으로 처리되는 일을 막기 위해서입니다.
+            errorHandler.handleInvalidToken(request, response, tokenProvider.isExpired(jwt));
+            return;
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    // 흐름: 서명/만료 검증 → 토큰 속 사용자 ID로 DB 조회 → role로 권한을 만들어 SecurityContext에 저장
+    private boolean authenticate(String jwt, HttpServletRequest request) {
+        if (!tokenProvider.validateToken(jwt)) {
+            return false;
+        }
+
+        Optional<Long> parsedUserId = parseUserId(tokenProvider.getUserId(jwt));
+        if (parsedUserId.isEmpty()) {
+            return false;
+        }
+
+        // JWT 서명이 맞아도 User를 DB에서 다시 확인합니다.
+        // 탈퇴한 사용자나 role이 바뀐 사용자의 오래된 토큰이 계속 권한을 갖지 않게 하기 위해서입니다.
+        Optional<User> user = userRepository.findById(parsedUserId.get());
+        if (user.isEmpty()) {
+            return false;
+        }
+
+        String role = user.get().getRole() != null ? user.get().getRole().name() : "USER";
+        List<SimpleGrantedAuthority> authorities = List.of(
+                // 스프링 시큐리티의 hasRole("ADMIN")은 내부적으로 "ROLE_ADMIN" 권한을 찾으므로 접두사를 붙입니다.
+                new SimpleGrantedAuthority("ROLE_" + role));
+
+        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                String.valueOf(parsedUserId.get()), null, authorities);
+
+        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+        // 이후 컨트롤러나 AuthenticatedUserProvider가 이 인증 정보를 읽어 사용자 ID를 알 수 있습니다.
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        return true;
+    }
+
+    private boolean isAuthEndpoint(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        String contextPath = request.getContextPath();
+        if (contextPath != null && !contextPath.isEmpty() && path.startsWith(contextPath)) {
+            path = path.substring(contextPath.length());
+        }
+        return path.startsWith("/api/auth/");
     }
 
     // 토큰의 subject(사용자 ID 문자열)를 숫자로 바꿉니다. 숫자가 아니면 인증하지 않은 것으로 처리합니다.

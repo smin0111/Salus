@@ -22,7 +22,9 @@ public class JwtTokenProvider {
     @Value("${jwt.secret}")
     private String secretKey;
 
-    private final long VALIDITY_IN_MS = 3600000; // 1시간
+    // access token은 모든 요청에 실려 다니므로 짧게 둡니다. 로그인 유지는 refresh token이 맡습니다.
+    @Value("${jwt.access-token-validity-seconds:1800}")
+    private long accessTokenValiditySeconds = 1800;
     private static final int MIN_SECRET_BYTES = 32;
 
     @PostConstruct
@@ -59,11 +61,11 @@ public class JwtTokenProvider {
     }
 
     /**
-     * 사용자 ID를 subject로 담은 토큰을 발급합니다. 유효기간은 발급 시점부터 1시간입니다.
+     * 사용자 ID를 subject로 담은 access token을 발급합니다. 유효기간은 jwt.access-token-validity-seconds(기본 30분)입니다.
      */
     public String createToken(String userId) {
         Date now = new Date();
-        Date validity = new Date(now.getTime() + VALIDITY_IN_MS);
+        Date validity = new Date(now.getTime() + accessTokenValiditySeconds * 1000);
 
         return Jwts.builder()
                 .setSubject(userId)
@@ -83,6 +85,21 @@ public class JwtTokenProvider {
         } catch (JwtException | IllegalArgumentException e) {
             // 만료, 변조, 형식 오류는 모두 인증 실패로만 처리합니다.
             // 자세한 실패 이유를 사용자에게 드러내면 공격자가 토큰 검증 방식을 추측하기 쉬워집니다.
+            return false;
+        }
+    }
+
+    /**
+     * 서명은 맞지만 만료된 토큰인지 확인합니다. 클라이언트에 "갱신하면 되는 401"을 알려 줄 때 씁니다.
+     * jjwt는 서명을 먼저 확인한 뒤 만료를 검사하므로, 위조 토큰은 만료로 판정되지 않습니다.
+     */
+    public boolean isExpired(String token) {
+        try {
+            Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token);
+            return false;
+        } catch (ExpiredJwtException e) {
+            return true;
+        } catch (JwtException | IllegalArgumentException e) {
             return false;
         }
     }

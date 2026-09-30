@@ -38,6 +38,19 @@ public class ApiSecurityErrorHandler {
         writeError(response, request, HttpServletResponse.SC_FORBIDDEN, "FORBIDDEN", "접근 권한이 없습니다.");
     }
 
+    /**
+     * 요청에 Bearer 토큰이 있지만 인증할 수 없을 때(만료·위조·탈퇴한 사용자) JwtAuthenticationFilter가 호출합니다.
+     * 만료는 TOKEN_EXPIRED로 구분해 클라이언트가 로그아웃 대신 refresh token 갱신을 시도하게 합니다.
+     */
+    public void handleInvalidToken(HttpServletRequest request, HttpServletResponse response, boolean expired)
+            throws IOException {
+        if (expired) {
+            writeError(response, request, HttpServletResponse.SC_UNAUTHORIZED, "TOKEN_EXPIRED", "로그인이 만료되었습니다.");
+        } else {
+            writeError(response, request, HttpServletResponse.SC_UNAUTHORIZED, "UNAUTHORIZED", "로그인이 필요합니다.");
+        }
+    }
+
     private void writeError(HttpServletResponse response, HttpServletRequest request, int status, String error,
             String message) throws IOException {
         // 이미 응답이 클라이언트로 전송되기 시작했다면 상태 코드나 본문을 바꿀 수 없으므로 그대로 종료합니다.
