@@ -10,6 +10,7 @@ import com.salus.healthytable.security.ApiSecurityErrorHandler;
 import com.salus.healthytable.security.IpWhitelistFilter;
 import com.salus.healthytable.security.JwtAuthenticationFilter;
 import com.salus.healthytable.security.JwtTokenProvider;
+import com.salus.healthytable.service.DashboardStatsService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.health.Health;
@@ -49,7 +50,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         JwtAuthenticationFilter.class,
         CoopHeaderFilter.class,
         IpWhitelistFilter.class,
-        ApiSecurityErrorHandler.class
+        ApiSecurityErrorHandler.class,
+        DashboardStatsService.class
 })
 @TestPropertySource(properties = {
         "app.cors.allowed-origins=http://localhost:3000",

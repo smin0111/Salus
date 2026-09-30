@@ -21,6 +21,7 @@ Three independently built subprojects; there is no root `package.json` or Makefi
 
 ## Backend packages (`backend/src/main/java/com/salus/healthytable/`)
 - `controller/` REST APIs: `/api/chat`, `/api/recipes`, `/api/meallogs`, `/api/fridge`, `/api/health-checkups`, `/api/users/me`, `/api/users/me/health-profile`, `/api/community`, `/api/payments`, `/api/activities`, `/api/admin/dashboard`; `AuthController` maps `/api/auth/{google,kakao,naver,apple}` per method; (WIP) users are identified by `social_accounts(provider, provider_user_id)` via `SocialLoginService`, not by email (same email on another provider = separate user); `OAuthService` checks Google `aud` / Kakao `app_id`, `AppleIdentityTokenVerifier` checks Apple JWKS signature/iss/aud/exp/nonce; all fail closed when `oauth.*` config is empty.
+- (WIP) Three `SecurityFilterChain`s in `SecurityConfig`: `/api/monitor/**` display token (`DisplayTokenFilter`, `MONITOR_DISPLAY_TOKEN_HASHES`, ROLE_MONITOR, stats only), `/api/admin/**` admin auth (`service/adminauth/`: `admin_accounts` password+TOTP, `admin_sessions` idle 30 min / max 8 h, `AdminTokenProvider` with separate `JWT_ADMIN_SECRET`, roles ADMIN_VIEWER/ADMIN; accounts created only via `AdminAccountCliRunner`), everything else = user app. Auth filters are not servlet-registered (registration disabled or built inside the chain) so they never run on another chain.
 - `security/` JWT filter/provider (access token 30 min; (WIP) a presented but expired/invalid Bearer token gets 401 `TOKEN_EXPIRED`/`UNAUTHORIZED` even on public APIs, except `/api/auth/**`; refresh tokens are hashed in `refresh_tokens` and rotated by `RefreshTokenService` via `/api/auth/refresh`, revoked via `/api/auth/logout`), `IpWhitelistFilter` (admin), `AuthenticatedUserProvider` (current user id).
 - `domain/` JPA entities; `repository/` one Spring Data JPA repository per entity; `dto/` request/response types.
 - `service/` flat business logic. Subpackages: `service/allergen/` (allergen dictionary/matching), `service/recipeagent/` (flag-gated Recipe Agent: web/YouTube/medication sources).
@@ -66,13 +67,13 @@ Ollama settings live in `application.properties` (`ollama.*`: model `qwen3:8b`, 
 ## Data layer
 - Entities: `User`, `HealthProfile`, `HealthCheckup`, `FridgeItem`, `MealLog`, `Recipe`, `RecipeStats`, `RecipeShare`, `GeneratedRecipe`, `Recommendation`, `SearchCache`, `ChatSession`, `ChatMessage`, `CommunityPost`, `PostComment`, `PostLike`, `Payment`, `ActivityLog` (+ enums `UserRole`, `UserGrade`; `JsonStringListConverter` for JSON list columns).
 - Typical chain: `domain/X` -> `repository/XRepository` (derived queries) -> `service/XService` (`@Transactional` writes) -> `controller/XController`. Example: `MealLog` -> `MealLogRepository` -> `MealLogService.saveOrUpdateMealLog` -> `MealLogController` (`/api/meallogs`).
-- Flyway `db/migration`: V1 init schema, V2 users/payments hardening, V3 align existing schema, V4 recipe share visibility, V5 user foreign keys; (WIP) V6 approved recipe catalog, V7 servings/calories, V8 generation attempt audit, V9 social accounts (drops `users.email` UNIQUE), V10 refresh tokens. `backend/migrations/*.sql` are legacy manual scripts, not run by Flyway.
+- Flyway `db/migration`: V1 init schema, V2 users/payments hardening, V3 align existing schema, V4 recipe share visibility, V5 user foreign keys; (WIP) V6 approved recipe catalog, V7 servings/calories, V8 generation attempt audit, V9 social accounts (drops `users.email` UNIQUE), V10 refresh tokens, V11 admin accounts/sessions. `backend/migrations/*.sql` are legacy manual scripts, not run by Flyway.
 - Redis: `RecipeWorkSessionService` only (JSON per user+chat session, TTL 6h, in-memory fallback). Chat rate limiting is in-memory, not Redis.
 - `spring.jpa.open-in-view=false`: load what you need inside services.
 
 ## Clients
 - `frontend/src/`: `screens/` (large: `ChatScreen.js` ~70KB), `api/` (HTTP client modules), `navigation/`, `context/AuthContext.js`, `components/`, `theme/`. Local `src/secrets.js` comes from `secrets.example.js`.
-- `admin/src/`: `pages/Dashboard.jsx`, `pages/Login.jsx`, `components/`; build-time `VITE_API_BASE_URL`.
+- `admin/src/`: `pages/Dashboard.jsx`, `pages/Login.jsx` (admin id/password + TOTP steps), `pages/Monitor.jsx` (`/monitor` unattended wall display, display token from `#display-token=`), `components/StatsBoard.jsx`; build-time `VITE_API_BASE_URL`.
 
 ## Commands
 | Purpose | Command |
