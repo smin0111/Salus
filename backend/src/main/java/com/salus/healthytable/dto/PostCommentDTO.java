@@ -6,6 +6,9 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * 댓글 응답 DTO입니다. 작성자 이름(userName)을 함께 내려 줍니다.
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

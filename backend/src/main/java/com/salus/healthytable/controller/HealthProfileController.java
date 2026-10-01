@@ -14,6 +14,10 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.LinkedHashSet;
 import java.util.List;
 
+/**
+ * 내 건강 프로필 API(/api/users/me/health-profile)입니다.
+ * 알레르기, 기저질환, 식단 제한, 복용 약, 건강 목표를 조회하고 저장합니다.
+ */
 @RestController
 @RequestMapping("/api/users/me/health-profile")
 @RequiredArgsConstructor
@@ -25,6 +29,9 @@ public class HealthProfileController {
     private final AuthenticatedUserProvider authenticatedUserProvider;
     private final HealthProfileRepository healthProfileRepository;
 
+    /**
+     * 내 건강 프로필을 조회합니다. 아직 저장한 적이 없으면 모든 항목이 빈 목록인 응답을 반환합니다.
+     */
     @GetMapping
     public HealthProfileDto getMyHealthProfile() {
         Long userId = authenticatedUserProvider.requireUserId();
@@ -33,6 +40,9 @@ public class HealthProfileController {
                 .orElseGet(this::emptyDto);
     }
 
+    /**
+     * 내 건강 프로필을 저장합니다. 기존 프로필이 있으면 덮어쓰고, 없으면 새로 만듭니다(upsert).
+     */
     @PutMapping
     public HealthProfileDto saveMyHealthProfile(@RequestBody HealthProfileDto request) {
         Long userId = authenticatedUserProvider.requireUserId();
@@ -65,6 +75,7 @@ public class HealthProfileController {
         return new HealthProfileDto(List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
+    // 빈 값 제거, 공백 정리, 중복 제거 후 항목당 80자 / 최대 30개 제한을 확인합니다.
     private List<String> cleanList(List<String> values, String label) {
         if (values == null || values.isEmpty()) {
             return List.of();
@@ -86,6 +97,7 @@ public class HealthProfileController {
         return List.copyOf(cleaned);
     }
 
+    // DB 값이 null이어도 클라이언트에는 항상 빈 배열([])을 내려 줍니다.
     private List<String> safeList(List<String> values) {
         return values == null ? List.of() : values;
     }

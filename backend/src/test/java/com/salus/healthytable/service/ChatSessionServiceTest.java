@@ -20,6 +20,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link ChatSessionService} 테스트입니다.
+ */
 class ChatSessionServiceTest {
 
     private ChatSessionRepository chatSessionRepository;
@@ -33,6 +36,7 @@ class ChatSessionServiceTest {
         chatSessionService = new ChatSessionService(chatSessionRepository, chatMessageRepository);
     }
 
+    // 요청한 채팅방이 현재 사용자 것이면 이어서 사용해야 합니다.
     @Test
     void resolveSessionContinuesCurrentUsersExistingSession() {
         ChatSession existing = session(17L, 3L, "기존 대화");
@@ -45,6 +49,7 @@ class ChatSessionServiceTest {
         verify(chatSessionRepository).findByIdAndUserId(17L, 3L);
     }
 
+    // 다른 사용자의 채팅방 ID를 보내면 열지 않고 새 채팅방을 만들어야 합니다.
     @Test
     void resolveSessionNeverOpensAnotherUsersSession() {
         ChatDto.Request request = request(99L, "내 대화로 시작해줘");
@@ -63,6 +68,7 @@ class ChatSessionServiceTest {
         verify(chatSessionRepository).findByIdAndUserId(99L, 3L);
     }
 
+    // 사용자/AI 메시지를 저장하고 채팅방의 마지막 활동 시각을 갱신해야 합니다.
     @Test
     void saveMessagePersistsUserAndModelMessagesAndTouchesSession() {
         ChatSession session = session(17L, 3L, "기존 대화");
@@ -82,6 +88,7 @@ class ChatSessionServiceTest {
         verify(chatSessionRepository, times(2)).save(session);
     }
 
+    // LLM용 대화 기록은 시간순이어야 하고, 방금 저장한 현재 메시지는 제외해야 합니다.
     @Test
     void resolveHistoryUsesPersistedOrderAndRemovesJustSavedCurrentMessage() {
         ChatSession session = session(17L, 3L, "기존 대화");

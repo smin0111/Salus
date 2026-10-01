@@ -1,5 +1,8 @@
 import heroImageSources from './heroImageSources';
 
+// 랜딩 히어로 캐러셀에 보여 줄 예시 데이터입니다(실제 사용자 데이터가 아닌 소개용 시연 데이터).
+
+// 레시피 장면마다 보여 줄 건강 조건 항목 정의(좌/우 배치 위치 포함)
 export const HERO_CONTEXT_META = [
     { id: 'allergy', number: '01', code: 'ALLERGY', label: '알레르기', side: 'left', reasonLabel: '알레르기 정보 참고' },
     { id: 'health', number: '02', code: 'HEALTH', label: '건강 상태', side: 'left', reasonLabel: '건강 관리 정보 참고' },
@@ -8,6 +11,7 @@ export const HERO_CONTEXT_META = [
     { id: 'fridge', number: '05', code: 'FRIDGE', label: '냉장고 재료', side: 'left', reasonLabel: '냉장고 재료 활용' },
 ];
 
+// 캐러셀 장면 목록: 요리 이미지, 색상 팔레트, 예시 건강 조건, 이미지 위 재료 라벨 위치(%)
 export const HERO_RECIPES = [
     {
         id: 'bibimbap',
@@ -116,6 +120,7 @@ export const HERO_RECIPES = [
     },
 ];
 
+// 장면의 예시 건강 조건으로 화면에 표시할 항목과 설명 문장을 만듭니다.
 export function createHealthContexts(scene) {
     return HERO_CONTEXT_META.filter((item) => Boolean(scene.profile[item.id])).map((item) => {
         const value = scene.profile[item.id];

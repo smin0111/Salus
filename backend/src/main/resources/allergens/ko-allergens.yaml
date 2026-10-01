@@ -3,6 +3,11 @@
 # aliases: 같은 알레르겐을 가리키는 다른 이름. 사용자가 프로필에 입력할 수 있는 표기.
 # derived: 해당 알레르겐이 들어가는 파생 재료와 가공품. 재료명에 루트가 드러나지
 #          않아 문자열 포함만으로는 잡히지 않는 것들이다.
+# name/declarationAliases: 공식 함유 표시 Parser에서 허용하는 직접 명칭.
+# lexicalHints: 어휘상 연관만 있는 표현. Declaration Evidence로 사용하지 않는다.
+# registryDerived: 라벨 Registry 전용 파생 별칭. 기존 프로필 Matcher 범위는 유지한다.
+# declarationAllergens: 라벨 관찰 전용 ID/그룹. 기존 Matcher의 루트를 추가하지 않는다.
+# parent: Registry의 명시적 부모 ID. 라벨의 explicitChildren이나 안전 판정으로 확장하지 않는다.
 #
 # 한 글자 용어는 토큰 전체가 일치할 때만 매칭한다. "밀"이 "밀크"에,
 # "게"가 "게으른"에 걸리는 오탐을 막기 위해서다. 파생 재료가 실제 탐지를 담당한다.
@@ -10,21 +15,31 @@
 allergens:
   - id: EGG
     name: 계란
+    declarationAliases: [달걀]
+    registryDerived: [전란액]
+    parent: EGG_GROUP
+    # 프로필 Matcher의 기존 별칭 호환성 유지. 라벨의 알류/난류는 아래 EGG_GROUP으로 구분.
     aliases: [계란, 달걀, 난류, 알류, egg]
     derived: [마요네즈, 머랭, 카스터드, 커스터드, 난백, 난황, 흰자, 노른자, 계란물, 달걀물, 마요, 타르타르소스]
 
   - id: MILK
     name: 우유
+    declarationAliases: [원유]
+    lexicalHints: [우유향, 버터향]
+    registryDerived: [탈지분유, 혼합탈지분유, 전지분유, 카제인나트륨, 유청, 유크림]
     aliases: [우유, 유제품, milk]
     derived: [버터, 치즈, 생크림, 휘핑크림, 연유, 분유, 요거트, 요구르트, 크림, 버터밀크, 사워크림, 리코타, 모짜렐라, 파르메산, 체다, 크림치즈, 가염버터, 무염버터, 우유식빵]
 
   - id: WHEAT
     name: 밀
+    registryDerived: [소맥분]
     aliases: [밀, 소맥, wheat, 글루텐]
     derived: [밀가루, 박력분, 중력분, 강력분, 부침가루, 튀김가루, 빵가루, 국수, 소면, 칼국수, 라면, 파스타, 스파게티, 마카로니, 우동, 수제비, 만두피, 식빵, 바게트, 크래커, 밀떡, 밀전병]
 
   - id: SOY
     name: 대두
+    lexicalHints: [콩]
+    registryDerived: [분리대두단백, 대두레시틴]
     aliases: [대두, 콩, 콩류, soy, soybean]
     derived: [두부, 된장, 간장, 고추장, 쌈장, 청국장, 두유, 콩나물, 콩기름, 대두유, 유부, 순두부, 연두부, 콩가루, 춘장]
 
@@ -55,6 +70,8 @@ allergens:
 
   - id: SHRIMP
     name: 새우
+    registryDerived: [건새우분말, 새우추출물분말]
+    lexicalHints: [새우풍미유]
     aliases: [새우, shrimp]
     derived: [건새우, 새우젓, 대하, 칵테일새우, 새우가루, 액젓, 오징어젓]
 
@@ -85,20 +102,42 @@ allergens:
 
   - id: PORK
     name: 돼지고기
+    declarationAliases: [돈육, 돼지]
     aliases: [돼지고기, 돈육, pork]
     derived: [삼겹살, 목살, 베이컨, 햄, 소시지, 등심, 앞다리살, 항정살, 갈비, 라드, 돈까스]
 
   - id: BEEF
     name: 쇠고기
+    declarationAliases: [소고기, 우육]
+    lexicalHints: [비프맛양념]
     aliases: [쇠고기, 소고기, 우육, beef]
     derived: [사골, 우삼겹, 차돌박이, 등심, 안심, 양지, 사태, 소갈비, 육수, 불고기]
 
   - id: CHICKEN
     name: 닭고기
+    declarationAliases: [계육]
     aliases: [닭고기, 계육, chicken]
     derived: [닭가슴살, 닭다리, 닭날개, 치킨스톡, 닭육수, 삼계]
 
   - id: SULFITE
     name: 아황산류
+    declarationAliases: [산성아황산나트륨]
     aliases: [아황산, 아황산류, sulfite]
     derived: [건포도, 건살구, 와인, 물엿]
+
+declarationAllergens:
+  - id: EGG_GROUP
+    name: 알류
+    declarationAliases: [난류]
+  - id: QUAIL_EGG
+    name: 메추리알
+    parent: EGG_GROUP
+  - id: OYSTER
+    name: 굴
+    parent: SHELLFISH
+  - id: ABALONE
+    name: 전복
+    parent: SHELLFISH
+  - id: MUSSEL
+    name: 홍합
+    parent: SHELLFISH

@@ -17,6 +17,7 @@ class AllergenRemovabilityTest {
 
     private final AllergenMatcher matcher = matcher();
 
+    // 테스트용 사전(우유→버터·치즈, 밀→밀가루 등)으로 Matcher를 만듭니다.
     private static AllergenMatcher matcher() {
         AllergenDictionary dictionary = new AllergenDictionary();
         dictionary.load();

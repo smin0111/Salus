@@ -6,8 +6,9 @@ import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
 import SalusLogo, { SalusLogoMark } from '../components/SalusLogo';
 
-// --- Minimalist Components ---
+// --- 로그인 화면에서 쓰는 작은 컴포넌트 ---
 
+// 소셜 로그인 버튼(아이콘 + 문구). 로딩 중이면 스피너를 보여 주고 누를 수 없게 합니다.
 const SocialButton = ({ icon, text, bgColor, iconColor, textColor, onPress, loading, border }) => (
     <TouchableOpacity
         style={[
@@ -19,7 +20,7 @@ const SocialButton = ({ icon, text, bgColor, iconColor, textColor, onPress, load
     >
         {loading ? <ActivityIndicator color={textColor} /> : (
             <>
-                {/* Fixed width container for icon to ensure text centering */}
+                {/* 아이콘 영역 너비를 고정해 버튼마다 글자가 같은 위치에 정렬되게 합니다 */}
                 <View style={{ width: 24, alignItems: 'center', marginRight: 12 }}>
                     {icon}
                 </View>
@@ -29,6 +30,7 @@ const SocialButton = ({ icon, text, bgColor, iconColor, textColor, onPress, load
     </TouchableOpacity>
 );
 
+// 로고, 소셜 로그인 버튼 3개, "로그인 없이 둘러보기" 링크로 구성된 로그인 폼
 const LoginForm = ({ onLogin, onGuest, loading, handleSocialLogin }) => {
     return (
         <View style={styles.formContainer}>
@@ -82,15 +84,21 @@ const LoginForm = ({ onLogin, onGuest, loading, handleSocialLogin }) => {
     );
 };
 
+/**
+ * 로그인 화면입니다.
+ * 넓은 웹 화면에서는 왼쪽 브랜드 영역 + 오른쪽 로그인 폼의 2단 레이아웃, 모바일에서는 폼만 보여 줍니다.
+ */
 export default function LoginScreen({ onLogin, onGuest }) {
     const { login } = useAuth();
     const [loading, setLoading] = useState(false);
+    // 로그인 유지 여부(현재는 항상 true로 전달)
     const [keepLoggedIn, setKeepLoggedIn] = useState(true);
 
     const { width, height } = useWindowDimensions();
     const isWeb = Platform.OS === 'web';
     const isSplitLayout = width > 700;
 
+    // AuthContext의 login으로 소셜 로그인을 진행하고, 성공하면 다음 화면으로 이동합니다.
     const handleSocialLogin = async (type) => {
         setLoading(true);
         const success = await login(type, keepLoggedIn);
@@ -103,17 +111,17 @@ export default function LoginScreen({ onLogin, onGuest }) {
     if (isWeb && isSplitLayout) {
         return (
             <View style={[styles.container, { flexDirection: 'row', minHeight: height }]}>
-                {/* Left Side: Brand Identity (Minimal) */}
+                {/* 왼쪽: 브랜드 영역 */}
                 <View style={styles.leftPane}>
                     <View style={styles.brandContainer}>
                         <SalusLogo size={72} wordmarkColor={colors.onPrimary} wordmarkStyle={styles.brandWordmark} />
                         <Text style={styles.brandSlogan}>당신을 위한 스마트 인공지능 셰프</Text>
                     </View>
-                    {/* Abstract Circle Decoration */}
+                    {/* 장식용 원형 도형 */}
                     <View style={styles.circleDecoration} />
                 </View>
 
-                {/* Right Side: Login Form */}
+                {/* 오른쪽: 로그인 폼 */}
                 <View style={styles.rightPane}>
                     <LoginForm
                         onLogin={onLogin}
@@ -126,7 +134,7 @@ export default function LoginScreen({ onLogin, onGuest }) {
         );
     }
 
-    // Mobile Layout
+    // 모바일 레이아웃
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
@@ -147,7 +155,7 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: colors.background,
     },
-    // Split Layout Styles
+    // 2단 레이아웃(넓은 웹 화면) 스타일
     leftPane: {
         flex: 1,
         backgroundColor: colors.secondary,
@@ -189,7 +197,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.1)',
     },
 
-    // Form Styles
+    // 로그인 폼 스타일
     formContainer: {
         width: '100%',
         maxWidth: 400,
@@ -222,7 +230,7 @@ const styles = StyleSheet.create({
     },
     socialButton: {
         height: 52,
-        borderRadius: 12, // Modern radius
+        borderRadius: 12, // 모서리 둥글기
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',

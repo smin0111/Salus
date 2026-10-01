@@ -1,0 +1,1737 @@
+{
+  "scope": "WEB_VERIFIED_STRICT",
+  "sourceWorkbook": "Salus_Strict_Web_Reference_20_2026-09-09.xlsx",
+  "sourceSha256": "ad5e41e3c8366dd9b45571186f3ad95683e93395a48bb4c639b9cb283213d8fb",
+  "provenance": "Accepted_20 G열 원본 전사. 기대 root 목록·선택된 nested paths·Evidence는 원문과 기존 Registry를 별도로 검토해 작성. 모든 의미의 완전 Tree 정답이 아닌 구조 검증. S020 출처 충돌 제외.",
+  "cases": [
+    {
+      "id": "S001",
+      "gtin": "8801115114154",
+      "productName": "서울우유",
+      "source": {
+        "workbookCell": "Accepted_20!G2",
+        "originalIngredient": "원유 100%(국산, 체세포수 기준 1급, 세균수 기준 1급A)",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801115114154&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801115114154/details",
+        "referenceNote": "현행 유통 라벨의 원재료·알레르기·제조소와 동일 GTIN 판매정보 교차확인.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "원유 100%(국산, 체세포수 기준 1급, 세균수 기준 1급A)",
+        "normalized": "원유 100%(국산, 체세포수 기준 1급, 세균수 기준 1급A)",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "원유"
+        ],
+        "expectedNestedPaths": [
+          [
+            "원유",
+            "국산"
+          ],
+          [
+            "원유",
+            "체세포수 기준 1급"
+          ],
+          [
+            "원유",
+            "세균수 기준 1급A"
+          ]
+        ],
+        "expectedEvidence": [
+          {
+            "path": [
+              "원유"
+            ],
+            "allergen": "MILK",
+            "relation": "DIRECT_NAME",
+            "confidence": "CERTAIN",
+            "matchedText": "원유 100%"
+          }
+        ],
+        "reviewedCandidates": [
+          {
+            "path": [
+              "원유"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          }
+        ]
+      }
+    },
+    {
+      "id": "S002",
+      "gtin": "8801115134237",
+      "productName": "서울 초코우유",
+      "source": {
+        "workbookCell": "Accepted_20!G3",
+        "originalIngredient": "정제수, 원유(국산), 기타과당, 탈지분유(국산), 설탕, 코코아분말(싱가포르산) 1.1%, 카라기난, 향료 2종",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801115134237&strCode=4006",
+        "independentUrl": "https://www.beepscan.com/barcode/8801115134237",
+        "referenceNote": "라벨 이미지에서 원재료·우유 함유·공장/품목보고번호를 직접 판독하고 독립 GTIN DB로 재확인.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "정제수, 원유(국산), 기타과당, 탈지분유(국산), 설탕, 코코아분말(싱가포르산) 1.1%, 카라기난, 향료 2종",
+        "normalized": "정제수, 원유(국산), 기타과당, 탈지분유(국산), 설탕, 코코아분말(싱가포르산) 1.1%, 카라기난, 향료 2종",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "정제수",
+          "원유",
+          "기타과당",
+          "탈지분유",
+          "설탕",
+          "코코아분말",
+          "카라기난",
+          "향료 2종"
+        ],
+        "expectedNestedPaths": [
+          [
+            "원유",
+            "국산"
+          ],
+          [
+            "탈지분유",
+            "국산"
+          ],
+          [
+            "코코아분말",
+            "싱가포르산"
+          ]
+        ],
+        "expectedEvidence": [
+          {
+            "path": [
+              "탈지분유"
+            ],
+            "allergen": "MILK",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "탈지분유"
+          },
+          {
+            "path": [
+              "원유"
+            ],
+            "allergen": "MILK",
+            "relation": "DIRECT_NAME",
+            "confidence": "CERTAIN",
+            "matchedText": "원유"
+          }
+        ],
+        "reviewedCandidates": [
+          {
+            "path": [
+              "원유"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          }
+        ]
+      }
+    },
+    {
+      "id": "S003",
+      "gtin": "8801121767122",
+      "productName": "매일 바이오 PROBIOTIC 드링킹요거트 플레인",
+      "source": {
+        "workbookCell": "Accepted_20!G4",
+        "originalIngredient": "원유(국산), 정제수, 플레인시럽10%[설탕, 변성전분, 펙틴, 구연산, 구연산삼나트륨], 혼합탈지분유(네덜란드산), 설탕, 올리고당, 복합유산균 1,000억 이상(LGG유산균 250억 이상)/250mL",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801121767122&strCode=4006",
+        "independentUrl": "https://www.beepscan.com/barcode/8801121767122",
+        "referenceNote": "현행 라벨의 원재료·우유 함유·같은 제조시설 문구와 단품 GTIN을 독립 출처에서 교차확인.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "원유(국산), 정제수, 플레인시럽10%[설탕, 변성전분, 펙틴, 구연산, 구연산삼나트륨], 혼합탈지분유(네덜란드산), 설탕, 올리고당, 복합유산균 1,000억 이상(LGG유산균 250억 이상)/250mL",
+        "normalized": "원유(국산), 정제수, 플레인시럽10%[설탕, 변성전분, 펙틴, 구연산, 구연산삼나트륨], 혼합탈지분유(네덜란드산), 설탕, 올리고당, 복합유산균 1,000억 이상(LGG유산균 250억 이상)/250mL",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "원유",
+          "정제수",
+          "플레인시럽",
+          "혼합탈지분유",
+          "설탕",
+          "올리고당",
+          "복합유산균 1,000억 이상"
+        ],
+        "expectedNestedPaths": [
+          [
+            "원유",
+            "국산"
+          ],
+          [
+            "플레인시럽",
+            "설탕"
+          ],
+          [
+            "플레인시럽",
+            "변성전분"
+          ],
+          [
+            "플레인시럽",
+            "펙틴"
+          ],
+          [
+            "플레인시럽",
+            "구연산"
+          ],
+          [
+            "플레인시럽",
+            "구연산삼나트륨"
+          ],
+          [
+            "혼합탈지분유",
+            "네덜란드산"
+          ],
+          [
+            "복합유산균 1,000억 이상",
+            "LGG유산균 250억 이상"
+          ]
+        ],
+        "expectedEvidence": [
+          {
+            "path": [
+              "원유"
+            ],
+            "allergen": "MILK",
+            "relation": "DIRECT_NAME",
+            "confidence": "CERTAIN",
+            "matchedText": "원유"
+          },
+          {
+            "path": [
+              "혼합탈지분유"
+            ],
+            "allergen": "MILK",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "혼합탈지분유"
+          }
+        ],
+        "reviewedCandidates": [
+          {
+            "path": [
+              "원유"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          },
+          {
+            "path": [
+              "혼합탈지분유"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          }
+        ]
+      }
+    },
+    {
+      "id": "S004",
+      "gtin": "8801007037783",
+      "productName": "햇반",
+      "source": {
+        "workbookCell": "Accepted_20!G5",
+        "originalIngredient": "멥쌀 99.9%(국산), 쌀미강추출물",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801007037783&strCode=4006",
+        "independentUrl": "https://www.ssg.com/item/itemView.ssg?itemId=1000024049958",
+        "referenceNote": "단순 원재료 음성 대조군. 현행 라벨과 SSG 모델번호 8801007037783 일치.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "멥쌀 99.9%(국산), 쌀미강추출물",
+        "normalized": "멥쌀 99.9%(국산), 쌀미강추출물",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "멥쌀",
+          "쌀미강추출물"
+        ],
+        "expectedNestedPaths": [
+          [
+            "멥쌀",
+            "국산"
+          ]
+        ],
+        "expectedEvidence": [],
+        "reviewedCandidates": []
+      }
+    },
+    {
+      "id": "S005",
+      "gtin": "8801007512259",
+      "productName": "스팸 클래식",
+      "source": {
+        "workbookCell": "Accepted_20!G6",
+        "originalIngredient": "돼지고기 92.44%(지방 일부 사용/국산, 외국산: 미국, 스페인, 캐나다 등), 정제수, 정제소금(국산), 백설탕, 혼합제제(폴리인산나트륨, 피로인산나트륨, 메타인산나트륨), 카라기난, 비타민C, 아질산나트륨(발색제)",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801007512259&strCode=4006",
+        "independentUrl": "https://dept.sfcmall.com/item/itemView.ssg?itemId=1000024006397&salestrNo=1009&siteNo=6009",
+        "referenceNote": "현행 라벨과 SSG 모델번호 8801007512259 교차확인.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "돼지고기 92.44%(지방 일부 사용/국산, 외국산: 미국, 스페인, 캐나다 등), 정제수, 정제소금(국산), 백설탕, 혼합제제(폴리인산나트륨, 피로인산나트륨, 메타인산나트륨), 카라기난, 비타민C, 아질산나트륨(발색제)",
+        "normalized": "돼지고기 92.44%(지방 일부 사용/국산, 외국산: 미국, 스페인, 캐나다 등), 정제수, 정제소금(국산), 백설탕, 혼합제제(폴리인산나트륨, 피로인산나트륨, 메타인산나트륨), 카라기난, 비타민C, 아질산나트륨(발색제)",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "돼지고기",
+          "정제수",
+          "정제소금",
+          "백설탕",
+          "혼합제제",
+          "카라기난",
+          "비타민C",
+          "아질산나트륨"
+        ],
+        "expectedNestedPaths": [
+          [
+            "돼지고기",
+            "지방 일부 사용/국산"
+          ],
+          [
+            "돼지고기",
+            "외국산: 미국"
+          ],
+          [
+            "돼지고기",
+            "스페인"
+          ],
+          [
+            "돼지고기",
+            "캐나다 등"
+          ],
+          [
+            "정제소금",
+            "국산"
+          ],
+          [
+            "혼합제제",
+            "폴리인산나트륨"
+          ],
+          [
+            "혼합제제",
+            "피로인산나트륨"
+          ],
+          [
+            "혼합제제",
+            "메타인산나트륨"
+          ],
+          [
+            "아질산나트륨",
+            "발색제"
+          ]
+        ],
+        "expectedEvidence": [
+          {
+            "path": [
+              "돼지고기"
+            ],
+            "allergen": "PORK",
+            "relation": "DIRECT_NAME",
+            "confidence": "CERTAIN",
+            "matchedText": "돼지고기 92.44%"
+          }
+        ],
+        "reviewedCandidates": []
+      }
+    },
+    {
+      "id": "S006",
+      "gtin": "8801114120958",
+      "productName": "특등급 국산콩 두부 2입 기획",
+      "source": {
+        "workbookCell": "Accepted_20!G7",
+        "originalIngredient": "대두 100%(국산), 조제해수염화마그네슘, 현미유, 올리브유",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801114120958&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801114120958/details",
+        "referenceNote": "대두 100% 제품이지만 응고제·유지까지 실제 라벨 기준으로 보존.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "대두 100%(국산), 조제해수염화마그네슘, 현미유, 올리브유",
+        "normalized": "대두 100%(국산), 조제해수염화마그네슘, 현미유, 올리브유",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "대두",
+          "조제해수염화마그네슘",
+          "현미유",
+          "올리브유"
+        ],
+        "expectedNestedPaths": [
+          [
+            "대두",
+            "국산"
+          ]
+        ],
+        "expectedEvidence": [
+          {
+            "path": [
+              "대두"
+            ],
+            "allergen": "SOY",
+            "relation": "DIRECT_NAME",
+            "confidence": "CERTAIN",
+            "matchedText": "대두 100%"
+          }
+        ],
+        "reviewedCandidates": []
+      }
+    },
+    {
+      "id": "S007",
+      "gtin": "8801043035989",
+      "productName": "새우깡",
+      "source": {
+        "workbookCell": "Accepted_20!G8",
+        "originalIngredient": "소맥분(밀: 미국산), 미강유(태국산), 옥수수전분{옥수수: 외국산(러시아, 헝가리, 세르비아 등)}, 새우(국산 50%, 미국산 50%), 팜유, 맛베이스조미분말{건새우분말(새우: 중국산), 새우추출물분말(새우: 미국산)}, 혼합제제(타피오카산화전분, 말토덱스트린), 새우풍미유, 염미시즈닝",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801043035989&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801043035989/details",
+        "referenceNote": "복합 알레르겐 + 교차접촉 검증용.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "소맥분(밀: 미국산), 미강유(태국산), 옥수수전분{옥수수: 외국산(러시아, 헝가리, 세르비아 등)}, 새우(국산 50%, 미국산 50%), 팜유, 맛베이스조미분말{건새우분말(새우: 중국산), 새우추출물분말(새우: 미국산)}, 혼합제제(타피오카산화전분, 말토덱스트린), 새우풍미유, 염미시즈닝",
+        "normalized": "소맥분(밀: 미국산), 미강유(태국산), 옥수수전분{옥수수: 외국산(러시아, 헝가리, 세르비아 등)}, 새우(국산 50%, 미국산 50%), 팜유, 맛베이스조미분말{건새우분말(새우: 중국산), 새우추출물분말(새우: 미국산)}, 혼합제제(타피오카산화전분, 말토덱스트린), 새우풍미유, 염미시즈닝",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "소맥분",
+          "미강유",
+          "옥수수전분",
+          "새우",
+          "팜유",
+          "맛베이스조미분말",
+          "혼합제제",
+          "새우풍미유",
+          "염미시즈닝"
+        ],
+        "expectedNestedPaths": [
+          [
+            "소맥분",
+            "밀: 미국산"
+          ],
+          [
+            "미강유",
+            "태국산"
+          ],
+          [
+            "옥수수전분",
+            "옥수수: 외국산",
+            "러시아"
+          ],
+          [
+            "옥수수전분",
+            "옥수수: 외국산",
+            "헝가리"
+          ],
+          [
+            "옥수수전분",
+            "옥수수: 외국산",
+            "세르비아 등"
+          ],
+          [
+            "새우",
+            "국산"
+          ],
+          [
+            "새우",
+            "미국산"
+          ],
+          [
+            "맛베이스조미분말",
+            "건새우분말",
+            "새우: 중국산"
+          ],
+          [
+            "맛베이스조미분말",
+            "새우추출물분말",
+            "새우: 미국산"
+          ],
+          [
+            "혼합제제",
+            "타피오카산화전분"
+          ],
+          [
+            "혼합제제",
+            "말토덱스트린"
+          ]
+        ],
+        "expectedEvidence": [
+          {
+            "path": [
+              "새우"
+            ],
+            "allergen": "SHRIMP",
+            "relation": "DIRECT_NAME",
+            "confidence": "CERTAIN",
+            "matchedText": "새우"
+          },
+          {
+            "path": [
+              "소맥분"
+            ],
+            "allergen": "WHEAT",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "소맥분"
+          },
+          {
+            "path": [
+              "소맥분",
+              "밀: 미국산"
+            ],
+            "allergen": "WHEAT",
+            "relation": "DIRECT_NAME",
+            "confidence": "CERTAIN",
+            "matchedText": "밀: 미국산"
+          },
+          {
+            "path": [
+              "맛베이스조미분말",
+              "건새우분말"
+            ],
+            "allergen": "SHRIMP",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "건새우분말"
+          },
+          {
+            "path": [
+              "맛베이스조미분말",
+              "건새우분말",
+              "새우: 중국산"
+            ],
+            "allergen": "SHRIMP",
+            "relation": "DIRECT_NAME",
+            "confidence": "CERTAIN",
+            "matchedText": "새우: 중국산"
+          },
+          {
+            "path": [
+              "맛베이스조미분말",
+              "새우추출물분말"
+            ],
+            "allergen": "SHRIMP",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "새우추출물분말"
+          },
+          {
+            "path": [
+              "맛베이스조미분말",
+              "새우추출물분말",
+              "새우: 미국산"
+            ],
+            "allergen": "SHRIMP",
+            "relation": "DIRECT_NAME",
+            "confidence": "CERTAIN",
+            "matchedText": "새우: 미국산"
+          },
+          {
+            "path": [
+              "새우풍미유"
+            ],
+            "allergen": "SHRIMP",
+            "relation": "LEXICAL_HINT",
+            "confidence": "POSSIBLE",
+            "matchedText": "새우풍미유"
+          }
+        ],
+        "reviewedCandidates": [
+          {
+            "path": [
+              "소맥분"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          },
+          {
+            "path": [
+              "소맥분",
+              "밀: 미국산"
+            ],
+            "reason": "등록 명칭을 포함한 원산지 주석 형식: 전체 토큰 exact 조회만 사용하므로 미해석."
+          },
+          {
+            "path": [
+              "맛베이스조미분말",
+              "건새우분말"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          },
+          {
+            "path": [
+              "맛베이스조미분말",
+              "건새우분말",
+              "새우: 중국산"
+            ],
+            "reason": "등록 명칭을 포함한 원산지 주석 형식: 전체 토큰 exact 조회만 사용하므로 미해석."
+          },
+          {
+            "path": [
+              "맛베이스조미분말",
+              "새우추출물분말"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          },
+          {
+            "path": [
+              "맛베이스조미분말",
+              "새우추출물분말",
+              "새우: 미국산"
+            ],
+            "reason": "등록 명칭을 포함한 원산지 주석 형식: 전체 토큰 exact 조회만 사용하므로 미해석."
+          },
+          {
+            "path": [
+              "새우풍미유"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          }
+        ]
+      }
+    },
+    {
+      "id": "S008",
+      "gtin": "8801117534912",
+      "productName": "초코파이 정",
+      "source": {
+        "workbookCell": "Accepted_20!G9",
+        "originalIngredient": "백설탕, 밀가루(밀: 미국산), 물엿, 쇼트닝(팜유: 말레이시아산, 팜올레인유: 말레이시아산), 식물성유지1(말레이시아산), 전지분유, 코코아분말1, 코코아분말2, 함수포도당, 젤라틴(돼지), 전란액, 식염, 산도조절제1, 산도조절제2, 코코아매스, 산도조절제3, 합성향료 3종, 혼합제제(카제인나트륨, 수산화칼슘, 아라비아검), 유화제, 잔탄검, 유당, 식물성유지2",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801117534912&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801117534912/details",
+        "referenceNote": "다중 함유 알레르겐과 '혼입가능' 문구가 동시에 있는 복합 케이스.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "백설탕, 밀가루(밀: 미국산), 물엿, 쇼트닝(팜유: 말레이시아산, 팜올레인유: 말레이시아산), 식물성유지1(말레이시아산), 전지분유, 코코아분말1, 코코아분말2, 함수포도당, 젤라틴(돼지), 전란액, 식염, 산도조절제1, 산도조절제2, 코코아매스, 산도조절제3, 합성향료 3종, 혼합제제(카제인나트륨, 수산화칼슘, 아라비아검), 유화제, 잔탄검, 유당, 식물성유지2",
+        "normalized": "백설탕, 밀가루(밀: 미국산), 물엿, 쇼트닝(팜유: 말레이시아산, 팜올레인유: 말레이시아산), 식물성유지1(말레이시아산), 전지분유, 코코아분말1, 코코아분말2, 함수포도당, 젤라틴(돼지), 전란액, 식염, 산도조절제1, 산도조절제2, 코코아매스, 산도조절제3, 합성향료 3종, 혼합제제(카제인나트륨, 수산화칼슘, 아라비아검), 유화제, 잔탄검, 유당, 식물성유지2",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "백설탕",
+          "밀가루",
+          "물엿",
+          "쇼트닝",
+          "식물성유지1",
+          "전지분유",
+          "코코아분말1",
+          "코코아분말2",
+          "함수포도당",
+          "젤라틴",
+          "전란액",
+          "식염",
+          "산도조절제1",
+          "산도조절제2",
+          "코코아매스",
+          "산도조절제3",
+          "합성향료 3종",
+          "혼합제제",
+          "유화제",
+          "잔탄검",
+          "유당",
+          "식물성유지2"
+        ],
+        "expectedNestedPaths": [
+          [
+            "밀가루",
+            "밀: 미국산"
+          ],
+          [
+            "쇼트닝",
+            "팜유: 말레이시아산"
+          ],
+          [
+            "쇼트닝",
+            "팜올레인유: 말레이시아산"
+          ],
+          [
+            "젤라틴",
+            "돼지"
+          ],
+          [
+            "혼합제제",
+            "카제인나트륨"
+          ],
+          [
+            "혼합제제",
+            "수산화칼슘"
+          ],
+          [
+            "혼합제제",
+            "아라비아검"
+          ]
+        ],
+        "expectedEvidence": [
+          {
+            "path": [
+              "밀가루"
+            ],
+            "allergen": "WHEAT",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "밀가루"
+          },
+          {
+            "path": [
+              "물엿"
+            ],
+            "allergen": "SULFITE",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "물엿"
+          },
+          {
+            "path": [
+              "밀가루",
+              "밀: 미국산"
+            ],
+            "allergen": "WHEAT",
+            "relation": "DIRECT_NAME",
+            "confidence": "CERTAIN",
+            "matchedText": "밀: 미국산"
+          },
+          {
+            "path": [
+              "전지분유"
+            ],
+            "allergen": "MILK",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "전지분유"
+          },
+          {
+            "path": [
+              "젤라틴",
+              "돼지"
+            ],
+            "allergen": "PORK",
+            "relation": "DIRECT_NAME",
+            "confidence": "CERTAIN",
+            "matchedText": "돼지"
+          },
+          {
+            "path": [
+              "전란액"
+            ],
+            "allergen": "EGG",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "전란액"
+          },
+          {
+            "path": [
+              "혼합제제",
+              "카제인나트륨"
+            ],
+            "allergen": "MILK",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "카제인나트륨"
+          }
+        ],
+        "reviewedCandidates": [
+          {
+            "path": [
+              "밀가루",
+              "밀: 미국산"
+            ],
+            "reason": "등록 명칭을 포함한 원산지 주석 형식: 전체 토큰 exact 조회만 사용하므로 미해석."
+          },
+          {
+            "path": [
+              "전지분유"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          },
+          {
+            "path": [
+              "젤라틴",
+              "돼지"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          },
+          {
+            "path": [
+              "전란액"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          },
+          {
+            "path": [
+              "혼합제제",
+              "카제인나트륨"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          },
+          {
+            "path": [
+              "유당"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          }
+        ]
+      }
+    },
+    {
+      "id": "S009",
+      "gtin": "8801062870455",
+      "productName": "빠다코코낫",
+      "source": {
+        "workbookCell": "Accepted_20!G10",
+        "originalIngredient": "밀가루(밀: 미국산), 설탕, 쇼트닝(팜유: 말레이시아산), 식물성유지(팜유: 말레이시아산), 가당볶음코코넛분말[건조코코넛분말(코코넛: 필리핀산), 기타설탕], 곡류가공품, 산도조절제, 전분, 정제소금, 기타과당, 버터(프랑스산), 기타가공품, 산도조절제, 합성향료(버터향, 코코넛향), 기타가공품, 산성아황산나트륨(산화방지제), 기타가공품",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801062870455&strCode=4006",
+        "independentUrl": "https://www.lollol.co.kr/shop/goods_list.php?ps_ctid=10080000",
+        "referenceNote": "현행 라벨 원재료를 보존하고 독립 유통목록에서 GTIN 8801062870455 재확인.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "밀가루(밀: 미국산), 설탕, 쇼트닝(팜유: 말레이시아산), 식물성유지(팜유: 말레이시아산), 가당볶음코코넛분말[건조코코넛분말(코코넛: 필리핀산), 기타설탕], 곡류가공품, 산도조절제, 전분, 정제소금, 기타과당, 버터(프랑스산), 기타가공품, 산도조절제, 합성향료(버터향, 코코넛향), 기타가공품, 산성아황산나트륨(산화방지제), 기타가공품",
+        "normalized": "밀가루(밀: 미국산), 설탕, 쇼트닝(팜유: 말레이시아산), 식물성유지(팜유: 말레이시아산), 가당볶음코코넛분말[건조코코넛분말(코코넛: 필리핀산), 기타설탕], 곡류가공품, 산도조절제, 전분, 정제소금, 기타과당, 버터(프랑스산), 기타가공품, 산도조절제, 합성향료(버터향, 코코넛향), 기타가공품, 산성아황산나트륨(산화방지제), 기타가공품",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "밀가루",
+          "설탕",
+          "쇼트닝",
+          "식물성유지",
+          "가당볶음코코넛분말",
+          "곡류가공품",
+          "산도조절제",
+          "전분",
+          "정제소금",
+          "기타과당",
+          "버터",
+          "기타가공품",
+          "산도조절제",
+          "합성향료",
+          "기타가공품",
+          "산성아황산나트륨",
+          "기타가공품"
+        ],
+        "expectedNestedPaths": [
+          [
+            "밀가루",
+            "밀: 미국산"
+          ],
+          [
+            "가당볶음코코넛분말",
+            "건조코코넛분말",
+            "코코넛: 필리핀산"
+          ],
+          [
+            "가당볶음코코넛분말",
+            "기타설탕"
+          ],
+          [
+            "버터",
+            "프랑스산"
+          ],
+          [
+            "합성향료",
+            "버터향"
+          ],
+          [
+            "합성향료",
+            "코코넛향"
+          ],
+          [
+            "산성아황산나트륨",
+            "산화방지제"
+          ]
+        ],
+        "expectedEvidence": [
+          {
+            "path": [
+              "밀가루"
+            ],
+            "allergen": "WHEAT",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "밀가루"
+          },
+          {
+            "path": [
+              "버터"
+            ],
+            "allergen": "MILK",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "버터"
+          },
+          {
+            "path": [
+              "밀가루",
+              "밀: 미국산"
+            ],
+            "allergen": "WHEAT",
+            "relation": "DIRECT_NAME",
+            "confidence": "CERTAIN",
+            "matchedText": "밀: 미국산"
+          },
+          {
+            "path": [
+              "합성향료",
+              "버터향"
+            ],
+            "allergen": "MILK",
+            "relation": "LEXICAL_HINT",
+            "confidence": "POSSIBLE",
+            "matchedText": "버터향"
+          },
+          {
+            "path": [
+              "산성아황산나트륨"
+            ],
+            "allergen": "SULFITE",
+            "relation": "DIRECT_NAME",
+            "confidence": "CERTAIN",
+            "matchedText": "산성아황산나트륨"
+          }
+        ],
+        "reviewedCandidates": [
+          {
+            "path": [
+              "밀가루",
+              "밀: 미국산"
+            ],
+            "reason": "등록 명칭을 포함한 원산지 주석 형식: 전체 토큰 exact 조회만 사용하므로 미해석."
+          },
+          {
+            "path": [
+              "합성향료",
+              "버터향"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          },
+          {
+            "path": [
+              "산성아황산나트륨"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          }
+        ]
+      }
+    },
+    {
+      "id": "S010",
+      "gtin": "8808244201045",
+      "productName": "제주삼다수",
+      "source": {
+        "workbookCell": "Accepted_20!G11",
+        "originalIngredient": "암반대수층 지하수(제주)",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8808244201045",
+        "independentUrl": "https://www.cvslove.com/product/product_view.asp?pcode=8808244201045",
+        "referenceNote": "알레르겐 음성 대조군. 현행 2L 라벨과 독립 상품코드 8808244201045 일치.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "암반대수층 지하수(제주)",
+        "normalized": "암반대수층 지하수(제주)",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "암반대수층 지하수"
+        ],
+        "expectedNestedPaths": [
+          [
+            "암반대수층 지하수",
+            "제주"
+          ]
+        ],
+        "expectedEvidence": [],
+        "reviewedCandidates": []
+      }
+    },
+    {
+      "id": "S011",
+      "gtin": "8801037088168",
+      "productName": "오레오 화이트크림",
+      "source": {
+        "workbookCell": "Accepted_20!G12",
+        "originalIngredient": "밀가루(밀: 미국산), 설탕, 식물성유지[에스테르화유-팜스테아린유(말레이시아산), 야자유(인도네시아산, 필리핀산), 해바라기유, 혼합제제(해바라기유, 글리세린에스테르, 정제수, 차카테킨), 혼합제제(올레오레진로즈메리, 올레오레진세이지)], 분당(설탕, 옥수수전분), 식물성유지[팜유(말레이시아산), 혼합제제, 혼합제제], 유당, 포도당, 코코아분말(미국산 70%, 싱가포르산 30%) 4.9%, 물엿, 옥수수전분, 유청, 팽창제1, 팽창제2, 정제소금, 레시틴, 바닐린, 혼합제제[천연향료, 합성향료(바닐라향)]",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801037088168&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801037088168/details",
+        "referenceNote": "교차접촉 목록이 긴 난이도 높은 케이스.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "밀가루(밀: 미국산), 설탕, 식물성유지[에스테르화유-팜스테아린유(말레이시아산), 야자유(인도네시아산, 필리핀산), 해바라기유, 혼합제제(해바라기유, 글리세린에스테르, 정제수, 차카테킨), 혼합제제(올레오레진로즈메리, 올레오레진세이지)], 분당(설탕, 옥수수전분), 식물성유지[팜유(말레이시아산), 혼합제제, 혼합제제], 유당, 포도당, 코코아분말(미국산 70%, 싱가포르산 30%) 4.9%, 물엿, 옥수수전분, 유청, 팽창제1, 팽창제2, 정제소금, 레시틴, 바닐린, 혼합제제[천연향료, 합성향료(바닐라향)]",
+        "normalized": "밀가루(밀: 미국산), 설탕, 식물성유지[에스테르화유-팜스테아린유(말레이시아산), 야자유(인도네시아산, 필리핀산), 해바라기유, 혼합제제(해바라기유, 글리세린에스테르, 정제수, 차카테킨), 혼합제제(올레오레진로즈메리, 올레오레진세이지)], 분당(설탕, 옥수수전분), 식물성유지[팜유(말레이시아산), 혼합제제, 혼합제제], 유당, 포도당, 코코아분말(미국산 70%, 싱가포르산 30%) 4.9%, 물엿, 옥수수전분, 유청, 팽창제1, 팽창제2, 정제소금, 레시틴, 바닐린, 혼합제제[천연향료, 합성향료(바닐라향)]",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "밀가루",
+          "설탕",
+          "식물성유지",
+          "분당",
+          "식물성유지",
+          "유당",
+          "포도당",
+          "코코아분말",
+          "물엿",
+          "옥수수전분",
+          "유청",
+          "팽창제1",
+          "팽창제2",
+          "정제소금",
+          "레시틴",
+          "바닐린",
+          "혼합제제"
+        ],
+        "expectedNestedPaths": [
+          [
+            "밀가루",
+            "밀: 미국산"
+          ],
+          [
+            "식물성유지",
+            "혼합제제",
+            "해바라기유"
+          ],
+          [
+            "식물성유지",
+            "혼합제제",
+            "글리세린에스테르"
+          ],
+          [
+            "식물성유지",
+            "혼합제제",
+            "정제수"
+          ],
+          [
+            "식물성유지",
+            "혼합제제",
+            "차카테킨"
+          ],
+          [
+            "식물성유지",
+            "혼합제제",
+            "올레오레진로즈메리"
+          ],
+          [
+            "식물성유지",
+            "혼합제제",
+            "올레오레진세이지"
+          ],
+          [
+            "분당",
+            "설탕"
+          ],
+          [
+            "분당",
+            "옥수수전분"
+          ],
+          [
+            "코코아분말",
+            "미국산"
+          ],
+          [
+            "코코아분말",
+            "싱가포르산"
+          ],
+          [
+            "혼합제제",
+            "천연향료"
+          ],
+          [
+            "혼합제제",
+            "합성향료",
+            "바닐라향"
+          ]
+        ],
+        "expectedEvidence": [
+          {
+            "path": [
+              "밀가루"
+            ],
+            "allergen": "WHEAT",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "밀가루"
+          },
+          {
+            "path": [
+              "물엿"
+            ],
+            "allergen": "SULFITE",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "물엿"
+          },
+          {
+            "path": [
+              "밀가루",
+              "밀: 미국산"
+            ],
+            "allergen": "WHEAT",
+            "relation": "DIRECT_NAME",
+            "confidence": "CERTAIN",
+            "matchedText": "밀: 미국산"
+          },
+          {
+            "path": [
+              "유청"
+            ],
+            "allergen": "MILK",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "유청"
+          }
+        ],
+        "reviewedCandidates": [
+          {
+            "path": [
+              "밀가루",
+              "밀: 미국산"
+            ],
+            "reason": "등록 명칭을 포함한 원산지 주석 형식: 전체 토큰 exact 조회만 사용하므로 미해석."
+          },
+          {
+            "path": [
+              "유당"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          },
+          {
+            "path": [
+              "유청"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          },
+          {
+            "path": [
+              "레시틴"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          }
+        ]
+      }
+    },
+    {
+      "id": "S012",
+      "gtin": "8801045100210",
+      "productName": "토마토 케찹",
+      "source": {
+        "workbookCell": "Accepted_20!G13",
+        "originalIngredient": "토마토페이스트 43.8%[외국산(미국, 칠레, 중국 등)], 정제수, 물엿, 설탕, 발효식초(주정, 발효영양원), 정제소금(국산), 잔탄검, 케첩향신료[천연향신료(육두구: 인도네시아산), 양파분(미국산)]",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801045100210&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801045100210/details",
+        "referenceNote": "소스류의 숨은 교차접촉 검증용.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "토마토페이스트 43.8%[외국산(미국, 칠레, 중국 등)], 정제수, 물엿, 설탕, 발효식초(주정, 발효영양원), 정제소금(국산), 잔탄검, 케첩향신료[천연향신료(육두구: 인도네시아산), 양파분(미국산)]",
+        "normalized": "토마토페이스트 43.8%[외국산(미국, 칠레, 중국 등)], 정제수, 물엿, 설탕, 발효식초(주정, 발효영양원), 정제소금(국산), 잔탄검, 케첩향신료[천연향신료(육두구: 인도네시아산), 양파분(미국산)]",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "토마토페이스트",
+          "정제수",
+          "물엿",
+          "설탕",
+          "발효식초",
+          "정제소금",
+          "잔탄검",
+          "케첩향신료"
+        ],
+        "expectedNestedPaths": [
+          [
+            "토마토페이스트",
+            "외국산",
+            "미국"
+          ],
+          [
+            "토마토페이스트",
+            "외국산",
+            "칠레"
+          ],
+          [
+            "토마토페이스트",
+            "외국산",
+            "중국 등"
+          ],
+          [
+            "발효식초",
+            "주정"
+          ],
+          [
+            "발효식초",
+            "발효영양원"
+          ],
+          [
+            "케첩향신료",
+            "천연향신료",
+            "육두구: 인도네시아산"
+          ],
+          [
+            "케첩향신료",
+            "양파분",
+            "미국산"
+          ]
+        ],
+        "expectedEvidence": [
+          {
+            "path": [
+              "토마토페이스트"
+            ],
+            "allergen": "TOMATO",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "토마토페이스트 43.8%"
+          },
+          {
+            "path": [
+              "물엿"
+            ],
+            "allergen": "SULFITE",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "물엿"
+          }
+        ],
+        "reviewedCandidates": []
+      }
+    },
+    {
+      "id": "S013",
+      "gtin": "8801039202395",
+      "productName": "해표 맑고 신선한 식용유(콩기름)",
+      "source": {
+        "workbookCell": "Accepted_20!G14",
+        "originalIngredient": "콩 100%[외국산(미국, 브라질, 파라과이 등)]",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801039202395&strCode=4006",
+        "independentUrl": "https://www.beepscan.com/barcode/8801039202395",
+        "referenceNote": "단일 주원료 + 대두 알레르겐 양성 대조군.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "콩 100%[외국산(미국, 브라질, 파라과이 등)]",
+        "normalized": "콩 100%[외국산(미국, 브라질, 파라과이 등)]",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "콩"
+        ],
+        "expectedNestedPaths": [
+          [
+            "콩",
+            "외국산",
+            "미국"
+          ],
+          [
+            "콩",
+            "외국산",
+            "브라질"
+          ],
+          [
+            "콩",
+            "외국산",
+            "파라과이 등"
+          ]
+        ],
+        "expectedEvidence": [
+          {
+            "path": [
+              "콩"
+            ],
+            "allergen": "SOY",
+            "relation": "LEXICAL_HINT",
+            "confidence": "POSSIBLE",
+            "matchedText": "콩 100%"
+          }
+        ],
+        "reviewedCandidates": []
+      }
+    },
+    {
+      "id": "S014",
+      "gtin": "8801111922722",
+      "productName": "참쌀설병",
+      "source": {
+        "workbookCell": "Accepted_20!G15",
+        "originalIngredient": "쌀, 백설탕, 팜유, 찹쌀가루, 감자전분, 정제소금, 젤라틴, 혼합제제(식물성유지, 유화제, 올레오레진로즈메리, 차추출물, 식용주정, 구연산), 향미증진제",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801111922722&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801111922722/details",
+        "referenceNote": "쌀과자지만 젤라틴 때문에 돼지고기 표시가 존재하는 비직관적 케이스.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "쌀, 백설탕, 팜유, 찹쌀가루, 감자전분, 정제소금, 젤라틴, 혼합제제(식물성유지, 유화제, 올레오레진로즈메리, 차추출물, 식용주정, 구연산), 향미증진제",
+        "normalized": "쌀, 백설탕, 팜유, 찹쌀가루, 감자전분, 정제소금, 젤라틴, 혼합제제(식물성유지, 유화제, 올레오레진로즈메리, 차추출물, 식용주정, 구연산), 향미증진제",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "쌀",
+          "백설탕",
+          "팜유",
+          "찹쌀가루",
+          "감자전분",
+          "정제소금",
+          "젤라틴",
+          "혼합제제",
+          "향미증진제"
+        ],
+        "expectedNestedPaths": [
+          [
+            "혼합제제",
+            "식물성유지"
+          ],
+          [
+            "혼합제제",
+            "유화제"
+          ],
+          [
+            "혼합제제",
+            "올레오레진로즈메리"
+          ],
+          [
+            "혼합제제",
+            "차추출물"
+          ],
+          [
+            "혼합제제",
+            "식용주정"
+          ],
+          [
+            "혼합제제",
+            "구연산"
+          ]
+        ],
+        "expectedEvidence": [],
+        "reviewedCandidates": [
+          {
+            "path": [
+              "젤라틴"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          }
+        ]
+      }
+    },
+    {
+      "id": "S015",
+      "gtin": "8801007100838",
+      "productName": "백설 하얀설탕",
+      "source": {
+        "workbookCell": "Accepted_20!G16",
+        "originalIngredient": "원당 100%",
+        "labelUrl": "https://lottemartzetta.com/products/OS8801007100838/details",
+        "independentUrl": "https://m.gsshop.com/prd/prd.gs?bnclick=prd-b02_prdb02A_apiPrdBrand&iid=W-1ERibq_6ne6&mseq=437159&prdid=1044124089",
+        "referenceNote": "원당 100%와 '알레르기 해당사항 없음'을 복수 현행 유통정보로 확인한 음성 대조군.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "원당 100%",
+        "normalized": "원당 100%",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "원당"
+        ],
+        "expectedNestedPaths": [],
+        "expectedEvidence": [],
+        "reviewedCandidates": []
+      }
+    },
+    {
+      "id": "S016",
+      "gtin": "8801094012403",
+      "productName": "코카-콜라",
+      "source": {
+        "workbookCell": "Accepted_20!G17",
+        "originalIngredient": "정제수, 당시럽, 설탕, 기타과당, 이산화탄소, 카라멜색소, 인산, 천연향료, 카페인(향미증진제)",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801094012403&strCode=4006",
+        "independentUrl": "https://www.alpha.co.kr/product/productView.do?PS_IDX=&productCode=139245",
+        "referenceNote": "직접 함유 알레르겐은 없지만 같은 제조시설 문구가 있는 음료 케이스.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "정제수, 당시럽, 설탕, 기타과당, 이산화탄소, 카라멜색소, 인산, 천연향료, 카페인(향미증진제)",
+        "normalized": "정제수, 당시럽, 설탕, 기타과당, 이산화탄소, 카라멜색소, 인산, 천연향료, 카페인(향미증진제)",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "정제수",
+          "당시럽",
+          "설탕",
+          "기타과당",
+          "이산화탄소",
+          "카라멜색소",
+          "인산",
+          "천연향료",
+          "카페인"
+        ],
+        "expectedNestedPaths": [
+          [
+            "카페인",
+            "향미증진제"
+          ]
+        ],
+        "expectedEvidence": [],
+        "reviewedCandidates": []
+      }
+    },
+    {
+      "id": "S017",
+      "gtin": "8801045290300",
+      "productName": "3분 카레 순한맛",
+      "source": {
+        "workbookCell": "Accepted_20!G18",
+        "originalIngredient": "정제수, 양파퓨레(중국산), 감자(미국산: 감자, 산도조절제), 혼합과일소스[사과(국산), 배(국산)], 열대과일퓨레, 쇠고기, 당근, 식물성유지, 변성전분, 감자전분, 사골엑기스, 토마토페이스트, 카레분 1.2%, 유크림, 오뚜기참치간장분말, 마늘, 쇠고기브이용, 정제소금, 설탕, 양파맛분말, 비프맛양념, 향미증진제, 큐민, 카르다몸, 고추가루, 강황추출액, 덱스트린",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801045290300&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801045290300/details",
+        "referenceNote": "현행 라벨 이미지에서 바코드·원재료·함유·같은시설·품목보고번호를 한 화면에서 직접 확인하고 롯데마트 판매코드로 재확인.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "정제수, 양파퓨레(중국산), 감자(미국산: 감자, 산도조절제), 혼합과일소스[사과(국산), 배(국산)], 열대과일퓨레, 쇠고기, 당근, 식물성유지, 변성전분, 감자전분, 사골엑기스, 토마토페이스트, 카레분 1.2%, 유크림, 오뚜기참치간장분말, 마늘, 쇠고기브이용, 정제소금, 설탕, 양파맛분말, 비프맛양념, 향미증진제, 큐민, 카르다몸, 고추가루, 강황추출액, 덱스트린",
+        "normalized": "정제수, 양파퓨레(중국산), 감자(미국산: 감자, 산도조절제), 혼합과일소스[사과(국산), 배(국산)], 열대과일퓨레, 쇠고기, 당근, 식물성유지, 변성전분, 감자전분, 사골엑기스, 토마토페이스트, 카레분 1.2%, 유크림, 오뚜기참치간장분말, 마늘, 쇠고기브이용, 정제소금, 설탕, 양파맛분말, 비프맛양념, 향미증진제, 큐민, 카르다몸, 고추가루, 강황추출액, 덱스트린",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "정제수",
+          "양파퓨레",
+          "감자",
+          "혼합과일소스",
+          "열대과일퓨레",
+          "쇠고기",
+          "당근",
+          "식물성유지",
+          "변성전분",
+          "감자전분",
+          "사골엑기스",
+          "토마토페이스트",
+          "카레분",
+          "유크림",
+          "오뚜기참치간장분말",
+          "마늘",
+          "쇠고기브이용",
+          "정제소금",
+          "설탕",
+          "양파맛분말",
+          "비프맛양념",
+          "향미증진제",
+          "큐민",
+          "카르다몸",
+          "고추가루",
+          "강황추출액",
+          "덱스트린"
+        ],
+        "expectedNestedPaths": [
+          [
+            "양파퓨레",
+            "중국산"
+          ],
+          [
+            "감자",
+            "미국산: 감자"
+          ],
+          [
+            "감자",
+            "산도조절제"
+          ],
+          [
+            "혼합과일소스",
+            "사과",
+            "국산"
+          ],
+          [
+            "혼합과일소스",
+            "배",
+            "국산"
+          ]
+        ],
+        "expectedEvidence": [
+          {
+            "path": [
+              "쇠고기"
+            ],
+            "allergen": "BEEF",
+            "relation": "DIRECT_NAME",
+            "confidence": "CERTAIN",
+            "matchedText": "쇠고기"
+          },
+          {
+            "path": [
+              "토마토페이스트"
+            ],
+            "allergen": "TOMATO",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "토마토페이스트"
+          },
+          {
+            "path": [
+              "유크림"
+            ],
+            "allergen": "MILK",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "유크림"
+          },
+          {
+            "path": [
+              "비프맛양념"
+            ],
+            "allergen": "BEEF",
+            "relation": "LEXICAL_HINT",
+            "confidence": "POSSIBLE",
+            "matchedText": "비프맛양념"
+          }
+        ],
+        "reviewedCandidates": [
+          {
+            "path": [
+              "사골엑기스"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          },
+          {
+            "path": [
+              "유크림"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          },
+          {
+            "path": [
+              "오뚜기참치간장분말"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          },
+          {
+            "path": [
+              "쇠고기브이용"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          },
+          {
+            "path": [
+              "비프맛양념"
+            ],
+            "reason": "원문에서 별도 검토 대상으로 지정한 유래/복합/향 표현. 후보 지정은 함유 확정이 아니며 Registry 추가 정규화/관계 검토 필요."
+          }
+        ]
+      }
+    },
+    {
+      "id": "S018",
+      "gtin": "8801037075649",
+      "productName": "포스트 콘푸라이트",
+      "source": {
+        "workbookCell": "Accepted_20!G19",
+        "originalIngredient": "곡류가공품 66%[옥수수: 호주산], 설탕, 정제소금(국내산), 맥아엿, 식물성경화유지[코코넛오일(인도네시아산, 필리핀산)], 혼합제제[비타민C, d-토코페릴아세테이트, 나이아신아미드, 분말비타민A, 비타민B6염산염, 비타민D3, 비타민B1염산염, 비타민B2, 엽산, 말토덱스트린], 피로인산제이철, 혼합제제[글리세린, d-토코페롤(혼합형), 글리세린에스테르], 산화아연",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801037075649&strCode=4006",
+        "independentUrl": "https://lottemartzetta.com/products/OS8801037075649/details",
+        "referenceNote": "직접 함유는 대두 1종이지만 교차접촉 목록이 넓은 케이스.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "곡류가공품 66%[옥수수: 호주산], 설탕, 정제소금(국내산), 맥아엿, 식물성경화유지[코코넛오일(인도네시아산, 필리핀산)], 혼합제제[비타민C, d-토코페릴아세테이트, 나이아신아미드, 분말비타민A, 비타민B6염산염, 비타민D3, 비타민B1염산염, 비타민B2, 엽산, 말토덱스트린], 피로인산제이철, 혼합제제[글리세린, d-토코페롤(혼합형), 글리세린에스테르], 산화아연",
+        "normalized": "곡류가공품 66%[옥수수: 호주산], 설탕, 정제소금(국내산), 맥아엿, 식물성경화유지[코코넛오일(인도네시아산, 필리핀산)], 혼합제제[비타민C, d-토코페릴아세테이트, 나이아신아미드, 분말비타민A, 비타민B6염산염, 비타민D3, 비타민B1염산염, 비타민B2, 엽산, 말토덱스트린], 피로인산제이철, 혼합제제[글리세린, d-토코페롤(혼합형), 글리세린에스테르], 산화아연",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "곡류가공품",
+          "설탕",
+          "정제소금",
+          "맥아엿",
+          "식물성경화유지",
+          "혼합제제",
+          "피로인산제이철",
+          "혼합제제",
+          "산화아연"
+        ],
+        "expectedNestedPaths": [
+          [
+            "곡류가공품",
+            "옥수수: 호주산"
+          ],
+          [
+            "정제소금",
+            "국내산"
+          ],
+          [
+            "식물성경화유지",
+            "코코넛오일",
+            "인도네시아산"
+          ],
+          [
+            "식물성경화유지",
+            "코코넛오일",
+            "필리핀산"
+          ],
+          [
+            "혼합제제",
+            "비타민C"
+          ],
+          [
+            "혼합제제",
+            "d-토코페릴아세테이트"
+          ],
+          [
+            "혼합제제",
+            "나이아신아미드"
+          ],
+          [
+            "혼합제제",
+            "분말비타민A"
+          ],
+          [
+            "혼합제제",
+            "비타민B6염산염"
+          ],
+          [
+            "혼합제제",
+            "비타민D3"
+          ],
+          [
+            "혼합제제",
+            "비타민B1염산염"
+          ],
+          [
+            "혼합제제",
+            "비타민B2"
+          ],
+          [
+            "혼합제제",
+            "엽산"
+          ],
+          [
+            "혼합제제",
+            "말토덱스트린"
+          ],
+          [
+            "혼합제제",
+            "글리세린"
+          ],
+          [
+            "혼합제제",
+            "d-토코페롤",
+            "혼합형"
+          ],
+          [
+            "혼합제제",
+            "글리세린에스테르"
+          ]
+        ],
+        "expectedEvidence": [],
+        "reviewedCandidates": []
+      }
+    },
+    {
+      "id": "S019",
+      "gtin": "8801047123729",
+      "productName": "동원 고추참치",
+      "source": {
+        "workbookCell": "Accepted_20!G20",
+        "originalIngredient": "가다랑어 50.3%(원양산), 고추소스 25.5%[D-소비톨액, 토마토페이스트(중국산), 설탕, 고춧가루 4.8%(중국산), 마늘, L-글루탐산나트륨(향미증진제), 향미증진제, 올레오레진캡시컴, 파프리카추출색소], 감자(국산), 정제수, 당근, 카놀라유, 양파",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801047123729&strCode=4006",
+        "independentUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801047834021&strCode=4006",
+        "referenceNote": "90g×4 판매 라벨에도 내부 단품 바코드 8801047123729가 인쇄되어 있고 원재료·알레르기 문구가 동일함을 재확인.",
+        "issue": null
+      },
+      "ingredient": {
+        "raw": "가다랑어 50.3%(원양산), 고추소스 25.5%[D-소비톨액, 토마토페이스트(중국산), 설탕, 고춧가루 4.8%(중국산), 마늘, L-글루탐산나트륨(향미증진제), 향미증진제, 올레오레진캡시컴, 파프리카추출색소], 감자(국산), 정제수, 당근, 카놀라유, 양파",
+        "normalized": "가다랑어 50.3%(원양산), 고추소스 25.5%[D-소비톨액, 토마토페이스트(중국산), 설탕, 고춧가루 4.8%(중국산), 마늘, L-글루탐산나트륨(향미증진제), 향미증진제, 올레오레진캡시컴, 파프리카추출색소], 감자(국산), 정제수, 당근, 카놀라유, 양파",
+        "note": null,
+        "expectedParseState": "PARSED",
+        "expectedRoots": [
+          "가다랑어",
+          "고추소스",
+          "감자",
+          "정제수",
+          "당근",
+          "카놀라유",
+          "양파"
+        ],
+        "expectedNestedPaths": [
+          [
+            "가다랑어",
+            "원양산"
+          ],
+          [
+            "고추소스",
+            "D-소비톨액"
+          ],
+          [
+            "고추소스",
+            "토마토페이스트",
+            "중국산"
+          ],
+          [
+            "고추소스",
+            "설탕"
+          ],
+          [
+            "고추소스",
+            "고춧가루",
+            "중국산"
+          ],
+          [
+            "고추소스",
+            "마늘"
+          ],
+          [
+            "고추소스",
+            "L-글루탐산나트륨",
+            "향미증진제"
+          ],
+          [
+            "고추소스",
+            "향미증진제"
+          ],
+          [
+            "고추소스",
+            "올레오레진캡시컴"
+          ],
+          [
+            "고추소스",
+            "파프리카추출색소"
+          ],
+          [
+            "감자",
+            "국산"
+          ]
+        ],
+        "expectedEvidence": [
+          {
+            "path": [
+              "고추소스",
+              "토마토페이스트"
+            ],
+            "allergen": "TOMATO",
+            "relation": "DERIVED_FROM",
+            "confidence": "CERTAIN",
+            "matchedText": "토마토페이스트"
+          }
+        ],
+        "reviewedCandidates": []
+      }
+    },
+    {
+      "id": "S020",
+      "gtin": "8801047224617",
+      "productName": "양반 들기름&올리브 혼합김",
+      "source": {
+        "workbookCell": "Accepted_20!G21",
+        "originalIngredient": "양반 들기름김: 재래김(국산) 44.8%, 카놀라유(외국산: 캐나다, 호주, 이탈리아 등), 들기름(외국산: 중국, 베트남, 미얀마 등) 10.4%, 정제소금, 참기름, 허브추출물 / 양반 올리브김: 재래김(국산) 44.8%, 카놀라유(외국산: 캐나다, 호주, 이탈리아 등), 정제올리브유(스페인산) 5.2%, 참기름, 정제소금, 허브추출물",
+        "labelUrl": "https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801047224617&strCode=4006",
+        "independentUrl": "https://www.beepscan.com/barcode/8801047224617",
+        "referenceNote": "두 종류 김이 한 묶음인 구성품 케이스. 두 구성의 원재료·품목보고번호를 각각 보존.",
+        "issue": "REFERENCE_VERSION_CONFLICT"
+      },
+      "ingredient": {
+        "raw": null,
+        "normalized": null,
+        "note": "Excel/공개 이미지의 배합·품목보고번호 충돌. 두 김 component가 있으나 어느 쪽의 원재료도 현재 정답으로 선택하지 않음. source.originalIngredient에 원본 보존.",
+        "expectedParseState": "CONFLICT",
+        "expectedRoots": [],
+        "expectedNestedPaths": [],
+        "expectedEvidence": [],
+        "reviewedCandidates": []
+      }
+    }
+  ]
+}

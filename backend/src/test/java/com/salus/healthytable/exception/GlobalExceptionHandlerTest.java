@@ -1,6 +1,7 @@
 package com.salus.healthytable.exception;
 
 import com.salus.healthytable.config.RequestIdFilter;
+import com.salus.healthytable.exception.RecipeGenerationTimeoutException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -17,6 +18,10 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * {@link GlobalExceptionHandler} 테스트입니다. 예외 종류별 상태 코드와 공통 JSON 오류 형식을 확인합니다.
+ * OutputCaptureExtension은 콘솔(로그) 출력을 캡처해 민감 정보가 로그에 남지 않는지 검사할 수 있게 해 줍니다.
+ */
 @ExtendWith(OutputCaptureExtension.class)
 class GlobalExceptionHandlerTest {
 
@@ -35,6 +40,7 @@ class GlobalExceptionHandlerTest {
         assertErrorResponse(response, 400, "BAD_REQUEST", "제목은 필수입니다.", "/api/community/posts");
     }
 
+    // 필수 요청 파라미터 누락은 400이어야 합니다.
     @Test
     void missingRequestParameterReturnsBadRequest() {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/community/posts/search");
@@ -47,6 +53,7 @@ class GlobalExceptionHandlerTest {
                 "/api/community/posts/search");
     }
 
+    // 파라미터 타입 불일치는 400이어야 합니다.
     @Test
     void parameterTypeMismatchReturnsBadRequest() {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/community/posts/popular");
@@ -60,6 +67,7 @@ class GlobalExceptionHandlerTest {
                 "/api/community/posts/popular");
     }
 
+    // 깨진 JSON 요청 본문은 400이어야 합니다.
     @Test
     void malformedJsonBodyReturnsBadRequest() {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/community/posts");
@@ -72,6 +80,7 @@ class GlobalExceptionHandlerTest {
                 "/api/community/posts");
     }
 
+    // ResponseStatusException은 지정한 상태 코드와 메시지로 같은 JSON 형식을 유지해야 합니다.
     @Test
     void responseStatusExceptionReturnsConsistentJsonError() {
         MockHttpServletRequest request = new MockHttpServletRequest("DELETE", "/api/fridge/1");
@@ -83,6 +92,7 @@ class GlobalExceptionHandlerTest {
         assertErrorResponse(response, 403, "FORBIDDEN", "본인의 냉장고 항목만 삭제할 수 있습니다.", "/api/fridge/1");
     }
 
+    // 요청 ID가 있으면 오류 응답에 포함해야 합니다.
     @Test
     void errorResponseIncludesRequestIdWhenPresent() {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/chat");
@@ -94,6 +104,23 @@ class GlobalExceptionHandlerTest {
 
         assertErrorResponse(response, 400, "BAD_REQUEST", "메시지는 필수입니다.", "/api/chat");
         assertThat(response.getBody()).containsEntry("requestId", "req-chat-123");
+    }
+
+    // 레시피 생성 시간 초과는 504와 전용 오류 코드로 응답해야 합니다.
+    @Test
+    void recipeGenerationTimeoutReturnsGatewayTimeoutCode() {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/chat/message");
+
+        ResponseEntity<Map<String, Object>> response = handler.handleRecipeGenerationTimeout(
+                new RecipeGenerationTimeoutException("REPAIR"),
+                request);
+
+        assertErrorResponse(
+                response,
+                504,
+                "RECIPE_GENERATION_TIMEOUT",
+                "레시피 생성 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.",
+                "/api/chat/message");
     }
 
     @Test
@@ -115,6 +142,7 @@ class GlobalExceptionHandlerTest {
                 .doesNotContain("database password leaked here");
     }
 
+    // 오류 응답의 상태 코드, error, message, path 값을 한 번에 검사하는 도우미입니다.
     private void assertErrorResponse(ResponseEntity<Map<String, Object>> response, int status, String error,
             String message, String path) {
         assertThat(response.getStatusCode().value()).isEqualTo(status);

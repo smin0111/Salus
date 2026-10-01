@@ -12,6 +12,14 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 
+/*
+ * Recipe Agent 파이프라인의 앞부분 구성 요소(요청 분석, 내부 DB 출처 검색, 근거 추출, 후보 레시피 구성)를 모아 둔 파일입니다.
+ */
+
+/**
+ * 약물-음식 상호작용 확인의 기본 구현입니다. 실제 조회 없이 항상 "알 수 없음(UNKNOWN)"을 반환합니다.
+ * 확인하지 못한 상호작용을 "없음"으로 표시하지 않기 위한 안전한 기본값입니다.
+ */
 @Service
 class UnknownMedicationFoodInteractionAdapter implements MedicationFoodInteractionPort {
 
@@ -21,16 +29,22 @@ class UnknownMedicationFoodInteractionAdapter implements MedicationFoodInteracti
     }
 }
 
+/**
+ * 사용자 메시지를 분석해 레시피 검색 계획(RecipeResearchPlan)을 세우는 클래스입니다.
+ * 요리 이름, 크리에이터 이름("백종원의 김치찌개" 등), 요청 모드, 검색어 목록을 만듭니다.
+ */
 @Service
 @RequiredArgsConstructor
 class DefaultRecipeRequestPlanner {
 
     private final RecipeNormalizer recipeNormalizer;
 
+    // 사용자 맥락 객체 없이 "맥락이 있는지"만 알 때 쓰는 편의 메서드입니다.
     RecipeResearchPlan plan(String message, boolean useFridgeIngredients, boolean hasUserContext) {
         return plan(message, useFridgeIngredients, hasUserContext ? UserRecipeContext.empty(null) : null);
     }
 
+    // 검색 계획을 만듭니다. 최대 검색 시도는 3회, 최대 출처 수는 5개로 고정합니다.
     RecipeResearchPlan plan(String message, boolean useFridgeIngredients, UserRecipeContext context) {
         String normalizedMessage = message == null ? "" : message.trim();
         String dishName = recipeNormalizer.normalize(normalizedMessage);
@@ -56,6 +70,7 @@ class DefaultRecipeRequestPlanner {
                 5);
     }
 
+    // "양파 빼고", "새우 말고" 같은 표현 바로 앞 단어를 제외 재료로 추출합니다(2글자 이상만).
     List<String> extractExplicitExclusions(String message) {
         if (message == null || message.isBlank()) {
             return List.of();
@@ -77,6 +92,7 @@ class DefaultRecipeRequestPlanner {
         return AgentText.distinct(exclusions);
     }
 
+    // 메시지 키워드로 요청 모드를 정합니다(자세히 → DETAIL, 대신/대체 → SUBSTITUTE, 빼고/제외 → EXCLUDE, 추천 → RECOMMEND).
     private RecipeRequestMode resolveMode(String message) {
         String normalized = message.replaceAll("\\s+", "");
         if (normalized.contains("자세")) {
@@ -94,6 +110,7 @@ class DefaultRecipeRequestPlanner {
         return RecipeRequestMode.CREATE;
     }
 
+    // "요리 레시피", "요리 만드는 법" 검색어를 만들고, 냉장고 재료 활용 시 재료 이름을 붙인 검색어도 추가합니다.
     private List<String> searchQueries(
             String dishName,
             String creatorName,
@@ -120,6 +137,7 @@ class DefaultRecipeRequestPlanner {
         return List.copyOf(queries);
     }
 
+    // 요리 이름에 들어 있거나 3일 이내에 유통기한이 끝나는 냉장고 재료를 최대 2개 고릅니다.
     private List<String> fridgeSearchTerms(String dishName, UserRecipeContext context) {
         if (context == null || context.fridgeIngredients().isEmpty()) {
             return List.of();
@@ -138,6 +156,10 @@ class DefaultRecipeRequestPlanner {
                 .toList();
     }
 
+    /**
+     * "크리에이터 요리" 형태의 요청에서 크리에이터 이름과 요리 이름을 분리합니다.
+     * 두 단어이고 첫 단어에 명확한 크리에이터 신호("OO의 ", @, -, 영문)가 있을 때만 분리합니다.
+     */
     private CreatorDish extractCreatorDish(String message, String normalizedDish) {
         if (message == null || message.isBlank()) {
             return new CreatorDish("", normalizedDish == null ? "" : normalizedDish);
@@ -177,6 +199,9 @@ class DefaultRecipeRequestPlanner {
     }
 }
 
+/**
+ * 내부 DB(승인 레시피)에서 출처를 찾는 검색 어댑터입니다. 내부 DB 출처는 신뢰도 0.95로 표시합니다.
+ */
 @Service
 @RequiredArgsConstructor
 class InternalRecipeSourceDiscoveryAdapter implements RecipeSourceDiscoveryPort {
@@ -194,6 +219,7 @@ class InternalRecipeSourceDiscoveryAdapter implements RecipeSourceDiscoveryPort 
                 .toList();
     }
 
+    // DB 레시피를 CandidateBuilder가 읽을 수 있는 "title:/ingredients:/steps:" 텍스트 형식의 출처 문서로 바꿉니다.
     private RecipeSourceDocument toDocument(Recipe recipe) {
         String content = """
                 title: %s
@@ -227,6 +253,9 @@ class InternalRecipeSourceDiscoveryAdapter implements RecipeSourceDiscoveryPort 
     }
 }
 
+/**
+ * 검색된 출처 중 본문이 있는 문서만 최대 5개 남깁니다.
+ */
 @Component
 class RecipeEvidenceExtractor {
 
@@ -238,6 +267,9 @@ class RecipeEvidenceExtractor {
     }
 }
 
+/**
+ * 첫 번째(가장 우선인) 출처 문서의 본문을 파싱해 후보 레시피를 만듭니다.
+ */
 @Component
 class RecipeCandidateBuilder {
 
@@ -260,6 +292,10 @@ class RecipeCandidateBuilder {
                 parsed.healthRiskTags());
     }
 
+    /**
+     * 출처 본문을 한 줄씩 읽어 제목/설명/재료/조리 단계/핵심·선택 재료/위험 태그를 추출합니다.
+     * "ingredients" 또는 "[재료]" 줄 이후는 재료, "steps" 또는 "[조리 순서]" 줄 이후는 조리 단계로 봅니다.
+     */
     private ParsedRecipe parse(String content) {
         List<String> ingredients = new ArrayList<>();
         List<String> steps = new ArrayList<>();
@@ -314,6 +350,7 @@ class RecipeCandidateBuilder {
                 AgentText.distinct(core), AgentText.distinct(optional), AgentText.distinct(risks));
     }
 
+    // 쉼표로 구분된 값을 공백 정리 후 목록으로 만듭니다.
     private List<String> splitCsv(String value) {
         if (value == null || value.isBlank()) {
             return List.of();

@@ -5,9 +5,16 @@ import { colors, radii } from '../theme/colors';
 import { PORTONE_IMP_CODE, SUBSCRIPTION_AMOUNT, SUBSCRIPTION_PRICE_LABEL } from '../constants/subscription';
 import SalusLogo from './SalusLogo';
 
+/**
+ * PLUS 구독 안내 및 결제 모달입니다.
+ * 웹에서는 포트원(아임포트) 결제 스크립트로 카카오페이 결제창을 띄우고,
+ * 결제가 성공하면 onSubscribe(imp_uid, merchant_uid)를 호출해 서버 검증을 요청합니다.
+ * 앱(iOS/Android) 결제는 아직 연동되지 않았습니다.
+ */
 const SubscriptionModal = ({ visible, onClose, onSubscribe, user }) => {
 
     // 포트원 스크립트 로드 (웹 환경 전용)
+    // 이미 스크립트가 있으면 중복으로 추가하지 않습니다.
     useEffect(() => {
         if (Platform.OS === 'web') {
             if (window.IMP || document.getElementById('portone-sdk')) {
@@ -22,6 +29,7 @@ const SubscriptionModal = ({ visible, onClose, onSubscribe, user }) => {
         }
     }, []);
 
+    // 결제 버튼 클릭 시 결제창을 띄웁니다.
     const handlePayment = () => {
         if (Platform.OS === 'web') {
             const { IMP } = window;
@@ -35,6 +43,7 @@ const SubscriptionModal = ({ visible, onClose, onSubscribe, user }) => {
 
             IMP.init(PORTONE_IMP_CODE);
 
+            // 주문 번호는 현재 시각으로 만들어 중복되지 않게 합니다. 서버는 이 값과 금액을 포트원에 다시 확인합니다.
             const merchantUid = `mid_${new Date().getTime()}`;
 
             const data = {
@@ -48,6 +57,7 @@ const SubscriptionModal = ({ visible, onClose, onSubscribe, user }) => {
                 m_redirect_url: window.location.origin + "/payment-result",
             };
 
+            // 결제창 결과 콜백: 성공하면 서버 검증 요청, 실패하면 오류 메시지 표시
             IMP.request_pay(data, response => {
                 const { success, imp_uid, merchant_uid, error_msg } = response;
                 if (success) {
@@ -112,6 +122,7 @@ const SubscriptionModal = ({ visible, onClose, onSubscribe, user }) => {
     );
 };
 
+// 구독 혜택 한 줄(아이콘, 제목, 설명)
 const FeatureItem = ({ icon, title, desc }) => (
     <View style={styles.featureItem}>
         <Ionicons name={icon} size={24} color={colors.primary} style={styles.featureIcon} />

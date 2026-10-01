@@ -26,6 +26,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link FridgeController} 테스트입니다.
+ */
 class FridgeControllerTest {
 
     private final FridgeItemRepository fridgeItemRepository = mock(FridgeItemRepository.class);
@@ -39,6 +42,7 @@ class FridgeControllerTest {
             new ObjectMapper(),
             clock);
 
+    // 냉장고 조회는 현재 사용자의 재료만 읽어야 합니다.
     @Test
     void getFridgeItemsReadsOnlyCurrentUsersItems() {
         FridgeItem item = fridgeItem(7L, 1L, "우유");
@@ -51,6 +55,7 @@ class FridgeControllerTest {
         verify(fridgeItemRepository).findByUserIdOrderByExpiryDate(1L);
     }
 
+    // 재료 추가 시 클라이언트가 보낸 id/userId는 무시하고 현재 사용자로 저장해야 합니다.
     @Test
     void addFridgeItemClearsClientControlledIdAndUserId() {
         FridgeItem request = new FridgeItem();
@@ -78,6 +83,7 @@ class FridgeControllerTest {
         assertThat(response).isSameAs(saved);
     }
 
+    // 유통기한이 없으면 주입한 Clock 기준 카테고리 기본값으로 채워야 합니다.
     @Test
     void addFridgeItemFillsDefaultExpiryDateWithConfiguredClock() {
         FridgeItem request = new FridgeItem();
@@ -92,6 +98,7 @@ class FridgeControllerTest {
         assertThat(response.getExpiryDate()).isEqualTo(LocalDate.of(2026, 7, 13));
     }
 
+    // 빈 재료 이름은 저장 전에 거부해야 합니다.
     @Test
     void addFridgeItemRejectsBlankNameBeforeSaving() {
         FridgeItem request = new FridgeItem();
@@ -105,6 +112,7 @@ class FridgeControllerTest {
         verifyNoInteractions(fridgeItemRepository);
     }
 
+    // 빈 수량/카테고리는 기본값("1개", "기타")으로 채워야 합니다.
     @Test
     void addFridgeItemDefaultsBlankQuantityAndCategory() {
         FridgeItem request = new FridgeItem();
@@ -121,6 +129,7 @@ class FridgeControllerTest {
         assertThat(response.getCategory()).isEqualTo("기타");
     }
 
+    // 재료 수정은 현재 사용자의 재료 필드만 바꿔야 합니다.
     @Test
     void updateFridgeItemChangesOnlyCurrentUsersItemFields() {
         FridgeItem existing = fridgeItem(7L, 1L, "우유");
@@ -143,6 +152,7 @@ class FridgeControllerTest {
         assertThat(response.getExpiryDate()).isEqualTo(LocalDate.of(2026, 7, 20));
     }
 
+    // 다른 사용자의 재료 수정은 404여야 합니다(존재 여부를 노출하지 않음).
     @Test
     void updateFridgeItemReturnsNotFoundWhenItemDoesNotBelongToCurrentUser() {
         FridgeItem existing = fridgeItem(7L, 2L, "우유");
@@ -158,6 +168,7 @@ class FridgeControllerTest {
                 });
     }
 
+    // 다른 사용자의 재료 삭제는 403이어야 합니다.
     @Test
     void deleteFridgeItemRejectsOtherUsersItem() {
         FridgeItem existing = fridgeItem(7L, 2L, "우유");
@@ -172,6 +183,7 @@ class FridgeControllerTest {
                 });
     }
 
+    // 다른 사용자의 재료 수량 변경은 404여야 합니다.
     @Test
     void adjustQuantityRejectsOtherUsersItem() {
         FridgeItem existing = fridgeItem(7L, 2L, "우유");
@@ -186,6 +198,7 @@ class FridgeControllerTest {
                 });
     }
 
+    // 빈 수량으로 변경하면 기본값 "1개"로 저장해야 합니다.
     @Test
     void adjustQuantityNormalizesBlankQuantityToDefault() {
         FridgeItem existing = fridgeItem(7L, 1L, "우유");
@@ -200,6 +213,7 @@ class FridgeControllerTest {
         verify(fridgeItemRepository).save(existing);
     }
 
+    // 이미지가 없으면 빈 목록을 반환해야 합니다.
     @Test
     void scanReceiptReturnsEmptyListWhenImageIsMissing() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -210,6 +224,7 @@ class FridgeControllerTest {
         verifyNoInteractions(geminiService);
     }
 
+    // 너무 큰 이미지는 AI 호출 전에 거부해야 합니다.
     @Test
     void scanReceiptRejectsTooLargeImageBeforeAiCall() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -222,6 +237,7 @@ class FridgeControllerTest {
         verifyNoInteractions(geminiService);
     }
 
+    // AI의 JSON 응답을 재료 목록으로 파싱하고 값을 정리해야 합니다.
     @Test
     void scanReceiptParsesAndNormalizesAiJsonResponse() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -241,6 +257,7 @@ class FridgeControllerTest {
         verify(geminiService).analyzeReceipt("base64-image");
     }
 
+    // AI 응답이 JSON 배열이 아니면 빈 목록을 반환해야 합니다.
     @Test
     void scanReceiptReturnsEmptyListWhenAiResponseIsNotJsonArray() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);

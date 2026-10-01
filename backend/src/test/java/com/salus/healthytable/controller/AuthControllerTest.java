@@ -29,6 +29,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link AuthController} 테스트입니다. 소셜 로그인 성공/실패 응답과 실패 원인 로그를 확인합니다.
+ */
 @ExtendWith(OutputCaptureExtension.class)
 class AuthControllerTest {
 
@@ -44,6 +47,7 @@ class AuthControllerTest {
             oAuthService,
             clock);
 
+    // 구글 로그인으로 처음 들어온 사용자는 주입한 Clock 기준 가입 시각으로 생성되어야 합니다.
     @Test
     void googleLoginCreatesNewUserWithConfiguredClock() {
         LoginRequestDTO request = new LoginRequestDTO();
@@ -74,6 +78,7 @@ class AuthControllerTest {
         verify(jwtTokenProvider).createToken("7");
     }
 
+    // 액세스 토큰이 없으면 OAuth 서비스를 호출하지 않고 401과 실패 원인 로그를 남겨야 합니다.
     @Test
     void googleLoginWithoutAccessTokenDoesNotCallOAuth(CapturedOutput output) {
         LoginRequestDTO request = new LoginRequestDTO();
@@ -86,6 +91,7 @@ class AuthControllerTest {
         verifyNoInteractions(oAuthService, userRepository, jwtTokenProvider);
     }
 
+    // 구글 토큰 검증 실패는 일관된 401 JSON 오류여야 하고, 로그에는 예외 클래스 이름만 남겨야 합니다.
     @Test
     void googleLoginFailureReturnsConsistentJsonError(CapturedOutput output) {
         LoginRequestDTO request = new LoginRequestDTO();
@@ -100,6 +106,7 @@ class AuthControllerTest {
                 .doesNotContain("invalid-token");
     }
 
+    // 이메일이 없는 구글 사용자 정보로는 회원을 만들지 않아야 합니다.
     @Test
     void googleLoginWithoutEmailDoesNotCreateUser(CapturedOutput output) {
         LoginRequestDTO request = new LoginRequestDTO();
@@ -115,6 +122,7 @@ class AuthControllerTest {
         verifyNoInteractions(userRepository, jwtTokenProvider);
     }
 
+    // 네이버 코드 교환 결과에 액세스 토큰이 없으면 401이어야 합니다.
     @Test
     void naverLoginWithoutAccessTokenReturnsConsistentJsonError(CapturedOutput output) {
         LoginRequestDTO request = new LoginRequestDTO();
@@ -133,6 +141,7 @@ class AuthControllerTest {
                 .doesNotContain("salus://redirect");
     }
 
+    // 네이버 인가 코드가 없으면 OAuth 호출 없이 실패해야 합니다.
     @Test
     void naverLoginWithoutCodeDoesNotCallOAuth(CapturedOutput output) {
         LoginRequestDTO request = new LoginRequestDTO();
@@ -149,6 +158,7 @@ class AuthControllerTest {
         verifyNoInteractions(oAuthService, userRepository, jwtTokenProvider);
     }
 
+    // 네이버 state 값이 없으면 OAuth 호출 없이 실패해야 합니다.
     @Test
     void naverLoginWithoutStateDoesNotCallOAuth(CapturedOutput output) {
         LoginRequestDTO request = new LoginRequestDTO();
@@ -165,6 +175,7 @@ class AuthControllerTest {
         verifyNoInteractions(oAuthService, userRepository, jwtTokenProvider);
     }
 
+    // 로그인하지 않은 상태의 내 정보 조회는 401 JSON 오류여야 합니다.
     @Test
     void unauthenticatedCurrentUserReturnsConsistentJsonError() {
         when(authenticatedUserProvider.requireUserId())
@@ -176,6 +187,7 @@ class AuthControllerTest {
         verifyNoInteractions(userRepository);
     }
 
+    // 토큰의 사용자가 DB에 없으면 404 JSON 오류여야 합니다.
     @Test
     void currentUserMissingFromDatabaseReturnsConsistentJsonError() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -186,6 +198,7 @@ class AuthControllerTest {
         assertErrorResponse(response, 404, "NOT_FOUND", "사용자를 찾을 수 없습니다.", "/api/users/me");
     }
 
+    // 오류 응답의 상태 코드/error/message/path를 한 번에 검사하는 도우미입니다.
     @SuppressWarnings("unchecked")
     private void assertErrorResponse(ResponseEntity<?> response, int status, String error, String message, String path) {
         assertThat(response.getStatusCode().value()).isEqualTo(status);

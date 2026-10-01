@@ -2,6 +2,10 @@ package com.salus.healthytable.service;
 
 import org.springframework.stereotype.Component;
 
+/**
+ * 사용자 메시지에서 "레시피", "알려줘" 같은 요청 표현과 조사를 떼어 내 검색용 요리 이름만 남기는 도우미입니다.
+ * 예) "고추장닭날개 레시피 알려줘" → "고추장 닭날개"
+ */
 @Component
 public class RecipeNormalizer {
 

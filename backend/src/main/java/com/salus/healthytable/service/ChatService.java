@@ -17,8 +17,24 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
+/**
+ * 채팅 메시지 처리의 중심(오케스트레이터) 서비스입니다. POST /api/chat/message의 실제 처리를 담당합니다.
+ *
+ * 전체 흐름(위에서부터 순서대로 검사하고, 조건에 맞으면 바로 응답을 반환합니다):
+ * 1) 의도 분류 + 승인 카탈로그 레시피 후보 찾기
+ * 2) 건강 조건(SafetyContext) 수집 — 로그인 사용자의 건강 정보를 읽지 못하면 개인화 응답 거부(fail closed)
+ * 3) 승인 레시피 조정 요청("2인분으로") 처리
+ * 4) (설정으로 켠 경우) Recipe Agent 경로로 위임
+ * 5) 레시피 요청이면 알레르기 충돌 사전 차단
+ * 6) 승인 레시피가 있으면 그 레시피를 그대로 렌더링해 응답
+ * 7) 로그인 사용자의 후속 요청(캘린더 저장, 재료 제외/대체, 상세 설명) 처리
+ * 8) 근거 검색(DB/검색 엔진) → 근거가 있으면 구조화 레시피 생성, 레시피 요청이 아니면 일반 LLM 대화
+ *
+ * 세부 로직은 각 전담 서비스에 위임하고, 이 클래스는 "어떤 순서로 무엇을 부를지"만 결정합니다.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -34,12 +50,15 @@ public class ChatService {
     private final ChatIntentClassifier chatIntentClassifier;
     private final RecipeNormalizer recipeNormalizer;
     private final RecipeAgentOrchestrator recipeAgentOrchestrator;
+    private final ApprovedRecipeService approvedRecipeService;
 
+    // Recipe Agent 기능 플래그(기본값 false). 켜지 않으면 기존 레시피 생성 경로만 사용합니다.
     @Value("${recipe.agent.enabled:false}")
     private boolean recipeAgentEnabled;
     @Value("${recipe.agent.initial-routing-enabled:false}")
     private boolean recipeAgentInitialRoutingEnabled;
 
+    // 아래 세 메서드는 채팅방/메시지 저장을 ChatSessionService에 위임하는 얇은 래퍼입니다.
     @Transactional
     public ChatSession resolveSession(Long userId, ChatDto.Request request) {
         return chatSessionService.resolveSession(userId, request);
@@ -55,19 +74,34 @@ public class ChatService {
         chatSessionService.saveMessage(session, role, content);
     }
 
+    /**
+     * 채팅 메시지 하나를 처리해 응답을 만듭니다.
+     *
+     * @param authenticatedUserId 로그인 사용자 ID (게스트면 빈 Optional)
+     * @param request             채팅 요청 (메시지, 대화 기록, 건강 정보 등)
+     * @return 비동기 응답. LLM 호출이 필요 없는 경우는 Mono.just(...)로 즉시 값을 감싸 반환합니다.
+     */
     public Mono<ChatDto.Response> processChat(Optional<Long> authenticatedUserId, ChatDto.Request request) {
         StringBuilder systemContext = new StringBuilder();
 
         // 1. 의도(Intent) 식별
         ChatIntentClassifier.ChatIntent intent = chatIntentClassifier.classify(request.getMessage());
         boolean isDetailFollowUp = isRecipeDetailFollowUp(request.getMessage());
-        boolean isRecipeRequestIntent = (intent == ChatIntentClassifier.ChatIntent.RECIPE_REQUEST) && !isDetailFollowUp;
+        boolean classifiedRecipeRequest = intent == ChatIntentClassifier.ChatIntent.RECIPE_REQUEST;
+        Optional<Recipe> approvedCandidate = approvedRecipeService.findApprovedMatch(request.getMessage());
+        // 승인 레시피가 있고, 상세 설명 후속 요청이 아니며, 레시피를 요청하는 표현이 있으면 승인 레시피로 바로 답합니다.
+        boolean approvedDirectRequest = approvedCandidate.isPresent()
+                && !isDetailFollowUp
+                && (classifiedRecipeRequest || isDirectApprovedRecipeRequest(request.getMessage()));
+        boolean isRecipeRequestIntent = (classifiedRecipeRequest || approvedDirectRequest) && !isDetailFollowUp;
 
+        // 로그인 사용자만 채팅방을 만들어 대화를 저장합니다. 게스트는 chatSession이 null입니다.
         ChatSession chatSession = authenticatedUserId
                 .map(userId -> resolveSession(userId, request))
                 .orElse(null);
         Long authenticatedUserIdValue = authenticatedUserId.orElse(null);
         Long sessionId = chatSession != null ? chatSession.getId() : null;
+        // Recipe Agent로 보낼지 결정: 기존 Agent 세션의 후속 요청이거나, 초기 라우팅이 켜진 상태의 레시피/메뉴 요청
         boolean structuredAgentFollowUp = recipeAgentEnabled
                 && hasStructuredAgentSession(authenticatedUserIdValue, sessionId)
                 && isRecipeAgentFollowUpCandidate(request.getMessage());
@@ -75,6 +109,7 @@ public class ChatService {
                 && recipeAgentInitialRoutingEnabled
                 && (isRecipeRequestIntent || intent == ChatIntentClassifier.ChatIntent.MENU_RECOMMENDATION);
 
+        // 건강 조건 수집. 로그인 사용자인데 DB 건강 정보를 못 읽었다면 알레르기를 모르는 상태이므로 레시피를 주지 않습니다.
         SafetyContext safetyContext = buildSafetyContext(authenticatedUserId, request);
         if (authenticatedUserId.isPresent() && !safetyContext.healthContextAvailable()) {
             String unavailableReply = "건강 정보를 안전하게 확인하지 못해 개인화 레시피를 제공하지 않았습니다. 잠시 후 다시 시도해 주세요.";
@@ -87,7 +122,26 @@ public class ChatService {
                     false));
         }
 
-        if (structuredAgentFollowUp || recipeAgentInitialRequest) {
+        // 이번 요청에서 실제로 사용할 승인 레시피 (레시피 요청이 아니면 사용하지 않음)
+        Optional<Recipe> approvedRecipe = approvedDirectRequest || classifiedRecipeRequest
+                ? approvedCandidate
+                : Optional.empty();
+
+        // 직전에 보여 준 승인 레시피에 대한 조정 요청(인분/맵기 변경 등)이면 여기서 처리합니다.
+        if (authenticatedUserIdValue != null && chatSession != null) {
+            Optional<ChatDto.Response> approvedAdjustment = chatFollowUpService.buildApprovedRecipeAdjustment(
+                    authenticatedUserIdValue,
+                    chatSession,
+                    request.getMessage());
+            if (approvedAdjustment.isPresent()) {
+                saveChatMessage(chatSession, "user", request.getMessage());
+                saveChatMessage(chatSession, "model", approvedAdjustment.get().getReply());
+                return Mono.just(approvedAdjustment.get());
+            }
+        }
+
+        // 승인 레시피가 없을 때만 Recipe Agent로 넘깁니다(승인 레시피가 항상 우선).
+        if ((structuredAgentFollowUp || recipeAgentInitialRequest) && approvedRecipe.isEmpty()) {
             if (chatSession != null) {
                 saveChatMessage(chatSession, "user", request.getMessage());
             }
@@ -109,10 +163,14 @@ public class ChatService {
                 : List.of();
         boolean hasTrustedRecipe = !trustedRecipes.isEmpty();
 
+        // 레시피 생성 전에 요리 이름/후보 레시피가 알레르기와 충돌하는지 먼저 확인하고, 충돌하면 즉시 차단합니다.
         if (isRecipeRequestIntent) {
+            List<Recipe> allergyCandidates = approvedRecipe
+                    .map(List::of)
+                    .orElse(trustedRecipes);
             Optional<String> allergyBlockedReply = buildAllergyConflictReply(
                     normalizedTitle,
-                    trustedRecipes,
+                    allergyCandidates,
                     safetyContext,
                     request.getMessage());
             if (allergyBlockedReply.isPresent()) {
@@ -127,13 +185,50 @@ public class ChatService {
                         false));
             }
         }
+        // 승인 레시피 경로: LLM으로 새로 만들지 않고, 검수된 레시피를 요청(인분 등)에 맞게 렌더링해 보여 줍니다.
+        if (approvedRecipe.isPresent()) {
+            try {
+                Recipe recipe = approvedRecipe.get();
+                ApprovedRecipeService.RenderedRecipe rendered = approvedRecipeService.renderApprovedRecipe(
+                        recipe,
+                        request.getMessage());
+                List<String> safetyNotes = chatSafetyContextService.buildRecipeSafetyNotes(
+                        authenticatedUserId,
+                        safetyContext,
+                        rendered.recipe());
+                if (chatSession != null) {
+                    saveChatMessage(chatSession, "user", request.getMessage());
+                    chatFollowUpService.saveApprovedRecipeState(
+                            authenticatedUserIdValue,
+                            chatSession.getId(),
+                            rendered);
+                    saveChatMessage(chatSession, "model", rendered.reply());
+                }
+                ChatDto.Response response = new ChatDto.Response(
+                        sessionId,
+                        rendered.reply(),
+                        chatSession != null,
+                        false);
+                response.setRecipe(recipeResponseSanitizer.buildRecipeCard(rendered.recipe(), safetyNotes));
+                return Mono.just(response);
+            // 렌더링할 수 없는 요청(지원하지 않는 조정 등)은 예외 메시지를 그대로 안내합니다.
+            } catch (IllegalArgumentException | IllegalStateException error) {
+                if (chatSession != null) {
+                    saveChatMessage(chatSession, "user", request.getMessage());
+                    saveChatMessage(chatSession, "model", error.getMessage());
+                }
+                return Mono.just(new ChatDto.Response(sessionId, error.getMessage(), false, false));
+            }
+        }
 
+        // 이후 LLM 호출에 쓸 시스템 프롬프트(참고 레시피 + 건강 정보)를 조립합니다.
         if (hasTrustedRecipe) {
             appendTrustedRecipeContext(systemContext, trustedRecipes);
         }
 
         appendSafetyContext(systemContext, safetyContext);
 
+        // 로그인 사용자 전용: 대화 저장, 후속 요청 처리, 검진/작업 세션 문맥 추가
         if (authenticatedUserId.isPresent()) {
             try {
                 Long userIdLong = authenticatedUserId.get();
@@ -197,11 +292,13 @@ public class ChatService {
                     systemContext.append("================\n");
                 }
 
+            // 개인화 문맥 준비 중 예상치 못한 오류는 기록만 하고 일반 흐름을 계속 진행합니다.
             } catch (Exception e) {
                 logRequestFailure(intent.name(), request.getMessage(), "PERSONALIZATION_CONTEXT_FAILED", e);
             }
         }
 
+        // 근거 수집(RAG: 검색 증강 생성). 레시피 요청일 때만 DB/외부 검색을 하고, 아니면 빈 근거로 대신합니다.
         Mono<RecipeEvidenceService.RagData> ragDataMono = isRecipeRequestIntent
                 ? recipeEvidenceService.resolve(
                         normalizedTitle,
@@ -217,6 +314,7 @@ public class ChatService {
         final Long sessionIdForWork = chatSession != null ? chatSession.getId() : null;
 
         return ragDataMono.flatMap(ragData -> {
+            // 신뢰할 근거를 찾지 못하면 LLM이 지어내지 않도록 레시피 생성을 거부합니다.
             if (isRecipeRequestIntent && ragData.status() != SearchEngine.SearchStatus.SUCCESS) {
                 String rejectReply = ragData.status() == SearchEngine.SearchStatus.FAILED
                         ? buildRecipeValidationFailureReply(normalizedTitle, ragData.status())
@@ -232,6 +330,7 @@ public class ChatService {
             final String finalMessage = systemContext.length() > 0 ? request.getMessage() + systemContext : request.getMessage();
             List<ChatDto.Message> history = resolveHistoryForAi(chatSession, request);
 
+            // 레시피 요청: 구조화 레시피 생성 파이프라인(생성 → 알레르기 검사 → 검증 → 복구 → 저장)으로 처리합니다.
             if (isRecipeRequestIntent && !normalizedTitle.isBlank()) {
                 RecipeGenerationRequest generationRequest = recipeGenerationCoordinator.buildCreationRequest(
                         request,
@@ -254,12 +353,18 @@ public class ChatService {
                         });
             }
 
+            // 일반 대화: LLM 답변을 그대로 쓰되, 레시피 요청이 아닌데 레시피 형태로 답했다면 검증되지 않은 레시피이므로 안내 문구로 바꿉니다.
             return llmService.getChatResponse(finalMessage, history)
                     .map(reply -> {
                         String responseReply = reply;
                         if (!isLlmUnavailableReply(reply) && looksLikeRecipeResponse(reply)) {
                             logRequestFailure(intent.name(), request.getMessage(), "NON_RECIPE_INTENT_RECIPE_OUTPUT", null);
                             responseReply = buildNonRecipeIntentReply(intent, request.getMessage());
+                        }
+                        // 일반 대화 답변은 검증기를 거치지 않으므로 등록 알레르겐이 보이면 주의 문구를 붙입니다.
+                        if (!isLlmUnavailableReply(reply)) {
+                            responseReply = chatSafetyContextService.appendAllergyCautionIfMentioned(
+                                    safetyContext, responseReply);
                         }
                         if (chatSession != null) {
                             saveChatMessage(chatSession, "model", responseReply);
@@ -277,6 +382,10 @@ public class ChatService {
         return chatFollowUpService.isRecipeAgentFollowUpCandidate(message);
     }
 
+    /**
+     * 요청 실패를 로그로 남깁니다.
+     * 개인정보 보호를 위해 메시지 원문 대신 길이와 SHA-256 해시만 기록합니다(같은 메시지인지 비교는 가능).
+     */
     private void logRequestFailure(String intent, String message, String failureCategory, Throwable error) {
         String value = message == null ? "" : message;
         log.warn("[ChatEvent] requestId={}, intent={}, messageLength={}, messageHash={}, failureCategory={}, exceptionClass={}",
@@ -288,6 +397,7 @@ public class ChatService {
                 error == null ? "none" : error.getClass().getSimpleName());
     }
 
+    // RequestIdFilter가 MDC에 넣어 둔 요청 ID를 꺼냅니다.
     private String requestId() {
         String requestId = MDC.get("requestId");
         return requestId == null || requestId.isBlank() ? "unavailable" : requestId;
@@ -302,6 +412,7 @@ public class ChatService {
         }
     }
 
+    // 이하 private 메서드들은 대부분 전담 서비스로 호출을 넘기는 위임 메서드입니다.
     private Mono<ChatDto.Response> buildStructuredRecipeResponse(
             RecipeGenerationRequest generationRequest,
             SafetyContext safetyContext,
@@ -410,6 +521,20 @@ public class ChatService {
         return recipeResponseSanitizer.looksLikeRecipeResponse(reply);
     }
 
+    // "알려줘", "만들어줘" 같은 직접 요청 표현이나 승인 레시피 조정 표현이 있으면 true입니다.
+    private boolean isDirectApprovedRecipeRequest(String message) {
+        if (message == null || message.isBlank()) {
+            return false;
+        }
+        if (approvedRecipeService.parseAdjustment(message).isPresent()) {
+            return true;
+        }
+        String compact = message.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+        return List.of("알려줘", "알려주세요", "해줘", "해주세요", "만들어줘", "끓여줘")
+                .stream()
+                .anyMatch(compact::contains);
+    }
+
     private boolean isLlmUnavailableReply(String reply) {
         return recipeResponseSanitizer.isLlmUnavailableReply(reply);
     }
@@ -418,6 +543,7 @@ public class ChatService {
         return recipeGenerationCoordinator.buildRecipeValidationFailureReply(title, searchStatus);
     }
 
+    // 레시피 요청이 아닌데 LLM이 레시피를 쓴 경우, 의도에 맞춰 대신 보여 줄 안내 문구를 고릅니다.
     private String buildNonRecipeIntentReply(ChatIntentClassifier.ChatIntent intent, String message) {
         if (intent == ChatIntentClassifier.ChatIntent.MENU_RECOMMENDATION) {
             return "좋아요. 메뉴 추천으로만 짧게 도와드릴게요. 상세 레시피가 필요하면 음식명과 함께 '레시피'나 '만드는 법'이라고 말씀해 주세요.";

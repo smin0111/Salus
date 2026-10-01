@@ -22,6 +22,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link MealLogController} 테스트입니다.
+ */
 class MealLogControllerTest {
 
     private final MealLogService mealLogService = mock(MealLogService.class);
@@ -32,6 +35,7 @@ class MealLogControllerTest {
             userRepository,
             authenticatedUserProvider);
 
+    // 식단 조회는 현재 로그인 사용자의 기록을 반환해야 합니다.
     @Test
     void getMyMealLogsUsesCurrentUser() {
         User user = user(1L);
@@ -48,6 +52,7 @@ class MealLogControllerTest {
         verify(mealLogService).getMealLogs(user);
     }
 
+    // 식단 저장은 현재 사용자와 요청 DTO를 서비스에 넘겨야 합니다.
     @Test
     void saveMealLogUsesCurrentUserAndRequestDto() {
         User user = user(1L);
@@ -67,6 +72,7 @@ class MealLogControllerTest {
         verify(mealLogService).saveOrUpdateMealLog(user, dto);
     }
 
+    // 월간 분석은 현재 사용자 기준으로 요청해야 합니다.
     @Test
     void getMonthlyAnalysisUsesCurrentUser() {
         User user = user(1L);
@@ -82,6 +88,7 @@ class MealLogControllerTest {
         verify(mealLogService).getMonthlyAnalysis(user, 2026, 7);
     }
 
+    // 토큰의 사용자가 DB에 없으면 404를 반환해야 합니다.
     @Test
     void currentUserMissingFromDatabaseReturnsNotFound() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(404L);

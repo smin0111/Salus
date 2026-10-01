@@ -21,11 +21,21 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+/**
+ * 레시피 생성에 사용할 "근거 자료"를 모으는 서비스입니다. (RAG: 검색 결과를 LLM 프롬프트에 넣어 답변 근거로 쓰는 방식)
+ *
+ * 근거를 찾는 순서:
+ * 1) 내부 DB의 승인 레시피가 있으면 그것을 근거로 사용(internal-db)
+ * 2) 최근에 "근거 없음"으로 캐시된 검색어면 외부 검색을 생략(negative cache)
+ * 3) 식약처(MFDS) 공식 레시피 검색 → 결과가 없으면 웹 검색 엔진(DuckDuckGo/Tavily)
+ * 4) 검색 결과 중 레시피로 신뢰할 만한 결과만 최대 3개(도메인당 1개) 골라 근거 텍스트로 만듦
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class RecipeEvidenceService {
 
+    // 프롬프트에 넣을 근거 레시피 최대 개수
     private static final int MAX_RAG_RECIPE_COUNT = 3;
     private static final List<String> RECIPE_CATEGORY_KEYWORDS = List.of(
             "찌개", "국", "탕", "볶음", "구이", "덮밥", "비빔밥", "찜", "조림", "무침", "샐러드", "파스타");
@@ -38,9 +48,14 @@ public class RecipeEvidenceService {
     private final RecipeResponseSanitizer recipeResponseSanitizer;
     private final Clock clock;
 
+    // "근거 없음" 캐시를 유지하는 기간(일)
     @Value("${rag.negative-cache-days:7}")
     private int negativeCacheDays;
 
+    /**
+     * 요리 이름에 대한 근거를 찾아 RagData로 돌려줍니다.
+     * status가 SUCCESS가 아니면 호출자(ChatService)는 레시피 생성을 하지 않습니다.
+     */
     public Mono<RagData> resolve(
             String normalizedTitle,
             List<Recipe> trustedRecipes,
@@ -59,6 +74,7 @@ public class RecipeEvidenceService {
         Optional<SearchCache> cache = searchCacheRepository.findByQuery(normalizedTitle);
         if (cache.isPresent() && !cache.get().isFound()) {
             LocalDateTime createdAt = cache.get().getCreatedAt();
+            // 생성 시각이 없으면 만료된 캐시로 봅니다.
             long ageDays = createdAt == null
                     ? negativeCacheDays
                     : Duration.between(createdAt, LocalDateTime.now(clock)).toDays();
@@ -74,6 +90,12 @@ public class RecipeEvidenceService {
                 .map(searchResponse -> toRagData(normalizedTitle, intent, searchResponse));
     }
 
+    /**
+     * 검색 응답을 RagData로 변환합니다.
+     * - FAILED: 검색 자체 실패 → 캐시하지 않음(일시 장애일 수 있음)
+     * - EMPTY: 결과 없음 → negative cache 저장
+     * - 결과는 있지만 신뢰할 결과가 없음 → EMPTY로 처리
+     */
     private RagData toRagData(
             String normalizedTitle,
             String intent,
@@ -102,6 +124,7 @@ public class RecipeEvidenceService {
             contextBuilder.append("  제목: ").append(result.title()).append("\n");
             contextBuilder.append("  내용: ").append(result.snippet()).append("\n");
         }
+        // rawSearchContext는 검증기(RecipeValidator)가 비교에 쓰고, systemContextSnippet은 LLM 프롬프트에 붙입니다.
         String rawSearchContext = contextBuilder.toString();
         String systemContextSnippet = "\n\n=== 외부 검색 결과 자료 (참고용) ===\n"
                 + "다음은 외부 웹에서 검색된 " + normalizedTitle + " 관련 레시피 정보입니다.\n"
@@ -115,6 +138,7 @@ public class RecipeEvidenceService {
                 searchResponse.source());
     }
 
+    // "근거 없음" 캐시를 새로 저장합니다. 저장 실패는 응답에 영향을 주지 않도록 로그만 남깁니다.
     private void writeNegativeCache(String normalizedTitle, String intent) {
         try {
             searchCacheRepository.deleteByQuery(normalizedTitle);
@@ -138,6 +162,7 @@ public class RecipeEvidenceService {
         logFailure("UNKNOWN", category, error);
     }
 
+    // 내부 DB 레시피를 "최우선 근거" 섹션으로 LLM 프롬프트에 덧붙입니다.
     void appendTrustedRecipeContext(StringBuilder systemContext, List<Recipe> recipes) {
         try {
             if (recipes.isEmpty()) {
@@ -176,6 +201,7 @@ public class RecipeEvidenceService {
         }
     }
 
+    // 내부 DB 레시피를 검증기에서 쓸 근거 텍스트 형식("검색어: ..." 포함)으로 만듭니다.
     String buildTrustedRecipeEvidence(String requestedTitle, List<Recipe> recipes) {
         StringBuilder evidence = new StringBuilder();
         evidence.append("검색어: ").append(recipeResponseSanitizer.nullToBlank(requestedTitle)).append("\n");
@@ -193,6 +219,7 @@ public class RecipeEvidenceService {
         return evidence.toString();
     }
 
+    // 신뢰할 만한 검색 결과만 골라, 같은 도메인은 하나만 남기고 최대 3개까지 반환합니다.
     List<SearchEngine.SearchResult> selectReliableSearchResults(
             String requestedTitle,
             List<SearchEngine.SearchResult> results) {
@@ -208,6 +235,12 @@ public class RecipeEvidenceService {
                 .toList();
     }
 
+    /**
+     * 검색 결과 하나가 레시피 근거로 쓸 만한지 판단합니다.
+     * - http(s) URL이어야 하고, 동영상/SNS/쇼핑/백과사전 사이트는 제외
+     * - 제목이나 본문에 요청한 요리 이름이 있어야 함
+     * - "재료", "큰술", "볶" 같은 레시피 신호 단어가 2개 이상 있어야 함
+     */
     boolean isReliableRecipeSearchResult(String requestedTitle, SearchEngine.SearchResult result) {
         String url = recipeResponseSanitizer.nullToBlank(result.url()).trim().toLowerCase();
         if (!(url.startsWith("https://") || url.startsWith("http://"))) {
@@ -244,6 +277,7 @@ public class RecipeEvidenceService {
         return recipeSignals >= 2;
     }
 
+    // URL에서 호스트(도메인)만 꺼냅니다. 파싱할 수 없으면 URL 전체를 그대로 사용합니다.
     String searchResultDomain(String url) {
         try {
             String host = java.net.URI.create(url).getHost();
@@ -253,6 +287,7 @@ public class RecipeEvidenceService {
         }
     }
 
+    // 식약처 공식 레시피를 먼저 검색하고, 결과가 없거나 오류가 나면 웹 검색 엔진으로 넘어갑니다.
     Mono<SearchEngine.SearchResponse> searchOfficialThenWeb(String requestedTitle) {
         return mfdsRecipeSearchClient.search(requestedTitle)
                 .flatMap(officialResponse -> officialResponse.status() == SearchEngine.SearchStatus.SUCCESS
@@ -266,6 +301,10 @@ public class RecipeEvidenceService {
                 });
     }
 
+    /**
+     * 메시지에서 키워드를 뽑아 승인 레시피를 제목으로 검색하고,
+     * 요청과 정확히 맞는 레시피만 점수순으로 최대 3개 반환합니다.
+     */
     List<Recipe> findTrustedRecipes(String message) {
         Map<Long, Recipe> matched = new LinkedHashMap<>();
         List<String> keywords = chatRequestParser.extractRecipeKeywords(message);
@@ -280,6 +319,10 @@ public class RecipeEvidenceService {
                 .toList();
     }
 
+    /**
+     * DB 레시피가 요청한 요리와 같은 요리인지 판단합니다.
+     * 제목이 정확히 같거나 거의 같으면 인정하고, 키워드 일부만 겹치는 경우("찌개"만 같음 등)는 다른 요리로 봅니다.
+     */
     boolean isReliableRecipeMatch(Recipe recipe, String requestedTitle, List<String> keywords) {
         String title = recipeResponseSanitizer.nullToBlank(recipe.getTitle()).replaceAll("\\s+", "").toLowerCase();
         String request = recipeResponseSanitizer.nullToBlank(requestedTitle).replaceAll("\\s+", "").toLowerCase();
@@ -319,6 +362,7 @@ public class RecipeEvidenceService {
         return true;
     }
 
+    // 키워드가 제목과 정확히 같으면 100점, 제목 포함 8점(요리 종류 키워드는 25점), 설명 포함 3점, 재료 포함 2점
     int scoreRecipe(Recipe recipe, List<String> keywords) {
         String title = recipeResponseSanitizer.nullToBlank(recipe.getTitle()).toLowerCase();
         String description = recipeResponseSanitizer.nullToBlank(recipe.getDescription()).toLowerCase();
@@ -343,6 +387,7 @@ public class RecipeEvidenceService {
         return score;
     }
 
+    // DB 검색 오류가 나도 채팅이 실패하지 않도록 빈 목록을 반환합니다(이후 외부 검색 경로로 진행).
     List<Recipe> findTrustedRecipesSafely(String message) {
         try {
             return findTrustedRecipes(message);
@@ -352,6 +397,10 @@ public class RecipeEvidenceService {
         }
     }
 
+    /**
+     * 근거 수집 결과입니다.
+     * status: 검색 상태 / systemContextSnippet: LLM 프롬프트용 텍스트 / rawSearchContext: 검증용 원본 근거 / source: 출처 이름
+     */
     public record RagData(
             SearchEngine.SearchStatus status,
             String systemContextSnippet,

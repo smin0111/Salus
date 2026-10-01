@@ -6,8 +6,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * {@link JwtTokenProvider} 테스트입니다. 토큰 발급/검증과 약한 시크릿 차단을 확인합니다.
+ */
 class JwtTokenProviderTest {
 
+    // 충분히 긴 시크릿으로 발급한 토큰은 검증을 통과하고 사용자 ID를 꺼낼 수 있어야 합니다.
     @Test
     void createsAndValidatesTokenWithStrongSecret() {
         JwtTokenProvider provider = new JwtTokenProvider();
@@ -21,6 +25,7 @@ class JwtTokenProviderTest {
         assertThat(provider.getUserId(token)).isEqualTo("42");
     }
 
+    // 32바이트 미만 시크릿은 서버 시작 시 거부해야 합니다.
     @Test
     void rejectsShortSecretOnStartup() {
         JwtTokenProvider provider = new JwtTokenProvider();
@@ -33,6 +38,7 @@ class JwtTokenProviderTest {
                 .hasMessageContaining("최소 32바이트");
     }
 
+    // 예시 문구가 들어간 시크릿은 길이가 충분해도 거부해야 합니다.
     @Test
     void rejectsExampleSecretOnStartup() {
         JwtTokenProvider provider = new JwtTokenProvider();

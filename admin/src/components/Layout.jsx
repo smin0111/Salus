@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 
+// 관리자 화면 공통 레이아웃: 왼쪽 사이드바 + 상단 제목 + 본문(<Outlet />에 현재 경로의 페이지가 들어갑니다)
 const Layout = ({ onLogout }) => {
     return (
         <div className="admin-layout">

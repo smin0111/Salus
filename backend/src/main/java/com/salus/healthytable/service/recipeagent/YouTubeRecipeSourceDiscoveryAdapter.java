@@ -14,6 +14,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * YouTube 영상에서 레시피 출처를 찾는 어댑터입니다(recipe.agent.youtube-source-enabled=true일 때만 동작).
+ *
+ * 영상마다 다음 두 종류의 출처 후보를 만들 수 있습니다.
+ * 1) 설명란에 공식 레시피 페이지 링크가 있고 그 페이지에서 구조화 레시피를 추출한 경우 → OFFICIAL_WEB 출처
+ * 2) 설명란 자체에 완전한 레시피(재료+조리 순서)가 있는 경우 → YOUTUBE_DESCRIPTION 출처
+ * 크리에이터를 지정한 요청은 등록된 채널 ID로 확인된 영상만 사용합니다(이름만 비슷한 채널 제외).
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -29,6 +37,7 @@ class YouTubeRecipeSourceDiscoveryAdapter {
     private final StructuredRecipePageAdapter structuredRecipePageAdapter;
     private final InMemoryYouTubeRecipeSourceCache cache;
 
+    // 기능 사용 여부, 검색어당 최대 결과 수, 최대 검색 요청 수(API 할당량 절약), 자막 선호 여부
     @Value("${recipe.agent.youtube-source-enabled:false}")
     private boolean youtubeSourceEnabled;
 
@@ -68,6 +77,7 @@ class YouTubeRecipeSourceDiscoveryAdapter {
         }
     }
 
+    // 검색 계획의 검색어 중 최대 maxSearchRequests개만 실행하고, 영상 ID 기준으로 중복을 제거합니다.
     private List<YouTubeVideoSearchResult> searchVideos(RecipeResearchPlan plan) {
         Map<String, YouTubeVideoSearchResult> results = new LinkedHashMap<>();
         List<String> queries = plan.searchQueries() == null ? List.of() : plan.searchQueries();
@@ -90,6 +100,7 @@ class YouTubeRecipeSourceDiscoveryAdapter {
         return List.copyOf(results.values());
     }
 
+    // 캐시에 있는 메타데이터는 재사용하고, 없는 영상만 API로 조회한 뒤 원래 순서대로 반환합니다.
     private List<YouTubeVideoMetadata> metadata(List<String> videoIds) {
         List<String> distinctIds = videoIds == null ? List.<String>of() : videoIds.stream()
                 .filter(id -> id != null && !id.isBlank())
@@ -116,6 +127,7 @@ class YouTubeRecipeSourceDiscoveryAdapter {
                 .toList();
     }
 
+    // 영상 하나에서 크리에이터 확인, 설명란 근거 추출, 자막 조회, 외부 링크 검증을 수행해 출처 후보를 만듭니다.
     private List<YouTubeRecipeSourceCandidate> toCandidates(RecipeResearchPlan plan, YouTubeVideoMetadata video) {
         CreatorIdentityResolution creator = creatorIdentityResolver.resolve(plan.creatorName(), video);
         YouTubeDescriptionEvidence description = descriptionEvidenceExtractor.extract(video.description());
@@ -160,6 +172,7 @@ class YouTubeRecipeSourceDiscoveryAdapter {
         return candidates;
     }
 
+    // 설명란의 레시피 링크들을 웹 출처 수집기(StructuredRecipePageAdapter)로 넘겨 구조화 레시피를 추출합니다.
     private List<RecipeSourceCandidate> externalRecipeCandidates(RecipeResearchPlan plan, YouTubeDescriptionEvidence description) {
         List<String> urls = externalLinkResolver.recipeEvidenceUrls(description);
         if (urls.isEmpty()) {
@@ -173,6 +186,7 @@ class YouTubeRecipeSourceDiscoveryAdapter {
         return structuredRecipePageAdapter.collect(plan, webCandidates);
     }
 
+    // 설명란 링크에서 찾은 웹 레시피를 OFFICIAL_WEB 출처로 만듭니다. 신뢰도는 웹 점수와 영상 점수 중 높은 값입니다.
     private RecipeSourceDocument officialWebSourceFrom(
             YouTubeVideoMetadata video,
             RecipeSourceDocument webSource,
@@ -188,6 +202,7 @@ class YouTubeRecipeSourceDiscoveryAdapter {
                 Math.max(webSource.sourceReliability(), score.finalSourceScore()));
     }
 
+    // 설명란에서 추출한 재료/조리 순서로 YOUTUBE_DESCRIPTION 출처 문서를 만듭니다.
     private RecipeSourceDocument descriptionSourceFrom(
             YouTubeVideoMetadata video,
             YouTubeDescriptionEvidence evidence,
@@ -241,11 +256,13 @@ class YouTubeRecipeSourceDiscoveryAdapter {
                 score.finalSourceScore());
     }
 
+    // 크리에이터를 지정하지 않았거나, 지정했다면 채널 ID로 확인된 경우에만 true입니다.
     private boolean creatorAllowedForCandidate(RecipeResearchPlan plan, CreatorIdentityResolution creator) {
         boolean requested = plan != null && plan.creatorName() != null && !plan.creatorName().isBlank();
         return !requested || creator.status() == CreatorMatchStatus.VERIFIED_CHANNEL_ID;
     }
 
+    // 근거 위치(설명란 재료/조리 순서 구역, 링크, 타임스탬프)를 출처 표기 정보로 정리합니다.
     private RecipeSourceAttribution attribution(
             RecipeSourceDocument source,
             YouTubeVideoMetadata video,
@@ -277,6 +294,7 @@ class YouTubeRecipeSourceDiscoveryAdapter {
                 AgentText.distinct(locations));
     }
 
+    // 최신 요청이면 최신순, 검색어에 "인기/조회"가 있으면 조회수순, 그 외에는 관련도순으로 검색합니다.
     private YouTubeSearchOrder order(RecipeResearchPlan plan, String query) {
         if (plan.latestSourceRequested()) {
             return YouTubeSearchOrder.DATE;

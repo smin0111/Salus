@@ -16,6 +16,13 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Clock;
 import java.time.LocalDateTime;
 
+/**
+ * 결제 저장과 회원 등급 업그레이드를 하나의 트랜잭션으로 처리하는 도우미 클래스입니다.
+ *
+ * PaymentService와 분리한 이유: 스프링의 {@code @Transactional}은 프록시로 동작하므로,
+ * 같은 클래스 안에서 자기 메서드를 호출하면 트랜잭션이 적용되지 않습니다.
+ * 별도 Bean으로 두면 외부 결제 조회(느린 네트워크 호출)는 트랜잭션 밖에서, DB 저장만 트랜잭션 안에서 처리할 수 있습니다.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -59,6 +66,7 @@ public class PaymentTxHelper {
 
         try {
             return paymentRepository.save(payment);
+        // DB unique 제약 위반(동시에 같은 결제가 저장된 경우)은 중복 결제로 보고 409로 응답합니다.
         } catch (DataIntegrityViolationException ex) {
             log.warn("Payment save failed. reason=duplicate_payment_constraint, userId={}", userId);
             log.debug("Payment duplicate constraint failure details", ex);

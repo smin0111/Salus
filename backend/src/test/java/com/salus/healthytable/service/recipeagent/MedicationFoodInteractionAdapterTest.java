@@ -16,7 +16,13 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * 약물-음식 상호작용 확인 경로({@link OfficialMedicationFoodInteractionAdapter}) 테스트입니다.
+ * 가짜 식약처/openFDA/RxNorm 포트로 약 식별, 근거 추출, 상태 분류, 정책 연계를 확인합니다.
+ * 핵심 원칙: 근거를 찾지 못한 것은 "안전"이 아니며, 확인되지 않은 충돌을 지어내지 않습니다.
+ */
 class MedicationFoodInteractionAdapterTest {
+    // 실제 알레르겐 사전으로 만든 Matcher를 테스트 전체에서 공유합니다.
     private static com.salus.healthytable.service.allergen.AllergenMatcher sharedAllergenMatcher() {
         com.salus.healthytable.service.allergen.AllergenDictionary dictionary =
                 new com.salus.healthytable.service.allergen.AllergenDictionary();
@@ -27,6 +33,7 @@ class MedicationFoodInteractionAdapterTest {
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-20T00:00:00Z"), ZoneId.of("Asia/Seoul"));
 
+    // 국내 제품명은 식약처 정보로 정규화하고, 복합 성분은 모두 보존해야 합니다.
     @Test
     void domesticProductNameIsNormalizedThroughMfdsAndCompoundIngredientsArePreserved() {
         FakeMfdsPort mfds = new FakeMfdsPort().with("복합정", mfdsFound("복합정", List.of("성분A", "성분B"), "", "", ""));
@@ -39,6 +46,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(normalized.confidence()).isGreaterThan(0.9);
     }
 
+    // 영문 성분명은 RxNorm으로 정규화할 수 있지만, RxNorm을 상호작용 근거로 쓰면 안 됩니다.
     @Test
     void englishIngredientCanBeNormalizedByRxNormButRxNormIsNotInteractionDatabase() {
         FakeMfdsPort mfds = new FakeMfdsPort().defaultResult(status(MedicationDataStatus.NOT_FOUND));
@@ -60,6 +68,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(fda.calls).isEqualTo(1);
     }
 
+    // 약 후보가 여러 개면 임의로 하나를 고르지 않아야 합니다.
     @Test
     void multipleMedicationMatchesAreNotAutoSelected() {
         OfficialMedicationFoodInteractionAdapter adapter = adapter(
@@ -75,6 +84,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(result.notices()).anyMatch(notice -> notice.contains("정확한 제품명"));
     }
 
+    // 라벨에서 명시된 음식만 근거로 추출하고 원문을 보존해야 합니다.
     @Test
     void labelExtractionUsesOnlyExplicitFoodsAndPreservesOriginalEvidence() {
         MedicationFoodEvidenceExtractor extractor = new MedicationFoodEvidenceExtractor(new DefaultFoodNutrientNormalizer());
@@ -94,6 +104,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(evidences.get(0).effectType()).isEqualTo(MedicationFoodEffectType.AVOID);
     }
 
+    // "피하라"는 명시적 라벨 지시가 레시피 재료와 일치하면 CONFIRMED_CONFLICT여야 합니다.
     @Test
     void explicitAvoidLabelMatchedWithRecipeIngredientBecomesConfirmedConflict() {
         OfficialMedicationFoodInteractionAdapter adapter = adapter(
@@ -111,6 +122,7 @@ class MedicationFoodInteractionAdapterTest {
         });
     }
 
+    // 섭취 제한/주의, 복용 간격, 식사 조건을 서로 다른 상태로 구분해야 합니다.
     @Test
     void limitCautionTimingAndFoodIntakeConditionsAreSeparated() {
         OfficialMedicationFoodInteractionAdapter caution = adapter(
@@ -134,6 +146,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(withFood.check(List.of("식후정"), List.of("밥 1공기")).status()).isEqualTo(InteractionStatus.FOOD_INTAKE_CONDITION);
     }
 
+    // "음식과 관계없이 복용" 같은 부정/중립 문장은 충돌이 되면 안 됩니다.
     @Test
     void foodNegationAndNeutralInstructionsDoNotBecomeConflicts() {
         MedicationFoodEvidenceExtractor extractor = new MedicationFoodEvidenceExtractor(new DefaultFoodNutrientNormalizer());
@@ -163,6 +176,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(result.status()).isNotEqualTo(InteractionStatus.SAFE);
     }
 
+    // 음식 단어가 들어 있다는 이유만으로 근거로 분류하면 안 됩니다.
     @Test
     void syntheticFoodEvidenceClassificationsAreNotTriggeredByFoodWordsAlone() {
         MedicationFoodEvidenceExtractor extractor = new MedicationFoodEvidenceExtractor(new DefaultFoodNutrientNormalizer());
@@ -211,6 +225,7 @@ class MedicationFoodInteractionAdapterTest {
                 .isEmpty();
     }
 
+    // 조건부 식사 지시는 충돌이 아니라 식사 조건(FOOD_INTAKE_CONDITION)으로 남아야 합니다.
     @Test
     void conditionalFoodInstructionsRemainFoodIntakeConditions() {
         OfficialMedicationFoodInteractionAdapter withFood = adapter(
@@ -231,6 +246,7 @@ class MedicationFoodInteractionAdapterTest {
                 .isEqualTo(MedicationFoodEffectType.TAKE_ON_EMPTY_STOMACH);
     }
 
+    // 같은 라벨의 중복 근거는 한 번만 세야 합니다.
     @Test
     void duplicateFoodEvidenceFromSameLabelIsCountedOnce() {
         MedicationFoodEvidenceExtractor extractor = new MedicationFoodEvidenceExtractor(new DefaultFoodNutrientNormalizer());
@@ -244,6 +260,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(evidences).hasSize(1);
     }
 
+    // 공식 근거가 없다는 것은 안전하다는 뜻이 아니며, 식별하지 못한 약은 따로 보고해야 합니다.
     @Test
     void noOfficialMatchDoesNotMeanSafeAndUnidentifiedMedicationIsReported() {
         OfficialMedicationFoodInteractionAdapter noMatch = adapter(
@@ -265,6 +282,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(unidentifiedResult.status()).isEqualTo(InteractionStatus.MEDICATION_NOT_IDENTIFIED);
     }
 
+    // API 실패로 충돌을 지어내지 않고, 다른 공식 출처는 계속 사용할 수 있어야 합니다.
     @Test
     void apiFailureDoesNotInventConflictAndOtherOfficialSourceCanStillSucceed() {
         OfficialMedicationFoodInteractionAdapter fdaSuccess = adapter(
@@ -283,6 +301,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(mfdsSuccess.check(List.of("openfda실패정"), List.of("자몽 1개")).status()).isEqualTo(InteractionStatus.CONFIRMED_CONFLICT);
     }
 
+    // 한 약의 확인된 충돌이 다른 약의 식별 실패를 가리면 안 됩니다.
     @Test
     void confirmedConflictDoesNotHideAnotherMedicationIdentificationFailure() throws Exception {
         FakeMfdsPort mfds = new FakeMfdsPort()
@@ -306,6 +325,7 @@ class MedicationFoodInteractionAdapterTest {
                 && notice.contains("식별하지 못해") && notice.contains("확인하지 못"));
     }
 
+    // 식사 조건 결과가 API 실패를, "매칭 없음"이 여러 후보 상태를 가리면 안 됩니다.
     @Test
     void intakeConditionDoesNotHideApiFailureAndNoMatchDoesNotHideMultipleCandidates() throws Exception {
         FakeMfdsPort firstMfds = new FakeMfdsPort()
@@ -337,6 +357,7 @@ class MedicationFoodInteractionAdapterTest {
                 .containsExactly(InteractionStatus.NO_MATCHING_INTERACTION_FOUND, InteractionStatus.MULTIPLE_MEDICATION_MATCHES);
     }
 
+    // 공식 조회가 꺼져 있어도 알 수 없는 약 두 개는 각각 따로 기록되어야 합니다.
     @Test
     void twoUnknownMedicationsRemainSeparateWhenOfficialLookupIsDisabled() throws Exception {
         OfficialMedicationFoodInteractionAdapter adapter = adapter(
@@ -353,6 +374,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(result.notices()).contains("상호작용이 없다는 의미는 아닙니다.");
     }
 
+    // 결과의 약별 상호작용 상태 목록을 꺼내는 도우미입니다.
     @SuppressWarnings("unchecked")
     private List<InteractionStatus> perDrugStatuses(MedicationInteractionResult result) throws Exception {
         Object perDrug = result.getClass().getDeclaredMethod("perDrugResults").invoke(result);
@@ -364,6 +386,7 @@ class MedicationFoodInteractionAdapterTest {
         return statuses;
     }
 
+    // 약별 결과 요약 건수를 한 번에 검사하는 도우미입니다.
     private void assertMedicationSummary(
             MedicationInteractionResult result,
             int identified,
@@ -381,6 +404,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(summary.getClass().getDeclaredMethod("withoutFoodEvidenceCount").invoke(summary)).isEqualTo(withoutFoodEvidence);
     }
 
+    // 공식 출처끼리 서로 모순되면 자동 차단하지 않고 안내해야 합니다.
     @Test
     void conflictingOfficialSourcesDoNotAutoBlock() {
         OfficialMedicationFoodInteractionAdapter adapter = adapter(
@@ -397,6 +421,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(result.notices()).anyMatch(notice -> notice.contains("서로 달라"));
     }
 
+    // 약물 정책이 알레르기 우선순위를 뒤집지 않고, 확인된 충돌 재료는 냉장고 활용 목록에서 빠져야 합니다.
     @Test
     void medicationPolicyDoesNotOverrideAllergyPriorityAndConfirmedConflictBeatsFridgeUse() {
         RecipePersonalizationPolicyEngine engine = engine(adapter(
@@ -433,6 +458,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(decision.fridgeItemsUsed()).contains("자몽");
     }
 
+    // 약물 충돌로 제거한 재료는 조리 단계에서도 지워져야 합니다.
     @Test
     void medicationModificationRemovesMatchedIngredientFromSteps() {
         MedicationFoodInteractionPort port = adapter(
@@ -461,6 +487,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(personalized.steps()).noneMatch(step -> step.contains("자몽"));
     }
 
+    // 답변에 복용약 섹션은 있되 "복용 중단/용량 변경" 같은 지시는 없어야 합니다.
     @Test
     void responseContainsMedicationSectionButNoStopDoseInstruction() {
         MedicationFoodInteractionPort port = adapter(
@@ -489,6 +516,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(reply).doesNotContain("복용을 중단").doesNotContain("용량을 변경");
     }
 
+    // 공용 약물 캐시에 사용자 건강 정보나 복용 약 목록을 저장하지 않아야 합니다.
     @Test
     void commonMedicationCacheDoesNotStoreUserHealthContextOrMedicationList() throws Exception {
         InMemoryMedicationEvidenceCache cache = new InMemoryMedicationEvidenceCache();
@@ -511,6 +539,7 @@ class MedicationFoodInteractionAdapterTest {
                 .doesNotContain("contextSnapshot").doesNotContain("personalizedRecipe");
     }
 
+    // 기능이 꺼져 있으면 UNKNOWN 대체 구현을 쓰고, 관련 기능 플래그 기본값은 모두 꺼져 있어야 합니다.
     @Test
     void disabledFeatureKeepsExistingUnknownFallbackAndFeatureFlagsRemainDefaultOff() throws Exception {
         OfficialMedicationFoodInteractionAdapter adapter = adapter(
@@ -533,6 +562,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(properties).contains("ollama.timeout-seconds=${OLLAMA_TIMEOUT_SECONDS:180}");
     }
 
+    // 채팅 응답 DTO 형태가 바뀌지 않아야 합니다.
     @Test
     void chatApiShapeRemainsStable() {
         com.salus.healthytable.dto.ChatDto.Response response = new com.salus.healthytable.dto.ChatDto.Response(10L, "reply", true, false);
@@ -543,6 +573,7 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(response.isMealSaved()).isFalse();
     }
 
+    // 아래 private 메서드/클래스들은 가짜 포트와 테스트 데이터를 만드는 도우미입니다.
     private OfficialMedicationFoodInteractionAdapter adapter(
             MfdsMedicationInformationPort mfds,
             OpenFdaDrugLabelPort fda,

@@ -5,13 +5,17 @@ import { SalusLogoMark } from '../components/SalusLogo';
 
 const { width, height } = Dimensions.get('window');
 
+/**
+ * 앱 시작 시 저장된 로그인 정보를 복원하는 동안 보여 주는 로딩 화면입니다.
+ * 로고가 나타나며 커지고, 로고 주변 점이 계속 회전하는 애니메이션을 보여 줍니다.
+ */
 export default function LoadingScreen() {
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const scaleAnim = useRef(new Animated.Value(0.8)).current;
     const rotateAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        // Sequenced Animations
+        // 여러 애니메이션을 동시에 실행: 서서히 나타나기 + 튕기듯 커지기 + 무한 회전
         Animated.parallel([
             Animated.timing(fadeAnim, {
                 toValue: 1,
@@ -34,6 +38,7 @@ export default function LoadingScreen() {
         ]).start();
     }, []);
 
+    // 0~1 애니메이션 값을 0~360도 회전 각도로 바꿉니다.
     const rotation = rotateAnim.interpolate({
         inputRange: [0, 1],
         outputRange: ['0deg', '360deg'],
@@ -155,6 +160,6 @@ const styles = StyleSheet.create({
         top: 0,
         height: '100%',
         backgroundColor: colors.primary,
-        width: '60%', // Static for now or can animate
+        width: '60%', // 현재는 고정 너비(필요하면 애니메이션으로 바꿀 수 있음)
     },
 });

@@ -7,6 +7,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
+/**
+ * 레시피 공유 요청 DTO입니다.
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

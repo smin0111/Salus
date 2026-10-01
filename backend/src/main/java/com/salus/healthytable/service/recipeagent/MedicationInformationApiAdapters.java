@@ -23,6 +23,23 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+/*
+ * 약물 정보를 제공하는 외부 공공/공식 API 어댑터들을 모아 둔 파일입니다.
+ * - 식약처 의약품 제품 허가정보(공공데이터포털)
+ * - 식약처 의약품개요정보(e약은요)
+ * - 미국 openFDA 의약품 라벨
+ * - 미국 NLM RxNorm
+ * 모든 어댑터는 기본적으로 꺼져 있고(enabled=false), 실패 시 예외 대신 API_FAILED/PARSING_FAILED 같은 상태를 반환합니다.
+ */
+
+/**
+ * 식약처 의약품 제품 허가정보 API 어댑터입니다.
+ *
+ * 1) 목록 API로 제품명 검색 → 2) 제품별 상세 API로 정보 보강 → 3) 성분 API로 유효성분 조회
+ * 성분 API는 제품 코드로 직접 조회할 수 없어 제품명/업체명으로 조회하므로,
+ * 응답 성분의 품목기준코드가 제품과 일치하는지 검사(audit)하고 일치하지 않으면 그 응답을 사용하지 않습니다.
+ * 조회 과정은 진단 정보(diagnostics)로 기록해 데이터 품질 문제를 추적할 수 있게 합니다.
+ */
 @Slf4j
 @Component
 class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
@@ -38,6 +55,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
     private final int maxIngredientPages;
     private final int maxIngredientItems;
 
+    // 스프링용 생성자: 설정값으로 API 주소/경로/키/타임아웃을 받습니다. 성분 조회는 최대 5페이지, 100건으로 제한합니다.
     @Autowired
     MfdsDrugProductPermitAdapter(
             WebClient.Builder webClientBuilder,
@@ -52,6 +70,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         this(webClientBuilder, objectMapper, enabled, apiKey, baseUrl, listPath, detailPath, ingredientPath, timeoutMs, 5, 100);
     }
 
+    // 테스트에서 페이지/건수 제한까지 직접 지정할 수 있는 생성자입니다.
     MfdsDrugProductPermitAdapter(
             WebClient.Builder webClientBuilder,
             ObjectMapper objectMapper,
@@ -76,6 +95,10 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         this.maxIngredientItems = Math.max(1, maxIngredientItems);
     }
 
+    /**
+     * 약 이름으로 제품 후보를 검색하고, 후보마다(최대 10개) 상세/성분 정보를 보강합니다.
+     * 기능이 꺼져 있거나 키가 없으면 API_DISABLED를 반환합니다.
+     */
     @Override
     public MfdsDrugProductSearchResult search(MedicationInput medication) {
         if (!enabled || apiKey.isBlank()) {
@@ -129,6 +152,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         }
     }
 
+    // 목록 API 응답 JSON을 제품 후보 목록으로 파싱합니다. 목록 단계의 성분 정보는 확정값이 아닌 "힌트"로만 표시합니다.
     MfdsDrugProductSearchResult parseSearchResponse(String body, MedicationInput input) {
         try {
             JsonNode root = objectMapper.readTree(body);
@@ -160,6 +184,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         return parseCandidate(item, input, MfdsIngredientSourceType.PRODUCT_CANDIDATE_HINT);
     }
 
+    // API마다 필드 이름 표기가 달라(ITEM_NAME, itemName 등) 여러 후보 이름 중 값이 있는 필드를 사용합니다.
     MfdsDrugProductCandidate parseCandidate(JsonNode item, MedicationInput input, MfdsIngredientSourceType ingredientSourceType) {
         List<MfdsActiveIngredient> activeIngredients = parseIngredientNodes(itemNodes(item), ingredientSourceType);
         String productName = clean(text(item, "ITEM_NAME", "itemName", "item_name", "PRDLST_NM"));
@@ -190,6 +215,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         return parseIngredientResponseResult(body).fieldStructures();
     }
 
+    // 성분 API 응답을 성분 목록, 진단 정보, 응답 필드 구조로 파싱합니다. 파싱 실패 시 빈 결과를 반환합니다.
     private MfdsIngredientParseResult parseIngredientResponseResult(String body) {
         try {
             JsonNode root = objectMapper.readTree(body);
@@ -214,6 +240,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         }
     }
 
+    // 상세 API 응답으로 후보 정보를 보강합니다. 응답이 비었거나 파싱에 실패하면 원래 후보를 그대로 사용합니다.
     MfdsDrugProductCandidate parseDetailResponse(String body, MfdsDrugProductCandidate fallback) {
         try {
             JsonNode root = objectMapper.readTree(body);
@@ -228,6 +255,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         }
     }
 
+    // 후보 하나에 상세 조회와 성분 조회를 수행하고 걸린 시간 등 진단 정보를 기록합니다. 품목기준코드가 없으면 조회하지 않습니다.
     private EnrichedMfdsCandidate withDetails(MfdsDrugProductCandidate candidate) {
         IngredientDiagnosticsBuilder diagnostics = new IngredientDiagnosticsBuilder();
         List<MfdsResponseFieldStructure> fieldStructures = new ArrayList<>();
@@ -256,6 +284,11 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         return new EnrichedMfdsCandidate(merged, diagnostics.toDiagnostics(), summarizeFieldStructures(fieldStructures));
     }
 
+    /**
+     * 성분 API를 페이지 단위로 조회합니다.
+     * 응답에 다른 제품의 성분이 섞이면(코드 불일치) 이 방식으로는 신뢰할 수 없다고 보고 중단합니다.
+     * 최대 페이지/건수에 도달하면 결과가 잘렸다는 진단 상태(TRUNCATED)를 남깁니다.
+     */
     private MfdsIngredientParseResult requestIngredientPages(MfdsDrugProductCandidate candidate) {
         List<MfdsActiveIngredient> ingredients = new ArrayList<>();
         List<MfdsResponseFieldStructure> fieldStructures = new ArrayList<>();
@@ -314,6 +347,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         return audit.matchingIngredients();
     }
 
+    // 성분 항목의 품목기준코드를 제품 코드와 비교해 일치/불일치/코드 없음으로 분류합니다.
     private IngredientCodeAudit ingredientCodeAudit(
             MfdsDrugProductCandidate candidate,
             List<MfdsActiveIngredient> ingredients) {
@@ -349,6 +383,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         return requestByItemSequence(path, itemSequence, category, 1, 0);
     }
 
+    // 성분 API를 제품명(Prduct)과 업체명(Entrps)으로 조회합니다. 실패하면 빈 문자열을 반환합니다.
     private String requestIngredientByProductFilter(MfdsDrugProductCandidate candidate, int pageNo, int numOfRows) {
         try {
             return webClient.get()
@@ -376,6 +411,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         }
     }
 
+    // 품목기준코드(item_seq)로 API를 조회합니다. 실패하면 빈 문자열을 반환합니다.
     private String requestByItemSequence(String path, String itemSequence, String category, int pageNo, int numOfRows) {
         try {
             return webClient.get()
@@ -400,6 +436,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         }
     }
 
+    // 상세 정보 값이 있으면 우선 사용하고, 없으면 기존 값을 유지해 후보를 합칩니다.
     private MfdsDrugProductCandidate mergeCandidate(
             MfdsDrugProductCandidate base,
             MfdsDrugProductCandidate detail,
@@ -420,6 +457,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         return parseIngredientNodes(nodes, MfdsIngredientSourceType.PRODUCT_INGREDIENT_ENDPOINT);
     }
 
+    // 응답 항목들을 성분 객체로 변환합니다. API 버전마다 다른 필드 이름 후보를 모두 확인합니다.
     private List<MfdsActiveIngredient> parseIngredientNodes(List<JsonNode> nodes, MfdsIngredientSourceType sourceType) {
         List<MfdsActiveIngredient> ingredients = new ArrayList<>();
         for (JsonNode node : nodes) {
@@ -500,6 +538,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
                 .toList();
     }
 
+    // 상세 API의 주성분/기타 성분 텍스트가 하나의 성분 이름으로 볼 수 있는 단순한 형태일 때만 성분으로 기록합니다.
     private List<MfdsActiveIngredient> parseDetailIngredients(JsonNode item, String itemSequence) {
         if (item == null || item.isMissingNode() || item.isNull()) {
             return List.of();
@@ -541,6 +580,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         return ingredients;
     }
 
+    // 쉼표/괄호/+ 등이 섞인 복합 문자열은 여러 성분이 섞였을 수 있어 하나의 성분으로 추측하지 않습니다.
     private boolean structurableIngredientText(String value) {
         String text = clean(value);
         return !text.isBlank()
@@ -553,6 +593,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
                 && !text.contains("+");
     }
 
+    // 유효성분 여부 표시값(Y/N, "주성분", "첨가제" 등)을 원료 역할로 변환합니다. 알 수 없으면 UNKNOWN입니다.
     private MfdsMaterialRole materialRole(String value) {
         String normalized = RecipeCandidate.normalize(value);
         if (normalized.isBlank()) {
@@ -567,6 +608,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         return MfdsMaterialRole.UNKNOWN_MATERIAL_ROLE;
     }
 
+    // 응답 항목들의 필드별 타입/빈 값 통계를 모읍니다(API 응답 형식 변경 감지용).
     private List<MfdsResponseFieldStructure> fieldStructures(List<JsonNode> nodes) {
         Map<String, FieldStructureCounter> counters = new LinkedHashMap<>();
         for (JsonNode node : nodes == null ? List.<JsonNode>of() : nodes) {
@@ -595,6 +637,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
                 .toList();
     }
 
+    // 공공데이터포털 응답은 body.items, response.body.items.item 등 형태가 제각각이라, 가능한 위치를 차례로 찾아 항목 목록으로 만듭니다.
     private List<JsonNode> itemNodes(JsonNode root) {
         if (root == null || root.isMissingNode() || root.isNull()) {
             return List.of();
@@ -635,6 +678,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         return objectMapper.missingNode();
     }
 
+    // 응답 헤더의 resultCode가 없거나 "00"/"0000"이면 성공, 그 외는 API 실패로 봅니다.
     private MedicationDataStatus headerStatus(JsonNode root) {
         String code = text(root, "/header/resultCode", "/response/header/resultCode", "/resultCode");
         if (code.isBlank() || "00".equals(code) || "0000".equals(code)) {
@@ -648,6 +692,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         return message.isBlank() ? "MFDS product permit resultCode was not successful." : clean(message);
     }
 
+    // 취소일자/취소명/취소 여부 필드로 허가가 취소·취하된 제품인지 판단합니다.
     private boolean canceled(JsonNode item) {
         String canceled = RecipeCandidate.normalize(text(item,
                 "CANCEL_DATE",
@@ -671,6 +716,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         }
     }
 
+    // 여러 필드 이름(또는 "/a/b" 형태의 JSON 포인터) 중 처음으로 값이 있는 것을 반환합니다.
     private String text(JsonNode node, String... fieldsOrPointers) {
         for (String field : fieldsOrPointers) {
             JsonNode value = field.startsWith("/") ? node.at(field) : node.get(field);
@@ -681,6 +727,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         return "";
     }
 
+    // 응답 값에 섞인 HTML 태그와 엔티티(&nbsp; 등)를 제거하고 공백을 정리합니다.
     private String clean(String value) {
         if (value == null || value.isBlank()) {
             return "";
@@ -709,6 +756,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         return path.startsWith("/") ? path : "/" + path;
     }
 
+    // 아래 record들은 조회 중간 결과를 담는 내부 전용 타입입니다.
     private record EnrichedMfdsCandidate(
             MfdsDrugProductCandidate candidate,
             MfdsIngredientMappingDiagnostics diagnostics,
@@ -743,6 +791,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         }
     }
 
+    // 성분 조회 진단 정보(건수, 상태, 지연 시간)를 여러 단계에 걸쳐 누적한 뒤 불변 record로 만드는 빌더입니다.
     private static class IngredientDiagnosticsBuilder {
         private final LinkedHashSet<MfdsIngredientDiagnosticStatus> statuses = new LinkedHashSet<>();
         private final LinkedHashSet<MfdsIngredientExclusionReason> exclusionReasons = new LinkedHashSet<>();
@@ -947,6 +996,7 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
         }
     }
 
+    // 필드 하나의 JSON 타입과 null/빈 값/존재 횟수를 세는 도우미입니다.
     private static class FieldStructureCounter {
         private final String fieldName;
         private String jsonType = "";
@@ -1028,6 +1078,11 @@ class MfdsDrugProductPermitAdapter implements MfdsDrugProductPermitPort {
     }
 }
 
+/**
+ * 식약처 의약품개요정보(e약은요) API 어댑터입니다.
+ * 제품명으로 조회해 상호작용, 주의사항, 복용법 설명 텍스트를 가져옵니다.
+ * 결과가 여러 개인데 이름이 정확히 일치하는 제품이 하나로 정해지지 않으면 MULTIPLE_RESULTS를 반환합니다(임의 선택 금지).
+ */
 @Slf4j
 @Component
 class MfdsEasyDrugInformationAdapter implements MfdsMedicationInformationPort {
@@ -1088,6 +1143,7 @@ class MfdsEasyDrugInformationAdapter implements MfdsMedicationInformationPort {
         }
     }
 
+    // 응답 JSON을 파싱합니다. 필드 이름이 API 버전마다 달라 여러 후보 이름을 확인합니다.
     MedicationInformationResult parseMfds(String body, NormalizedMedication medication) {
         try {
             JsonNode root = objectMapper.readTree(body);
@@ -1142,6 +1198,7 @@ class MfdsEasyDrugInformationAdapter implements MfdsMedicationInformationPort {
                 "", "", "", medication == null ? "" : medication.mfdsItemSequence(), LocalDateTime.now(), "", List.of(warning));
     }
 
+    // 정규화된 제품명이 있으면 그것으로, 없으면 사용자가 입력한 원래 이름으로 조회합니다.
     private String queryName(NormalizedMedication medication) {
         if (medication == null) {
             return "";
@@ -1183,6 +1240,13 @@ class MfdsEasyDrugInformationAdapter implements MfdsMedicationInformationPort {
     }
 }
 
+/**
+ * 미국 openFDA 의약품 라벨 API 어댑터입니다.
+ *
+ * 정확도가 높은 검색부터 차례로 시도합니다(RXCUI → 일반명 → 성분명 → 상품명 → 토큰 검색).
+ * 검색 결과 라벨은 검색 조건과 실제로 일치하는지 다시 검증하고, 검증된 라벨이 정확히 1개일 때만 FOUND입니다.
+ * 한국어 이름은 openFDA 검색어로 쓰지 않습니다(영문 성분명/RXCUI로 식별된 약만 조회).
+ */
 @Slf4j
 @Component
 class OpenFdaDrugLabelAdapter implements OpenFdaDrugLabelPort {
@@ -1203,6 +1267,7 @@ class OpenFdaDrugLabelAdapter implements OpenFdaDrugLabelPort {
         this(webClientBuilder, objectMapper, enabled, apiKey, timeoutMs, "https://api.fda.gov/drug/label.json");
     }
 
+    // 라벨 응답이 커서 WebClient 메모리 버퍼를 4MB로 늘립니다. 테스트에서는 baseUrl을 가짜 서버로 바꿀 수 있습니다.
     OpenFdaDrugLabelAdapter(
             WebClient.Builder webClientBuilder,
             ObjectMapper objectMapper,
@@ -1223,6 +1288,11 @@ class OpenFdaDrugLabelAdapter implements OpenFdaDrugLabelPort {
     }
 
     @Override
+    /**
+     * 검색 계획을 순서대로 실행합니다.
+     * 404(없음)는 다음 계획으로 넘어가고, 400(검색어 거부)·429(호출 한도 초과)·파싱 실패는 즉시 중단합니다.
+     * 모든 시도는 attempts에 기록해 어떤 단계에서 찾았는지/실패했는지 추적할 수 있습니다.
+     */
     public DrugLabelEvidenceResult findLabelEvidence(NormalizedMedication medication) {
         if (!enabled) {
             return new DrugLabelEvidenceResult(MedicationDataStatus.API_DISABLED, List.of(), List.of("openFDA medication label API is disabled."));
@@ -1331,6 +1401,7 @@ class OpenFdaDrugLabelAdapter implements OpenFdaDrugLabelPort {
         }
     }
 
+    // 라벨 JSON에서 식별 정보와 음식 근거를 찾을 섹션(상호작용, 경고, 복용법 등)을 추출합니다. 출처 URL은 DailyMed 링크로 만듭니다.
     DrugLabelEvidence toLabel(JsonNode result) {
         JsonNode openfda = result.get("openfda");
         String setId = text(result, "set_id");
@@ -1365,6 +1436,7 @@ class OpenFdaDrugLabelAdapter implements OpenFdaDrugLabelPort {
         }
     }
 
+    // 상태 코드를 직접 확인하기 위해 retrieve() 대신 exchangeToMono()로 응답 전체를 받습니다.
     private OpenFdaHttpResult request(String search) {
         return webClient.get()
                 .uri(builder -> {
@@ -1393,6 +1465,7 @@ class OpenFdaDrugLabelAdapter implements OpenFdaDrugLabelPort {
         return new OpenFdaSearchAttempt(plan.stage(), plan.field(), plan.queryKind(), status, labelCount, verified, failureCategory);
     }
 
+    // 식별된 약 정보로 검색 계획 목록을 만듭니다. 상품명 검색은 RXCUI나 영문 성분명이 있을 때만 추가합니다.
     private List<OpenFdaSearchPlan> searchPlans(NormalizedMedication medication) {
         if (medication == null) {
             return List.of();
@@ -1421,6 +1494,7 @@ class OpenFdaDrugLabelAdapter implements OpenFdaDrugLabelPort {
         return distinctPlans(plans);
     }
 
+    // exact 검색은 따옴표로 감싸 정확히 일치하는 값만 찾습니다.
     private OpenFdaSearchPlan plan(OpenFdaSearchStage stage, String field, String value, String queryKind, OpenFdaLabelMatchStatus status, List<String> requiredIngredientTerms) {
         String query = queryKind.equals("exact") ? field + ":\"" + value + "\"" : field + ":" + value;
         return new OpenFdaSearchPlan(stage, field, value, queryKind, query, status, requiredIngredientTerms);
@@ -1465,6 +1539,7 @@ class OpenFdaDrugLabelAdapter implements OpenFdaDrugLabelPort {
                 .toList();
     }
 
+    // 괄호와 영문 외 문자를 제거하고, 한글이 없는 2글자 이상의 영문 검색어만 중복 없이 남깁니다.
     private List<String> distinctEnglishTerms(List<String> terms) {
         Set<String> seen = new LinkedHashSet<>();
         List<String> result = new ArrayList<>();
@@ -1503,6 +1578,7 @@ class OpenFdaDrugLabelAdapter implements OpenFdaDrugLabelPort {
                 .toList();
     }
 
+    // 검색 단계에 맞게 라벨의 RXCUI/일반명/성분명/상품명이 기대값과 일치하는지 확인합니다. 복합제는 모든 성분이 있어야 합니다.
     private boolean verified(DrugLabelEvidence label, OpenFdaSearchPlan plan) {
         String expected = RecipeCandidate.normalize(plan.value());
         String generic = RecipeCandidate.normalize(label.genericName());
@@ -1562,6 +1638,7 @@ class OpenFdaDrugLabelAdapter implements OpenFdaDrugLabelPort {
         return values.stream().filter(item -> !item.isBlank()).toList();
     }
 
+    // HTTP 응답(상태 코드, 콘텐츠 타입, 본문)과 검색 계획 한 건
     private record OpenFdaHttpResult(int statusCode, String contentType, String body) {
     }
 
@@ -1580,6 +1657,10 @@ class OpenFdaDrugLabelAdapter implements OpenFdaDrugLabelPort {
     }
 }
 
+/**
+ * 미국 NLM RxNav(RxNorm) API로 약 이름에 해당하는 RXCUI(표준 약 식별자)를 찾는 어댑터입니다.
+ * 이름 정규화에만 사용하며 상호작용 판단에는 쓰지 않습니다. 후보가 여러 개면 MULTIPLE_MATCHES로 반환합니다.
+ */
 @Slf4j
 @Component
 class RxNormNormalizationAdapter implements RxNormMedicationNormalizationPort {

@@ -22,6 +22,13 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * 웹 페이지 HTML의 JSON-LD(schema.org Recipe) 데이터에서 레시피 근거를 추출합니다.
+ *
+ * 많은 레시피 사이트는 검색 엔진용으로 {@code <script type="application/ld+json">} 안에
+ * 이름, 재료(recipeIngredient), 조리 단계(recipeInstructions) 같은 구조화 데이터를 넣어 둡니다.
+ * 본문 HTML을 추측해 긁는 것보다 정확하므로 이 데이터만 근거로 사용합니다.
+ */
 @Component
 @RequiredArgsConstructor
 class SchemaOrgRecipeJsonLdExtractor {
@@ -29,6 +36,7 @@ class SchemaOrgRecipeJsonLdExtractor {
     private final ObjectMapper objectMapper;
     private final RecipeIngredientLineParser ingredientLineParser = new RecipeIngredientLineParser();
 
+    // 페이지의 모든 JSON-LD 스크립트에서 Recipe 타입 노드를 찾아 근거 목록으로 변환합니다.
     List<ExtractedRecipeEvidence> extract(WebPageFetchResult page) {
         if (page == null || page.body() == null || page.body().isBlank()) {
             return List.of();
@@ -50,12 +58,17 @@ class SchemaOrgRecipeJsonLdExtractor {
                     evidence.add(toEvidence(recipeNode.node(), recipeNode.path(), page, canonicalUrl));
                 }
             } catch (Exception ignored) {
-                // Invalid JSON-LD is treated as extraction failure for that script only.
+                // 잘못된 JSON-LD는 해당 스크립트만 추출 실패로 보고, 나머지 스크립트는 계속 처리합니다.
             }
         }
         return evidence;
     }
 
+    /**
+     * JSON 트리를 재귀적으로 돌며 @type이 Recipe인 객체를 모읍니다.
+     * 사이트마다 구조가 달라 배열, @graph, mainEntity, itemListElement 안쪽까지 찾아봅니다.
+     * path에는 나중에 근거를 추적할 수 있도록 JSON 경로(예: $.script[0].@graph[2])를 기록합니다.
+     */
     private void collectRecipeNodes(JsonNode node, String path, List<RecipeJsonNode> recipes) {
         if (node == null || node.isNull()) {
             return;
@@ -84,6 +97,7 @@ class SchemaOrgRecipeJsonLdExtractor {
         }
     }
 
+    // Recipe JSON 노드 하나를 근거 객체로 변환하고, 어디서 추출했는지 출처 기록(provenance)을 남깁니다.
     private ExtractedRecipeEvidence toEvidence(
             JsonNode recipe,
             String jsonPath,
@@ -118,6 +132,7 @@ class SchemaOrgRecipeJsonLdExtractor {
                 provenance);
     }
 
+    // @type이 "Recipe"이거나 ["Recipe", ...] 배열에 Recipe가 포함되어 있으면 true입니다.
     private boolean isRecipeType(JsonNode typeNode) {
         if (typeNode == null || typeNode.isNull()) {
             return false;
@@ -135,6 +150,7 @@ class SchemaOrgRecipeJsonLdExtractor {
         return false;
     }
 
+    // 조리 단계 텍스트를 모아 중복을 제거하고 1부터 순서를 매깁니다.
     private List<ExtractedInstructionStep> instructionSteps(JsonNode instructions) {
         List<String> texts = new ArrayList<>();
         collectInstructionTexts(instructions, texts);
@@ -147,6 +163,7 @@ class SchemaOrgRecipeJsonLdExtractor {
         return steps;
     }
 
+    // 문자열, 배열, HowToStep/HowToSection 객체(itemListElement, steps, text, name) 등 다양한 형태의 조리 단계를 모두 텍스트로 모읍니다.
     private void collectInstructionTexts(JsonNode node, List<String> texts) {
         if (node == null || node.isNull()) {
             return;
@@ -183,6 +200,7 @@ class SchemaOrgRecipeJsonLdExtractor {
         }
     }
 
+    // 여러 줄로 된 조리 설명은 줄 단위로 나누고 앞의 "1." 같은 번호를 제거합니다.
     private List<String> splitInstructionText(String value) {
         if (value == null || value.isBlank()) {
             return List.of();
@@ -197,6 +215,7 @@ class SchemaOrgRecipeJsonLdExtractor {
         return List.of(normalized);
     }
 
+    // 문자열/숫자/배열/객체(name, text) 어떤 형태든 텍스트 값 목록으로 모읍니다.
     private List<String> textValues(JsonNode node) {
         if (node == null || node.isNull()) {
             return List.of();
@@ -247,6 +266,7 @@ class SchemaOrgRecipeJsonLdExtractor {
                 text(nutrition.get("sugarContent")));
     }
 
+    // author는 문자열, 배열, Person 객체 등으로 올 수 있어 첫 번째로 찾은 이름을 반환합니다.
     private String creatorName(JsonNode author) {
         if (author == null || author.isNull()) {
             return "";
@@ -270,12 +290,14 @@ class SchemaOrgRecipeJsonLdExtractor {
         return "";
     }
 
+    // recipeYield("4 servings", "2인분")에서 첫 숫자를 인분 수로 읽습니다.
     private Integer servings(JsonNode node) {
         String value = textValues(node).stream().findFirst().orElse("");
         Matcher matcher = Pattern.compile("(\\d+)").matcher(value);
         return matcher.find() ? Integer.valueOf(matcher.group(1)) : null;
     }
 
+    // ISO-8601 기간 문자열(예: PT30M = 30분)을 Duration으로 바꿉니다. 형식이 틀리면 null입니다.
     private Duration duration(JsonNode node) {
         String value = text(node);
         if (value.isBlank()) {
@@ -288,6 +310,7 @@ class SchemaOrgRecipeJsonLdExtractor {
         }
     }
 
+    // 시간대가 있는 날짜 시각 또는 날짜만 있는 문자열을 모두 지원합니다.
     private LocalDateTime parseDate(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -303,6 +326,7 @@ class SchemaOrgRecipeJsonLdExtractor {
         }
     }
 
+    // <link rel="canonical">의 절대 URL을 읽고, 없으면 실제 가져온 URL을 사용합니다.
     private String canonicalUrl(Document document, String fallback) {
         Element canonical = document.selectFirst("link[rel=canonical]");
         String href = canonical == null ? "" : canonical.attr("abs:href").trim();
@@ -342,10 +366,16 @@ class SchemaOrgRecipeJsonLdExtractor {
         }
     }
 
+    // 찾은 Recipe JSON 노드와 그 JSON 경로
     private record RecipeJsonNode(JsonNode node, String path) {
     }
 }
 
+/**
+ * 재료 한 줄 문자열을 이름/양/단위/손질 방법으로 파싱합니다.
+ * 예) "양파 1/2 개 채썬 것" → 이름=양파, 양=0.5, 단위=개, 손질=채썬 것 (FULL)
+ *     "소금 약간" → 이름=소금, 단위=약간 (PARTIAL), 형식이 맞지 않으면 UNPARSED
+ */
 class RecipeIngredientLineParser {
 
     private static final Pattern NUMERIC_INGREDIENT = Pattern.compile(
@@ -381,6 +411,7 @@ class RecipeIngredientLineParser {
         return new ExtractedIngredientLine(text, text, null, "", "", IngredientParseStatus.UNPARSED);
     }
 
+    // "1/2" 같은 분수와 "1.5" 같은 소수를 숫자로 바꿉니다. 분모가 0이거나 형식이 틀리면 null입니다.
     private Double amount(String value) {
         if (value == null || value.isBlank()) {
             return null;

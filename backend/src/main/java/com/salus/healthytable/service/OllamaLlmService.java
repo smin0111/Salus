@@ -16,12 +16,21 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 로컬 LLM 서버(Ollama)의 /api/chat을 호출하는 일반 채팅용 {@link LlmService} 구현체입니다.
+ *
+ * - 대화 기록을 Ollama 메시지 형식(system/user/assistant)으로 바꿔 보냅니다.
+ * - 1차 인스턴스(primary-url)가 실패하면, 설정된 경우 2차 인스턴스(secondary-url)로 다시 시도합니다.
+ * - 두 인스턴스가 모두 실패해도 예외 대신 안내 문구를 반환해 채팅 화면이 깨지지 않게 합니다.
+ * 구조화 레시피 생성(JSON)은 이 클래스가 아니라 OllamaRecipeGenerationClient가 담당합니다.
+ */
 @Slf4j
 @Service
 public class OllamaLlmService implements LlmService {
 
     private final WebClient webClient;
 
+    // 사용할 모델 이름(application.properties의 ollama.model, 현재 기본 설정은 qwen3:8b)
     @Value("${ollama.model:gemma2}")
     private String ollamaModel;
 
@@ -31,7 +40,7 @@ public class OllamaLlmService implements LlmService {
     @Value("${ollama.primary-url:http://localhost:11434/api/chat}")
     private String primaryUrl;
 
-    @Value("${ollama.secondary-url:http://localhost:11435/api/chat}")
+    @Value("${ollama.secondary-url:}")
     private String secondaryUrl;
 
     public OllamaLlmService(WebClient webClient) {
@@ -54,6 +63,9 @@ public class OllamaLlmService implements LlmService {
         return model.toLowerCase(java.util.Locale.ROOT).startsWith("qwen3") ? Boolean.FALSE : null;
     }
 
+    /**
+     * 시스템 지시문 + 이전 대화 + 현재 메시지를 Ollama에 보내고 답변 문자열을 받습니다.
+     */
     @Override
     public Mono<String> getChatResponse(String currentMessage, List<ChatDto.Message> history) {
         List<OllamaMessage> messages = new java.util.ArrayList<>();
@@ -61,6 +73,7 @@ public class OllamaLlmService implements LlmService {
 
         if (history != null) {
             for (ChatDto.Message msg : history) {
+                // 클라이언트의 "model" 역할은 Ollama 형식의 "assistant"로 바꿉니다.
                 String role = "user".equals(msg.getRole()) ? "user" : "assistant";
                 messages.add(new OllamaMessage(role, msg.getContent()));
             }
@@ -81,6 +94,7 @@ public class OllamaLlmService implements LlmService {
         log.info("[Ollama] Initiating request to primary instance using model: {}...", ollamaModel);
 
         // 1차 메인 로컬 AI 인스턴스 호출 (Port 11434)
+        // 1차 인스턴스 호출 → 응답이 비었거나 실패하면 onErrorResume에서 2차 인스턴스로 재시도합니다.
         return webClient.post()
                 .uri(primaryUrl)
                 .bodyValue(request)
@@ -93,9 +107,14 @@ public class OllamaLlmService implements LlmService {
                     }
                     throw new RuntimeException("Primary instance returned empty response");
                 })
-                // 1차 인스턴스 연결 실패 시 2차 서브 로컬 AI 인스턴스로 자동 우회 (Port 11435)
                 .onErrorResume(primaryError -> {
-                    log.warn("[Ollama] Primary instance unreachable. Error: {}. Redirecting request to secondary instance...", primaryError.getMessage());
+                    if (secondaryUrl == null || secondaryUrl.isBlank() || secondaryUrl.equals(primaryUrl)) {
+                        log.error("[Ollama] Primary instance unavailable and no secondary instance is configured. category={}",
+                                primaryError.getClass().getSimpleName());
+                        return Mono.just("현재 로컬 AI 엔진이 응답하지 않습니다. 잠시 후 다시 시도해 주세요.");
+                    }
+                    log.warn("[Ollama] Primary instance unavailable. Trying configured secondary instance. category={}",
+                            primaryError.getClass().getSimpleName());
 
                     return webClient.post()
                             .uri(secondaryUrl)
@@ -112,13 +131,14 @@ public class OllamaLlmService implements LlmService {
                             })
                             // 1차, 2차 로컬 인스턴스가 모두 다운된 경우의 최종 예외 처리
                             .onErrorResume(secondaryError -> {
-                                log.error("[Ollama] Both primary and secondary instances are unreachable.");
-                                return Mono.just("현재 로컬 AI 엔진 전체가 점검 중입니다. 잠시 후 다시 시도해 주시거나, " +
-                                        "관리자 설정에서 클라우드 AI(Gemini) 모드로 전환해 주세요.");
+                                log.error("[Ollama] Both configured instances are unavailable. category={}",
+                                        secondaryError.getClass().getSimpleName());
+                                return Mono.just("현재 로컬 AI 엔진이 응답하지 않습니다. 잠시 후 다시 시도해 주세요.");
                             });
                 });
     }
 
+    // 답변에서 이모지를 제거하고 불필요한 공백을 정리합니다.
     private String sanitizeReply(String reply) {
         if (reply == null) {
             return "";
@@ -130,6 +150,12 @@ public class OllamaLlmService implements LlmService {
                 .trim();
     }
 
+    /**
+     * 메시지 내용에 따라 시스템 지시문을 고릅니다.
+     * - 외부 검색 근거가 포함된 경우: 근거 기반 레시피 작성 지시문
+     * - 직전 레시피 상세 설명 요청인 경우: 초보자용 상세 설명 지시문
+     * - 그 외: 일반 대화/요리 코치 지시문
+     */
     private String resolveSystemInstruction(String currentMessage) {
         if (currentMessage != null && currentMessage.contains("=== 외부 검색 결과 자료")) {
             return ragRecipeInstruction();
@@ -231,10 +257,16 @@ public class OllamaLlmService implements LlmService {
                 """;
     }
 
+    // 아래 클래스들은 Ollama /api/chat 요청/응답 JSON 구조와 1:1로 대응합니다.
     // --- Ollama API 규격 바인딩용 DTO 클래스 정의 ---
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
+    /**
+     * Ollama 요청 본문입니다.
+     * think: null이면 JSON에서 생략되어 모델 기본값을 사용합니다.
+     * options: temperature 등 생성 옵션, format: 구조화 출력용 JSON Schema
+     */
     public static class OllamaRequest {
         private String model;
         private List<OllamaMessage> messages;
@@ -244,6 +276,7 @@ public class OllamaLlmService implements LlmService {
         private Map<String, Object> options;
         private Object format;
 
+        // think 값 없이 만드는 보조 생성자입니다.
         public OllamaRequest(String model, List<OllamaMessage> messages, boolean stream, Map<String, Object> options, Object format) {
             this(model, messages, stream, null, options, format);
         }
@@ -252,6 +285,7 @@ public class OllamaLlmService implements LlmService {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
+    // 메시지 한 개. thinking은 추론 모델이 응답에 담아 보내는 추론 과정 텍스트입니다.
     public static class OllamaMessage {
         private String role;
         private String content;
@@ -265,11 +299,21 @@ public class OllamaLlmService implements LlmService {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
+    /**
+     * Ollama 응답 본문입니다.
+     * doneReason이 "length"면 출력 토큰 한도에서 잘린 응답이고, promptEvalCount/evalCount는 입력/출력 토큰 수입니다.
+     */
     public static class OllamaResponse {
         private String model;
         @JsonProperty("created_at")
         private String createdAt;
         private OllamaMessage message;
         private boolean done;
+        @JsonProperty("done_reason")
+        private String doneReason;
+        @JsonProperty("prompt_eval_count")
+        private Integer promptEvalCount;
+        @JsonProperty("eval_count")
+        private Integer evalCount;
     }
 }

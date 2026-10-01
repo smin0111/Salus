@@ -7,12 +7,16 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * 구조화 레시피 경로의 {@link RecipeValidator} 테스트입니다.
+ */
 class RecipeValidatorStructuredTest {
 
     private final RecipeDraftMapper mapper = new RecipeDraftMapper();
     private final RecipeReplyFormatter formatter = new RecipeReplyFormatter(mapper);
     private final RecipeValidator validator = new RecipeValidator();
 
+    // 구조화 경로에서는 조리 문장 속 단어를 재료로 잘못 추출해 "조리 순서에만 등장" 경고를 내면 안 됩니다.
     @Test
     void structuredPathDoesNotExtractInstructionTokensAsIngredients() {
         GeneratedRecipeDraft draft = new GeneratedRecipeDraft(
@@ -42,6 +46,7 @@ class RecipeValidatorStructuredTest {
                 .noneMatch(warning -> warning.contains("잘게") || warning.contains("썰어") || warning.contains("5분"));
     }
 
+    // 근거에 없는 핵심 재료가 여러 개 들어가면 다른 점수가 높아도 검증을 통과하면 안 됩니다.
     @Test
     void fourUnsupportedIngredientsCannotBypassEvidenceValidation() {
         GeneratedRecipeDraft draft = new GeneratedRecipeDraft(
@@ -74,6 +79,7 @@ class RecipeValidatorStructuredTest {
         assertThat(result.reasons()).anyMatch(reason -> reason.contains("근거에 없는 핵심 재료"));
     }
 
+    // 근거와 일치하는 레시피는 엄격한 근거 검증을 통과해야 합니다.
     @Test
     void groundedRecipePassesStrictEvidenceValidation() {
         GeneratedRecipeDraft draft = new GeneratedRecipeDraft(
@@ -106,6 +112,7 @@ class RecipeValidatorStructuredTest {
         assertThat(result.valid()).isTrue();
     }
 
+    // 재료와 단계가 완전한 구조화 레시피는 단계가 2개뿐이라는 이유만으로 거절하면 안 됩니다.
     @Test
     void completeStructuredRecipeIsNotRejectedOnlyBecauseItHasTwoSteps() {
         GeneratedRecipeDraft draft = new GeneratedRecipeDraft(

@@ -1,5 +1,5 @@
-// React Native's built-in iOS Image does not guarantee WebP support.
-// Keep the optimized PNG set as the safe iOS/unknown-platform fallback.
+// React Native의 iOS 기본 Image는 WebP 지원을 보장하지 않습니다.
+// 그래서 iOS와 그 밖의 플랫폼에서는 최적화된 PNG 이미지를 안전한 기본값으로 사용합니다.
 export default {
     bibimbap: require('../../../assets/landing/salus-bibimbap-hero.png'),
     salmon: require('../../../assets/landing/salus-salmon-hero.png'),

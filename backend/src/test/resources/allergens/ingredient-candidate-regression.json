@@ -1,0 +1,506 @@
+{
+  "scope": "Registry/semantic normalization review regression; NOT product Gold",
+  "reviewedAt": "2026-09-19",
+  "candidates": [
+    {
+      "term": "원유",
+      "classification": "CERTAIN_ALIAS",
+      "expectedAllergen": "MILK",
+      "expectedRelation": "DIRECT_NAME",
+      "expectedConfidence": "CERTAIN",
+      "outcome": "RESOLVED_CERTAIN",
+      "reason": "유제품 원료의 직접 명칭. 원유 자체의 우유 정체성만 정규화.",
+      "sources": [
+        "https://inspection.canada.ca/en/about-cfia/acts-and-regulations/list-acts-and-regulations/documents-incorporated-reference/canadian-standards-identity-volume-1"
+      ],
+      "occurrences": [
+        {
+          "productId": "S001",
+          "path": [
+            "원유"
+          ]
+        },
+        {
+          "productId": "S002",
+          "path": [
+            "원유"
+          ]
+        },
+        {
+          "productId": "S003",
+          "path": [
+            "원유"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "혼합탈지분유",
+      "classification": "CERTAIN_DERIVED",
+      "expectedAllergen": "MILK",
+      "expectedRelation": "DERIVED_FROM",
+      "expectedConfidence": "CERTAIN",
+      "outcome": "RESOLVED_CERTAIN",
+      "reason": "탈지분유를 포함하는 혼합분유 명칭. 혼합물 전체 성분은 추론하지 않음.",
+      "sources": [
+        "https://www.foodsafetykorea.go.kr/upload/20181228/20181228041605_1545981365016.pdf",
+        "https://inspection.canada.ca/en/about-cfia/acts-and-regulations/list-acts-and-regulations/documents-incorporated-reference/canadian-standards-identity-volume-1"
+      ],
+      "occurrences": [
+        {
+          "productId": "S003",
+          "path": [
+            "혼합탈지분유"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "소맥분",
+      "classification": "CERTAIN_DERIVED",
+      "expectedAllergen": "WHEAT",
+      "expectedRelation": "DERIVED_FROM",
+      "expectedConfidence": "CERTAIN",
+      "outcome": "RESOLVED_CERTAIN",
+      "reason": "소맥분은 밀가루의 동의 명칭.",
+      "sources": [
+        "https://www.mafra.go.kr/bbs/mafra/71/251740/download.do"
+      ],
+      "occurrences": [
+        {
+          "productId": "S007",
+          "path": [
+            "소맥분"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "밀: 미국산",
+      "classification": "ANNOTATED_KNOWN_INGREDIENT",
+      "expectedAllergen": "WHEAT",
+      "expectedRelation": "DIRECT_NAME",
+      "expectedConfidence": "CERTAIN",
+      "outcome": "NORMALIZED_ANNOTATION",
+      "reason": "S Reference의 명칭: 원산지 구조. 밀로 조회하고 미국산은 주석 보존.",
+      "sources": [],
+      "occurrences": [
+        {
+          "productId": "S007",
+          "path": [
+            "소맥분",
+            "밀: 미국산"
+          ]
+        },
+        {
+          "productId": "S008",
+          "path": [
+            "밀가루",
+            "밀: 미국산"
+          ]
+        },
+        {
+          "productId": "S009",
+          "path": [
+            "밀가루",
+            "밀: 미국산"
+          ]
+        },
+        {
+          "productId": "S011",
+          "path": [
+            "밀가루",
+            "밀: 미국산"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "건새우분말",
+      "classification": "CERTAIN_DERIVED",
+      "expectedAllergen": "SHRIMP",
+      "expectedRelation": "DERIVED_FROM",
+      "expectedConfidence": "CERTAIN",
+      "outcome": "RESOLVED_CERTAIN",
+      "reason": "건새우의 분말이라는 일반 원료명이며 S007에 새우 출처 자식도 명시.",
+      "sources": [],
+      "occurrences": [
+        {
+          "productId": "S007",
+          "path": [
+            "맛베이스조미분말",
+            "건새우분말"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "새우: 중국산",
+      "classification": "ANNOTATED_KNOWN_INGREDIENT",
+      "expectedAllergen": "SHRIMP",
+      "expectedRelation": "DIRECT_NAME",
+      "expectedConfidence": "CERTAIN",
+      "outcome": "NORMALIZED_ANNOTATION",
+      "reason": "새우로 조회하고 중국산은 주석 보존.",
+      "sources": [],
+      "occurrences": [
+        {
+          "productId": "S007",
+          "path": [
+            "맛베이스조미분말",
+            "건새우분말",
+            "새우: 중국산"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "새우추출물분말",
+      "classification": "CERTAIN_DERIVED",
+      "expectedAllergen": "SHRIMP",
+      "expectedRelation": "DERIVED_FROM",
+      "expectedConfidence": "CERTAIN",
+      "outcome": "RESOLVED_CERTAIN",
+      "reason": "새우 추출물의 분말이라는 명시 원료명. S007에도 새우 자식 명시.",
+      "sources": [],
+      "occurrences": [
+        {
+          "productId": "S007",
+          "path": [
+            "맛베이스조미분말",
+            "새우추출물분말"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "새우: 미국산",
+      "classification": "ANNOTATED_KNOWN_INGREDIENT",
+      "expectedAllergen": "SHRIMP",
+      "expectedRelation": "DIRECT_NAME",
+      "expectedConfidence": "CERTAIN",
+      "outcome": "NORMALIZED_ANNOTATION",
+      "reason": "새우로 조회하고 미국산은 주석 보존.",
+      "sources": [],
+      "occurrences": [
+        {
+          "productId": "S007",
+          "path": [
+            "맛베이스조미분말",
+            "새우추출물분말",
+            "새우: 미국산"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "새우풍미유",
+      "classification": "LEXICAL_HINT",
+      "expectedAllergen": "SHRIMP",
+      "expectedRelation": "LEXICAL_HINT",
+      "expectedConfidence": "POSSIBLE",
+      "outcome": "RESOLVED_POSSIBLE",
+      "reason": "풍미 명칭만으로 실제 새우 원료 함유를 확정하지 않음.",
+      "sources": [],
+      "occurrences": [
+        {
+          "productId": "S007",
+          "path": [
+            "새우풍미유"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "전지분유",
+      "classification": "CERTAIN_DERIVED",
+      "expectedAllergen": "MILK",
+      "expectedRelation": "DERIVED_FROM",
+      "expectedConfidence": "CERTAIN",
+      "outcome": "RESOLVED_CERTAIN",
+      "reason": "전유를 건조한 분유 원료.",
+      "sources": [
+        "https://inspection.canada.ca/en/about-cfia/acts-and-regulations/list-acts-and-regulations/documents-incorporated-reference/canadian-standards-identity-volume-1"
+      ],
+      "occurrences": [
+        {
+          "productId": "S008",
+          "path": [
+            "전지분유"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "돼지",
+      "classification": "CERTAIN_ALIAS",
+      "expectedAllergen": "PORK",
+      "expectedRelation": "DIRECT_NAME",
+      "expectedConfidence": "CERTAIN",
+      "outcome": "RESOLVED_CERTAIN",
+      "reason": "S008 젤라틴 아래 독립 출처 노드만 매칭. 젤라틴 자체는 미정.",
+      "sources": [],
+      "occurrences": [
+        {
+          "productId": "S008",
+          "path": [
+            "젤라틴",
+            "돼지"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "전란액",
+      "classification": "CERTAIN_DERIVED",
+      "expectedAllergen": "EGG",
+      "expectedRelation": "DERIVED_FROM",
+      "expectedConfidence": "CERTAIN",
+      "outcome": "RESOLVED_CERTAIN",
+      "reason": "요청의 전란 원료 매핑과 기존 계란 정책 적용. EGG_GROUP으로 확장하지 않음.",
+      "sources": [],
+      "occurrences": [
+        {
+          "productId": "S008",
+          "path": [
+            "전란액"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "카제인나트륨",
+      "classification": "CERTAIN_DERIVED",
+      "expectedAllergen": "MILK",
+      "expectedRelation": "DERIVED_FROM",
+      "expectedConfidence": "CERTAIN",
+      "outcome": "RESOLVED_CERTAIN",
+      "reason": "우유 카제인에서 제조하는 카제인염 원료.",
+      "sources": [
+        "https://inspection.canada.ca/en/about-cfia/acts-and-regulations/list-acts-and-regulations/documents-incorporated-reference/canadian-standards-identity-volume-1"
+      ],
+      "occurrences": [
+        {
+          "productId": "S008",
+          "path": [
+            "혼합제제",
+            "카제인나트륨"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "유당",
+      "classification": "NEEDS_REVIEW",
+      "expectedAllergen": null,
+      "expectedRelation": null,
+      "expectedConfidence": null,
+      "outcome": "UNRESOLVED_AMBIGUOUS",
+      "reason": "현재 Relation은 파생을 CERTAIN으로 고정한다. 유당의 별도 confidence 정책은 보류.",
+      "sources": [],
+      "occurrences": [
+        {
+          "productId": "S008",
+          "path": [
+            "유당"
+          ]
+        },
+        {
+          "productId": "S011",
+          "path": [
+            "유당"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "버터향",
+      "classification": "LEXICAL_HINT",
+      "expectedAllergen": "MILK",
+      "expectedRelation": "LEXICAL_HINT",
+      "expectedConfidence": "POSSIBLE",
+      "outcome": "RESOLVED_POSSIBLE",
+      "reason": "향 명칭은 실물 버터 함유 증거가 아님.",
+      "sources": [],
+      "occurrences": [
+        {
+          "productId": "S009",
+          "path": [
+            "합성향료",
+            "버터향"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "산성아황산나트륨",
+      "classification": "CERTAIN_ALIAS",
+      "expectedAllergen": "SULFITE",
+      "expectedRelation": "DIRECT_NAME",
+      "expectedConfidence": "CERTAIN",
+      "outcome": "RESOLVED_CERTAIN",
+      "reason": "아황산염 화학종의 직접 명칭. 농도/규제/위험 판정은 하지 않음.",
+      "sources": [
+        "https://www.foodsafetykorea.go.kr/upload/residue/20200120015334_1579496014158.pdf"
+      ],
+      "occurrences": [
+        {
+          "productId": "S009",
+          "path": [
+            "산성아황산나트륨"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "유청",
+      "classification": "CERTAIN_DERIVED",
+      "expectedAllergen": "MILK",
+      "expectedRelation": "DERIVED_FROM",
+      "expectedConfidence": "CERTAIN",
+      "outcome": "RESOLVED_CERTAIN",
+      "reason": "유제품 제조에서 분리한 유청 원료.",
+      "sources": [
+        "https://inspection.canada.ca/en/about-cfia/acts-and-regulations/list-acts-and-regulations/documents-incorporated-reference/canadian-standards-identity-volume-1"
+      ],
+      "occurrences": [
+        {
+          "productId": "S011",
+          "path": [
+            "유청"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "레시틴",
+      "classification": "SOURCE_UNRESOLVED",
+      "expectedAllergen": null,
+      "expectedRelation": null,
+      "expectedConfidence": null,
+      "outcome": "UNRESOLVED_AMBIGUOUS",
+      "reason": "출처가 여러 가지라 대두로 확정 불가. Declaration을 참조하지 않음.",
+      "sources": [
+        "https://www.ams.usda.gov/sites/default/files/media/2023Technical_Report_Lecithin_deoiled_Handling.pdf"
+      ],
+      "occurrences": [
+        {
+          "productId": "S011",
+          "path": [
+            "레시틴"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "젤라틴",
+      "classification": "SOURCE_UNRESOLVED",
+      "expectedAllergen": null,
+      "expectedRelation": null,
+      "expectedConfidence": null,
+      "outcome": "UNRESOLVED_AMBIGUOUS",
+      "reason": "S014에 동물종 자식 없음. 별도 돼지고기 Declaration으로 역추론하지 않음.",
+      "sources": [],
+      "occurrences": [
+        {
+          "productId": "S014",
+          "path": [
+            "젤라틴"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "사골엑기스",
+      "classification": "SOURCE_UNRESOLVED",
+      "expectedAllergen": null,
+      "expectedRelation": null,
+      "expectedConfidence": null,
+      "outcome": "UNRESOLVED_AMBIGUOUS",
+      "reason": "S017에 동물종 자식 없음. 별도 쇠고기 노드는 이 원료의 출처 증거가 아님.",
+      "sources": [],
+      "occurrences": [
+        {
+          "productId": "S017",
+          "path": [
+            "사골엑기스"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "유크림",
+      "classification": "CERTAIN_DERIVED",
+      "expectedAllergen": "MILK",
+      "expectedRelation": "DERIVED_FROM",
+      "expectedConfidence": "CERTAIN",
+      "outcome": "RESOLVED_CERTAIN",
+      "reason": "우유에서 분리한 크림 원료.",
+      "sources": [
+        "https://inspection.canada.ca/en/about-cfia/acts-and-regulations/list-acts-and-regulations/documents-incorporated-reference/canadian-standards-identity-volume-1"
+      ],
+      "occurrences": [
+        {
+          "productId": "S017",
+          "path": [
+            "유크림"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "오뚜기참치간장분말",
+      "classification": "NEEDS_REVIEW",
+      "expectedAllergen": null,
+      "expectedRelation": null,
+      "expectedConfidence": null,
+      "outcome": "UNRESOLVED_AMBIGUOUS",
+      "reason": "브랜드 복합원료의 구성 미상. 간장/참치 substring 추론 금지.",
+      "sources": [],
+      "occurrences": [
+        {
+          "productId": "S017",
+          "path": [
+            "오뚜기참치간장분말"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "쇠고기브이용",
+      "classification": "NEEDS_REVIEW",
+      "expectedAllergen": null,
+      "expectedRelation": null,
+      "expectedConfidence": null,
+      "outcome": "UNRESOLVED_AMBIGUOUS",
+      "reason": "복합원료 명칭의 세부 정체성과 구성이 확인되지 않아 보류.",
+      "sources": [],
+      "occurrences": [
+        {
+          "productId": "S017",
+          "path": [
+            "쇠고기브이용"
+          ]
+        }
+      ]
+    },
+    {
+      "term": "비프맛양념",
+      "classification": "LEXICAL_HINT",
+      "expectedAllergen": "BEEF",
+      "expectedRelation": "LEXICAL_HINT",
+      "expectedConfidence": "POSSIBLE",
+      "outcome": "RESOLVED_POSSIBLE",
+      "reason": "맛 명칭은 실제 쇠고기 원료 함유를 확정하지 않음.",
+      "sources": [],
+      "occurrences": [
+        {
+          "productId": "S017",
+          "path": [
+            "비프맛양념"
+          ]
+        }
+      ]
+    }
+  ]
+}

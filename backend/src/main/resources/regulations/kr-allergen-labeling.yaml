@@ -1,0 +1,64 @@
+# 2026-09-20 공식 자료 검토. runtime 네트워크/시스템 날짜를 사용하지 않는다.
+# effectiveTo는 포함 경계. null은 이 고정 설정에서 후속 종료 버전 미등록을 뜻한다.
+ruleSets:
+  - id: KR_EFFECTIVE_2026_01_01
+    jurisdiction: KR
+    lifecycle: EFFECTIVE
+    effectiveFrom: "2026-01-01"
+    effectiveTo: null
+    source:
+      title: "식품 등의 표시ㆍ광고에 관한 법률 시행규칙 별표 2 I.1"
+      authority: "국가법령정보센터"
+      version: "총리령 제2004호, 2024-12-30 개정 / 2026-01-01 시행본"
+      url: "https://www.law.go.kr/LSW/flDownload.do?bylClsCd=110201&flSeq=156389449"
+      publishedAt: "2024-12-30"
+      verifiedAt: "2026-09-20"
+      notes: "2026 시행본을 구현한 범위이며 최초 알레르기 표시제 도입일이 아니다. 이전 적용일은 미지원. 가금류 알류와 조개류 범주, 별도 표시 예외 및 첨가한 아황산류 조건만 다룬다."
+    exemptions: [SINGLE_INGREDIENT_NAME_MATCH, MEAT_NAME_MATCH]
+    regulatoryParents:
+      OYSTER: SHELLFISH
+      ABALONE: SHELLFISH
+      MUSSEL: SHELLFISH
+    rules:
+      - {allergen: EGG_GROUP, type: ALWAYS}
+      - {allergen: MILK, type: ALWAYS}
+      - {allergen: BUCKWHEAT, type: ALWAYS}
+      - {allergen: PEANUT, type: ALWAYS}
+      - {allergen: SOY, type: ALWAYS}
+      - {allergen: WHEAT, type: ALWAYS}
+      - {allergen: MACKEREL, type: ALWAYS}
+      - {allergen: CRAB, type: ALWAYS}
+      - {allergen: SHRIMP, type: ALWAYS}
+      - {allergen: PORK, type: ALWAYS}
+      - {allergen: PEACH, type: ALWAYS}
+      - {allergen: TOMATO, type: ALWAYS}
+      - allergen: SULFITE
+        type: FINAL_SO2_MIN_MG_PER_KG
+        thresholdMgPerKg: 10
+        requiresAddition: true
+      - {allergen: WALNUT, type: ALWAYS}
+      - {allergen: CHICKEN, type: ALWAYS}
+      - {allergen: BEEF, type: ALWAYS}
+      - {allergen: SQUID, type: ALWAYS}
+      - {allergen: SHELLFISH, type: ALWAYS}
+      - {allergen: PINE_NUT, type: ALWAYS}
+  - id: KR_PROPOSED_2026_08_07
+    jurisdiction: KR
+    lifecycle: PROPOSED
+    effectiveFrom: null
+    effectiveTo: null
+    source:
+      title: "식품 등의 표시ㆍ광고에 관한 법률 시행규칙 일부개정령(안) 입법예고"
+      authority: "식품의약품안전처"
+      version: "식품의약품안전처공고 제2026-386호"
+      url: "https://www.mfds.go.kr/brd/m_209/view.do?seq=44285"
+      publishedAt: "2026-08-07"
+      verifiedAt: "2026-09-20"
+      notes: "추가 제안 4종만 기록한 delta이다. 현행 전체 목록이 아니며 입법예고/의견제출 종료로 활성화하지 않는다."
+    exemptions: []
+    regulatoryParents: {}
+    rules:
+      - {allergen: SESAME, type: ALWAYS}
+      - {allergen: PERILLA, type: ALWAYS}
+      - {allergen: ALMOND, type: ALWAYS}
+      - {allergen: CASHEW, type: ALWAYS}

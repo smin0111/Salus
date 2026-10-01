@@ -3,6 +3,7 @@ import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-nat
 import { Ionicons } from '@expo/vector-icons';
 import { landingColors, landingType, webPointer } from './landingTheme';
 
+// 랜딩 페이지 시연용 데이터: 건강 조건별로 제육볶음 레시피가 어떻게 바뀌는지 보여 주는 변경 전/후 예시
 const CONTEXT_STATES = [
     {
         id: 'allergy',
@@ -34,11 +35,16 @@ const CONTEXT_STATES = [
     },
 ];
 
+/**
+ * 건강 조건을 선택하면 예시 레시피의 재료/조리 설명 변경 내용을 보여 주는 인터랙티브 소개 컴포넌트입니다.
+ * 웹 데스크톱에서는 마우스를 올리기만 해도, 모바일에서는 눌러서 선택합니다.
+ */
 export default function PersonalizationWorkbench({ compact, reducedMotion }) {
     const [activeIndex, setActiveIndex] = useState(0);
     const reveal = useRef(new Animated.Value(1)).current;
     const active = CONTEXT_STATES[activeIndex];
 
+    // 선택 항목이 바뀔 때마다 변경 내용을 짧게 다시 등장시키는 애니메이션을 실행합니다.
     useEffect(() => {
         if (reducedMotion) {
             reveal.setValue(1);

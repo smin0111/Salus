@@ -1,0 +1,22 @@
+{
+  "note": "구조는 멀쩡하지만 우유 알레르기 사용자에게 버터가 남은 응답. 알레르겐 차원이 반드시 잡아내야 한다.",
+  "draft": {
+    "title": "감자스프",
+    "description": "삶은 감자를 곱게 으깨 부드럽게 끓인 감자스프입니다.",
+    "servings": 2,
+    "cookingTimeMinutes": 25,
+    "difficulty": 1,
+    "ingredients": [
+      {"name": "감자", "amount": 300, "unit": "g", "preparation": "껍질을 벗겨 깍둑 썬 것"},
+      {"name": "양파", "amount": 100, "unit": "g", "preparation": "채 썬 것"},
+      {"name": "버터", "amount": 20, "unit": "g"},
+      {"name": "물", "amount": 400, "unit": "ml"},
+      {"name": "소금", "unit": "약간"}
+    ],
+    "steps": [
+      {"order": 1, "instruction": "냄비에 버터를 녹이고 양파를 중불에서 볶는다.", "heatLevel": "중불", "minutes": 5, "completionCue": "양파가 투명해진 상태", "ingredientNames": ["버터", "양파"]},
+      {"order": 2, "instruction": "감자와 물을 넣고 중불에서 끓인다.", "heatLevel": "중불", "minutes": 12, "completionCue": "감자를 젓가락으로 찔렀을 때 부드럽게 들어가는 상태", "ingredientNames": ["감자", "물"]},
+      {"order": 3, "instruction": "감자를 곱게 으깨고 소금으로 간을 맞춘다.", "heatLevel": "해당 없음", "completionCue": "덩어리 없이 고르게 풀어진 상태", "ingredientNames": ["소금"]}
+    ]
+  }
+}

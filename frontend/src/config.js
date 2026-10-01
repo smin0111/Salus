@@ -6,6 +6,8 @@ import { LOCAL_IP } from './secrets';
 // 터미널에서 'ipconfig getifaddr en0'(Mac) 또는 'ipconfig'(Windows) 명령어로 확인 가능합니다.
 // LOCAL_IP 예시는 secrets.js에만 두어 개인 개발 환경값이 코드에 남지 않게 합니다.
 
+// 웹 브라우저에서 실행할 때 백엔드 API 주소를 정합니다.
+// 로컬(localhost)이면 localhost:8080, 다른 주소로 접속했다면 같은 호스트의 8080 포트를 사용합니다.
 const getWebApiBaseUrl = () => {
     const location = typeof window !== 'undefined' ? window.location : null;
 
@@ -21,6 +23,7 @@ const getWebApiBaseUrl = () => {
     return `http://${hostname}:8080/api`;
 };
 
+// 웹은 브라우저 주소 기준, 앱(iOS/Android)은 secrets.js의 개발 PC IP 기준으로 API 주소를 정합니다.
 const API_BASE_URL = Platform.OS === 'web'
     ? getWebApiBaseUrl()
     : `http://${LOCAL_IP}:8080/api`;

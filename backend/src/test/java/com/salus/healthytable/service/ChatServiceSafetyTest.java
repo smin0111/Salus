@@ -17,6 +17,9 @@ import com.salus.healthytable.repository.RecipeRepository;
 import com.salus.healthytable.repository.SearchCacheRepository;
 import com.salus.healthytable.repository.UserRepository;
 import com.salus.healthytable.service.recipeagent.RecipeAgentOrchestrator;
+import com.salus.healthytable.service.allergen.AllergenDictionary;
+import com.salus.healthytable.service.allergen.AllergenRegistry;
+import com.salus.healthytable.service.allergen.ProfileResolutionShadowObserver;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
@@ -46,7 +49,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link ChatService}의 안전 관련 동작 통합 테스트입니다(의존성은 Mock, 알레르겐 판정은 실제 사전 사용).
+ * 알레르기 차단, 건강 정보 조회 실패 시 거부, 복구 횟수, 제외 재료, 근거 검색, 개인정보 로그를 확인합니다.
+ */
 class ChatServiceSafetyTest {
+    // 실제 알레르겐 사전으로 Matcher를 만듭니다.
     private static com.salus.healthytable.service.allergen.AllergenMatcher allergenMatcher() {
         com.salus.healthytable.service.allergen.AllergenDictionary dictionary =
                 new com.salus.healthytable.service.allergen.AllergenDictionary();
@@ -77,6 +85,7 @@ class ChatServiceSafetyTest {
     private final RecipeDraftMapper recipeDraftMapper = new RecipeDraftMapper();
     private final RecipeReplyFormatter recipeReplyFormatter = new RecipeReplyFormatter(recipeDraftMapper);
     private final RecipeAgentOrchestrator recipeAgentOrchestrator = mock(RecipeAgentOrchestrator.class);
+    private final ApprovedRecipeService approvedRecipeService = mock(ApprovedRecipeService.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-05T15:30:00Z"), ZoneId.of("Asia/Seoul"));
 
     private final RecipeResponseSanitizer recipeResponseSanitizer = new RecipeResponseSanitizer();
@@ -85,7 +94,14 @@ class ChatServiceSafetyTest {
     private final ChatSessionService chatSessionService = new ChatSessionService(
             chatSessionRepository, chatMessageRepository);
     private final ChatSafetyContextService chatSafetyContextService = new ChatSafetyContextService(
-            healthProfileRepository, healthCheckupRepository, healthCheckupAnalysisService, allergenMatcher());
+            healthProfileRepository, healthCheckupRepository, healthCheckupAnalysisService, allergenMatcher(), allergenRegistry(),
+            mock(ProfileResolutionShadowObserver.class));
+
+    private static AllergenRegistry allergenRegistry() {
+        AllergenDictionary dictionary = new AllergenDictionary();
+        dictionary.load();
+        return new AllergenRegistry(dictionary);
+    }
     private final GeneratedRecipeLifecycleService generatedRecipeLifecycleService =
             new GeneratedRecipeLifecycleService(generatedRecipeRepository, recipeRepository, clock);
     private final RecipeEvidenceService recipeEvidenceService = new RecipeEvidenceService(
@@ -118,6 +134,7 @@ class ChatServiceSafetyTest {
             chatRequestParser,
             recipeReplyParser,
             chatSafetyContextService,
+            approvedRecipeService,
             clock);
 
     private final ChatService chatService = new ChatService(
@@ -130,8 +147,10 @@ class ChatServiceSafetyTest {
             chatSessionService,
             chatIntentClassifier,
             recipeNormalizer,
-            recipeAgentOrchestrator);
+            recipeAgentOrchestrator,
+            approvedRecipeService);
 
+    // 기본 설정: 식약처 공식 레시피 검색은 결과 없음으로 두어 웹 검색 경로를 타게 합니다.
     @BeforeEach
     void useWebSearchWhenOfficialRecipeIsUnavailable() {
         when(mfdsRecipeSearchClient.search(anyString())).thenReturn(Mono.just(new SearchEngine.SearchResponse(
@@ -140,6 +159,7 @@ class ChatServiceSafetyTest {
                 "식품의약품안전처 레시피 DB")));
     }
 
+    // Agent 세션이 있는 후속 요청은 의도 분류 결과와 상관없이 Recipe Agent로 보내야 합니다.
     @Test
     void structuredAgentSessionRoutesFollowUpToRecipeAgentRegardlessOfIntentClassification() {
         ChatSession session = new ChatSession();
@@ -187,6 +207,7 @@ class ChatServiceSafetyTest {
         verify(llmService, never()).getChatResponse(anyString(), any());
     }
 
+    // 실패 로그에 사용자 메시지 원문이나 약 이름이 남으면 안 됩니다.
     @Test
     void privacySafeFailureLogDoesNotContainUserMessageOrMedicationName() {
         Logger logger = (Logger) LoggerFactory.getLogger(ChatService.class);
@@ -215,6 +236,7 @@ class ChatServiceSafetyTest {
                 .doesNotContain(sensitive, "와파린", "당뇨", "원본 외부 응답");
     }
 
+    // 사용자가 "빼고"라고 요청해도 생성 레시피에 알레르기 재료가 있으면 차단해야 합니다.
     @Test
     void generatedRecipeStillBlocksAllergyIngredientWhenUserAskedToExcludeIt() {
         ChatDto.Request request = new ChatDto.Request();
@@ -248,6 +270,7 @@ class ChatServiceSafetyTest {
         assertThat(conflicts).containsExactly("수박");
     }
 
+    // 재료 대체 후속 요청은 직전 레시피를 대체 재료로 다시 작성해야 합니다.
     @Test
     void substitutionFollowUpRewritesPreviousRecipeWithReplacementIngredient() {
         ChatSession chatSession = new ChatSession();
@@ -338,6 +361,7 @@ class ChatServiceSafetyTest {
         verify(recipeWorkSessionService).saveRecommendation(any(), any(), anyString());
     }
 
+    // 생성 초안에 알레르기 재료가 있으면 복구를 시도하지 않고 바로 차단해야 합니다.
     @Test
     void allergyIngredientInGeneratedDraftBlocksWithoutRepair() {
         ChatDto.Request request = new ChatDto.Request();
@@ -375,6 +399,7 @@ class ChatServiceSafetyTest {
         verify(recipeValidator, never()).validateStructured(any(Recipe.class), anyString(), anyString(), any(GeneratedRecipeDraft.class));
     }
 
+    // 복구 가능한 초안 실패 후에는 복구를 정확히 1번만 호출해야 합니다.
     @Test
     void repairIsCalledOnceAfterRetryableDraftFailure() {
         ChatDto.Request request = new ChatDto.Request();
@@ -418,10 +443,11 @@ class ChatServiceSafetyTest {
         ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
 
         assertThat(response).isNotNull();
-        assertThat(response.getReply()).contains("감자구이 레시피입니다.", "- 버터 1큰술");
+        assertThat(response.getReply()).contains("감자구이 1인분 레시피입니다.", "- 버터 1큰술");
         verify(recipeGenerationClient, times(1)).repair(any(), any(), any());
     }
 
+    // 복구본도 실패하면 초안 내용을 노출하지 않고 검증 실패 안내만 반환해야 합니다.
     @Test
     void secondInvalidDraftReturnsValidationFailureWithoutExposingDraft() {
         ChatDto.Request request = new ChatDto.Request();
@@ -453,6 +479,7 @@ class ChatServiceSafetyTest {
         verify(recipeRepository, never()).save(any(Recipe.class));
     }
 
+    // 요청에 담긴 건강 정보의 알레르기와 요리 이름이 충돌하면 차단해야 합니다.
     @Test
     void requestHealthProfileAllergyBlocksMatchingRecipeTitle() {
         ChatDto.Request request = new ChatDto.Request();
@@ -486,6 +513,7 @@ class ChatServiceSafetyTest {
         assertThat(conflicts).containsExactly("수박");
     }
 
+    // 알레르기 요리 요청은 LLM 호출 전에 차단해야 합니다.
     @Test
     void processChatBlocksRequestedAllergyRecipeBeforeCallingLlm() {
         ChatDto.Request request = new ChatDto.Request();
@@ -509,6 +537,25 @@ class ChatServiceSafetyTest {
         verify(searchEngine, never()).search(anyString());
     }
 
+    // 일반 대화 답변은 검증기를 거치지 않으므로, 등록 알레르겐이 보이면 차단 대신 주의 문구를 붙여야 합니다.
+    @Test
+    void generalChatReplyMentioningRegisteredAllergyGetsCautionNote() {
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("오늘 저녁 뭐 먹을지 추천해줘");
+        request.setHealthProfile(new ChatDto.HealthProfileContext(
+                List.of("새우"), List.of(), List.of(), List.of(), List.of()));
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        when(llmService.getChatResponse(anyString(), any())).thenReturn(Mono.just("새우볶음밥은 어떠세요?"));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getReply())
+                .startsWith("새우볶음밥은 어떠세요?")
+                .contains("※ 등록하신 알레르기(새우)");
+    }
+
+    // 이전 대화에서 말한 알레르기도 반영해 차단해야 합니다.
     @Test
     void processChatBlocksRecipeWhenAllergyWasMentionedInHistory() {
         ChatDto.Request request = new ChatDto.Request();
@@ -527,6 +574,7 @@ class ChatServiceSafetyTest {
         verify(searchEngine, never()).search(anyString());
     }
 
+    // 로그인 사용자는 DB에 저장된 건강 프로필의 알레르기로 차단해야 합니다.
     @Test
     void processChatBlocksRecipeUsingSavedHealthProfileForAuthenticatedUser() {
         HealthProfile savedProfile = new HealthProfile();
@@ -550,6 +598,7 @@ class ChatServiceSafetyTest {
         verify(searchEngine, never()).search(anyString());
     }
 
+    // 건강 프로필 조회에 실패하면 개인화 레시피 생성을 거부해야 합니다(fail closed).
     @Test
     void healthProfileReadFailureBlocksPersonalizedRecipeGeneration() {
         ChatDto.Request request = new ChatDto.Request();
@@ -576,6 +625,7 @@ class ChatServiceSafetyTest {
         verify(recipeAgentOrchestrator, never()).handle(any(), any(), any());
     }
 
+    // 제외 요청한 재료가 재료 목록이나 조리 단계로 다시 나타나면 안 됩니다.
     @Test
     void excludedIngredientDoesNotReturnAsRecipeIngredientOrCookingStep() {
         ChatSession chatSession = new ChatSession();
@@ -619,6 +669,7 @@ class ChatServiceSafetyTest {
         assertThat(response.getReply()).doesNotContain("양파 1/2개", "양파와 당근", "팬에 양파");
     }
 
+    // 불을 쓰지 않는 디저트에는 불 조절 팁이 붙으면 안 됩니다.
     @Test
     void noHeatDessertDoesNotReceiveFireControlTips() {
         Recipe recipe = new Recipe();
@@ -639,6 +690,7 @@ class ChatServiceSafetyTest {
         assertThat(ingredients).contains("얼음 적당량");
     }
 
+    // 생성된 무가열 디저트 답변에서 LLM이 넣은 가열 관련 문구를 제거해야 합니다.
     @Test
     void generatedNoHeatDessertReplyRemovesLlmHeatArtifacts() {
         ChatDto.Request request = new ChatDto.Request();
@@ -697,6 +749,7 @@ class ChatServiceSafetyTest {
                         .doesNotContain("센불", "중불", "약불", "타는 냄새"));
     }
 
+    // 내부 DB 레시피를 근거로 해도 구조화 정확도 검증 파이프라인을 똑같이 거쳐야 합니다.
     @Test
     void trustedDatabaseRecipeAlsoPassesStructuredAccuracyPipeline() {
         ChatDto.Request request = new ChatDto.Request();
@@ -742,7 +795,7 @@ class ChatServiceSafetyTest {
         ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
 
         assertThat(response).isNotNull();
-        assertThat(response.getReply()).contains("김치찌개 레시피입니다.");
+        assertThat(response.getReply()).contains("김치찌개 2인분 레시피입니다.");
         ArgumentCaptor<RecipeGenerationRequest> captor = ArgumentCaptor.forClass(RecipeGenerationRequest.class);
         verify(recipeGenerationClient).generate(captor.capture());
         assertThat(captor.getValue().trustedRecipes()).containsExactly(trusted);
@@ -753,6 +806,53 @@ class ChatServiceSafetyTest {
         verify(searchEngine, never()).search(anyString());
     }
 
+    // "레시피"라는 단어가 없어도 승인 레시피 이름 + 조정 요청이면 승인 레시피 경로로 가야 합니다.
+    @Test
+    void approvedRecipeWithAdjustmentRoutesWithoutExplicitRecipeKeyword() {
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("김치찌개 2인분 불닭 정도로 알려줘");
+
+        Recipe approved = new Recipe();
+        approved.setId(92L);
+        approved.setTitle("김치찌개");
+        approved.setDescription("승인 김치찌개");
+        approved.setIngredients(List.of("김치 300g", "청양고추 20g"));
+        approved.setSteps(List.of("김치와 청양고추를 넣고 끓인다."));
+        approved.setBaseServings(2);
+        approved.setCookingTime(40);
+        approved.setCalories(360);
+        approved.setCaloriesPerServing(360);
+        approved.setDifficulty(2);
+
+        when(chatIntentClassifier.classify(anyString()))
+                .thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        when(recipeNormalizer.normalize(request.getMessage())).thenReturn("김치찌개");
+        when(approvedRecipeService.findApprovedMatch(request.getMessage()))
+                .thenReturn(Optional.of(approved));
+        when(approvedRecipeService.parseAdjustment(request.getMessage()))
+                .thenReturn(Optional.of(new ApprovedRecipeService.AdjustmentRequest(
+                        2, ApprovedRecipeService.SpiceLevel.EXTREME)));
+        when(approvedRecipeService.renderApprovedRecipe(eq(approved), eq(request.getMessage())))
+                .thenReturn(new ApprovedRecipeService.RenderedRecipe(
+                        approved,
+                        "승인 김치찌개 불닭맛 응답",
+                        2,
+                        ApprovedRecipeService.SpiceLevel.EXTREME,
+                        2,
+                        List.of()));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getReply()).isEqualTo("승인 김치찌개 불닭맛 응답");
+        assertThat(response.getRecipe()).isNotNull();
+        assertThat(response.getRecipe().getServings()).isEqualTo(2);
+        assertThat(response.getRecipe().getCaloriesPerServing()).isEqualTo(360);
+        verify(llmService, never()).getChatResponse(anyString(), any());
+        verify(recipeAgentOrchestrator, never()).handle(any(), any(), any());
+    }
+
+    // 요청과 무관한 웹 검색 결과는 레시피 생성 전에 거부해야 합니다.
     @Test
     void irrelevantWebSearchResultIsRejectedBeforeRecipeGeneration() {
         ChatDto.Request request = new ChatDto.Request();
@@ -775,6 +875,7 @@ class ChatServiceSafetyTest {
         verify(recipeGenerationClient, never()).generate(any());
     }
 
+    // 식약처 공식 레시피 검색 결과가 있으면 일반 웹 검색보다 우선해야 합니다.
     @Test
     void officialRecipeSearchIsPreferredOverGeneralWebSearch() {
         SearchEngine.SearchResponse official = new SearchEngine.SearchResponse(
@@ -796,6 +897,7 @@ class ChatServiceSafetyTest {
         verify(searchEngine, never()).search(anyString());
     }
 
+    // "내일 저장" 요청의 날짜는 주입한 Clock 기준으로 계산해야 합니다.
     @Test
     void saveCurrentRecommendationUsesConfiguredClockForTomorrowMealDate() {
         ChatSession chatSession = new ChatSession();
@@ -827,6 +929,7 @@ class ChatServiceSafetyTest {
         assertThat(response.get().getReply()).contains("2026-07-07", "점심 식단");
     }
 
+    // "근거 없음" 캐시 만료는 주입한 Clock 기준으로 판단해야 합니다.
     @Test
     void negativeRecipeSearchCacheExpiresUsingConfiguredClock() {
         ReflectionTestUtils.setField(recipeEvidenceService, "negativeCacheDays", 1);
@@ -854,21 +957,18 @@ class ChatServiceSafetyTest {
         verify(searchEngine).search("미등록요리");
     }
 
+    // 생성 레시피가 자동으로 승인 카탈로그에 올라가면 안 됩니다.
     @Test
-    void promotedGeneratedRecipeUsesConfiguredClockForCreatedAt() {
+    void generatedRecipeIsNotAutomaticallyPromotedToApprovedCatalog() {
         Recipe recipe = new Recipe();
         recipe.setTitle("토마토 샐러드");
 
-        when(recipeRepository.searchByKeyword("토마토 샐러드", 1)).thenReturn(List.of());
-
         ReflectionTestUtils.invokeMethod(chatService, "saveToRecipeDbSafely", recipe);
 
-        ArgumentCaptor<Recipe> captor = ArgumentCaptor.forClass(Recipe.class);
-        verify(recipeRepository).save(captor.capture());
-        assertThat(captor.getValue().getAverageRating()).isEqualTo(0.0);
-        assertThat(captor.getValue().getCreatedAt()).isEqualTo(LocalDateTime.of(2026, 7, 6, 0, 30));
+        verify(recipeRepository, never()).save(any(Recipe.class));
     }
 
+    // 레시피 요청 의도와 정규화 결과를 Mock으로 설정하는 도우미입니다.
     private void stubRecipeRequest(String normalizedTitle) {
         when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.RECIPE_REQUEST);
         when(recipeNormalizer.normalize(anyString())).thenReturn(normalizedTitle);
@@ -876,6 +976,7 @@ class ChatServiceSafetyTest {
         when(llmService.getChatResponse(anyString(), any())).thenReturn(Mono.just("LLM should not be called"));
     }
 
+    // 성공적인 웹 검색 결과를 Mock으로 설정하는 도우미입니다.
     private void stubSuccessfulRecipeSearch(String normalizedTitle) {
         when(searchCacheRepository.findByQuery(normalizedTitle)).thenReturn(Optional.empty());
         when(searchEngine.search(normalizedTitle)).thenReturn(Mono.just(new SearchEngine.SearchResponse(

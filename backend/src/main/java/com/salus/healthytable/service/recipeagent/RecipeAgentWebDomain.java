@@ -4,11 +4,17 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/*
+ * Recipe Agent의 웹 레시피 검색/수집 과정에서 쓰는 타입 모음입니다.
+ */
+
+// 웹 검색 포트: 검색어 목록으로 최대 maxResults개의 검색 결과를 반환합니다.
 interface WebRecipeSearchPort {
 
     List<WebRecipeSearchResult> search(List<String> queries, int maxResults);
 }
 
+// 웹 검색 결과 한 건(제목, URL, 요약, 도메인, 순위)
 record WebRecipeSearchResult(
         String title,
         String url,
@@ -18,11 +24,13 @@ record WebRecipeSearchResult(
 ) {
 }
 
+// 외부 웹 페이지를 안전하게(내부망 접근 차단, 크기/시간 제한) 가져오는 포트입니다.
 interface SafeWebPageFetcher {
 
     WebPageFetchResult fetch(String url);
 }
 
+// 가져온 페이지 정보(최종 URL, HTTP 상태, 콘텐츠 타입, 본문, 가져온 시각, 본문 해시)
 record WebPageFetchResult(
         String finalUrl,
         int statusCode,
@@ -33,6 +41,7 @@ record WebPageFetchResult(
 ) {
 }
 
+// 출처 조사 상태: 검증된 출처 찾음 / 찾았지만 정보 부족 / 신뢰할 출처 없음 / 가져오기 실패 / 추출 실패
 enum RecipeResearchStatus {
     VERIFIED_SOURCE_FOUND,
     SOURCE_FOUND_BUT_INCOMPLETE,
@@ -41,6 +50,7 @@ enum RecipeResearchStatus {
     EXTRACTION_FAILED
 }
 
+// 웹 페이지(주로 schema.org JSON-LD)에서 추출한 레시피 근거(제목, 작성자, 인분, 시간, 재료, 조리 단계, 영양 정보, 출처 기록)
 record ExtractedRecipeEvidence(
         String title,
         String creatorName,
@@ -63,6 +73,7 @@ record ExtractedRecipeEvidence(
     }
 }
 
+// 재료 한 줄의 원문과 파싱 결과. parseStatus로 파싱이 완전/부분/실패인지 구분합니다.
 record ExtractedIngredientLine(
         String originalText,
         String normalizedName,
@@ -79,6 +90,7 @@ enum IngredientParseStatus {
     UNPARSED
 }
 
+// 조리 단계 한 개(순서, 이름, 설명)
 record ExtractedInstructionStep(
         Integer position,
         String name,
@@ -86,6 +98,7 @@ record ExtractedInstructionStep(
 ) {
 }
 
+// 영양 정보(원문 문자열 그대로 보관)
 record ExtractedNutrition(
         String calories,
         String carbohydrateContent,
@@ -96,6 +109,7 @@ record ExtractedNutrition(
 ) {
 }
 
+// 근거의 출처 기록(원본/정규 URL, 도메인, 추출 방식, 가져온 시각, 해시, 추출한 JSON 경로). 나중에 근거를 추적할 수 있게 합니다.
 record RecipeEvidenceProvenance(
         String sourceUrl,
         String canonicalUrl,
@@ -110,6 +124,7 @@ record RecipeEvidenceProvenance(
     }
 }
 
+// 출처 품질 점수. blockingReasons가 하나라도 있으면 사용할 수 없는 출처입니다.
 record RecipeSourceQualityScore(
         double totalScore,
         boolean structuredRecipePresent,
@@ -130,6 +145,7 @@ record RecipeSourceQualityScore(
     }
 }
 
+// 캐시에 저장하는 출처 근거(만료 시각 포함)
 record CachedRecipeEvidence(
         RecipeSourceDocument source,
         RecipeCandidate originalRecipe,
@@ -140,6 +156,7 @@ record CachedRecipeEvidence(
 ) {
 }
 
+// 품질 평가까지 마친 출처 후보(출처, 원본 레시피, 품질 점수, 추출 근거)
 record RecipeSourceCandidate(
         RecipeSourceDocument source,
         RecipeCandidate originalRecipe,

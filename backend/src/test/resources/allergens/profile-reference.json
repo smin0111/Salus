@@ -1,0 +1,228 @@
+{
+  "scope": "PROFILE_RESOLUTION_CONTRACT",
+  "provenance": "Synthetic normalized profile terms for contract regression. Not product Reference, real user profiles, or production distribution.",
+  "cases": [
+    {
+      "id": "P001",
+      "term": "우유",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "RESOLVED",
+        "allergen": "MILK",
+        "resolutionType": "EXACT_ALIAS",
+        "matchedTerm": "우유",
+        "relation": "DIRECT_NAME"
+      }
+    },
+    {
+      "id": "P002",
+      "term": "대두",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "RESOLVED",
+        "allergen": "SOY",
+        "resolutionType": "EXACT_ALIAS",
+        "matchedTerm": "대두",
+        "relation": "DIRECT_NAME"
+      }
+    },
+    {
+      "id": "P003",
+      "term": "밀",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "RESOLVED",
+        "allergen": "WHEAT",
+        "resolutionType": "EXACT_ALIAS",
+        "matchedTerm": "밀",
+        "relation": "DIRECT_NAME"
+      }
+    },
+    {
+      "id": "P004",
+      "term": "게",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "RESOLVED",
+        "allergen": "CRAB",
+        "resolutionType": "EXACT_ALIAS",
+        "matchedTerm": "게",
+        "relation": "DIRECT_NAME"
+      }
+    },
+    {
+      "id": "P005",
+      "term": "잣",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "RESOLVED",
+        "allergen": "PINE_NUT",
+        "resolutionType": "EXACT_ALIAS",
+        "matchedTerm": "잣",
+        "relation": "DIRECT_NAME"
+      }
+    },
+    {
+      "id": "P006",
+      "term": "굴",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "RESOLVED",
+        "allergen": "OYSTER",
+        "resolutionType": "EXACT_ALIAS",
+        "matchedTerm": "굴",
+        "relation": "DIRECT_NAME"
+      }
+    },
+    {
+      "id": "P007",
+      "term": "전복",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "RESOLVED",
+        "allergen": "ABALONE",
+        "resolutionType": "EXACT_ALIAS",
+        "matchedTerm": "전복",
+        "relation": "DIRECT_NAME"
+      }
+    },
+    {
+      "id": "P008",
+      "term": "홍합",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "RESOLVED",
+        "allergen": "MUSSEL",
+        "resolutionType": "EXACT_ALIAS",
+        "matchedTerm": "홍합",
+        "relation": "DIRECT_NAME"
+      }
+    },
+    {
+      "id": "P009",
+      "term": "메추리알",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "RESOLVED",
+        "allergen": "QUAIL_EGG",
+        "resolutionType": "EXACT_ALIAS",
+        "matchedTerm": "메추리알",
+        "relation": "DIRECT_NAME"
+      }
+    },
+    {
+      "id": "P010",
+      "term": "알류",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "RESOLVED",
+        "allergen": "EGG_GROUP",
+        "resolutionType": "EXACT_ALIAS",
+        "matchedTerm": "알류",
+        "relation": "DIRECT_NAME"
+      }
+    },
+    {
+      "id": "P011",
+      "term": "난류",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "RESOLVED",
+        "allergen": "EGG_GROUP",
+        "resolutionType": "EXACT_ALIAS",
+        "matchedTerm": "난류",
+        "relation": "DIRECT_NAME"
+      }
+    },
+    {
+      "id": "P012",
+      "term": "조개류",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "RESOLVED",
+        "allergen": "SHELLFISH",
+        "resolutionType": "EXACT_ALIAS",
+        "matchedTerm": "조개류",
+        "relation": "DIRECT_NAME"
+      }
+    },
+    {
+      "id": "P013",
+      "term": "우유",
+      "source": "CHAT_MESSAGE",
+      "expected": {
+        "state": "RESOLVED",
+        "allergen": "MILK",
+        "resolutionType": "EXACT_ALIAS",
+        "matchedTerm": "우유",
+        "relation": "DIRECT_NAME"
+      }
+    },
+    {
+      "id": "P014",
+      "term": "우유",
+      "source": "CHAT_REQUEST_PROFILE",
+      "expected": {
+        "state": "RESOLVED",
+        "allergen": "MILK",
+        "resolutionType": "EXACT_ALIAS",
+        "matchedTerm": "우유",
+        "relation": "DIRECT_NAME"
+      }
+    },
+    {
+      "id": "P015",
+      "term": "키위",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "UNRESOLVED",
+        "reason": "REGISTRY_MISS"
+      }
+    },
+    {
+      "id": "P016",
+      "term": "김",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "UNRESOLVED",
+        "reason": "REGISTRY_MISS"
+      }
+    },
+    {
+      "id": "P017",
+      "term": "굴소스",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "UNRESOLVED",
+        "reason": "NO_PROFILE_ELIGIBLE_ALIAS"
+      }
+    },
+    {
+      "id": "P018",
+      "term": "대두레시틴",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "UNRESOLVED",
+        "reason": "NO_PROFILE_ELIGIBLE_ALIAS"
+      }
+    },
+    {
+      "id": "P019",
+      "term": "우유향",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "UNRESOLVED",
+        "reason": "NO_PROFILE_ELIGIBLE_ALIAS"
+      }
+    },
+    {
+      "id": "P020",
+      "term": "콩",
+      "source": "STORED_HEALTH_PROFILE",
+      "expected": {
+        "state": "UNRESOLVED",
+        "reason": "NO_PROFILE_ELIGIBLE_ALIAS"
+      }
+    }
+  ]
+}

@@ -33,6 +33,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link UserAccountService} 테스트입니다.
+ */
 class UserAccountServiceTest {
 
     private final UserRepository userRepository = mock(UserRepository.class);
@@ -66,6 +69,7 @@ class UserAccountServiceTest {
             chatMessageRepository,
             chatSessionRepository);
 
+    // 데이터 요약에 채팅방과 채팅 메시지 수가 포함되어야 합니다.
     @Test
     void summarizeUserDataIncludesChatSessionsAndMessages() {
         User user = user(1L);
@@ -101,6 +105,7 @@ class UserAccountServiceTest {
         assertThat(summary.getChatMessages()).isEqualTo(13L);
     }
 
+    // 회원 탈퇴 시 자식 데이터를 올바른 순서(게시글 댓글/좋아요 → ... → 채팅 메시지 → 채팅방 → 사용자)로 삭제해야 합니다.
     @Test
     void deleteAccountRemovesChatMessagesBeforeChatSessionsAndThenDeletesUser() {
         User user = user(1L);
@@ -146,6 +151,7 @@ class UserAccountServiceTest {
         inOrder.verify(userRepository).delete(user);
     }
 
+    // 작성한 게시글이 없으면 게시글 하위 데이터 정리를 건너뛰어야 합니다.
     @Test
     void deleteAccountSkipsPostDependencyCleanupWhenUserHasNoPosts() {
         User user = user(1L);
@@ -160,6 +166,7 @@ class UserAccountServiceTest {
         verify(chatSessionRepository).deleteByUserId(1L);
     }
 
+    // 사용자가 없으면 404 예외여야 합니다.
     @Test
     void deleteAccountThrowsWhenUserDoesNotExist() {
         when(userRepository.findById(404L)).thenReturn(Optional.empty());

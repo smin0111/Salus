@@ -11,6 +11,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 기존 SearchEngine(DuckDuckGo/Tavily)을 Recipe Agent의 WebRecipeSearchPort 형태로 감싼 어댑터입니다.
+ * 검색어를 차례로 실행해 URL 기준으로 중복 없이 최대 maxResults개를 모읍니다.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -32,6 +36,7 @@ class SearchEngineWebRecipeSearchAdapter implements WebRecipeSearchPort {
                 continue;
             }
             try {
+                // 검색어 하나당 최대 18초까지만 기다립니다.
                 SearchEngine.SearchResponse response = searchEngine.search(query).block(SEARCH_TIMEOUT);
                 if (response == null || response.status() != SearchEngine.SearchStatus.SUCCESS) {
                     continue;

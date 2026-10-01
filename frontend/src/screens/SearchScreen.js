@@ -16,6 +16,10 @@ import axios from 'axios';
 import { colors } from '../theme/colors';
 import config from '../config';
 
+/**
+ * 커뮤니티 게시글 검색 화면입니다. 제목/내용 키워드로 검색하고 결과를 목록으로 보여 줍니다.
+ * 상태: 검색 전 안내 → 검색 중 로딩 → 결과 없음 안내 또는 결과 목록
+ */
 export default function SearchScreen({ onBack, onNavigate, user, webMode = false }) {
     const insets = useSafeAreaInsets();
     const [searchQuery, setSearchQuery] = useState('');
@@ -23,6 +27,7 @@ export default function SearchScreen({ onBack, onNavigate, user, webMode = false
     const [loading, setLoading] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
 
+    // 검색어를 URL에 안전하게 넣기 위해 encodeURIComponent로 인코딩합니다.
     const handleSearch = async () => {
         if (!searchQuery.trim()) return;
 
@@ -40,6 +45,7 @@ export default function SearchScreen({ onBack, onNavigate, user, webMode = false
         }
     };
 
+    // FlatList가 게시글 한 개를 그릴 때 사용하는 함수(누르면 게시글 상세로 이동)
     const renderPostCard = ({ item }) => (
         <TouchableOpacity
             style={styles.postCard}

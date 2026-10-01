@@ -17,6 +17,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+/*
+ * 웹에서 수집한 레시피 출처를 평가·정리·캐시하는 클래스들을 모아 둔 파일입니다.
+ */
+
+/**
+ * 웹 페이지에서 추출한 레시피 근거의 품질을 0~1 점수와 차단 사유로 평가합니다.
+ * 차단 사유: 재료 없음, 조리 단계 없음, 요청 요리와 제목 불일치, 요청한 크리에이터와 작성자 불일치, 재료 파싱 85% 이상 실패
+ */
 @Component
 class RecipeSourceQualityAssessor {
 
@@ -68,6 +76,7 @@ class RecipeSourceQualityAssessor {
             warnings.add("페이지 URL과 canonical URL이 다릅니다.");
         }
 
+        // 항목별 가중치를 더해 점수를 만들고, 0~1 범위로 자릅니다.
         double score = 0.0;
         score += 0.22; // JSON-LD Recipe 존재
         score += ingredientsPresent ? 0.18 : 0.0;
@@ -90,6 +99,7 @@ class RecipeSourceQualityAssessor {
                 blocking);
     }
 
+    // 요청 요리 이름이 비어 있으면 통과, 아니면 제목과 서로 포함 관계인지 확인합니다.
     boolean dishMatches(String requestedDish, String title) {
         String requested = RecipeCandidate.normalize(requestedDish);
         String normalizedTitle = RecipeCandidate.normalize(title);
@@ -102,6 +112,7 @@ class RecipeSourceQualityAssessor {
         return normalizedTitle.contains(requested) || requested.contains(normalizedTitle);
     }
 
+    // 요청한 크리에이터가 없으면 통과, 있으면 출처 작성자와 서로 포함 관계인지 확인합니다.
     boolean creatorMatches(String requestedCreator, String actualCreator) {
         String requested = RecipeCandidate.normalize(requestedCreator);
         if (requested.isBlank()) {
@@ -111,6 +122,10 @@ class RecipeSourceQualityAssessor {
         return !actual.isBlank() && (actual.contains(requested) || requested.contains(actual));
     }
 
+    /**
+     * "백종원김치찌개"처럼 요청 요리 이름 앞에 붙은 접두어가 크리에이터 이름일 수 있는지 추정합니다.
+     * 접두어가 재료 이름("돼지김치찌개"의 돼지)이면 크리에이터로 보지 않습니다.
+     */
     private String implicitCreatorPrefix(RecipeResearchPlan plan, ExtractedRecipeEvidence evidence) {
         if (plan == null || evidence == null || (plan.creatorName() != null && !plan.creatorName().isBlank())) {
             return "";
@@ -133,12 +148,14 @@ class RecipeSourceQualityAssessor {
         return ingredientQualifier ? "" : prefix;
     }
 
+    // 재료 최대 5개, 조리 단계 최대 5개를 기준으로 완성도를 0~1로 계산합니다.
     private double completenessScore(ExtractedRecipeEvidence evidence) {
         int ingredientScore = Math.min(5, evidence.ingredients().size());
         int stepScore = Math.min(5, evidence.steps().size());
         return (ingredientScore + stepScore) / 10.0;
     }
 
+    // 파싱하지 못한 재료 줄의 비율
     private double unparsedRatio(List<ExtractedIngredientLine> ingredients) {
         if (ingredients == null || ingredients.isEmpty()) {
             return 0.0;
@@ -166,6 +183,10 @@ class RecipeSourceQualityAssessor {
     }
 }
 
+/**
+ * 웹 검색 결과 페이지를 안전하게 가져와 schema.org 레시피를 추출하고, 품질 평가를 통과한 출처 후보를 만드는 어댑터입니다.
+ * 페이지 하나가 실패해도 다음 결과로 넘어가며, 결과는 중복 제거 후 품질 점수 순으로 정렬합니다.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -208,6 +229,7 @@ class StructuredRecipePageAdapter {
                 .toList();
     }
 
+    // 조리 단계만 없고 나머지는 모두 맞는 출처는 재료 근거로는 쓸 수 있으므로 예외적으로 허용합니다.
     private boolean isIngredientsOnlyEvidence(RecipeSourceQualityScore qualityScore) {
         return qualityScore.structuredRecipePresent()
                 && qualityScore.ingredientsPresent()
@@ -217,6 +239,11 @@ class StructuredRecipePageAdapter {
                 && qualityScore.blockingReasons().stream().allMatch("조리 단계가 없습니다."::equals);
     }
 
+    /**
+     * 중복 출처를 제거합니다(품질 점수 높은 것을 우선 유지).
+     * - 완전 중복: canonical URL, 본문 해시, 제목+작성자 중 하나가 같음
+     * - 유사 중복: 같은 작성자이면서 핵심 재료 유사도(자카드 유사도)가 0.8 이상
+     */
     List<RecipeSourceCandidate> deduplicate(List<RecipeSourceCandidate> candidates) {
         if (candidates == null || candidates.isEmpty()) {
             return List.of();
@@ -240,6 +267,7 @@ class StructuredRecipePageAdapter {
         return unique;
     }
 
+    // 추출한 근거를 출처 문서와 후보 레시피로 변환합니다. 신뢰도에는 품질 점수를 사용합니다.
     private RecipeSourceCandidate toSourceCandidate(ExtractedRecipeEvidence evidence, RecipeSourceQualityScore qualityScore) {
         RecipeCandidate recipe = toRecipeCandidate(evidence);
         RecipeEvidenceProvenance provenance = evidence.provenance();
@@ -255,6 +283,7 @@ class StructuredRecipePageAdapter {
         return new RecipeSourceCandidate(source, recipe, qualityScore, evidence);
     }
 
+    // 근거의 재료/조리 단계로 후보 레시피를 만듭니다. 제목에 들어간 재료를 우선으로 최대 3개를 핵심 재료로 추정합니다.
     private RecipeCandidate toRecipeCandidate(ExtractedRecipeEvidence evidence) {
         List<String> ingredients = evidence.ingredients().stream()
                 .map(ExtractedIngredientLine::originalText)
@@ -285,6 +314,7 @@ class StructuredRecipePageAdapter {
                 healthRiskTags(ingredients));
     }
 
+    // RecipeCandidateBuilder가 다시 파싱할 수 있는 "key: value" 텍스트 형식으로 출처 본문을 만듭니다.
     private String toSourceContent(ExtractedRecipeEvidence evidence, RecipeCandidate recipe) {
         return """
                 title: %s
@@ -331,6 +361,7 @@ class StructuredRecipePageAdapter {
         return firstCreator.isBlank() || secondCreator.isBlank() || firstCreator.equals(secondCreator);
     }
 
+    // 두 레시피의 핵심 재료 집합 유사도 = 교집합 크기 / 합집합 크기(자카드 유사도)
     private double coreIngredientSimilarity(RecipeCandidate first, RecipeCandidate second) {
         Set<String> left = normalizedSet(first.coreIngredients().isEmpty() ? first.ingredients() : first.coreIngredients());
         Set<String> right = normalizedSet(second.coreIngredients().isEmpty() ? second.ingredients() : second.coreIngredients());
@@ -356,6 +387,7 @@ class StructuredRecipePageAdapter {
         return normalized;
     }
 
+    // 영양 정보의 칼로리 문자열("250 calories")에서 첫 숫자를 읽습니다.
     private Integer calories(ExtractedNutrition nutrition) {
         if (nutrition == null || nutrition.calories() == null) {
             return null;
@@ -371,6 +403,7 @@ class StructuredRecipePageAdapter {
         return Math.max(1, (int) duration.toMinutes());
     }
 
+    // 당류 재료가 있으면 "high_added_sugar" 위험 태그를 붙입니다(만성질환 정책에서 사용).
     private List<String> healthRiskTags(List<String> ingredients) {
         String text = String.join(" ", ingredients);
         if (AgentText.containsAnyNormalized(text, List.of("설탕", "시럽", "꿀", "올리고당", "물엿", "연유", "캐러멜"))) {
@@ -414,6 +447,10 @@ class StructuredRecipePageAdapter {
     }
 }
 
+/**
+ * 웹 출처 수집 결과를 서버 메모리에 6시간 동안 보관하는 간단한 캐시입니다.
+ * 같은 요리/크리에이터/모드 요청이 반복될 때 외부 웹 요청을 줄입니다. 서버를 재시작하면 비워집니다.
+ */
 @Component
 class InMemoryRecipeSourceCache {
 
@@ -447,6 +484,7 @@ class InMemoryRecipeSourceCache {
                 now.plus(DEFAULT_TTL)));
     }
 
+    // 캐시 키: 요리 이름|크리에이터|요청 모드|언어
     String key(RecipeResearchPlan plan) {
         if (plan == null) {
             return "";
@@ -458,6 +496,7 @@ class InMemoryRecipeSourceCache {
                 "ko");
     }
 
+    // 현재 캐시 내용을 복사해 반환합니다(테스트/점검용).
     Map<String, CachedRecipeEvidence> snapshot() {
         return new LinkedHashMap<>(cache);
     }

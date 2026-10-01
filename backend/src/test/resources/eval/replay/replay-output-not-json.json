@@ -1,0 +1,9 @@
+{
+  "note": "모델이 JSON 대신 설명 문장을 뱉은 경우. OUTPUT_NOT_JSON으로 분류되어야 한다.",
+  "response": {
+    "model": "qwen3:8b",
+    "done": true,
+    "done_reason": "stop",
+    "message": {"role": "assistant", "content": "죄송합니다. 요청하신 레시피는 제공된 근거만으로는 작성할 수 없습니다."}
+  }
+}

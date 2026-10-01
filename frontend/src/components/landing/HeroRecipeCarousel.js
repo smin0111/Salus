@@ -13,8 +13,12 @@ import { landingColors, landingType, webPointer } from './landingTheme';
 import useHeroCarousel from './useHeroCarousel';
 import useHeroDrag from './useHeroDrag';
 
+// 랜딩 히어로의 레시피 이미지 캐러셀입니다. 요리 사진 주변에 예시 건강 조건 주석을 배치하고, 선택한 조건의 추천 이유를 보여 줍니다.
+
+// 네이티브 드라이버는 웹에서 지원되지 않아 앱에서만 사용합니다.
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 
+// 웹 키보드 접근성: Enter/Space 키로 버튼처럼 동작하게 합니다.
 function activateFromKeyboard(event, action) {
     if (Platform.OS !== 'web') return;
     const key = event?.nativeEvent?.key ?? event?.key;
@@ -23,6 +27,7 @@ function activateFromKeyboard(event, action) {
     action();
 }
 
+// 요리 사진 주변에 붙는 건강 조건 주석 하나(알레르기, 건강 상태 등). 화면 크기에 따라 위치 스타일이 달라집니다.
 function ContextAnnotation({
     item,
     active,
@@ -120,6 +125,7 @@ function ContextAnnotation({
     );
 }
 
+// "냉장고 재료" 조건을 선택했을 때 사진 위 재료 위치에 표시하는 라벨들
 function IngredientMarkers({ progress, mobile, markers, palette }) {
     return (
         <Animated.View
@@ -151,6 +157,7 @@ function IngredientMarkers({ progress, mobile, markers, palette }) {
     );
 }
 
+// 사진 아래 레시피 정보 패널(제목, 선택한 조건의 추천 이유, 장면 이동 점)
 function RecipeInsight({
     activeItem,
     progress,
@@ -279,6 +286,11 @@ function RecipeInsight({
     );
 }
 
+/**
+ * 히어로 캐러셀 본체입니다.
+ * - 장면 상태/자동 넘김: useHeroCarousel, 스와이프: useHeroDrag
+ * - 웹에서는 가로 휠 스크롤과 좌우 방향키로도 장면을 넘길 수 있습니다.
+ */
 export default function HeroRecipeCarousel({ desktop, mobile, reducedMotion }) {
     const carousel = useHeroCarousel({ reducedMotion });
     const { dragX, panHandlers } = useHeroDrag({
@@ -286,6 +298,7 @@ export default function HeroRecipeCarousel({ desktop, mobile, reducedMotion }) {
         reducedMotion,
         setDragging: carousel.setDragging,
     });
+    // 다음 장면 이미지를 미리 불러와 전환 시 깜빡임을 줄이기 위한 상태
     const [canPreloadNext, setCanPreloadNext] = useState(false);
     const lastWheelAt = useRef(0);
     const foodIn = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
@@ -299,6 +312,7 @@ export default function HeroRecipeCarousel({ desktop, mobile, reducedMotion }) {
     const activeItem = healthContexts.find(item => item.id === carousel.activeContext);
     const nextScene = HERO_RECIPES[(carousel.sceneIndex + 1) % carousel.sceneCount];
 
+    // 처음 표시될 때 사진 → 건강 조건 주석(차례로) → 정보 패널 순서로 등장 애니메이션을 실행합니다.
     useEffect(() => {
         if (reducedMotion) {
             [foodIn, insightIn, ...contextEntrances].forEach(value => value.setValue(1));
@@ -335,6 +349,7 @@ export default function HeroRecipeCarousel({ desktop, mobile, reducedMotion }) {
         return () => animation.stop();
     }, [contextEntrances, foodIn, insightIn, reducedMotion]);
 
+    // "냉장고 재료" 조건이 선택되면 사진 위 재료 라벨을 보여 줍니다.
     useEffect(() => {
         const animation = Animated.timing(markerIn, {
             toValue: carousel.activeContext === 'fridge' ? 1 : 0,
@@ -345,6 +360,7 @@ export default function HeroRecipeCarousel({ desktop, mobile, reducedMotion }) {
         return () => animation.stop();
     }, [carousel.activeContext, markerIn, reducedMotion]);
 
+    // 트랙패드 가로 스크롤로 장면 이동. 너무 자주 넘어가지 않게 720ms 간격을 둡니다.
     const handleWheel = useCallback((event) => {
         const deltaX = event?.nativeEvent?.deltaX ?? event?.deltaX ?? 0;
         const deltaY = event?.nativeEvent?.deltaY ?? event?.deltaY ?? 0;
@@ -354,6 +370,7 @@ export default function HeroRecipeCarousel({ desktop, mobile, reducedMotion }) {
         carousel.goToRelativeScene(deltaX > 0 ? 1 : -1);
     }, [carousel.goToRelativeScene]);
 
+    // 좌우 방향키로 장면 이동
     const handleKeyDown = useCallback((event) => {
         const key = event?.nativeEvent?.key ?? event?.key;
         if (key === 'ArrowLeft') carousel.goToRelativeScene(-1);

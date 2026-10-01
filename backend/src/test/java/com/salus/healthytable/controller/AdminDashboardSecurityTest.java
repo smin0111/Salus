@@ -40,6 +40,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * 관리자 대시보드 API의 보안 규칙과 통계 응답 테스트입니다.
+ */
 @WebMvcTest(AdminDashboardController.class)
 @Import({
         SecurityConfig.class,
@@ -75,12 +78,14 @@ class AdminDashboardSecurityTest {
     @MockBean
     private JwtTokenProvider jwtTokenProvider;
 
+    // 날짜 경계 계산을 검증할 수 있도록 고정 Clock을 설정합니다.
     @org.junit.jupiter.api.BeforeEach
     void setUpClock() {
         when(clock.instant()).thenReturn(Instant.parse("2026-07-05T03:00:00Z"));
         when(clock.getZone()).thenReturn(ZoneId.of("Asia/Seoul"));
     }
 
+    // 로그인하지 않은 사용자는 관리자 권한 확인 API에 401을 받아야 합니다.
     @Test
     void unauthenticatedUserCannotCheckAdminAuth() throws Exception {
         mockMvc.perform(get("/api/admin/dashboard/auth-check"))
@@ -92,6 +97,7 @@ class AdminDashboardSecurityTest {
                 .andExpect(jsonPath("$.path").value("/api/admin/dashboard/auth-check"));
     }
 
+    // 일반 사용자는 관리자 권한 확인 API에 403을 받아야 합니다.
     @Test
     void ordinaryUserCannotCheckAdminAuth() throws Exception {
         mockMvc.perform(get("/api/admin/dashboard/auth-check").with(user("1").roles("USER")))
@@ -103,6 +109,7 @@ class AdminDashboardSecurityTest {
                 .andExpect(jsonPath("$.path").value("/api/admin/dashboard/auth-check"));
     }
 
+    // 관리자는 통계를 조회하지 않고도 권한 확인에 성공해야 합니다.
     @Test
     void adminCanCheckAdminAuthWithoutLoadingStats() throws Exception {
         mockMvc.perform(get("/api/admin/dashboard/auth-check").with(user("1").roles("ADMIN")))
@@ -112,6 +119,7 @@ class AdminDashboardSecurityTest {
         verifyNoInteractions(userRepository, activityLogRepository, paymentRepository);
     }
 
+    // 로그인하지 않은 사용자는 통계를 볼 수 없어야 합니다.
     @Test
     void unauthenticatedUserCannotReadAdminStats() throws Exception {
         mockMvc.perform(get("/api/admin/dashboard/stats"))
@@ -123,6 +131,7 @@ class AdminDashboardSecurityTest {
                 .andExpect(jsonPath("$.path").value("/api/admin/dashboard/stats"));
     }
 
+    // 일반 사용자는 통계를 볼 수 없어야 합니다.
     @Test
     void ordinaryUserCannotReadAdminStats() throws Exception {
         mockMvc.perform(get("/api/admin/dashboard/stats").with(user("1").roles("USER")))
@@ -134,6 +143,7 @@ class AdminDashboardSecurityTest {
                 .andExpect(jsonPath("$.path").value("/api/admin/dashboard/stats"));
     }
 
+    // 관리자는 통계를 조회할 수 있어야 합니다.
     @Test
     void adminCanReadAdminStats() throws Exception {
         when(userRepository.count()).thenReturn(10L);
@@ -158,6 +168,7 @@ class AdminDashboardSecurityTest {
                 .andExpect(jsonPath("$.monthPaymentAmount").value(69300));
     }
 
+    // 통계 응답에 개인정보나 원본 로그가 포함되면 안 됩니다.
     @Test
     void adminStatsDoesNotExposePersonalDataOrRawLogs() throws Exception {
         mockMvc.perform(get("/api/admin/dashboard/stats").with(user("1").roles("ADMIN")))
@@ -170,6 +181,7 @@ class AdminDashboardSecurityTest {
                 .andExpect(jsonPath("$.errorLogs").doesNotExist());
     }
 
+    // application 상태는 Actuator 헬스 체크 결과를 반영해야 합니다.
     @Test
     void adminStatsUsesActuatorHealthForApplicationStatus() throws Exception {
         when(healthEndpoint.health()).thenReturn(Health.down().build());
@@ -184,6 +196,7 @@ class AdminDashboardSecurityTest {
                 .andExpect(jsonPath("$.serverStatus.payment").doesNotExist());
     }
 
+    // 오늘/어제 경계는 주입한 Clock 기준으로 계산해야 합니다.
     @Test
     void adminStatsUsesConfiguredClockForDailyBoundaries() throws Exception {
         when(clock.instant()).thenReturn(Instant.parse("2026-07-05T15:30:00Z"));
@@ -202,6 +215,7 @@ class AdminDashboardSecurityTest {
         verify(paymentRepository).sumAmountByPaidAtBetweenAndStatus(expectedTodayStart, expectedTodayEnd, "paid");
     }
 
+    // 일별 결제 통계 날짜를 MM-dd 형식으로 안전하게 변환해야 합니다.
     @Test
     void adminStatsFormatsDailyPaymentStatsSafely() throws Exception {
         when(paymentRepository.findDailyPaymentStats(any(LocalDateTime.class))).thenReturn(Arrays.asList(

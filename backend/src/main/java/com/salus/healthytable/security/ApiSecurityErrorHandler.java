@@ -15,6 +15,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * 인증/인가 실패를 JSON 오류 응답으로 바꿔 주는 핸들러입니다.
+ *
+ * - 401 Unauthorized: 로그인하지 않았거나 토큰이 유효하지 않음
+ * - 403 Forbidden: 로그인은 했지만 해당 API를 쓸 권한이 없음
+ * SecurityConfig에서 authenticationEntryPoint / accessDeniedHandler로 연결됩니다.
+ */
 @Component
 @RequiredArgsConstructor
 public class ApiSecurityErrorHandler {
@@ -33,6 +40,7 @@ public class ApiSecurityErrorHandler {
 
     private void writeError(HttpServletResponse response, HttpServletRequest request, int status, String error,
             String message) throws IOException {
+        // 이미 응답이 클라이언트로 전송되기 시작했다면 상태 코드나 본문을 바꿀 수 없으므로 그대로 종료합니다.
         if (response.isCommitted()) {
             return;
         }

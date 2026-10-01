@@ -1,3 +1,7 @@
+/**
+ * 서비스 화면(로그인 이후 화면)에서 쓰는 색상, 모서리 둥글기, 글자 스타일, 공통 컨트롤 스타일 모음입니다.
+ * 색상 값을 화면마다 직접 쓰지 않고 이 파일의 이름(primary, text 등)으로 참조하면 디자인을 한 곳에서 바꿀 수 있습니다.
+ */
 export const colors = {
     // Landing의 Visual Language를 서비스 화면용 semantic role로 확장합니다.
     primary: '#A63C24',
@@ -11,23 +15,27 @@ export const colors = {
     logoInk: '#084038',
     logoCore: '#F87820',
 
+    // 배경/카드 표면 색
     background: '#F3F0E7',
     surface: '#FFFDF7',
     surfaceAlt: '#F7F3E9',
     surfaceStrong: '#EEE8DC',
 
+    // 글자 색(기본/보조/흐림/장식용)과 주요 버튼 위 글자 색
     text: '#17231D',
     textSecondary: '#566158',
     textTertiary: '#626D65',
     textDecorative: '#7B837C',
     onPrimary: '#FFFDF7',
 
+    // 테두리, 구분선, 비활성 상태 색
     border: '#D8D2C4',
     borderHighlight: '#BEB7A8',
     divider: '#E3DDD1',
     disabled: '#E6E1D6',
     disabledText: '#7B837C',
 
+    // 상태 색: 성공/경고/오류/정보와 각각의 옅은 배경색
     success: '#2F6B49',
     successLight: '#E1EEE4',
     warning: '#8A5A13',
@@ -38,6 +46,7 @@ export const colors = {
     infoLight: '#E3EEF0',
     overlay: 'rgba(23, 35, 29, 0.48)',
 
+    // 그림자 단계(sm < md < lg). elevation은 Android용 그림자 값입니다.
     shadow: {
         sm: {
             shadowColor: '#17231D',
@@ -63,6 +72,7 @@ export const colors = {
     },
 };
 
+// 모서리 둥글기 크기 단계
 export const radii = {
     xs: 4,
     sm: 8,
@@ -73,6 +83,7 @@ export const radii = {
     pill: 999,
 };
 
+// 글자 크기/줄 높이/굵기 조합(제목, 본문, 캡션 등)
 export const typography = {
     pageTitle: { fontSize: 20, lineHeight: 27, fontWeight: '800', color: colors.text },
     sectionTitle: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: colors.text },
@@ -84,6 +95,7 @@ export const typography = {
     button: { fontSize: 14, lineHeight: 20, fontWeight: '800' },
 };
 
+// 카드, 입력창, 버튼처럼 여러 화면에서 반복되는 기본 스타일
 export const controlStyles = {
     card: {
         backgroundColor: colors.surface,

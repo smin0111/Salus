@@ -24,6 +24,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link RecommendationService} 테스트입니다.
+ */
 class RecommendationServiceTest {
 
     private final RecipeRepository recipeRepository = mock(RecipeRepository.class);
@@ -36,6 +39,7 @@ class RecommendationServiceTest {
             healthProfileRepository,
             recommendationRepository);
 
+    // 알레르기 재료가 들어간 레시피는 추천에서 빠지고, 빈 냉장고 값은 정리된 뒤 점수가 계산되어야 합니다.
     @Test
     void generateRecommendationsExcludesAllergyRecipesAndNormalizesLegacyValues() {
         Recipe watermelonRecipe = recipe(10L, "수박화채", Arrays.asList("수박", "얼음"));
@@ -64,6 +68,25 @@ class RecommendationServiceTest {
         assertThat(saved.getReason()).contains("두부");
     }
 
+    // 같은 등록값 "굴"이 추천 경로에서도 보존되어 해당 재료가 있는 레시피를 제외해야 합니다.
+    @Test
+    void storedOysterAllergyStillExcludesOysterRecipe() {
+        HealthProfile profile = new HealthProfile();
+        profile.setAllergies(List.of("굴"));
+        when(healthProfileRepository.findByUserId(1L)).thenReturn(Optional.of(profile));
+        when(recipeRepository.findAll()).thenReturn(List.of(
+                recipe(10L, "굴 두부 요리", List.of("굴", "두부")),
+                recipe(20L, "두부 요리", List.of("두부"))));
+        when(fridgeItemRepository.findByUserId(1L)).thenReturn(List.of(fridgeItem("두부")));
+        when(recommendationRepository.save(any(Recommendation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(service.generateRecommendations(1L)).extracting(Recommendation::getRecipeId).containsExactly(20L);
+        ArgumentCaptor<Recommendation> captor = ArgumentCaptor.forClass(Recommendation.class);
+        verify(recommendationRepository).save(captor.capture());
+        assertThat(captor.getValue().getRecipeId()).isEqualTo(20L);
+    }
+
+    // 추천된 레시피가 삭제되어 없어도 "알 수 없는 레시피"로 안전하게 응답해야 합니다.
     @Test
     void getRecommendationsMapsMissingRecipeSafely() {
         Recommendation recommendation = new Recommendation();
@@ -82,6 +105,7 @@ class RecommendationServiceTest {
         assertThat(response.get(0).getReason()).isEqualTo("추천 사유");
     }
 
+    // 사용자 ID가 null이면 DB 조회 전에 거부해야 합니다.
     @Test
     void generateRecommendationsRejectsNullUserIdBeforeRepositoryLookup() {
         assertThatThrownBy(() -> service.generateRecommendations(null))

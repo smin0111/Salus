@@ -6,10 +6,14 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * {@link RecipeDraftValidator} 테스트입니다. 규칙마다 통과/실패 예시와 실패 코드를 확인합니다.
+ */
 class RecipeDraftValidatorTest {
 
     private final RecipeDraftValidator validator = new RecipeDraftValidator();
 
+    // 조리 단계에서 쓴 재료가 재료 목록에 없으면 실패해야 합니다.
     @Test
     void stepIngredientNotDeclaredFailsValidation() {
         GeneratedRecipeDraft draft = draft(
@@ -24,6 +28,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.codes()).contains("STEP_INGREDIENT_NOT_DECLARED");
     }
 
+    // 조리 설명 속 단어를 재료로 추측하지 않아야 합니다.
     @Test
     void instructionTokensAreNotGuessedAsIngredients() {
         GeneratedRecipeDraft draft = draft(
@@ -37,6 +42,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.reasons()).doesNotContain("잘게", "썰어", "5분");
     }
 
+    // 달걀과 계란은 같은 재료로 인정해야 합니다.
     @Test
     void eggAndGyeranAreAliases() {
         GeneratedRecipeDraft draft = draft(
@@ -49,6 +55,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.valid()).isTrue();
     }
 
+    // 불을 쓰지 않는 음료는 불 세기 없이 통과해야 합니다.
     @Test
     void noHeatBeveragePassesWithoutHeatLevel() {
         GeneratedRecipeDraft draft = draft(
@@ -68,6 +75,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.valid()).isTrue();
     }
 
+    // 무가열 음료에 불 세기가 있으면 실패해야 합니다.
     @Test
     void noHeatBeverageWithHeatLevelFailsValidation() {
         GeneratedRecipeDraft draft = draft(
@@ -81,6 +89,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.codes()).contains("NO_HEAT_HAS_HEAT_LEVEL");
     }
 
+    // 대체 후 재료는 재료 목록과 조리 단계 모두에 있어야 합니다.
     @Test
     void substitutionTargetMustRemainInIngredientsAndSteps() {
         GeneratedRecipeDraft draft = draft(
@@ -103,6 +112,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.valid()).isTrue();
     }
 
+    // 영어 단위 tbsp는 큰술로 정규화되어야 합니다.
     @Test
     void englishTablespoonIsNormalizedToKoreanUnit() {
         GeneratedIngredient ingredient = new GeneratedIngredient("고추장", 2.0, "tbsp", null);
@@ -112,6 +122,7 @@ class RecipeDraftValidatorTest {
         assertThat(mapper.toIngredientLines(List.of(ingredient))).containsExactly("고추장 2큰술");
     }
 
+    // 알 수 없는 단위는 실패해야 합니다.
     @Test
     void unknownEnglishUnitFailsValidation() {
         GeneratedRecipeDraft draft = draft(
@@ -125,6 +136,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.codes()).contains("INGREDIENT_UNIT_UNKNOWN");
     }
 
+    // medium-high 불 세기는 중강불로 정규화되어야 합니다.
     @Test
     void mediumHighHeatLevelIsNormalized() {
         GeneratedCookingStep step = new GeneratedCookingStep(1, "팬을 달군 뒤 볶습니다", "medium-high", 3, "향이 올라온 상태", "타면 중불로 낮추세요", List.of("감자"));
@@ -139,6 +151,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.valid()).isTrue();
     }
 
+    // 무가열 음료에 medium(중불)이 들어가면 정규화 후에도 실패해야 합니다.
     @Test
     void noHeatBeverageWithMediumFailsAfterNormalization() {
         GeneratedRecipeDraft draft = draft(
@@ -152,6 +165,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.codes()).contains("NO_HEAT_HAS_HEAT_LEVEL");
     }
 
+    // 대체 요청에 수량 조정 설명이 없으면 QUANTITY_ADJUSTMENT_MISSING 코드로 실패해야 합니다.
     @Test
     void substitutionWithoutQuantityAdjustmentFailsWithSpecificCode() {
         GeneratedRecipeDraft draft = draft(
@@ -175,6 +189,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.codes()).contains("QUANTITY_ADJUSTMENT_MISSING");
     }
 
+    // "substitution" 같은 의미 없는 값은 수량 조정 설명으로 인정하지 않아야 합니다.
     @Test
     void substitutionLabelIsNotAcceptedAsQuantityAdjustment() {
         GeneratedRecipeDraft draft = draft(
@@ -198,6 +213,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.codes()).contains("QUANTITY_ADJUSTMENT_MISSING");
     }
 
+    // 제외한 재료를 조리 지시에서 사용하면 실패해야 합니다.
     @Test
     void excludedIngredientUsedInInstructionFails() {
         GeneratedRecipeDraft draft = draft(
@@ -211,6 +227,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.codes()).contains("EXCLUDED_INGREDIENT_REMAINED");
     }
 
+    // "양파 없이"처럼 제외를 설명하는 문장은 실패로 보지 않아야 합니다.
     @Test
     void excludedIngredientNegationInInstructionDoesNotFail() {
         GeneratedRecipeDraft draft = draft(
@@ -223,6 +240,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.valid()).isTrue();
     }
 
+    // 제외한 재료가 재료 목록에 남아 있으면 실패해야 합니다.
     @Test
     void excludedIngredientRemainingFailsValidation() {
         GeneratedRecipeDraft draft = draft(
@@ -236,6 +254,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.codes()).contains("EXCLUDED_INGREDIENT_REMAINED");
     }
 
+    // 요청한 요리 이름과 생성된 제목이 일치해야 합니다.
     @Test
     void requestedDishAndGeneratedTitleMustMatch() {
         GeneratedRecipeDraft draft = draft(
@@ -258,6 +277,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.codes()).contains("TITLE_MISMATCH");
     }
 
+    // 요청한 요리를 다른 종류의 요리(예: 김치 → 김치볶음밥)로 바꾸면 실패해야 합니다.
     @Test
     void requestedDishCannotBeChangedIntoAnotherDishType() {
         GeneratedRecipeDraft draft = draft(
@@ -280,6 +300,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.codes()).contains("TITLE_MISMATCH");
     }
 
+    // 실제로 따라 할 수 있는 레시피가 되려면 인분 수와 조리 시간이 필수여야 합니다.
     @Test
     void servingsAndCookingTimeAreRequiredForExecutableRecipe() {
         GeneratedRecipeDraft draft = new GeneratedRecipeDraft(
@@ -308,6 +329,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.codes()).contains("SERVINGS_REQUIRED", "COOKING_TIME_REQUIRED");
     }
 
+    // 0 이하의 재료 수량은 거부해야 합니다.
     @Test
     void zeroOrNegativeIngredientAmountIsRejected() {
         GeneratedRecipeDraft draft = draft(
@@ -330,6 +352,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.codes()).contains("INGREDIENT_AMOUNT_INVALID");
     }
 
+    // 별칭만 다른 같은 재료(달걀/계란)가 중복 선언되면 거부해야 합니다.
     @Test
     void aliasDuplicateIngredientsAreRejected() {
         GeneratedRecipeDraft draft = draft(
@@ -352,6 +375,7 @@ class RecipeDraftValidatorTest {
         assertThat(result.codes()).contains("INGREDIENT_DUPLICATED");
     }
 
+    // 가열 단계에는 불 세기, 시간, 완료 기준이 필요해야 합니다.
     @Test
     void heatedStepRequiresHeatTimeAndCompletionCue() {
         GeneratedRecipeDraft draft = draft(
@@ -377,6 +401,7 @@ class RecipeDraftValidatorTest {
                 "COMPLETION_CUE_REQUIRED");
     }
 
+    // 고위험 단백질에는 속까지 익었는지 확인하는 완료 기준이 필요해야 합니다.
     @Test
     void highRiskProteinRequiresSafeDonenessCue() {
         GeneratedRecipeDraft draft = draft(
@@ -399,6 +424,201 @@ class RecipeDraftValidatorTest {
         assertThat(result.codes()).contains("PROTEIN_DONENESS_CUE_REQUIRED");
     }
 
+    // 내부 작성 규칙 문구가 조리 설명에 노출되면 실패해야 합니다.
+    @Test
+    void leakedAuthoringRuleFailsValidation() {
+        GeneratedRecipeDraft draft = draft(
+                "김치볶음밥",
+                List.of(new GeneratedIngredient("김치", "200g"), new GeneratedIngredient("밥", "1공기")),
+                List.of(new GeneratedCookingStep(
+                        1,
+                        "청양고추가 재료 목록에 표시된 경우에만 김치와 밥을 볶습니다",
+                        "중불",
+                        5,
+                        "밥알에 김치 양념이 고르게 밴 상태",
+                        "팬이 마르면 식용유를 조금 보충하세요",
+                        List.of("김치", "밥"))));
+
+        RecipeDraftValidator.ValidationResult result = validator.validate(
+                request("김치볶음밥", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.codes()).contains("AUTHORING_RULE_LEAKED");
+    }
+
+    // 단계별 시간 합계가 전체 조리 시간의 허용 오차(10%)를 넘으면 실패해야 합니다.
+    @Test
+    void stepTimeSumBeyondTenPercentToleranceFailsValidation() {
+        GeneratedRecipeDraft draft = new GeneratedRecipeDraft(
+                "감자볶음",
+                "설명",
+                2,
+                35,
+                200,
+                1,
+                List.of(new GeneratedIngredient("감자", "2개")),
+                List.of(
+                        new GeneratedCookingStep(1, "감자를 썹니다", "무가열", 20,
+                                "크기가 고른 상태", "", List.of("감자")),
+                        new GeneratedCookingStep(2, "감자를 팬에서 볶습니다", "중불", 21,
+                                "감자가 속까지 익은 상태", "타면 불을 낮추세요", List.of("감자"))),
+                List.of());
+
+        RecipeDraftValidator.ValidationResult result = validator.validate(
+                request("감자볶음", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.codes()).contains("TIME_CONFLICT");
+    }
+
+    // 손질 단계에는 조리 온도를 넣을 수 없어야 합니다.
+    @Test
+    void preparationStepCannotExposeCookingTemperature() {
+        GeneratedRecipeDraft draft = draft(
+                "된장찌개",
+                List.of(new GeneratedIngredient("감자", "100g")),
+                List.of(new GeneratedCookingStep(
+                        1, "감자를 고르게 썹니다", "무가열", 250, 7,
+                        "감자 크기가 고른 상태", null, List.of("감자"))));
+
+        RecipeDraftValidator.ValidationResult result = validator.validate(
+                request("된장찌개", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.codes()).contains("NON_OVEN_TEMPERATURE_FORBIDDEN");
+    }
+
+    // 팬/냄비 단계에는 기기용 온도(℃)를 넣을 수 없어야 합니다.
+    @Test
+    void stovetopStepCannotExposeApplianceTemperature() {
+        GeneratedRecipeDraft draft = draft(
+                "된장찌개",
+                List.of(new GeneratedIngredient("된장", "40g")),
+                List.of(new GeneratedCookingStep(
+                        1, "냄비에서 된장을 풀어 끓입니다", "중불", 180, 3,
+                        "된장 덩어리 없이 국물이 균일한 상태", null, List.of("된장"))));
+
+        RecipeDraftValidator.ValidationResult result = validator.validate(
+                request("된장찌개", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.codes()).contains("NON_OVEN_TEMPERATURE_FORBIDDEN");
+    }
+
+    // 과조리된 상태에 더 가열하라는 복구 팁은 실패해야 합니다.
+    @Test
+    void recoveryActionCannotWorsenOvercookedIngredient() {
+        GeneratedRecipeDraft draft = draft(
+                "된장찌개",
+                List.of(new GeneratedIngredient("애호박", "100g")),
+                List.of(new GeneratedCookingStep(
+                        1, "애호박을 냄비에서 끓입니다", "중약불", 7,
+                        "애호박 모양이 유지된 상태",
+                        "애호박이 너무 부드러우면 불을 높이거나 더 오래 끓이세요",
+                        List.of("애호박"))));
+
+        RecipeDraftValidator.ValidationResult result = validator.validate(
+                request("된장찌개", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.codes()).contains("RECOVERY_ACTION_CONTRADICTS_FAILURE");
+    }
+
+    // 풀리지 않은 양념 덩어리에 더 끓이라는 복구 팁은 실패해야 합니다.
+    @Test
+    void additionalBoilingCannotBeSuggestedForUnmixedPaste() {
+        GeneratedRecipeDraft draft = draft(
+                "된장찌개",
+                List.of(new GeneratedIngredient("된장", "40g")),
+                List.of(new GeneratedCookingStep(
+                        1, "육수에 된장을 풀어 끓입니다", "중불", 3,
+                        "된장 덩어리 없이 국물이 균일한 상태",
+                        "된장이 덩어리로 남으면 더 오래 끓이거나 체에 걸러 다시 섞으세요",
+                        List.of("된장"))));
+
+        RecipeDraftValidator.ValidationResult result = validator.validate(
+                request("된장찌개", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.codes()).contains("RECOVERY_ACTION_INEFFECTIVE");
+    }
+
+    // 마무리로 넣는 파를 완전히 익히려고 불을 높이라는 지시는 실패해야 합니다.
+    @Test
+    void finishingScallionDoesNotNeedMoreHeatToBecomeFullyCooked() {
+        GeneratedRecipeDraft draft = draft(
+                "된장찌개",
+                List.of(new GeneratedIngredient("대파", "20g")),
+                List.of(new GeneratedCookingStep(
+                        1, "대파를 넣어 짧게 끓이고 불을 끕니다", "중불", 2,
+                        "파 향이 나고 국물이 가볍게 끓는 상태",
+                        "대파가 익지 않으면 더 오래 끓이거나 불을 더 높이세요",
+                        List.of("대파"))));
+
+        RecipeDraftValidator.ValidationResult result = validator.validate(
+                request("된장찌개", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.codes()).contains("UNNECESSARY_DONENESS_RECOVERY");
+    }
+
+    // 되돌릴 수 없는 실패라면 복구 팁이 없어도 통과해야 합니다.
+    @Test
+    void recoveryTipIsOptionalWhenTheFailureCannotBeReversed() {
+        GeneratedRecipeDraft draft = draft(
+                "감자볶음",
+                List.of(new GeneratedIngredient("감자", "200g")),
+                List.of(new GeneratedCookingStep(
+                        1, "감자를 팬에서 볶습니다", "중불", 5,
+                        "표면이 노릇하고 중심이 부드러운 상태", null, List.of("감자"))));
+
+        RecipeDraftValidator.ValidationResult result = validator.validate(
+                request("감자볶음", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.valid()).isTrue();
+    }
+
+    // 두부에 육류식 "중심까지 익히기" 안전 문구를 붙이면 실패해야 합니다.
+    @Test
+    void meatStyleSafetyWarningForTofuIsRejected() {
+        GeneratedRecipeDraft draft = new GeneratedRecipeDraft(
+                "된장찌개",
+                "설명",
+                2,
+                10,
+                210,
+                1,
+                List.of(new GeneratedIngredient("두부", "150g")),
+                List.of(new GeneratedCookingStep(
+                        1, "두부를 냄비에서 끓입니다", "중약불", 7,
+                        "두부가 따뜻하고 국물이 가볍게 끓는 상태", null, List.of("두부"))),
+                List.of("두부는 완전히 익혀야 합니다. 젓가락으로 중심까지 확인하세요."));
+
+        RecipeDraftValidator.ValidationResult result = validator.validate(
+                request("된장찌개", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.codes()).contains("EXCESSIVE_SAFETY_NOTE");
+    }
+
+    // "적당한 상태"처럼 관찰할 수 없는 완료 기준은 실패해야 합니다.
+    @Test
+    void vagueCompletionCueIsRejected() {
+        GeneratedRecipeDraft draft = draft(
+                "감자볶음",
+                List.of(new GeneratedIngredient("감자", "200g")),
+                List.of(new GeneratedCookingStep(
+                        1, "감자를 팬에서 볶습니다", "중불", 5,
+                        "적당한 상태", null, List.of("감자"))));
+
+        RecipeDraftValidator.ValidationResult result = validator.validate(
+                request("감자볶음", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.codes()).contains("COMPLETION_CUE_NOT_OBSERVABLE");
+    }
+
+    // 테스트용 생성 요청과 초안을 만드는 도우미 메서드들입니다.
     private RecipeGenerationRequest request(
             String title,
             List<String> excluded,
@@ -417,6 +637,148 @@ class RecipeDraftValidatorTest {
                 List.of(),
                 excluded,
                 substitutions);
+    }
+
+    // 기구 이름만 나오고 실제 가열이 아닌 취급 단계에는 온도·시간을 요구하지 않아야 합니다.
+    // "에어프라이어에서 꺼내어 식힌다"까지 가열 단계로 보면 정상 레시피가 실패합니다.
+    @Test
+    void applianceMentionWithoutHeatingActionDoesNotRequireTemperature() {
+        GeneratedRecipeDraft draft = draft(
+                "에어프라이어 감자구이",
+                List.of(new GeneratedIngredient("감자", "2개")),
+                List.of(
+                        new GeneratedCookingStep(1, "에어프라이어에 감자를 넣고 190도로 익힙니다",
+                                "무가열", 190, 20, "감자가 노릇하게 익은 상태", null, List.of("감자")),
+                        new GeneratedCookingStep(2, "에어프라이어에서 감자를 꺼내어 식힙니다",
+                                "무가열", null, 0, null, null, List.of("감자"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("에어프라이어 감자구이", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).doesNotContain(
+                "COOKING_TEMPERATURE_REQUIRED", "COOKING_MINUTES_REQUIRED", "COMPLETION_CUE_REQUIRED");
+    }
+
+    // 실제 가열 동작이 있는 오븐·에어프라이어 단계에는 온도를 계속 요구해야 합니다.
+    @Test
+    void applianceStepWithHeatingActionStillRequiresTemperature() {
+        GeneratedRecipeDraft draft = draft(
+                "에어프라이어 감자구이",
+                List.of(new GeneratedIngredient("감자", "2개")),
+                List.of(new GeneratedCookingStep(1, "에어프라이어에 감자를 넣고 굽습니다",
+                        "무가열", null, 20, "감자가 노릇하게 익은 상태", null, List.of("감자"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("에어프라이어 감자구이", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).contains("COOKING_TEMPERATURE_REQUIRED");
+    }
+
+    // 취급 표현이 섞여 있어도 가열 동작이 함께 있으면 가열 단계로 봅니다.
+    @Test
+    void heatingVerbWinsOverHandlingWordInApplianceStep() {
+        GeneratedRecipeDraft draft = draft(
+                "오븐 감자구이",
+                List.of(new GeneratedIngredient("감자", "2개")),
+                List.of(new GeneratedCookingStep(1, "오븐에 넣어 구운 뒤 꺼냅니다",
+                        "무가열", null, 15, "감자가 노릇하게 익은 상태", null, List.of("감자"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("오븐 감자구이", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).contains("COOKING_TEMPERATURE_REQUIRED");
+    }
+
+    // 기구를 언급하지 않은 단계의 temperatureC는 계속 금지해야 합니다.
+    @Test
+    void temperatureStillForbiddenWhenNoApplianceMentioned() {
+        GeneratedRecipeDraft draft = draft(
+                "감자볶음",
+                List.of(new GeneratedIngredient("감자", "2개")),
+                List.of(new GeneratedCookingStep(1, "감자를 팬에 볶습니다",
+                        "중불", 200, 5, "감자가 노릇하게 익은 상태", null, List.of("감자"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("감자볶음", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).contains("NON_OVEN_TEMPERATURE_FORBIDDEN");
+    }
+
+    // 통조림처럼 이미 가열된 형태는 "중심까지 익힘" 확인을 요구하지 않아야 합니다.
+    // "참치캔"이 "참치"에 부분 일치해 생선회처럼 취급되던 오탐입니다.
+    @Test
+    void precookedProteinDoesNotRequireDonenessCue() {
+        GeneratedRecipeDraft draft = draft(
+                "참치김치찌개",
+                List.of(new GeneratedIngredient("김치", "200g"), new GeneratedIngredient("참치캔", "1개")),
+                List.of(new GeneratedCookingStep(1, "김치를 볶다가 참치를 넣고 끓입니다",
+                        "중불", 10, "김치 색이 진해진 상태", null, List.of("김치", "참치캔"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("참치김치찌개", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).doesNotContain("PROTEIN_DONENESS_CUE_REQUIRED");
+    }
+
+    // 생참치는 그대로 "중심까지 익힘" 확인을 요구해야 합니다. 규칙이 약해지면 안 됩니다.
+    @Test
+    void rawFishStillRequiresDonenessCue() {
+        GeneratedRecipeDraft draft = draft(
+                "참치스테이크",
+                List.of(new GeneratedIngredient("참치", "200g")),
+                List.of(new GeneratedCookingStep(1, "참치를 팬에 굽습니다",
+                        "중불", 5, "겉면이 노릇해진 상태", null, List.of("참치"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("참치스테이크", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).contains("PROTEIN_DONENESS_CUE_REQUIRED");
+    }
+
+    // 생고기도 그대로 요구해야 합니다.
+    @Test
+    void rawPorkStillRequiresDonenessCue() {
+        GeneratedRecipeDraft draft = draft(
+                "김치찌개",
+                List.of(new GeneratedIngredient("돼지고기", "200g")),
+                // "익은 상태"는 검증기가 허용하는 표현이므로 일부러 쓰지 않습니다.
+                List.of(new GeneratedCookingStep(1, "돼지고기를 볶습니다",
+                        "중불", 7, "고기 색이 변한 상태", null, List.of("돼지고기"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("김치찌개", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).contains("PROTEIN_DONENESS_CUE_REQUIRED");
+    }
+
+    // "햄버거패티"는 "햄"을 포함하지만 생고기입니다. 가공품 예외로 익힘 확인이 빠지면 안 됩니다.
+    @Test
+    void rawHamburgerPattyStillRequiresDonenessCue() {
+        GeneratedRecipeDraft draft = draft(
+                "햄버그스테이크",
+                List.of(new GeneratedIngredient("햄버거패티", "2장")),
+                List.of(new GeneratedCookingStep(1, "햄버거패티를 팬에 굽습니다",
+                        "중불", 8, "겉면이 노릇해진 상태", null, List.of("햄버거패티"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("햄버그스테이크", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).contains("PROTEIN_DONENESS_CUE_REQUIRED");
+    }
+
+    // 베이컨은 가열 전 상태로 팔리는 경우가 많아 가공품 예외를 적용하지 않습니다.
+    @Test
+    void baconMadeFromPorkStillRequiresDonenessCue() {
+        GeneratedRecipeDraft draft = draft(
+                "베이컨볶음밥",
+                List.of(new GeneratedIngredient("돼지고기 베이컨", "100g")),
+                List.of(new GeneratedCookingStep(1, "돼지고기 베이컨을 팬에 볶습니다",
+                        "중불", 5, "노릇해진 상태", null, List.of("돼지고기 베이컨"))));
+
+        RecipeDraftValidator.ValidationResult result =
+                validator.validate(request("베이컨볶음밥", List.of(), List.of(), List.of()), draft);
+
+        assertThat(result.codes()).contains("PROTEIN_DONENESS_CUE_REQUIRED");
     }
 
     private GeneratedRecipeDraft draft(String title, List<GeneratedIngredient> ingredients, List<GeneratedCookingStep> steps) {

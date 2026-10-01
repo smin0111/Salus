@@ -10,6 +10,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * 실제 Ollama를 호출해 대표 한식 레시피가 모든 정확도 검증을 통과하는지 확인하는 라이브 테스트입니다.
+ * 로컬 LLM이 필요해 기본적으로 실행되지 않으며, 시스템 속성으로 명시적으로 켜야 합니다.
+ */
 @EnabledIfSystemProperty(named = "레시피정확도실행", matches = "true")
 class RecipeAccuracyLiveTest {
 
@@ -20,6 +24,7 @@ class RecipeAccuracyLiveTest {
     private final RecipeReplyFormatter formatter = new RecipeReplyFormatter(mapper);
     private final RecipeValidator evidenceValidator = new RecipeValidator();
 
+    // 선택한 요리마다 레시피를 생성해 초안 검증과 근거 검증을 모두 통과해야 합니다.
     @Test
     void representativeKoreanRecipesPassEveryAccuracyGate() {
         OllamaRecipeGenerationClient client = new OllamaRecipeGenerationClient(
@@ -66,6 +71,7 @@ class RecipeAccuracyLiveTest {
         }
     }
 
+    // 평가 케이스의 요리 이름과 근거로 생성 요청을 만듭니다.
     private RecipeGenerationRequest request(AccuracyCase accuracyCase) {
         return new RecipeGenerationRequest(
                 RecipeGenerationRequest.Mode.CREATE,
@@ -82,6 +88,7 @@ class RecipeAccuracyLiveTest {
                 List.of());
     }
 
+    // 평가할 요리와 근거 텍스트 목록
     private List<AccuracyCase> cases() {
         return List.of(
                 new AccuracyCase(
@@ -120,6 +127,7 @@ class RecipeAccuracyLiveTest {
                                 """));
     }
 
+    // 평가 케이스(요리 이름, 근거)
     private record AccuracyCase(String title, String evidence) {
     }
 }

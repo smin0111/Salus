@@ -6,10 +6,14 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * {@link RecipeReplyFormatter} 테스트입니다. 프론트엔드가 읽는 답변 형식이 유지되는지 확인합니다.
+ */
 class RecipeReplyFormatterTest {
 
     private final RecipeReplyFormatter formatter = new RecipeReplyFormatter(new RecipeDraftMapper());
 
+    // 요약 줄, [건강 주의], [재료 - N인분], [조리 순서] 섹션 형식이 유지되어야 합니다.
     @Test
     void formatterKeepsFrontendCompatibleRecipeTextShape() {
         GeneratedRecipeDraft draft = new GeneratedRecipeDraft(
@@ -26,15 +30,16 @@ class RecipeReplyFormatterTest {
         String reply = formatter.format(draft, List.of());
 
         assertThat(reply)
-                .startsWith("김치짜글이 레시피입니다.")
-                .contains("조리 시간: 35분 / 열량: 520kcal / 난이도: 2")
+                .startsWith("김치짜글이 1인분 레시피입니다.")
+                .contains("조리 시간: 35분 / 열량: 1인분당 약 520kcal / 난이도: 2")
                 .contains("[건강 주의]")
-                .contains("[재료]")
+                .contains("[재료 - 1인분]")
                 .contains("- 김치 150g")
                 .contains("[조리 순서]")
                 .contains("1. 김치와 돼지고기를 냄비에 넣습니다.");
     }
 
+    // 구조화 레시피 답변에는 예전 텍스트 보정 규칙(재료 자동 추가 등)을 적용하지 않아야 합니다.
     @Test
     void structuredFormatterDoesNotApplyLegacyQualityGuard() {
         GeneratedRecipeDraft draft = new GeneratedRecipeDraft(
@@ -57,7 +62,7 @@ class RecipeReplyFormatterTest {
 
         String reply = formatter.format(draft, List.of());
 
-        assertThat(reply).contains("[재료]");
+        assertThat(reply).contains("[재료 - 1인분]");
         assertThat(reply).contains("[조리 순서]");
         assertThat(reply).doesNotContain("- 버터 1큰술");
     }

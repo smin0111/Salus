@@ -17,13 +17,20 @@ const AuthContext = createContext();
 // OAuth 리다이렉트가 돌아왔을 때 브라우저 세션을 앱 인증 흐름으로 마무리합니다.
 WebBrowser.maybeCompleteAuthSession();
 
+/**
+ * 로그인 상태를 앱 전체에 제공하는 Provider 컴포넌트입니다.
+ * 제공 값: isLoggedIn, user, token, login(소셜 종류), logout, refreshUser, loading
+ * 화면에서는 const { user, login } = useAuth(); 처럼 꺼내 씁니다.
+ */
 export const AuthProvider = ({ children }) => {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [user, setUser] = useState(null);
     const [token, setToken] = useState(null);
     const [loading, setLoading] = useState(true); // 저장된 로그인 정보를 먼저 복원해야 하므로 초기에는 로딩 상태로 둡니다.
     const processedResponse = useRef(null); // 같은 OAuth 응답을 반복 처리하면 로그인 API가 중복 호출될 수 있어 마지막 처리값을 기억합니다.
+    // "로그인 만료" 알림을 여러 API 실패마다 반복해서 띄우지 않기 위한 표시값입니다.
     const sessionExpiredNotified = useRef(false);
+    // 네이버 로그인 후 앱(salus:// 스킴)으로 돌아올 주소
     const naverRedirectUri = AuthSession.makeRedirectUri({
         scheme: 'salus',
         preferLocalhost: true,
@@ -39,6 +46,7 @@ export const AuthProvider = ({ children }) => {
         return () => clearTimeout(timer);
     }, []);
 
+    // 안전 저장소에서 토큰과 사용자 정보를 읽어 로그인 상태를 복원합니다.
     const loadAuthState = async () => {
         try {
             const storedToken = await SafeStorage.getItem('user_token');
@@ -76,6 +84,7 @@ export const AuthProvider = ({ children }) => {
         }),
     });
 
+    // 네이버는 인가 코드(code) 방식으로 요청하고, 코드를 백엔드에 보내 토큰으로 교환합니다.
     const [naverRequest, naverResponse, naverPromptAsync] = AuthSession.useAuthRequest(
         {
             clientId: NAVER_CLIENT_ID,
@@ -100,6 +109,7 @@ export const AuthProvider = ({ children }) => {
         }
     }, [naverRequest, naverRedirectUri]);
 
+    // 로그인 요청 때 만든 state와 응답의 state가 같은지 확인합니다(다른 사이트가 위조한 로그인 응답 차단).
     const isValidNaverOAuthState = (state) => {
         if (!naverRequest?.state || !state || state !== naverRequest.state) {
             console.warn('Naver OAuth state validation failed.');
@@ -122,6 +132,7 @@ export const AuthProvider = ({ children }) => {
         }
     }, [googleResponse]);
 
+    // 네이버 인증 응답에 새 인가 코드가 들어오면 state를 검증한 뒤 백엔드 로그인으로 넘깁니다.
     useEffect(() => {
         if (
             naverResponse?.type === 'success' &&
@@ -173,6 +184,7 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // 네이버 인가 코드와 state를 백엔드에 보내 JWT를 받습니다. 성공하면 로그인 상태를 저장합니다.
     const handleNaverAuthentication = async (code, state, keepLoggedIn = true) => {
         setLoading(true);
         try {
@@ -248,6 +260,7 @@ export const AuthProvider = ({ children }) => {
         return false;
     };
 
+    // 저장소와 메모리의 로그인 정보를 모두 지웁니다.
     const clearAuthState = async () => {
         await SafeStorage.removeItem('user_token');
         await SafeStorage.removeItem('user_data');
@@ -334,8 +347,10 @@ export const AuthProvider = ({ children }) => {
     );
 };
 
+// 로그인 상태를 꺼내 쓰는 커스텀 훅
 export const useAuth = () => useContext(AuthContext);
 
+// 로그인 API(/auth/) 요청인지 확인합니다.
 const isAuthRequest = (requestUrl) => {
     if (typeof requestUrl !== 'string') {
         return false;

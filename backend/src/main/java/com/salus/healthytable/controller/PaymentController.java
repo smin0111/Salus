@@ -10,6 +10,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
+/**
+ * 결제 API(/api/payments)입니다.
+ */
 @Slf4j
 @RestController
 @RequestMapping("/api/payments")
@@ -19,6 +22,10 @@ public class PaymentController {
     private final PaymentService paymentService;
     private final AuthenticatedUserProvider authenticatedUserProvider;
 
+    /**
+     * 클라이언트에서 결제를 마친 뒤 호출합니다.
+     * 서버가 결제 내역을 검증하고 저장하면 회원 등급이 PLUS로 올라갑니다.
+     */
     @PostMapping("/verify")
     public ResponseEntity<?> verifyPayment(@RequestBody PaymentRequestDto request) {
         if (request == null) {

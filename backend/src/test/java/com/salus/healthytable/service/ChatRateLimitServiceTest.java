@@ -13,10 +13,14 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * {@link ChatRateLimitService} 테스트입니다. 조작 가능한 가짜 Clock으로 1분 윈도우를 검증합니다.
+ */
 class ChatRateLimitServiceTest {
 
     private final MutableClock clock = new MutableClock();
 
+    // 게스트는 IP 기준으로 분당 요청 수가 제한되고, 초과하면 429 예외가 나야 합니다.
     @Test
     void guestRequestsAreLimitedByClientIpPerMinute() {
         ChatRateLimitService service = new ChatRateLimitService(true, 2, 60, clock);
@@ -32,6 +36,7 @@ class ChatRateLimitServiceTest {
                 });
     }
 
+    // 1분이 지나면 게스트 제한이 초기화되어야 합니다.
     @Test
     void guestLimitResetsAfterOneMinuteWindow() {
         ChatRateLimitService service = new ChatRateLimitService(true, 1, 60, clock);
@@ -43,6 +48,7 @@ class ChatRateLimitServiceTest {
         service.checkAllowed(Optional.empty(), request);
     }
 
+    // 로그인 사용자는 같은 IP를 공유해도 사용자 ID 기준으로 따로 제한되어야 합니다.
     @Test
     void authenticatedRequestsAreLimitedByUserIdNotSharedIp() {
         ChatRateLimitService service = new ChatRateLimitService(true, 1, 1, clock);
@@ -56,6 +62,7 @@ class ChatRateLimitServiceTest {
                         assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
     }
 
+    // 제한 기능이 꺼져 있으면 반복 요청을 모두 허용해야 합니다.
     @Test
     void disabledLimiterAllowsRepeatedRequests() {
         ChatRateLimitService service = new ChatRateLimitService(false, 1, 1, clock);

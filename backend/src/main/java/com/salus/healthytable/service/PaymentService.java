@@ -25,6 +25,12 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * 포트원(PortOne, 구 아임포트) 결제 검증 서비스입니다.
+ *
+ * 결제 흐름: 클라이언트 결제 완료 → 서버가 포트원 API로 실제 결제 내역 조회
+ * → 상태/주문번호/금액 검증 → 결제 저장 + PLUS 등급 업그레이드(PaymentTxHelper)
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -36,12 +42,14 @@ public class PaymentService {
     private final Clock clock;
     private final PaymentTxHelper paymentTxHelper;
 
+    // 포트원 REST API 키/시크릿 (비밀 설정 파일이나 환경 변수로 주입)
     @Value("${iamport.api.key}")
     private String iamportApiKey;
 
     @Value("${iamport.api.secret}")
     private String iamportApiSecret;
 
+    // PLUS 구독 결제 금액(원). 실제 결제 금액이 이 값과 다르면 위변조로 판단합니다.
     private static final int SUBSCRIPTION_AMOUNT = 9900;
     private static final ParameterizedTypeReference<Map<String, Object>> IAMPORT_RESPONSE_TYPE =
             new ParameterizedTypeReference<>() {
@@ -91,6 +99,9 @@ public class PaymentService {
         return paymentTxHelper.savePaymentAndUpgradeUser(normalizedImpUid, normalizedMerchantUid, amount, status, userId);
     }
 
+    /**
+     * 결제 식별자를 검증합니다. 값이 URL 경로에 그대로 들어가므로 공백, /, \, ?, # 같은 문자를 허용하지 않습니다.
+     */
     private String normalizePaymentIdentifier(String value, String label) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(label + "가 누락되었습니다.");
@@ -106,6 +117,7 @@ public class PaymentService {
         return normalized;
     }
 
+    // 포트원 API 호출에 필요한 액세스 토큰을 발급받습니다. 응답의 code가 0이어야 성공입니다.
     private String getIamportAccessToken() {
         String url = "https://api.iamport.kr/users/getToken";
 
@@ -131,6 +143,7 @@ public class PaymentService {
                 }
             }
             throw paymentGatewayException("포트원 토큰 발급 실패");
+        // 위에서 직접 만든 502 예외는 그대로 다시 던지고, 그 밖의 예외만 연동 오류로 감쌉니다.
         } catch (ResponseStatusException e) {
             throw e;
         } catch (Exception e) {
@@ -140,6 +153,7 @@ public class PaymentService {
         }
     }
 
+    // impUid로 포트원에 결제 단건 정보를 조회합니다.
     private Map<String, Object> getPaymentData(String impUid, String accessToken) {
         String url = "https://api.iamport.kr/payments/" + impUid;
 
@@ -167,6 +181,7 @@ public class PaymentService {
         }
     }
 
+    // 결제사 연동 실패를 502 Bad Gateway로 변환합니다. 사용자에게는 내부 원인을 노출하지 않습니다.
     private ResponseStatusException paymentGatewayException(String logReason) {
         log.error("Payment gateway failure. reason={}", logReason);
         return new ResponseStatusException(
@@ -187,6 +202,7 @@ public class PaymentService {
         log.warn("Payment validation failed. reason={}, userId={}", reason, userId);
     }
 
+    // 아래 메서드들은 JSON 응답(Map<String, Object>)의 값을 타입 안전하게 꺼내기 위한 도우미입니다.
     private Integer toInteger(Object value) {
         if (value instanceof Number number) {
             return number.intValue();

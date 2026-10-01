@@ -31,6 +31,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link ChatController} 테스트입니다. 입력 검증과 채팅방 소유권 확인을 중심으로 확인합니다.
+ */
 class ChatControllerTest {
 
     private final AuthenticatedUserProvider authenticatedUserProvider = mock(AuthenticatedUserProvider.class);
@@ -47,6 +50,7 @@ class ChatControllerTest {
             chatService,
             chatRateLimitService);
 
+    // 메시지가 없으면 서비스 호출 전에 거부해야 합니다.
     @Test
     void chatWithoutMessageThrowsValidationExceptionBeforeCallingService() {
         ChatDto.Request request = new ChatDto.Request();
@@ -59,6 +63,7 @@ class ChatControllerTest {
         verifyNoInteractions(authenticatedUserProvider, chatService, chatRateLimitService);
     }
 
+    // 너무 긴 메시지는 서비스 호출 전에 거부해야 합니다.
     @Test
     void chatWithTooLongMessageThrowsValidationExceptionBeforeCallingService() {
         ChatDto.Request request = new ChatDto.Request();
@@ -71,6 +76,7 @@ class ChatControllerTest {
         verifyNoInteractions(authenticatedUserProvider, chatService, chatRateLimitService);
     }
 
+    // 대화 기록이 12개를 넘으면 거부해야 합니다.
     @Test
     void chatWithTooManyHistoryMessagesThrowsValidationExceptionBeforeCallingService() {
         ChatDto.Request request = new ChatDto.Request();
@@ -86,6 +92,7 @@ class ChatControllerTest {
         verifyNoInteractions(authenticatedUserProvider, chatService, chatRateLimitService);
     }
 
+    // 대화 기록의 role이 user/model이 아니면 거부해야 합니다.
     @Test
     void chatWithInvalidHistoryRoleThrowsValidationExceptionBeforeCallingService() {
         ChatDto.Request request = new ChatDto.Request();
@@ -99,6 +106,7 @@ class ChatControllerTest {
         verifyNoInteractions(authenticatedUserProvider, chatService, chatRateLimitService);
     }
 
+    // 건강 정보 항목이 너무 길면 거부해야 합니다.
     @Test
     void chatWithTooLongHealthProfileItemThrowsValidationExceptionBeforeCallingService() {
         ChatDto.Request request = new ChatDto.Request();
@@ -117,6 +125,7 @@ class ChatControllerTest {
         verifyNoInteractions(authenticatedUserProvider, chatService, chatRateLimitService);
     }
 
+    // 메시지/기록/건강 정보 공백을 정리하고 로그인 사용자 ID를 서비스에 넘겨야 합니다.
     @Test
     void chatTrimsMessageAndPassesAuthenticatedUserToService() {
         ChatDto.Request request = new ChatDto.Request();
@@ -145,6 +154,7 @@ class ChatControllerTest {
         verify(chatService).processChat(eq(Optional.of(1L)), same(request));
     }
 
+    // 빈 음성 파일은 거부해야 합니다.
     @Test
     void speechToTextRejectsEmptyAudioFile() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -157,6 +167,7 @@ class ChatControllerTest {
         verify(authenticatedUserProvider).requireUserId();
     }
 
+    // 10MB를 넘는 음성 파일은 거부해야 합니다.
     @Test
     void speechToTextRejectsTooLargeAudioFile() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -171,6 +182,7 @@ class ChatControllerTest {
         verify(authenticatedUserProvider).requireUserId();
     }
 
+    // 오디오가 아닌 파일은 거부해야 합니다.
     @Test
     void speechToTextRejectsNonAudioFile() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -183,6 +195,7 @@ class ChatControllerTest {
         verify(authenticatedUserProvider).requireUserId();
     }
 
+    // 음성 인식은 로그인이 필요해야 합니다.
     @Test
     void speechToTextRequiresAuthenticatedUser() {
         MockMultipartFile file = new MockMultipartFile("audio", "voice.m4a", "audio/mp4", new byte[] {1, 2, 3});
@@ -198,6 +211,7 @@ class ChatControllerTest {
         verify(authenticatedUserProvider).requireUserId();
     }
 
+    // 올바른 오디오 파일은 (현재 Mock) 응답을 반환해야 합니다.
     @Test
     void speechToTextAcceptsAudioFile() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -210,6 +224,7 @@ class ChatControllerTest {
         verify(authenticatedUserProvider).requireUserId();
     }
 
+    // 다른 사용자의 채팅방 메시지 조회는 404여야 합니다.
     @Test
     void getMessagesReturnsNotFoundWhenSessionDoesNotBelongToCurrentUser() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -225,6 +240,7 @@ class ChatControllerTest {
         verifyNoInteractions(chatMessageRepository);
     }
 
+    // 현재 사용자 채팅방의 메시지만 읽어야 합니다.
     @Test
     void getMessagesReadsOnlyMessagesFromCurrentUsersSession() {
         ChatSession session = chatSession(7L, 1L, "저녁 메뉴");
@@ -246,6 +262,7 @@ class ChatControllerTest {
         verify(chatSessionRepository).findByIdAndUserId(7L, 1L);
     }
 
+    // 빈 제목은 DB 조회 전에 거부해야 합니다.
     @Test
     void updateSessionTitleRejectsBlankTitleBeforeRepositoryLookup() {
         ChatDto.SessionUpdateRequest request = new ChatDto.SessionUpdateRequest("   ");
@@ -258,6 +275,7 @@ class ChatControllerTest {
         verifyNoInteractions(chatSessionRepository);
     }
 
+    // 제목 공백을 정리해 현재 사용자 채팅방에만 저장해야 합니다.
     @Test
     void updateSessionTitleNormalizesAndSavesOnlyCurrentUsersSession() {
         ChatSession session = chatSession(7L, 1L, "기존 제목");
@@ -276,6 +294,7 @@ class ChatControllerTest {
         verify(chatSessionRepository).save(session);
     }
 
+    // 다른 사용자의 채팅방 삭제는 404여야 합니다.
     @Test
     void deleteSessionReturnsNotFoundWhenSessionDoesNotBelongToCurrentUser() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -291,6 +310,7 @@ class ChatControllerTest {
         verifyNoInteractions(recipeWorkSessionService, chatMessageRepository);
     }
 
+    // 채팅방 삭제 시 작업 세션과 메시지도 함께 지워야 합니다.
     @Test
     void deleteSessionClearsWorkSessionAndMessagesForCurrentUsersSession() {
         ChatSession session = chatSession(7L, 1L, "삭제할 대화");

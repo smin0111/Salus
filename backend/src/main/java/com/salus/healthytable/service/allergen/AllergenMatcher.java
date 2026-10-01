@@ -72,6 +72,7 @@ public class AllergenMatcher {
         return false;
     }
 
+    // 탐지 용어 중 하나라도 어떤 토큰과 매칭되면 true입니다.
     private boolean matchesAny(Set<String> terms, List<String> tokens) {
         for (String term : terms) {
             if (term.isBlank()) {
@@ -96,6 +97,7 @@ public class AllergenMatcher {
         return term.length() == 1 ? token.equals(term) : token.contains(term);
     }
 
+    // 모든 텍스트를 소문자로 바꾸고 한글/영문/숫자가 아닌 문자 기준으로 잘라 중복 없는 토큰 목록을 만듭니다.
     private List<String> tokenize(List<String> texts) {
         Set<String> tokens = new LinkedHashSet<>();
         if (texts == null) {

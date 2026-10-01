@@ -9,6 +9,9 @@ import {
     landingType,
 } from './landingTheme';
 
+// 랜딩 03 섹션: 레시피가 사용자에게 보이기까지의 검증 과정(검색 → 생성 → 검증 → 통과/차단 → 결과)을 스크롤에 맞춰 보여 줍니다.
+
+// 검증 과정 단계 설명(실제 백엔드 파이프라인 흐름을 사용자 눈높이로 요약)
 const STEPS = [
     {
         number: '01',
@@ -45,6 +48,7 @@ const STEPS = [
     },
 ];
 
+// 섹션 번호/라벨
 function SectionLabel() {
     return (
         <View style={styles.sectionLabel}>
@@ -55,6 +59,10 @@ function SectionLabel() {
     );
 }
 
+/**
+ * 검증 단계 한 개입니다. 스크롤 위치가 이 단계에 가까워지면 진하게, 멀어지면 흐리게 보이도록
+ * scrollY.interpolate로 투명도와 위치를 계산합니다(좁은 화면이나 동작 줄이기 설정에서는 애니메이션 없음).
+ */
 function ValidationStep({ step, index, compact, scrollY, sectionOffset, reducedMotion }) {
     const stageStart = sectionOffset + 410 + index * 280;
     const motionStyle = compact || reducedMotion ? null : {
@@ -102,6 +110,7 @@ function ValidationStep({ step, index, compact, scrollY, sectionOffset, reducedM
     );
 }
 
+// 오른쪽 예시 레시피 카드의 재료 한 줄
 function ProofIngredientRow({ name, note, opacity, visible }) {
     const checkMotion = visible ? null : {
         opacity: opacity.interpolate({ inputRange: [0, 1], outputRange: [0.24, 1] }),
@@ -120,8 +129,13 @@ function ProofIngredientRow({ name, note, opacity, visible }) {
     );
 }
 
+/**
+ * 스크롤하는 동안 화면에 고정되어 보이는 예시 레시피 카드입니다.
+ * 스크롤이 진행될수록 재료 확인 → 요청 확인 → 구조 확인 → "검토 완료" 상태가 차례로 나타납니다.
+ */
 function StickyRecipeProof({ compact, scrollY, sectionOffset, reducedMotion }) {
     const showAll = compact || reducedMotion;
+    // 섹션 시작 위치 + at(px) 근처를 지날 때 0 → 1로 변하는 애니메이션 값을 만듭니다.
     const createReveal = (at) => scrollY.interpolate({
         inputRange: [sectionOffset + at - 90, sectionOffset + at + 80],
         outputRange: [0, 1],
@@ -252,11 +266,16 @@ function StickyRecipeProof({ compact, scrollY, sectionOffset, reducedMotion }) {
     );
 }
 
+/**
+ * 검증 과정 섹션 전체입니다.
+ * scrollY: 페이지 스크롤 위치(애니메이션 값), sectionOffset: 페이지에서 이 섹션이 시작되는 y 위치
+ */
 export default function ValidationJourney({ width, scrollY, sectionOffset, reducedMotion }) {
     const gutter = getLandingGutter(width);
     const sectionType = getSectionType(width);
     const compact = width < 768;
     const stacked = width < 980;
+    // 섹션 전체 진행률(0~1). 진행 막대 등의 표시에 사용합니다.
     const progress = compact || reducedMotion ? 1 : scrollY.interpolate({
         inputRange: [sectionOffset + 280, sectionOffset + 1580],
         outputRange: [0, 1],

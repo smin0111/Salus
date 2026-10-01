@@ -13,6 +13,9 @@ import {
     webPointer,
 } from './landingTheme';
 
+// 랜딩 페이지의 각 섹션 컴포넌트 모음입니다.
+
+// 섹션 번호와 영문 라벨(예: 01 — WHY SALUS)
 function SectionLabel({ number, children, light = false }) {
     return (
         <View style={styles.sectionLabel}>
@@ -23,6 +26,7 @@ function SectionLabel({ number, children, light = false }) {
     );
 }
 
+// 01 섹션: 같은 음식이라도 사람마다 건강 조건이 달라 답이 달라져야 한다는 문제 제기
 export function ProblemSection({ width }) {
     const gutter = getLandingGutter(width);
     const sectionType = getSectionType(width);
@@ -49,6 +53,7 @@ export function ProblemSection({ width }) {
     );
 }
 
+// 02 섹션: 건강 정보가 레시피에 반영되는 방식을 PersonalizationWorkbench로 직접 보여 줍니다.
 export function PersonalizationSection({ width, reducedMotion }) {
     const gutter = getLandingGutter(width);
     const compact = width < 768;
@@ -76,6 +81,7 @@ export function PersonalizationSection({ width, reducedMotion }) {
     );
 }
 
+// 04 섹션에 보여 줄 사용 흐름 3단계(프로필 등록 → 대화로 조정 → 식단 기록)
 const EXPERIENCE_ITEMS = [
     {
         icon: 'person-outline',
@@ -94,6 +100,7 @@ const EXPERIENCE_ITEMS = [
     },
 ];
 
+// 04 섹션의 예시 레시피 카드와 후속 요청 말풍선
 function ExperienceRecipe({ compact }) {
     return (
         <View style={[styles.experienceVisual, compact && styles.experienceVisualCompact]}>
@@ -125,6 +132,7 @@ function ExperienceRecipe({ compact }) {
     );
 }
 
+// 04 섹션: 실제 사용 경험 흐름 소개
 export function ExperienceSection({ width }) {
     const gutter = getLandingGutter(width);
     const sectionType = getSectionType(width);
@@ -161,6 +169,7 @@ export function ExperienceSection({ width }) {
     );
 }
 
+// 마지막 행동 유도(CTA) 섹션과 푸터. 로그인 여부에 따라 버튼 문구와 로그인 링크 표시가 달라집니다.
 export function FinalCtaSection({ width, isLoggedIn, userName, onStart, onLogin, onAccountSettings }) {
     const gutter = getLandingGutter(width);
     const compact = width < 768;

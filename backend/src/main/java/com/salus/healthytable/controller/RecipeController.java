@@ -1,6 +1,7 @@
 package com.salus.healthytable.controller;
 
 import com.salus.healthytable.domain.Recipe;
+import com.salus.healthytable.domain.RecipeApprovalStatus;
 import com.salus.healthytable.dto.RecipeDTO;
 import com.salus.healthytable.repository.RecipeRepository;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
@@ -20,6 +21,10 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 레시피 API(/api/recipes)입니다.
+ * 승인된 레시피 목록 조회와, 입력한 재료 기반 AI 레시피 추천을 제공합니다.
+ */
 @RestController
 @RequestMapping("/api/recipes")
 public class RecipeController {
@@ -35,6 +40,7 @@ public class RecipeController {
     private final AuthenticatedUserProvider authenticatedUserProvider;
     private final ChatRateLimitService chatRateLimitService;
 
+    // @RequiredArgsConstructor 대신 생성자를 직접 작성한 형태입니다. 동작(생성자 주입)은 동일합니다.
     public RecipeController(RecipeRepository recipeRepository,
             GeminiService geminiService,
             AuthenticatedUserProvider authenticatedUserProvider,
@@ -45,10 +51,13 @@ public class RecipeController {
         this.chatRateLimitService = chatRateLimitService;
     }
 
+    /**
+     * 승인(APPROVED)된 레시피를 최신순으로 조회합니다. 검수되지 않은 레시피는 노출하지 않습니다.
+     */
     @GetMapping
     public List<RecipeDTO> getRecipes(@RequestParam(defaultValue = "" + DEFAULT_RECIPE_LIMIT) int limit) {
         int normalizedLimit = normalizeRecipeLimit(limit);
-        return recipeRepository.findAll(PageRequest.of(
+        return recipeRepository.findByApprovalStatus(RecipeApprovalStatus.APPROVED, PageRequest.of(
                 0,
                 normalizedLimit,
                 Sort.by(Sort.Direction.DESC, "createdAt")))
@@ -57,6 +66,9 @@ public class RecipeController {
                 .toList();
     }
 
+    /**
+     * 재료 목록과 건강 참고 정보를 받아 AI 추천 레시피를 문자열로 반환합니다.
+     */
     @PostMapping("/recommend")
     public Mono<String> recommendRecipe(@Valid @RequestBody RecommendationRequest request, HttpServletRequest servletRequest) {
         // Validation을 거치면서 기본적인 null, 리스트 크기 및 데이터 길이 유효성이 모두 통과되었습니다.
@@ -79,6 +91,7 @@ public class RecipeController {
         return geminiService.getRecipeRecommendation(ingredients, healthContext);
     }
 
+    // 조회 개수가 1~50 범위인지 확인합니다.
     private int normalizeRecipeLimit(int limit) {
         if (limit < 1 || limit > MAX_RECIPE_LIMIT) {
             throw new IllegalArgumentException("레시피 조회 개수는 1부터 50 사이로 입력해 주세요.");
@@ -86,6 +99,7 @@ public class RecipeController {
         return limit;
     }
 
+    // 엔티티를 응답 DTO로 변환합니다. servings에는 레시피의 기준 인분 수(baseServings)를 사용합니다.
     private RecipeDTO toRecipeDTO(Recipe recipe) {
         return new RecipeDTO(
                 recipe.getId(),
@@ -93,7 +107,9 @@ public class RecipeController {
                 recipe.getDescription(),
                 safeList(recipe.getIngredients()),
                 safeList(recipe.getSteps()),
+                recipe.getBaseServings(),
                 recipe.getCalories(),
+                recipe.getCaloriesPerServing(),
                 recipe.getDifficulty(),
                 recipe.getCookingTime(),
                 recipe.getAverageRating(),
@@ -105,6 +121,9 @@ public class RecipeController {
         return values == null ? List.of() : values;
     }
 
+    /**
+     * 레시피 추천 요청 본문입니다. 리스트 원소 타입에도 검증 어노테이션을 붙여 재료 하나하나의 길이를 검사합니다.
+     */
     @Data
     public static class RecommendationRequest {
         @NotNull(message = "추천에 사용할 재료를 1개 이상 입력해 주세요.")

@@ -33,7 +33,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Recipe Agent 개인화 흐름 테스트입니다.
+ * 요청 분석, 사용자 맥락 로드 상태, 알레르기/당뇨/약물/냉장고/식단 제한 정책, 후속 요청, 세션 만료를 확인합니다.
+ */
 class RecipeAgentPersonalizationTest {
+    // 실제 알레르겐 사전으로 만든 Matcher를 테스트 전체에서 공유합니다.
     private static com.salus.healthytable.service.allergen.AllergenMatcher sharedAllergenMatcher() {
         com.salus.healthytable.service.allergen.AllergenDictionary dictionary =
                 new com.salus.healthytable.service.allergen.AllergenDictionary();
@@ -44,6 +49,7 @@ class RecipeAgentPersonalizationTest {
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-16T00:00:00Z"), ZoneId.of("Asia/Seoul"));
 
+    // "들깨 빼 주세요" 같은 자연스러운 요청에서 제외 재료를 정확히 추출해야 합니다.
     @Test
     void naturalKoreanRemoveRequestProducesCanonicalExplicitExclusion() {
         DefaultRecipeRequestPlanner planner = new DefaultRecipeRequestPlanner(new RecipeNormalizer());
@@ -52,6 +58,7 @@ class RecipeAgentPersonalizationTest {
         assertThat(planner.extractExplicitExclusions("땅콩을 빼 주세요")).containsExactly("땅콩");
     }
 
+    // 띄어 쓴 요리 이름을 크리에이터 지정 요청으로 잘못 분류하면 안 됩니다.
     @Test
     void spacedDishNameIsNotMisclassifiedAsCreatorSpecificRequest() {
         DefaultRecipeRequestPlanner planner = new DefaultRecipeRequestPlanner(new RecipeNormalizer());
@@ -67,6 +74,7 @@ class RecipeAgentPersonalizationTest {
         assertThat(creatorPlan.mode()).isEqualTo(RecipeRequestMode.CREATOR_SPECIFIC);
     }
 
+    // 로그인 사용자는 항상 건강 프로필과 냉장고를 함께 로드해야 합니다.
     @Test
     void loggedInContextAlwaysLoadsHealthProfileAndFridge() {
         HealthProfileRepository healthProfiles = mock(HealthProfileRepository.class);
@@ -94,6 +102,7 @@ class RecipeAgentPersonalizationTest {
         verify(fridgeItems).findByUserIdOrderByExpiryDate(1L);
     }
 
+    // 게스트 맥락은 비어 있고 DB를 조회하지 않아야 합니다.
     @Test
     void guestContextIsEmptyAndDoesNotQueryRepositories() {
         HealthProfileRepository healthProfiles = mock(HealthProfileRepository.class);
@@ -109,6 +118,7 @@ class RecipeAgentPersonalizationTest {
         verify(fridgeItems, never()).findByUserIdOrderByExpiryDate(any());
     }
 
+    // 로드 상태를 "등록 정보 없음/일부 로드/로드 실패"로 구분해야 합니다.
     @Test
     void contextLoaderDistinguishesNotRegisteredPartialAndFailed() {
         HealthProfileRepository healthProfiles = mock(HealthProfileRepository.class);
@@ -129,6 +139,7 @@ class RecipeAgentPersonalizationTest {
         assertThat(loader.loadWithStatus(3L).status()).isEqualTo(UserRecipeContextLoadStatus.LOAD_FAILED);
     }
 
+    // 들깨 알레르기면 참치김밥에서 들깨(핵심 재료 아님)를 제거하고 MODIFY로 판정해야 합니다.
     @Test
     void perillaAllergyRemovesPerillaFromTunaKimbapAndDecisionIsModify() {
         RecipeCandidate original = tunaKimbap();
@@ -146,6 +157,7 @@ class RecipeAgentPersonalizationTest {
         assertThat(validation.valid()).isTrue();
     }
 
+    // 땅콩이 핵심 재료인 레시피는 신뢰할 대체안이 없으면 차단해야 합니다.
     @Test
     void peanutAllergyBlocksCorePeanutSauceWithoutTrustedAlternative() {
         RecipeCandidate recipe = new RecipeCandidate(
@@ -167,6 +179,7 @@ class RecipeAgentPersonalizationTest {
                 && conflict.severity() == ConflictSeverity.BLOCKING);
     }
 
+    // 당뇨 사용자에게 설탕이 핵심인 바나나 브륄레는 대체 메뉴를 추천하되, 모든 바나나 레시피를 막지는 않아야 합니다.
     @Test
     void diabetesBananaBruleeRecommendsAlternativeButDoesNotBlockEveryBananaRecipe() {
         UserRecipeContext diabetes = new UserRecipeContext(
@@ -187,6 +200,7 @@ class RecipeAgentPersonalizationTest {
         assertThat(smoothie.conflicts()).noneMatch(conflict -> conflict.severity() == ConflictSeverity.BLOCKING);
     }
 
+    // 당류를 줄여 수정할 수 있는 레시피는 MODIFY로 판정해야 합니다.
     @Test
     void lowSugarModificationPossibleRecipeUsesModifyDecision() {
         UserRecipeContext diabetesWithAllulose = new UserRecipeContext(
@@ -207,6 +221,7 @@ class RecipeAgentPersonalizationTest {
         assertThat(String.join(" ", personalized.ingredients())).contains("알룰로스").doesNotContain("설탕 1큰술");
     }
 
+    // 자동 추정한 핵심 재료 때문에 설탕이 조금 들어간 모든 레시피가 대체 메뉴 전용이 되면 안 됩니다.
     @Test
     void automaticallyInferredCoreListDoesNotMakeEveryAddedSugarRecipeAnAlternativeOnlyDish() {
         UserRecipeContext diabetesWithAllulose = new UserRecipeContext(
@@ -228,6 +243,7 @@ class RecipeAgentPersonalizationTest {
                 && "SUBSTITUTE_OR_REDUCE".equals(modification.action()));
     }
 
+    // 약물 상호작용을 모르면 안내만 추가하고 가짜 충돌을 만들지 않아야 합니다.
     @Test
     void unknownMedicationInteractionCreatesNoticeButNoFakeConflict() {
         UserRecipeContext context = new UserRecipeContext(1L, List.of(), List.of(), List.of(), List.of("혈압약"), List.of(), List.of(), List.of());
@@ -242,6 +258,7 @@ class RecipeAgentPersonalizationTest {
                 .contains("약 복용 방식은 의사 또는 약사에게 확인하세요.");
     }
 
+    // 공식 근거로 확인된 약물 충돌은 최종 추천을 제한해야 합니다.
     @Test
     void trustedMedicationConflictLimitsFinalRecommendation() {
         MedicationFoodInteractionPort conflictPort = (medications, ingredients) -> new MedicationInteractionResult(
@@ -263,6 +280,7 @@ class RecipeAgentPersonalizationTest {
                 && conflict.severity() == ConflictSeverity.BLOCKING);
     }
 
+    // 냉장고 정책은 일치하는 재료를 활용하고, 부족한 핵심 재료만 추가 구매 목록에 넣어야 합니다.
     @Test
     void fridgePolicyUsesMatchingIngredientsAndAddsMissingCorePurchasesOnly() {
         UserRecipeContext context = new UserRecipeContext(
@@ -285,6 +303,7 @@ class RecipeAgentPersonalizationTest {
         assertThat(decision.userNotices()).anyMatch(notice -> notice.contains("유통기한"));
     }
 
+    // 알레르기 정책이 냉장고 활용보다 우선해야 합니다.
     @Test
     void allergyPolicyHasPriorityOverFridgeAdaptation() {
         UserRecipeContext context = new UserRecipeContext(
@@ -305,6 +324,7 @@ class RecipeAgentPersonalizationTest {
         assertThat(String.join(" ", personalized.ingredients())).doesNotContain("깻잎");
     }
 
+    // 질환 등록 없이 "저염" 건강 목표만 있어도 저염 정책을 적용해야 합니다.
     @Test
     void healthGoalWithoutRegisteredConditionStillAppliesLowSodiumPolicy() {
         UserRecipeContext context = new UserRecipeContext(
@@ -326,6 +346,7 @@ class RecipeAgentPersonalizationTest {
         assertThat(decision.modifications()).anyMatch(modification -> "REDUCE".equals(modification.action()));
     }
 
+    // 약물 충돌로 차단된 재료는 "냉장고에서 사용한 재료"로 보고하면 안 됩니다.
     @Test
     void blockingMedicationIngredientIsNotReportedAsFridgeItemUsed() {
         MedicationFoodInteractionPort conflictPort = (medications, ingredients) -> new MedicationInteractionResult(
@@ -354,6 +375,7 @@ class RecipeAgentPersonalizationTest {
         assertThat(decision.fridgeItemsUsed()).doesNotContain("자몽");
     }
 
+    // 조리 순서가 없는 레시피는 최종 검증에서 실패해야 합니다.
     @Test
     void recipeWithoutInstructionsFailsValidation() {
         RecipeCandidate incomplete = new RecipeCandidate(
@@ -373,6 +395,7 @@ class RecipeAgentPersonalizationTest {
         assertThat(validation.reasons()).anyMatch(reason -> reason.contains("조리 순서"));
     }
 
+    // 식단 제한과 충돌하고 검증된 대체안이 없으면 원본 레시피를 차단해야 합니다.
     @Test
     void dietaryRestrictionBlocksOriginalWhenNoVerifiedAlternativeExists() {
         UserRecipeContext vegan = new UserRecipeContext(
@@ -385,6 +408,7 @@ class RecipeAgentPersonalizationTest {
         assertThat(decision.modifications()).anyMatch(modification -> "동물성 재료".equals(modification.ingredient()));
     }
 
+    // 답변은 원본과 개인화 레시피를 구분하고 변경 이유를 포함해야 합니다.
     @Test
     void composerKeepsOriginalAndPersonalizedRecipeSeparateAndIncludesChangeReason() {
         UserRecipeContext context = contextWithAllergy("깻잎");
@@ -403,6 +427,7 @@ class RecipeAgentPersonalizationTest {
                 .contains("수정 후 추천");
     }
 
+    // 출처 검색이 실패해도 레시피를 지어내지 않고 정책 판단 결과만으로 응답해야 합니다.
     @Test
     void orchestratorFallsBackToPolicyResponseWhenSourceDiscoveryFails() {
         RecipeAgentOrchestrator orchestrator = orchestrator(
@@ -422,6 +447,56 @@ class RecipeAgentPersonalizationTest {
         assertThat(response.getReply()).contains("제공 제한");
     }
 
+    // 구조화 출처를 못 찾으면 호출자가 더 낮은 근거 등급으로 내려갈 수 있게 빈 값을 줘야 합니다.
+    // 여기서 거절 응답을 만들어 버리면 마크업이 없는 요리의 커버리지가 통째로 사라집니다.
+    @Test
+    void handleIfSourceFoundReturnsEmptyWhenNoReliableSource() {
+        RecipeWorkSessionService workSessions = mock(RecipeWorkSessionService.class);
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                userId -> contextWithAllergy("깻잎"),
+                (plan, context) -> List.of(),
+                workSessions);
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", true);
+
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("마라샹궈 레시피 알려줘");
+
+        assertThat(orchestrator.handleIfSourceFound(1L, 10L, request).block()).isEmpty();
+        // 출처가 없으면 세션도 저장하지 않아야 합니다. 저장하면 다음 요청이 빈 상태를 재사용합니다.
+        verify(workSessions, never()).saveAgentSession(any(), any(), any(), any());
+    }
+
+    // 출처를 찾으면 평소대로 응답해야 합니다.
+    @Test
+    void handleIfSourceFoundReturnsResponseWhenSourceExists() {
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                userId -> contextWithAllergy("깻잎"),
+                (plan, context) -> List.of(sourceDocument()),
+                mock(RecipeWorkSessionService.class));
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", true);
+
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("김치찌개 레시피 알려줘");
+
+        assertThat(orchestrator.handleIfSourceFound(1L, 10L, request).block()).isPresent();
+    }
+
+    // 출처 검색이 꺼져 있으면 빈 값을 줘야 합니다. 켜지 않은 채로 Agent가 응답을 독점하면 안 됩니다.
+    @Test
+    void handleIfSourceFoundReturnsEmptyWhenDiscoveryDisabled() {
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                userId -> contextWithAllergy("깻잎"),
+                (plan, context) -> List.of(sourceDocument()),
+                mock(RecipeWorkSessionService.class));
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", false);
+
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("김치찌개 레시피 알려줘");
+
+        assertThat(orchestrator.handleIfSourceFound(1L, 10L, request).block()).isEmpty();
+    }
+
+    // 후속 요청은 답변 텍스트를 다시 파싱하지 않고 저장된 구조화 Agent 세션을 사용해야 합니다.
     @Test
     void followUpUsesStructuredAgentSessionInsteadOfParsingReplyText() {
         RecipeWorkSessionService workSessionService = mock(RecipeWorkSessionService.class);
@@ -449,6 +524,7 @@ class RecipeAgentPersonalizationTest {
         verify(workSessionService).find(1L, 10L);
     }
 
+    // 후속 요청은 원본 레시피를 복원하고, 안전 판단은 현재 DB의 최신 건강 정보로 해야 합니다.
     @Test
     void followUpRestoresOriginalRecipeAndUsesCurrentAuthoritativeSafetyContext() {
         RecipeWorkSessionService workSessionService = mock(RecipeWorkSessionService.class);
@@ -487,6 +563,7 @@ class RecipeAgentPersonalizationTest {
         assertThat(String.join(" ", response.getRecipe().getIngredients())).doesNotContain("깻잎");
     }
 
+    // 현재 로드에 성공하면 이전 스냅샷의 삭제된 프로필/냉장고 값이 최신 값으로 대체되어야 합니다.
     @Test
     void successfulCurrentContextLoadReplacesDeletedProfileAndFridgeValuesFromSnapshot() {
         RecipeWorkSessionService workSessionService = mock(RecipeWorkSessionService.class);
@@ -528,6 +605,7 @@ class RecipeAgentPersonalizationTest {
         assertThat(saved.contextSnapshot().explicitlyExcludedIngredients()).containsExactly("양파");
     }
 
+    // 사용자 맥락 로드에 실패하면 개인화 레시피를 노출하지 않아야 합니다(fail closed).
     @Test
     void contextLoadFailureBlocksPersonalizedRecipeExposure() {
         RecipeAgentOrchestrator orchestrator = orchestrator(
@@ -555,6 +633,7 @@ class RecipeAgentPersonalizationTest {
         assertThat(response.getReply()).contains("사용자 건강정보와 냉장고 정보를 불러오지 못해");
     }
 
+    // 세션 TTL이 지나면 오래된 건강 정보 스냅샷을 다음 요청에 쓰지 않아야 합니다.
     @Test
     void ttlExpiryDropsStaleHealthSnapshotBeforeNextOperationalRequest() {
         MutableClock mutableClock = new MutableClock(Instant.parse("2026-07-21T00:00:00Z"), ZoneId.of("Asia/Seoul"));
@@ -591,6 +670,7 @@ class RecipeAgentPersonalizationTest {
         assertThat((List<?>) context.get("explicitlyExcludedIngredients")).isEmpty();
     }
 
+    // Recipe Agent 기능 플래그는 기본적으로 꺼져 있고, 모델 설정은 환경 변수로 덮어쓸 수 있어야 합니다.
     @Test
     void recipeAgentAndModelSettingsKeepSafeDefaultsAndEnvironmentOverrides() throws Exception {
         String properties = java.nio.file.Files.readString(
@@ -612,6 +692,7 @@ class RecipeAgentPersonalizationTest {
     }
 
 
+    // 아래 private 메서드/클래스들은 정책 엔진, 오케스트레이터, 테스트용 레시피와 가짜 Clock을 만드는 도우미입니다.
     private RecipePersonalizationPolicyEngine engine(MedicationFoodInteractionPort interactionPort) {
         return new RecipePersonalizationPolicyEngine(List.of(
                 new AllergyPolicy(sharedAllergenMatcher()),
@@ -628,6 +709,18 @@ class RecipeAgentPersonalizationTest {
 
     private UserRecipeContext contextWithAllergy(String allergy) {
         return new UserRecipeContext(1L, List.of(allergy), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+    }
+
+    private RecipeSourceDocument sourceDocument() {
+        return new RecipeSourceDocument(
+                "fixture:source",
+                RecipeSourceType.INTERNAL_DB,
+                "김치찌개",
+                "fixture",
+                "",
+                "title: 김치찌개\ningredients:\n- 김치 200g\n- 두부 1모\nsteps:\n- 김치를 볶고 물을 부어 끓입니다.",
+                java.time.LocalDateTime.of(2026, 7, 1, 0, 0),
+                0.95);
     }
 
     private RecipeAgentOrchestrator orchestrator(
