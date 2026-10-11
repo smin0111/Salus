@@ -129,6 +129,50 @@ class RecipeWebSourceAdapterTest {
         assertThat(assessor.assess(creatorPlan, authorMismatch).blockingReasons()).contains("작성자 지정 요청과 출처 author가 일치하지 않습니다.");
     }
 
+    // 쇠고기/소고기는 같은 요리로 봐야 합니다. 다른 요리는 여전히 막아야 합니다.
+    @Test
+    void dishMatchTreatsBeefSpellingVariantsAsSameDish() {
+        RecipeSourceQualityAssessor assessor = new RecipeSourceQualityAssessor();
+
+        assertThat(assessor.dishMatches("쇠고기무국", "얼큰소고기무국 만드는 법")).isTrue();
+        assertThat(assessor.dishMatches("소고기무국", "쇠고기무국")).isTrue();
+        assertThat(assessor.dishMatches("쇠고기무국", "된장찌개 끓이는 법")).isFalse();
+    }
+
+    // 네이버 블로그 PC 주소는 본문 없는 iframe만 오므로 같은 경로의 모바일 주소로 받습니다.
+    @Test
+    void safeFetcherRequestsMobileNaverBlogKeepingPathAndQuery() {
+        DefaultSafeWebPageFetcher fetcher = new DefaultSafeWebPageFetcher(1, 4096, java.time.Duration.ofMillis(100), java.time.Duration.ofMillis(100));
+
+        assertThat(fetcher.preferFetchableHost(URI.create("https://blog.naver.com/cook/224123?viewType=pc")))
+                .hasToString("https://m.blog.naver.com/cook/224123?viewType=pc");
+        assertThat(fetcher.preferFetchableHost(URI.create("https://blog.naver.com/PostView.naver?blogId=a&logNo=1")))
+                .hasToString("https://m.blog.naver.com/PostView.naver?blogId=a&logNo=1");
+        assertThat(fetcher.preferFetchableHost(URI.create("https://www.10000recipe.com/recipe/1")))
+                .hasToString("https://www.10000recipe.com/recipe/1");
+    }
+
+    // 위키·SNS 결과는 레시피 후보 자리를 차지하지 않아야 합니다.
+    @Test
+    void webSearchSkipsNonRecipeDomainsBeforeCountingCandidates() {
+        com.salus.healthytable.service.SearchEngine engine = mock(com.salus.healthytable.service.SearchEngine.class);
+        when(engine.search("로제떡볶이 레시피")).thenReturn(reactor.core.publisher.Mono.just(
+                new com.salus.healthytable.service.SearchEngine.SearchResponse(
+                        com.salus.healthytable.service.SearchEngine.SearchStatus.SUCCESS,
+                        List.of(
+                                new com.salus.healthytable.service.SearchEngine.SearchResult("로제", "https://namu.wiki/w/rose", "가수"),
+                                new com.salus.healthytable.service.SearchEngine.SearchResult("로제", "https://ko.wikipedia.org/wiki/rose", "가수"),
+                                new com.salus.healthytable.service.SearchEngine.SearchResult("릴스", "https://www.instagram.com/reel/1", "영상"),
+                                new com.salus.healthytable.service.SearchEngine.SearchResult("로제떡볶이 레시피", "https://m.blog.naver.com/a/1", "재료"),
+                                new com.salus.healthytable.service.SearchEngine.SearchResult("로제떡볶이 만들기", "https://www.10000recipe.com/recipe/2", "재료")))));
+        SearchEngineWebRecipeSearchAdapter adapter = new SearchEngineWebRecipeSearchAdapter(engine);
+
+        List<WebRecipeSearchResult> results = adapter.search(List.of("로제떡볶이 레시피"), 2);
+
+        assertThat(results).extracting(WebRecipeSearchResult::url)
+                .containsExactly("https://m.blog.naver.com/a/1", "https://www.10000recipe.com/recipe/2");
+    }
+
     // "백종원김치찌개"처럼 붙여 쓴 크리에이터 접두어도 구조화 데이터의 작성자와 일치해야 합니다.
     @Test
     void implicitKoreanCreatorPrefixStillRequiresMatchingStructuredAuthor() {

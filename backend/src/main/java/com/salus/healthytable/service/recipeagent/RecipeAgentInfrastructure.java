@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 
 /*
  * Recipe Agent 파이프라인의 앞부분 구성 요소(요청 분석, 내부 DB 출처 검색, 근거 추출, 후보 레시피 구성)를 모아 둔 파일입니다.
@@ -44,7 +45,6 @@ class DefaultRecipeRequestPlanner {
         return plan(message, useFridgeIngredients, hasUserContext ? UserRecipeContext.empty(null) : null);
     }
 
-    // 검색 계획을 만듭니다. 최대 검색 시도는 3회, 최대 출처 수는 5개로 고정합니다.
     // 제외 구절("돼지고기는 빼줘", "양파 빼고", "돼지고기 없는")입니다. 제외 재료는 extractExplicitExclusions가 따로 뽑습니다.
     private static final java.util.regex.Pattern EXCLUSION_CLAUSE = java.util.regex.Pattern.compile(
             "[,·]?\\s*[가-힣a-zA-Z0-9]+(?:은|는|을|를|이|가)?\\s*(?:빼\\s*주세요|빼\\s*줘|빼고|빼|제외(?:해\\s*줘|하고|해\\s*주세요)?|말고|없는|안\\s*들어간)");
@@ -64,6 +64,7 @@ class DefaultRecipeRequestPlanner {
         return cleaned.isBlank() ? dishName.trim() : cleaned;
     }
 
+    // 검색 계획을 만듭니다. 최대 검색 시도는 3회, 최대 출처 수는 5개로 고정합니다.
     RecipeResearchPlan plan(String message, boolean useFridgeIngredients, UserRecipeContext context) {
         String normalizedMessage = message == null ? "" : message.trim();
         String dishName = withoutExclusionClause(recipeNormalizer.normalize(normalizedMessage));
@@ -362,11 +363,36 @@ class RecipeCandidateBuilder {
             if ("ingredients".equals(section)) {
                 ingredients.add(value);
             } else if ("steps".equals(section)) {
-                steps.add(value);
+                if (isInstructionStep(value)) {
+                    steps.add(value);
+                }
             }
         }
         return new ParsedRecipe(title, description, AgentText.distinct(ingredients), AgentText.distinct(steps),
                 AgentText.distinct(core), AgentText.distinct(optional), AgentText.distinct(risks));
+    }
+
+    private boolean isInstructionStep(String line) {
+        if (line == null || line.isBlank()) {
+            return false;
+        }
+        String normalized = line.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+        if (normalized.startsWith("[팁]") || normalized.startsWith("팁:") || normalized.startsWith("tip:")
+                || normalized.startsWith("[tip]") || normalized.startsWith("*참고") || normalized.startsWith("※참고")
+                || normalized.startsWith("[참고]") || normalized.startsWith("*주의") || normalized.startsWith("[주의]")) {
+            return false;
+        }
+        if (normalized.contains("대체가능") || normalized.contains("추천합") || normalized.contains("추천해") || normalized.contains("추천드")) {
+            return hasCookingAction(normalized);
+        }
+        return true;
+    }
+
+    private boolean hasCookingAction(String text) {
+        return text.contains("볶") || text.contains("녹이") || text.contains("굽") || text.contains("끓")
+                || text.contains("섞") || text.contains("넣") || text.contains("반죽") || text.contains("성형")
+                || text.contains("썰") || text.contains("갈") || text.contains("붓") || text.contains("식히")
+                || text.contains("데치") || text.contains("튀기") || text.contains("바르") || text.contains("뿌리");
     }
 
     // 쉼표로 구분된 값을 공백 정리 후 목록으로 만듭니다.

@@ -73,7 +73,7 @@ class DefaultSafeWebPageFetcher implements SafeWebPageFetcher {
      */
     @Override
     public WebPageFetchResult fetch(String url) {
-        URI current = validateExternalUri(parseUri(url));
+        URI current = validateExternalUri(preferFetchableHost(parseUri(url)));
         for (int redirectCount = 0; redirectCount <= maxRedirects; redirectCount++) {
             HttpResponse<InputStream> response = send(current);
             int status = response.statusCode();
@@ -101,6 +101,22 @@ class DefaultSafeWebPageFetcher implements SafeWebPageFetcher {
                     sha256(bytes));
         }
         throw new SafeWebPageFetchException("redirect limit exceeded");
+    }
+
+    /**
+     * 본문을 받을 수 있는 주소로 바꿉니다. 네이버 블로그 PC 주소는 본문 없이 iframe 껍데기만
+     * 돌려주므로(2026-10-01 실측 15~24자) 같은 경로의 모바일 주소로 요청합니다.
+     */
+    URI preferFetchableHost(URI uri) {
+        if (uri == null || uri.getHost() == null || !uri.getHost().equalsIgnoreCase("blog.naver.com")) {
+            return uri;
+        }
+        try {
+            return new URI(uri.getScheme(), uri.getUserInfo(), "m.blog.naver.com", uri.getPort(),
+                    uri.getPath(), uri.getQuery(), uri.getFragment());
+        } catch (java.net.URISyntaxException e) {
+            return uri;
+        }
     }
 
     // 외부 공개 주소인지 검증합니다. 도메인이 가리키는 모든 IP 중 하나라도 내부 주소면 거부합니다.

@@ -41,7 +41,7 @@ public class SearxngSearchEngine implements SearchEngine {
     public SearxngSearchEngine(
             WebClient.Builder webClientBuilder,
             @Value("${searxng.base-url:http://localhost:8888}") String baseUrl,
-            @Value("${searxng.engines:google,bing,duckduckgo}") String engines,
+            @Value("${searxng.engines:google,bing,duckduckgo,startpage,yahoo,mojeek}") String engines,
             @Value("${searxng.language:ko}") String language,
             @Value("${searxng.timeout-seconds:15}") long timeoutSeconds) {
         this.webClient = webClientBuilder.baseUrl(baseUrl).build();
@@ -87,6 +87,15 @@ public class SearxngSearchEngine implements SearchEngine {
     // 제목이나 본문이 비어 있는 결과는 근거로 쓸 수 없으므로 버립니다.
     private SearchResponse toSearchResponse(SearxngResponse response) {
         if (response == null || response.results() == null || response.results().isEmpty()) {
+            // 결과가 비었는데 응답하지 못한 엔진이 있으면 "결과 없음"이 아니라 "확인 불가"입니다.
+            // 구글 차단(access denied), DuckDuckGo CAPTCHA처럼 상위 엔진이 막혀도 SearXNG는 200과 빈 결과를
+            // 돌려줍니다(2026-10-06 실측). EMPTY로 두면 폴백 검색이 돌지 않고, 기본 레시피 경로에서는
+            // "근거 없음"이 negative cache에 며칠간 남습니다.
+            if (response != null && response.unresponsiveEngines() != null && !response.unresponsiveEngines().isEmpty()) {
+                log.warn("[SearxngSearch] All results missing with unresponsive engines. count={}",
+                        response.unresponsiveEngines().size());
+                return new SearchResponse(SearchStatus.FAILED, List.of(), sourceName());
+            }
             log.info("[SearxngSearch] Search completed with empty results.");
             return new SearchResponse(SearchStatus.EMPTY, List.of(), sourceName());
         }
@@ -159,7 +168,10 @@ public class SearxngSearchEngine implements SearchEngine {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record SearxngResponse(@JsonProperty("results") List<SearxngResult> results) {}
+    record SearxngResponse(
+            @JsonProperty("results") List<SearxngResult> results,
+            // [[엔진 이름, 실패 사유], ...] 형태입니다. 사유 문자열은 기록하지 않고 개수만 봅니다.
+            @JsonProperty("unresponsive_engines") List<List<String>> unresponsiveEngines) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record SearxngResult(

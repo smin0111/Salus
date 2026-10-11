@@ -340,8 +340,33 @@ record RecipeResearchPlan(
         boolean personalizationRequired,
         List<String> searchQueries,
         int maxSearchAttempts,
-        int maxSources
+        int maxSources,
+        // 출처에 들어 있으면 안 되는 재료(사용자가 뺀 핵심 재료). 비어 있으면 제한 없음.
+        List<String> avoidIngredients
 ) {
+    RecipeResearchPlan {
+        avoidIngredients = avoidIngredients == null ? List.of() : List.copyOf(avoidIngredients);
+    }
+
+    RecipeResearchPlan(
+            String dishName, String creatorName, RecipeRequestMode mode, boolean latestSourceRequested,
+            boolean useFridgeIngredients, boolean personalizationRequired, List<String> searchQueries,
+            int maxSearchAttempts, int maxSources) {
+        this(dishName, creatorName, mode, latestSourceRequested, useFridgeIngredients, personalizationRequired,
+                searchQueries, maxSearchAttempts, maxSources, List.of());
+    }
+
+    /**
+     * "돼지고기 없는 김치찌개"처럼 뺀 재료 없이 만드는 같은 요리를 찾는 계획입니다. 요리 이름은 그대로 두어
+     * 출처의 요리 이름 확인(같은 요리인지)은 기존 규칙을 따릅니다.
+     */
+    RecipeResearchPlan withAvoidIngredients(List<String> avoid) {
+        String without = String.join(" ", avoid);
+        return new RecipeResearchPlan(dishName, creatorName, mode, latestSourceRequested, useFridgeIngredients,
+                personalizationRequired,
+                List.of(without + " 없는 " + dishName + " 레시피", without + " 없이 " + dishName + " 만드는 법"),
+                maxSearchAttempts, maxSources, avoid);
+    }
 }
 
 // 요청 모드: 생성 / 추천 / 재료 대체 / 재료 제외 / 상세 설명 / 특정 크리에이터 레시피

@@ -239,7 +239,10 @@ class YouTubeDescriptionEvidenceExtractor {
                     if ("ingredients".equals(section)) {
                         ingredientLines.add(inline);
                     } else if ("steps".equals(section)) {
-                        stepLines.add(inline);
+                        String cleaned = cleanListLine(inline);
+                        if (isInstructionStep(cleaned)) {
+                            stepLines.add(cleaned);
+                        }
                     }
                 }
                 continue;
@@ -250,7 +253,10 @@ class YouTubeDescriptionEvidenceExtractor {
             if ("ingredients".equals(section)) {
                 ingredientLines.add(cleanListLine(line));
             } else if ("steps".equals(section)) {
-                stepLines.add(cleanListLine(line));
+                String cleaned = cleanListLine(line);
+                if (isInstructionStep(cleaned)) {
+                    stepLines.add(cleaned);
+                }
             }
         }
         List<ExtractedIngredientLine> ingredients = ingredientLines.stream()
@@ -353,6 +359,30 @@ class YouTubeDescriptionEvidenceExtractor {
                 .replaceFirst("^\\d+[.)]\\s*", "")
                 .replaceFirst("^\\d{1,2}:\\d{2}(?::\\d{2})?\\s*", "")
                 .trim();
+    }
+
+    // 실제 조리 동작이 아닌 팁, 대체 안내, 추천 문구 등은 조리 순서에서 제외합니다.
+    private boolean isInstructionStep(String line) {
+        if (line == null || line.isBlank()) {
+            return false;
+        }
+        String normalized = line.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+        if (normalized.startsWith("[팁]") || normalized.startsWith("팁:") || normalized.startsWith("tip:")
+                || normalized.startsWith("[tip]") || normalized.startsWith("*참고") || normalized.startsWith("※참고")
+                || normalized.startsWith("[참고]") || normalized.startsWith("*주의") || normalized.startsWith("[주의]")) {
+            return false;
+        }
+        if (normalized.contains("대체가능") || normalized.contains("추천합") || normalized.contains("추천해") || normalized.contains("추천드")) {
+            return hasCookingAction(normalized);
+        }
+        return true;
+    }
+
+    private boolean hasCookingAction(String text) {
+        return text.contains("볶") || text.contains("녹이") || text.contains("굽") || text.contains("끓")
+                || text.contains("섞") || text.contains("넣") || text.contains("반죽") || text.contains("성형")
+                || text.contains("썰") || text.contains("갈") || text.contains("붓") || text.contains("식히")
+                || text.contains("데치") || text.contains("튀기") || text.contains("바르") || text.contains("뿌리");
     }
 }
 

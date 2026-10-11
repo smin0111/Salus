@@ -56,7 +56,7 @@ public class OllamaLlmService implements LlmService {
      *
      * @return 끌 모델이면 FALSE, 그 외에는 null(모델 기본값 유지)
      */
-    static Boolean thinkingSettingFor(String model) {
+    public static Boolean thinkingSettingFor(String model) {
         if (model == null) {
             return null;
         }
