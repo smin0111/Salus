@@ -1,0 +1,57 @@
+# Salus 실전(E2E) 평가 세트 v1. 실제 앱 API(/api/chat/message)로 보내고 scripts/e2e-eval.py가 채점합니다.
+# 핵심 지표: "맞는 요리 + 알레르기 안전 + 60초 이내"로 답한 비율. 알레르기 위반은 1건이라도 실패입니다.
+# expect: recipe(레시피 카드가 있어야 하는지), dishAny(제목·재료에 하나라도 있어야 함), mustInclude(재료에 모두 있어야 함),
+#         mustNotInclude(재료·단계에 없어야 함), blockOk(알레르기 등으로 정직하게 거절해도 통과), maxSeconds.
+# turns가 여러 개면 로그인 세션이 필요합니다(E2E_TOKEN). 마지막 질문의 답을 채점합니다.
+{"id":"trend-dujjonku","category":"trend","turns":["두쫀쿠 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["쫀득","두쫀쿠"],"mustInclude":["마시멜로"]}}
+{"id":"trend-dubai-chewy-cookie","category":"trend","turns":["두바이 쫀득 쿠키 만드는 법 알려줘"],"expect":{"recipe":true,"dishAny":["쫀득","쿠키"],"mustInclude":["마시멜로"]}}
+{"id":"trend-crunji","category":"trend","turns":["크룽지 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["크룽지"],"mustInclude":["크로와상"]}}
+{"id":"trend-tanghulu","category":"trend","turns":["탕후루 만드는 법"],"expect":{"recipe":true,"dishAny":["탕후루"],"mustInclude":["설탕"]}}
+{"id":"trend-malaxiangguo","category":"trend","turns":["마라샹궈 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["마라"]}}
+{"id":"trend-rose-tteokbokki","category":"trend","turns":["로제떡볶이 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["로제"],"mustInclude":["떡"]}}
+{"id":"trend-butter-tteok","category":"trend","turns":["버터떡 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["버터떡"],"mustInclude":["버터"]}}
+{"id":"trend-yogurt-icecream","category":"trend","turns":["요거트 아이스크림 만드는 법 알려줘"],"expect":{"recipe":true,"dishAny":["요거트","요구르트"]}}
+{"id":"trend-dalgona-coffee","category":"trend","turns":["달고나 커피 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["달고나"],"mustInclude":["커피"]}}
+{"id":"trend-cucumber-kimbap","category":"trend","turns":["오이김밥 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["오이","김밥"],"mustInclude":["오이"]}}
+{"id":"trend-dubai-chocolate","category":"trend","turns":["두바이 초콜릿 만드는 법 알려줘"],"expect":{"recipe":true,"dishAny":["두바이","초콜릿"],"mustInclude":["카다이프"]}}
+{"id":"trend-buldak-egg-roll","category":"trend","turns":["불닭계란말이 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["계란말이","불닭"],"mustInclude":["계란"]}}
+{"id":"trend-salt-bread","category":"trend","turns":["소금빵 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["소금빵"],"mustInclude":["버터"]}}
+{"id":"trend-smore-cookie","category":"trend","turns":["스모어쿠키 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["스모어"],"mustInclude":["마시멜로"]}}
+{"id":"trend-yakgwa-cookie","category":"trend","turns":["약과쿠키 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["약과"]}}
+{"id":"basic-kimchi-jjigae","category":"basic","turns":["김치찌개 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["김치찌개"],"mustInclude":["김치"]}}
+{"id":"basic-doenjang-jjigae","category":"basic","turns":["된장찌개 끓이는 법 알려줘"],"expect":{"recipe":true,"dishAny":["된장찌개"],"mustInclude":["된장"]}}
+{"id":"basic-jeyuk","category":"basic","turns":["제육볶음 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["제육"],"mustInclude":["돼지고기"]}}
+{"id":"basic-gyeranmari","category":"basic","turns":["계란말이 만드는 법 알려줘"],"expect":{"recipe":true,"dishAny":["계란말이"],"mustInclude":["계란"]}}
+{"id":"basic-japchae","category":"basic","turns":["잡채 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["잡채"],"mustInclude":["당면"]}}
+{"id":"basic-miyeokguk","category":"basic","turns":["미역국 끓이는 법 알려줘"],"expect":{"recipe":true,"dishAny":["미역국"],"mustInclude":["미역"]}}
+{"id":"basic-tteokbokki","category":"basic","turns":["떡볶이 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["떡볶이"],"mustInclude":["떡"]}}
+{"id":"basic-dakbokkeumtang","category":"basic","turns":["닭볶음탕 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["닭볶음탕","닭도리탕"],"mustInclude":["닭"]}}
+{"id":"basic-gamja-jorim","category":"basic","turns":["감자조림 만드는 법 알려줘"],"expect":{"recipe":true,"dishAny":["감자조림"],"mustInclude":["감자"]}}
+{"id":"basic-bulgogi","category":"basic","turns":["소불고기 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["불고기"],"mustInclude":["소고기"]}}
+{"id":"variant-tuna-kimchi-jjigae","category":"variant","turns":["참치김치찌개 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["참치"],"mustInclude":["참치"],"mustNotInclude":["돼지고기"]}}
+{"id":"variant-chadol-doenjang","category":"variant","turns":["차돌된장찌개 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["차돌"],"mustInclude":["차돌"]}}
+{"id":"variant-tuna-kimchi-fried-rice","category":"variant","turns":["참치김치볶음밥 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["참치"],"mustInclude":["참치"]}}
+{"id":"variant-cream-tteokbokki","category":"variant","turns":["크림떡볶이 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["크림"],"mustInclude":["떡"]}}
+{"id":"variant-perilla-makguksu","category":"variant","turns":["들기름막국수 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["막국수"],"mustInclude":["들기름"]}}
+{"id":"allergy-milk-cream-pasta","category":"allergy","allergies":["우유"],"turns":["크림파스타 레시피 알려줘"],"expect":{"recipe":true,"blockOk":true,"dishAny":["파스타"]}}
+{"id":"allergy-shrimp-haemul-pajeon","category":"allergy","allergies":["새우"],"turns":["해물파전 레시피 알려줘"],"expect":{"recipe":true,"blockOk":true,"dishAny":["파전"]}}
+{"id":"allergy-egg-gyeranmari","category":"allergy","allergies":["계란"],"turns":["계란말이 레시피 알려줘"],"expect":{"recipe":false,"blockOk":true}}
+{"id":"allergy-peanut-cookie","category":"allergy","allergies":["땅콩"],"turns":["땅콩버터쿠키 레시피 알려줘"],"expect":{"recipe":false,"blockOk":true}}
+{"id":"allergy-wheat-buchimgae","category":"allergy","allergies":["밀"],"turns":["부침개 레시피 알려줘"],"expect":{"recipe":true,"blockOk":true,"dishAny":["부침개","전"]}}
+{"id":"allergy-soy-doenjang","category":"allergy","allergies":["대두"],"turns":["된장찌개 레시피 알려줘"],"expect":{"recipe":false,"blockOk":true}}
+{"id":"allergy-crab-fried-rice","category":"allergy","allergies":["게"],"turns":["게살볶음밥 레시피 알려줘"],"expect":{"recipe":false,"blockOk":true}}
+{"id":"allergy-milk-dujjonku","category":"allergy","allergies":["우유"],"turns":["두쫀쿠 레시피 알려줘"],"expect":{"recipe":true,"blockOk":true,"dishAny":["쫀득","두쫀쿠"]}}
+{"id":"allergy-buckwheat-soba","category":"allergy","allergies":["메밀"],"turns":["메밀소바 레시피 알려줘"],"expect":{"recipe":false,"blockOk":true}}
+{"id":"allergy-exclude-pork-kimchi-jjigae","category":"allergy","turns":["김치찌개 레시피 알려줘, 돼지고기는 빼줘"],"expect":{"recipe":true,"dishAny":["김치찌개"],"mustNotInclude":["돼지고기","삼겹살","목살"]}}
+{"id":"followup-kimchi-no-onion","category":"followup","turns":["김치찌개 레시피 알려줘","양파 빼줘"],"expect":{"recipe":true,"dishAny":["김치찌개"],"mustNotInclude":["양파"]}}
+{"id":"followup-kimchi-3-servings","category":"followup","turns":["김치찌개 레시피 알려줘","3인분으로 바꿔줘"],"expect":{"recipe":true,"dishAny":["김치찌개"],"replyAny":["3인분"]}}
+{"id":"followup-jeyuk-less-spicy","category":"followup","turns":["제육볶음 레시피 알려줘","덜 맵게 해줘"],"expect":{"recipe":true,"dishAny":["제육"]}}
+{"id":"followup-dujjonku-another","category":"followup","turns":["두쫀쿠 레시피 알려줘","다른 두쫀쿠 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["쫀득","두쫀쿠"],"differentSourceFromFirst":true}}
+{"id":"followup-tteokbokki-to-rose","category":"followup","turns":["떡볶이 레시피 알려줘","로제떡볶이로 바꿔줘"],"expect":{"recipe":true,"dishAny":["로제"]}}
+{"id":"followup-gyeranmari-add-cheese","category":"followup","turns":["계란말이 레시피 알려줘","치즈 넣어줘"],"expect":{"recipe":true,"dishAny":["계란말이"],"mustInclude":["치즈"]}}
+{"id":"followup-kimbap-swap-perilla","category":"followup","turns":["오이김밥 레시피 알려줘","깻잎 말고 상추 넣어줘"],"expect":{"recipe":true,"dishAny":["김밥"],"mustNotInclude":["깻잎"]}}
+{"id":"followup-new-dish-after-kimchi","category":"followup","turns":["김치찌개 레시피 알려줘","크룽지 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["크룽지"],"mustNotInclude":["김치"]}}
+{"id":"followup-new-dish-buldak","category":"followup","turns":["김치찌개 레시피 알려줘","불닭계란말이 레시피 알려줘"],"expect":{"recipe":true,"dishAny":["계란말이","불닭"],"mustNotInclude":["김치"]}}
+{"id":"followup-crunji-bare-name","category":"followup","turns":["크룽지!"],"expect":{"recipe":true,"dishAny":["크룽지"]}}
+{"id":"negative-nonexistent-dish","category":"negative","turns":["쿼르텔바즈 스튜 레시피 알려줘"],"expect":{"recipe":false}}
+{"id":"negative-greeting","category":"negative","turns":["안녕 반가워"],"expect":{"recipe":false}}

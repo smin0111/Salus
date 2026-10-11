@@ -29,6 +29,19 @@ FILES=(
     "$MAIN/RecipePromptFactory.java"
     "$MAIN/SearxngSearchEngine.java"
     "$MAIN/recipeagent/RecipeAgentOrchestrator.java"
+    "$MAIN/recipeagent/DefaultSafeWebPageFetcher.java"
+    "$MAIN/recipeagent/RecipeWebSourceProcessing.java"
+    "$MAIN/recipeagent/WebRecipeSearchAdapter.java"
+    "$MAIN/recipeagent/RecipeTextExtraction.java"
+    "$MAIN/OllamaLlmService.java"
+    "$MAIN/ApprovedRecipeService.java"
+    "$MAIN/ChatFollowUpService.java"
+    "$MAIN/recipeagent/RecipeWebSourceStore.java"
+    "$MAIN/recipeagent/CompositeRecipeSourceDiscoveryAdapter.java"
+    "$MAIN/recipeagent/RecipeAgentPipeline.java"
+    backend/src/main/java/com/salus/healthytable/domain/WebRecipeSource.java
+    backend/src/main/java/com/salus/healthytable/repository/WebRecipeSourceRepository.java
+    backend/src/main/resources/db/migration/V15__add_web_recipe_sources.sql
     backend/src/main/resources/application.properties
     "$TEST/eval/EvalGrader.java"
     "$TEST/eval/EvalRun.java"
@@ -36,15 +49,24 @@ FILES=(
     "$TEST/service/ChatSafetyContextServiceTest.java"
     "$TEST/service/ChatServiceSafetyTest.java"
     "$TEST/service/FallbackSearchEngineTest.java"
+    "$TEST/service/SearxngSearchEngineTest.java"
     "$TEST/service/RecipeDraftValidatorTest.java"
     "$TEST/service/RecipeGenerationCoordinatorTimeoutTest.java"
     "$TEST/service/RecipePromptFactoryTest.java"
+    "$TEST/service/ApprovedRecipeServiceTest.java"
     "$TEST/service/recipeagent/RecipeAgentPersonalizationTest.java"
+    "$TEST/service/recipeagent/RecipeWebSourceAdapterTest.java"
+    "$TEST/service/recipeagent/LongtailSourceSnapshotEval.java"
+    "$TEST/service/recipeagent/LongtailTextExtractionEval.java"
+    "$TEST/service/recipeagent/PageTextRecipeExtractorTest.java"
+    "$TEST/service/recipeagent/LongtailLiveDiscoveryEval.java"
+    "$TEST/service/recipeagent/WebRecipeSourceStoreTest.java"
     scripts/eval-ollama-metrics.py
     scripts/eval-order-experiment.py
     scripts/eval-repeat-runs.sh
     scripts/eval-run-variance.py
     scripts/eval-worktree-sync.sh
+    scripts/longtail-source-probe.py
     # 참조 테스트(CrossContact/IngredientReferenceTest)가 읽는 미추적 원본 워크북
     docs/reference/Salus_Strict_Web_Reference_20_2026-09-09.xlsx
 )
