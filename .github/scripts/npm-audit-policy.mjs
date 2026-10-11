@@ -26,6 +26,22 @@ const policies = {
         reason: 'Expo Metro의 빌드 전용 전이 의존성이며 현재 공개된 패치 버전이 없습니다.',
       },
     ],
+    [
+      'https://github.com/advisories/GHSA-vfj7-8cjw-p6xm',
+      {
+        dependency: 'braces',
+        reason: 'Metro·Jest(개발·빌드 도구)의 전이 의존성입니다. 2026-10-12 기준 최신 3.0.3도 영향 범위(<=3.0.3)이고 '
+          + '패치 버전이 없습니다. 앱 번들에는 들어가지 않고, 공격 입력은 개발자가 쓰는 파일 패턴입니다.',
+      },
+    ],
+    [
+      'https://github.com/advisories/GHSA-86w9-cpqp-85rv',
+      {
+        dependency: 'node-forge',
+        reason: '@expo/cli 코드 서명 인증서 도구(개발 도구)의 전이 의존성입니다. 2026-10-12 기준 최신 1.4.0도 영향 범위(<=1.4.0)이고 '
+          + '패치 버전이 없습니다. 앱 번들에는 들어가지 않습니다. npm이 제안하는 수정(expo 44)은 다운그레이드라 쓰지 않습니다.',
+      },
+    ],
   ]),
 };
 
