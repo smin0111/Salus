@@ -31,4 +31,12 @@ class RecipeRequestPlannerDishNameTest {
     void exclusionIsStillExtractedSeparately() {
         assertThat(planner.extractExplicitExclusions("김치찌개 레시피 알려줘, 돼지고기는 빼줘")).contains("돼지고기");
     }
+
+    // "다른 두쫀쿠 레시피"의 "다른"은 요리 이름이 아닙니다. 이름이 남지 않으면 빈 이름(직전 요리의 다른 레시피)입니다.
+    @Test
+    void anotherWordsAreNotPartOfDishName() {
+        assertThat(planner.plan("다른 두쫀쿠 레시피 알려줘", false, true).dishName()).isEqualTo("두쫀쿠");
+        assertThat(planner.plan("두쫀쿠 다른 레시피 알려줘", false, true).dishName()).isEqualTo("두쫀쿠");
+        assertThat(planner.plan("다른 레시피 알려줘", false, true).dishName()).isEmpty();
+    }
 }

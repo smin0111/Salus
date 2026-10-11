@@ -53,15 +53,24 @@ class DefaultRecipeRequestPlanner {
      * 요리 이름에서 제외 구절을 떼어 냅니다. "김치찌개 레시피 알려줘, 돼지고기는 빼줘"의 요리 이름이
      * "김치찌개 , 돼지고기는 빼줘"로 잡혀 검색과 출처 확인이 모두 실패하던 문제를 막습니다(2026-10-09).
      */
+    private static final java.util.regex.Pattern ANOTHER_WORDS = java.util.regex.Pattern.compile(
+            "(?:또\\s*)?다른|버전(?:으로|을|로)?");
+
     static String withoutExclusionClause(String dishName) {
         if (dishName == null || dishName.isBlank()) {
             return dishName == null ? "" : dishName;
         }
-        String cleaned = EXCLUSION_CLAUSE.matcher(dishName).replaceAll(" ")
+        // "다른 두쫀쿠", "다른 버전으로"의 "다른·버전"도 요리 이름이 아닙니다. 지우고 남는 말이 없으면 빈 이름입니다
+        // (직전 요리의 다른 레시피 요청).
+        String withoutAnother = ANOTHER_WORDS.matcher(dishName).replaceAll(" ").replaceAll("\\s+", " ").trim();
+        if (withoutAnother.isBlank()) {
+            return "";
+        }
+        String cleaned = EXCLUSION_CLAUSE.matcher(withoutAnother).replaceAll(" ")
                 .replaceAll("[,·]", " ")
                 .replaceAll("\\s+", " ")
                 .trim();
-        return cleaned.isBlank() ? dishName.trim() : cleaned;
+        return cleaned.isBlank() ? withoutAnother : cleaned;
     }
 
     // 검색 계획을 만듭니다. 최대 검색 시도는 3회, 최대 출처 수는 5개로 고정합니다.

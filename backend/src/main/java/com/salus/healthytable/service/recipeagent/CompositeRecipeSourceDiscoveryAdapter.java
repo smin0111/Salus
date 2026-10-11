@@ -73,6 +73,10 @@ class CompositeRecipeSourceDiscoveryAdapter implements RecipeSourceDiscoveryPort
         if (plan != null && !plan.avoidIngredients().isEmpty()) {
             documents.removeIf(document -> containsAvoided(document.content(), plan.avoidIngredients()));
         }
+        // "다른 레시피" 요청이면 이미 보여 준 출처는 후보에서 뺍니다.
+        if (plan != null && !plan.excludedSourceUrls().isEmpty()) {
+            documents.removeIf(document -> isExcludedSource(document.url(), plan.excludedSourceUrls()));
+        }
         if (!webSourceEnabled || plan == null) {
             return sorted(documents, plan);
         }
@@ -98,6 +102,7 @@ class CompositeRecipeSourceDiscoveryAdapter implements RecipeSourceDiscoveryPort
         List<RecipeSourceCandidate> webCandidates = structuredRecipePageAdapter.collect(plan, searchResults).stream()
                 .filter(candidate -> plan.avoidIngredients().isEmpty() || candidate.originalRecipe() == null
                         || !containsAvoided(String.join("\n", candidate.originalRecipe().ingredients()), plan.avoidIngredients()))
+                .filter(candidate -> candidate.source() == null || !isExcludedSource(candidate.source().url(), plan.excludedSourceUrls()))
                 .toList();
         if (webCandidates.isEmpty()) {
             return sorted(documents, plan);
@@ -125,6 +130,23 @@ class CompositeRecipeSourceDiscoveryAdapter implements RecipeSourceDiscoveryPort
                 .forEach(documents::add);
 
         return sorted(documents, plan);
+    }
+
+    // 같은 글의 주소 차이(https/http, www·m. 접두어, 끝의 /)는 무시하고 비교합니다
+    // (네이버 블로그는 모바일 주소로 가져오므로 검색 주소와 저장 주소가 다를 수 있음).
+    static boolean isExcludedSource(String url, List<String> excluded) {
+        if (url == null || excluded.isEmpty()) {
+            return false;
+        }
+        String key = sourceKey(url);
+        return excluded.stream().map(CompositeRecipeSourceDiscoveryAdapter::sourceKey).anyMatch(key::equals);
+    }
+
+    private static String sourceKey(String url) {
+        return url.trim().toLowerCase(java.util.Locale.ROOT)
+                .replaceFirst("^https?://", "")
+                .replaceFirst("^(?:www\\.|m\\.)", "")
+                .replaceFirst("/+$", "");
     }
 
     // 재료 이름 비교는 공백·기호를 무시합니다("돼지 고기" = "돼지고기").

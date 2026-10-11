@@ -133,12 +133,36 @@ public class RecipeAgentOrchestrator {
         boolean isFollowUp = previousState
                 .filter(previous -> isFollowUpToPreviousRecipe(previous, plan, request == null ? "" : request.getMessage()))
                 .isPresent();
-        DiscoveryResult discovery = isFollowUp
-                ? new DiscoveryResult(
-                        previousState.get().originalRecipe(),
-                        previousState.get().sourceEvidence(),
-                        RecipeResearchStatus.VERIFIED_SOURCE_FOUND)
-                : discoverCandidate(plan, context);
+        // "다른 두쫀쿠 레시피 알려줘": 이미 보여 준 출처는 빼고 다시 찾습니다(2026-10-09 평가: 같은 출처로 답함).
+        // 이전 카드 제목("두바이 쫀득 쿠키")과 요청 이름("두쫀쿠")이 달라도 이전 출처는 뺍니다.
+        // 같은 요리인데 다른 출처가 없으면 지어내지 않고 이전 레시피를 다시 보여 주며 그렇게 안내합니다.
+        String notice = null;
+        DiscoveryResult discovery = null;
+        if (previousState.isPresent() && asksForAnotherSource(request == null ? "" : request.getMessage())) {
+            PreviousAgentState previous = previousState.get();
+            String dish = plan.dishName().isBlank() ? previous.originalRecipe().title() : plan.dishName();
+            RecipeResearchPlan anotherPlan = requestPlanner.plan(dish, request.isUseFridge(), loadedContext)
+                    .withExcludedSources(previous.sourceEvidence().stream()
+                            .map(RecipeSourceDocument::url).filter(java.util.Objects::nonNull).toList());
+            DiscoveryResult another = discoverCandidate(anotherPlan, context);
+            if (another.status() == RecipeResearchStatus.VERIFIED_SOURCE_FOUND) {
+                discovery = another;
+                isFollowUp = false;
+                notice = "이전과 다른 출처의 레시피를 찾았어요.";
+            } else if (isFollowUp) {
+                notice = "다른 출처의 레시피를 찾지 못해 이전 레시피를 다시 보여 드려요.";
+            } else {
+                discovery = another;
+            }
+        }
+        if (discovery == null) {
+            discovery = isFollowUp
+                    ? new DiscoveryResult(
+                            previousState.get().originalRecipe(),
+                            previousState.get().sourceEvidence(),
+                            RecipeResearchStatus.VERIFIED_SOURCE_FOUND)
+                    : discoverCandidate(plan, context);
+        }
         // 구조화 출처가 없으면 여기서 멈춥니다. 호출자가 더 낮은 등급의 근거 경로로 내려갑니다.
         if (requireReliableSource && discovery.status() != RecipeResearchStatus.VERIFIED_SOURCE_FOUND) {
             log.info("[RecipeAgent] No verified source. Deferring to lower evidence tier. dish={}", plan.dishName());
@@ -162,16 +186,14 @@ public class RecipeAgentOrchestrator {
                     log.info("[RecipeAgent] Found alternative without excluded core ingredient. dish={}", plan.dishName());
                     discovery = alternative;
                     originalRecipe = alternative.recipe();
-                    RecipePersonalizationDecision found = alternativeEvaluation.decision();
-                    List<String> notices = new java.util.ArrayList<>(found.userNotices());
-                    notices.add(0, "요청하신 대로 " + String.join(", ", context.explicitlyExcludedIngredients())
+                    evaluation = alternativeEvaluation.withNotice("요청하신 대로 "
+                            + String.join(", ", context.explicitlyExcludedIngredients())
                             + " 없이 만드는 " + plan.dishName() + " 레시피를 찾았어요.");
-                    evaluation = new Evaluation(new RecipePersonalizationDecision(
-                            found.decisionType(), found.conflicts(), found.modifications(), AgentText.distinct(notices),
-                            found.additionalPurchaseItems(), found.fridgeItemsUsed()),
-                            alternativeEvaluation.personalized(), alternativeEvaluation.validation());
                 }
             }
+        }
+        if (notice != null) {
+            evaluation = evaluation.withNotice(notice);
         }
         RecipePersonalizationDecision decision = evaluation.decision();
         RecipeCandidate personalizedRecipe = evaluation.personalized();
@@ -207,6 +229,15 @@ public class RecipeAgentOrchestrator {
             RecipePersonalizationDecision decision, RecipeCandidate personalized, RecipeValidationResult validation) {
         boolean blocked() {
             return decision.decisionType() == RecipeDecisionType.BLOCK || !validation.valid();
+        }
+
+        // 사용자에게 보여 줄 안내 문구를 맨 앞에 더합니다.
+        Evaluation withNotice(String notice) {
+            List<String> notices = new java.util.ArrayList<>(decision.userNotices());
+            notices.add(0, notice);
+            return new Evaluation(new RecipePersonalizationDecision(
+                    decision.decisionType(), decision.conflicts(), decision.modifications(), AgentText.distinct(notices),
+                    decision.additionalPurchaseItems(), decision.fridgeItemsUsed()), personalized, validation);
         }
 
         // 사용자가 뺀 재료가 핵심 재료였는지입니다. 빼고 제공해도 요리의 중심이 빠진 레시피라 대안을 먼저 찾습니다.
@@ -403,6 +434,13 @@ public class RecipeAgentOrchestrator {
      * 이번 요청이 이전 세션 레시피에 대한 후속 요청인지(재료 변경, 세부 질문 등) 판단합니다.
      * 새로운 요리 이름이 명시되어 있고 이전 요리와 다르면 새로운 요리 요청으로 보고 이전 레시피를 재사용하지 않습니다.
      */
+    // "다른 레시피", "다른 버전", "다른 방법"처럼 같은 요리의 다른 출처를 묻는지 봅니다.
+    static boolean asksForAnotherSource(String message) {
+        String compact = message == null ? "" : message.replaceAll("\\s+", "");
+        return compact.contains("다른") && (compact.contains("레시피") || compact.contains("버전")
+                || compact.contains("방법") || compact.contains("만드는법"));
+    }
+
     private boolean isFollowUpToPreviousRecipe(PreviousAgentState previous, RecipeResearchPlan plan, String message) {
         if (previous == null || previous.originalRecipe() == null) {
             return false;

@@ -694,7 +694,10 @@ class InMemoryRecipeSourceCache {
                 SELECTION_VERSION)
                 // 뺀 재료가 있는 검색은 일반 검색과 결과가 달라 따로 저장합니다.
                 + (plan.avoidIngredients().isEmpty() ? "" : "|no:" + plan.avoidIngredients().stream()
-                        .map(RecipeCandidate::normalize).sorted().collect(java.util.stream.Collectors.joining(",")));
+                        .map(RecipeCandidate::normalize).sorted().collect(java.util.stream.Collectors.joining(",")))
+                // 뺀 출처 주소는 길어서 해시로 줄입니다(캐시 키 200자 제한).
+                + (plan.excludedSourceUrls().isEmpty() ? "" : "|not:" + Integer.toHexString(
+                        plan.excludedSourceUrls().stream().sorted().toList().hashCode()));
     }
 
     // 현재 캐시 내용을 복사해 반환합니다(테스트/점검용).

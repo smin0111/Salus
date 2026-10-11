@@ -889,6 +889,67 @@ class RecipeAgentPersonalizationTest {
         }
     }
 
+    private RecipeWorkSessionService previousDujjonkuSession() {
+        RecipeWorkSessionService workSessionService = mock(RecipeWorkSessionService.class);
+        Map<String, Object> session = agentSessionMap(new RecipeCandidate(
+                "두바이 쫀득 쿠키", "", List.of("마시멜로우 150g", "카다이프면 100g"), List.of("마시멜로우를 녹입니다.", "성형합니다."),
+                null, null, null, List.of("마시멜로우"), List.of(), List.of()));
+        session.put("sourceEvidence", List.of(Map.of(
+                "sourceId", "web:a", "sourceType", "GENERAL_WEB", "title", "두쫀쿠 A",
+                "url", "https://blog.naver.com/a/1", "content", "title: 두바이 쫀득 쿠키", "sourceReliability", 0.6)));
+        when(workSessionService.find(1L, 20L)).thenReturn(Optional.of(RecipeWorkSessionDTO.builder()
+                .userId(1L).chatSessionId(20L).lastRecommendation("이전 두쫀쿠").agentSession(session).build()));
+        return workSessionService;
+    }
+
+    // "다른 두쫀쿠 레시피 알려줘"는 이미 보여 준 출처를 빼고 다시 찾습니다(2026-10-09 평가: 같은 출처로 답함).
+    // 모바일 주소(m.blog.naver.com)로 저장된 같은 글도 이미 보여 준 출처로 봅니다.
+    @Test
+    void anotherRecipeRequestExcludesPreviouslyShownSource() {
+        RecipeSourceDocument otherSource = new RecipeSourceDocument(
+                "fixture:b", RecipeSourceType.INTERNAL_DB, "두쫀쿠 B", "chef", "https://salus.internal/recipes/dujjonku-b",
+                "title: 두쫀쿠\ningredients:\n- 마시멜로우 200g\n- 카다이프면 80g\n- 피스타치오 스프레드 100g\nsteps:\n- 카다이프면을 볶습니다.\n- 마시멜로우로 감쌉니다.",
+                null, 1.0);
+        List<RecipeResearchPlan> plans = new java.util.ArrayList<>();
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                UserRecipeContext::empty,
+                (plan, context) -> {
+                    plans.add(plan);
+                    return List.of(otherSource);
+                },
+                previousDujjonkuSession());
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", true);
+
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("다른 두쫀쿠 레시피 알려줘");
+        ChatDto.Response response = orchestrator.handle(1L, 20L, request).block();
+
+        assertThat(plans).hasSize(1);
+        assertThat(plans.get(0).dishName()).isEqualTo("두쫀쿠");
+        assertThat(plans.get(0).excludedSourceUrls()).containsExactly("https://blog.naver.com/a/1");
+        assertThat(response.getReply()).contains("이전과 다른 출처의 레시피를 찾았어요").contains("dujjonku-b");
+        assertThat(CompositeRecipeSourceDiscoveryAdapter.isExcludedSource(
+                "https://m.blog.naver.com/a/1/", List.of("https://blog.naver.com/a/1"))).isTrue();
+    }
+
+    // 다른 출처가 없으면 지어내지 않고 이전 레시피를 다시 보여 주며 그렇게 안내합니다.
+    @Test
+    void anotherRecipeRequestFallsBackToPreviousRecipeWhenNoOtherSource() {
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                UserRecipeContext::empty,
+                (plan, context) -> List.of(),
+                previousDujjonkuSession());
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", true);
+
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("다른 레시피 알려줘");
+        ChatDto.Response response = orchestrator.handle(1L, 20L, request).block();
+
+        assertThat(response.getReply()).contains("다른 출처의 레시피를 찾지 못해 이전 레시피를 다시 보여 드려요");
+        assertThat(response.getRecipe()).isNotNull();
+        assertThat(response.getRecipe().getTitle()).isEqualTo("두바이 쫀득 쿠키");
+    }
+
     private RecipeAgentOrchestrator orchestrator(
             UserRecipeContextLoader loader,
             RecipeSourceDiscoveryPort sourcePort,

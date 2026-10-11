@@ -94,7 +94,12 @@ class RecipeStepSummarizer {
                     summaries = retried;
                 }
             }
-            summaries = summaries.stream().filter(step -> !isStorageOnlyStep(step)).toList();
+            // 같은 문장을 되풀이한 단계는 한 번만 남깁니다(2026-10-11 쇠고기무국 요약에서 같은 문장 4번 반복).
+            summaries = summaries.stream()
+                    .filter(step -> !isStorageOnlyStep(step))
+                    .map(String::trim)
+                    .distinct()
+                    .toList();
             if (summaries.size() < 2) {
                 log.info("[RecipeStepSummary] Rejected. reason=TOO_FEW_STEPS");
                 return Optional.empty();

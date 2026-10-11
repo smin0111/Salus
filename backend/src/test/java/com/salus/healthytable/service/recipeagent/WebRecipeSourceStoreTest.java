@@ -169,6 +169,17 @@ class WebRecipeSourceStoreTest {
         assertThat(result).hasSize(2);
     }
 
+    // 모델이 같은 문장을 되풀이하면 한 번만 남깁니다.
+    @Test
+    void summarizerDropsRepeatedSteps() {
+        RecipeStepSummarizer summarizer = summarizer((prompt, schema) -> objectMapper.valueToTree(Map.of("steps", List.of(
+                Map.of("text", "소고기를 참기름에 볶는다"), Map.of("text", "국물이 끓으면 대파를 넣는다"),
+                Map.of("text", "국물이 끓으면 대파를 넣는다"), Map.of("text", " 국물이 끓으면 대파를 넣는다 ")))));
+
+        assertThat(summarizer.summarize("소고기무국", candidate(List.of("원문 1", "원문 2", "원문 3"))).orElseThrow())
+                .containsExactly("소고기를 참기름에 볶는다", "국물이 끓으면 대파를 넣는다");
+    }
+
     @Test
     void detectsMissingDetailsAndStorageOnlySteps() {
         assertThat(RecipeStepSummarizer.missingDetails(

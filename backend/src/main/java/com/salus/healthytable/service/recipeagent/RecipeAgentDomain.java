@@ -342,10 +342,13 @@ record RecipeResearchPlan(
         int maxSearchAttempts,
         int maxSources,
         // 출처에 들어 있으면 안 되는 재료(사용자가 뺀 핵심 재료). 비어 있으면 제한 없음.
-        List<String> avoidIngredients
+        List<String> avoidIngredients,
+        // 이미 보여 준 출처 주소("다른 레시피" 요청에서 빼고 찾음). 비어 있으면 제한 없음.
+        List<String> excludedSourceUrls
 ) {
     RecipeResearchPlan {
         avoidIngredients = avoidIngredients == null ? List.of() : List.copyOf(avoidIngredients);
+        excludedSourceUrls = excludedSourceUrls == null ? List.of() : List.copyOf(excludedSourceUrls);
     }
 
     RecipeResearchPlan(
@@ -353,7 +356,7 @@ record RecipeResearchPlan(
             boolean useFridgeIngredients, boolean personalizationRequired, List<String> searchQueries,
             int maxSearchAttempts, int maxSources) {
         this(dishName, creatorName, mode, latestSourceRequested, useFridgeIngredients, personalizationRequired,
-                searchQueries, maxSearchAttempts, maxSources, List.of());
+                searchQueries, maxSearchAttempts, maxSources, List.of(), List.of());
     }
 
     /**
@@ -365,7 +368,15 @@ record RecipeResearchPlan(
         return new RecipeResearchPlan(dishName, creatorName, mode, latestSourceRequested, useFridgeIngredients,
                 personalizationRequired,
                 List.of(without + " 없는 " + dishName + " 레시피", without + " 없이 " + dishName + " 만드는 법"),
-                maxSearchAttempts, maxSources, avoid);
+                maxSearchAttempts, maxSources, avoid, excludedSourceUrls);
+    }
+
+    /**
+     * "다른 두쫀쿠 레시피"처럼 이미 보여 준 출처를 빼고 같은 요리를 다시 찾는 계획입니다.
+     */
+    RecipeResearchPlan withExcludedSources(List<String> urls) {
+        return new RecipeResearchPlan(dishName, creatorName, mode, latestSourceRequested, useFridgeIngredients,
+                personalizationRequired, searchQueries, maxSearchAttempts, maxSources, avoidIngredients, urls);
     }
 }
 
