@@ -5,6 +5,7 @@ import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.handler.timeout.WriteTimeoutHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Scope;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -31,7 +32,18 @@ public class WebClientConfig {
     private long writeTimeoutSeconds;
 
     @Bean
-    public WebClient webClient(WebClient.Builder builder) {
+    public WebClient webClient() {
+        return webClientBuilder().build();
+    }
+
+    /**
+     * 주입받는 곳마다 새 Builder를 줍니다(prototype). Builder는 바꿀 수 있는 객체라 하나를 함께 쓰면
+     * 한 서비스가 정한 baseUrl 등이 다른 서비스 요청에 섞입니다(예: 의약품 API 주소가 네이버 토큰 요청 경로에 붙음).
+     * 타임아웃과 응답 버퍼 크기는 모든 Builder에 똑같이 적용합니다.
+     */
+    @Bean
+    @Scope("prototype")
+    public WebClient.Builder webClientBuilder() {
         // AI API 응답 지연 시 무한 대기를 막되, 로컬 LLM의 긴 생성 시간은 허용합니다.
         HttpClient httpClient = HttpClient.create()
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000)  // 연결 타임아웃: 10초
@@ -40,14 +52,8 @@ public class WebClientConfig {
                         .addHandlerLast(new ReadTimeoutHandler(readTimeoutSeconds, TimeUnit.SECONDS))
                         .addHandlerLast(new WriteTimeoutHandler(writeTimeoutSeconds, TimeUnit.SECONDS)));
 
-        return builder
+        return WebClient.builder()
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
-                .codecs(config -> config.defaultCodecs().maxInMemorySize(10 * 1024 * 1024)) // 최대 10MB 버퍼
-                .build();
-    }
-
-    @Bean
-    public WebClient.Builder webClientBuilder() {
-        return WebClient.builder();
+                .codecs(config -> config.defaultCodecs().maxInMemorySize(10 * 1024 * 1024)); // 최대 10MB 버퍼
     }
 }
