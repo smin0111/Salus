@@ -57,7 +57,8 @@ public class ChatFollowUpService {
             return Optional.empty();
         }
         Optional<ApprovedRecipeService.AdjustmentRequest> adjustment = approvedRecipeService.parseAdjustment(requestMessage);
-        if (adjustment.isEmpty()) {
+        // 다른 요리를 요청한 메시지는 직전 레시피의 조정으로 보지 않습니다("불닭계란말이 레시피" ≠ 김치찌개 아주 맵게).
+        if (adjustment.isEmpty() || approvedRecipeService.mentionsAnotherDish(requestMessage)) {
             return Optional.empty();
         }
         Optional<RecipeWorkSessionDTO> workSession = recipeWorkSessionService.find(userId, chatSession.getId());
@@ -325,6 +326,149 @@ public class ChatFollowUpService {
         // 변형 레시피 카드에도 알레르기/건강 주의 문구를 다시 계산해 붙입니다.
         response.setRecipe(recipeResponseSanitizer.buildRecipeCard(variant, chatSafetyContextService.buildRecipeSafetyNotes(Optional.of(userId), safetyContext, variant)));
         return Optional.of(response);
+    }
+
+    /**
+     * "양파 빼줘", "깻잎 말고 상추 넣어줘", "치즈 넣어줘"를 직전 레시피에 그대로 적용합니다.
+     * LLM으로 새로 쓰지 않으므로 바뀌는 것은 요청한 재료뿐이고, 알레르기 판정은 바뀐 결과로 다시 합니다.
+     * 직전 레시피가 없거나 읽을 수 없으면 빈 Optional을 반환해 다음 처리 단계로 넘깁니다.
+     */
+    Optional<ChatDto.Response> buildIngredientEditFollowUp(
+            Long userId,
+            ChatSession chatSession,
+            ChatDto.Request request,
+            SafetyContext safetyContext) {
+        if (userId == null || chatSession == null) {
+            return Optional.empty();
+        }
+        Optional<IngredientEdits.Edit> parsed = IngredientEdits.parse(request.getMessage());
+        if (parsed.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<RecipeWorkSessionDTO> workSession = recipeWorkSessionService.find(userId, chatSession.getId());
+        if (workSession.isEmpty()) {
+            return Optional.empty();
+        }
+        Recipe base = previousRecipe(workSession.get());
+        if (base == null || base.getIngredients() == null || base.getIngredients().isEmpty()) {
+            return Optional.empty();
+        }
+        IngredientEdits.Edit edit = parsed.get();
+
+        List<String> notes = new java.util.ArrayList<>();
+        List<String> ingredients = recipeResponseSanitizer.removeExcludedIngredients(base.getIngredients(), edit.removals());
+        List<String> steps = new java.util.ArrayList<>();
+        for (String step : Optional.ofNullable(base.getSteps()).orElse(List.of())) {
+            String cleaned = recipeResponseSanitizer.removeExcludedIngredientMentions(step, edit.removals());
+            // 재료 이름을 지우고 나면 문장이 거의 남지 않는 단계("양파를 썬다" → "썬다")는 뺍니다.
+            if (cleaned.replaceAll("[^가-힣a-zA-Z0-9]", "").length() >= 6
+                    && !recipeResponseSanitizer.containsExcludedIngredient(cleaned, edit.removals())) {
+                steps.add(cleaned);
+            }
+        }
+        for (String removal : edit.removals()) {
+            if (!recipeResponseSanitizer.containsExcludedIngredient(String.join(" ", base.getIngredients()), List.of(removal))) {
+                notes.add(removal + "은(는) 원래 레시피에 없는 재료예요.");
+            }
+        }
+        for (IngredientEdits.Substitution substitution : edit.substitutions()) {
+            boolean present = ingredients.stream().anyMatch(line -> line.contains(substitution.from()));
+            if (!present) {
+                notes.add(substitution.from() + "은(는) 원래 레시피에 없어 " + substitution.to() + "을(를) 재료에 더했어요(분량은 취향껏).");
+                ingredients = append(ingredients, substitution.to() + " 적당량");
+                continue;
+            }
+            // 같은 자리에 같은 분량으로 바꿉니다. 맛과 익는 시간은 달라질 수 있어 안내합니다.
+            ingredients = ingredients.stream().map(line -> line.replace(substitution.from(), substitution.to())).toList();
+            steps = steps.stream().map(step -> step.replace(substitution.from(), substitution.to())).collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+            notes.add(substitution.from() + " 대신 " + substitution.to() + "을(를) 같은 분량으로 넣었어요. 맛과 익는 시간은 달라질 수 있어요.");
+        }
+        for (String addition : edit.additions()) {
+            if (ingredients.stream().noneMatch(line -> line.contains(addition))) {
+                ingredients = append(ingredients, addition + " 적당량");
+            }
+            // 원래 레시피에 넣는 시점이 없으므로 조리 단계를 지어내지 않고 안내만 합니다.
+            notes.add(addition + "은(는) 원래 레시피에 없던 재료라 분량과 넣는 시점은 취향에 맞게 조절해 주세요.");
+        }
+        if (steps.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Recipe variant = new Recipe();
+        variant.setTitle(base.getTitle());
+        variant.setDescription(String.join(" ", notes));
+        variant.setIngredients(ingredients);
+        variant.setSteps(steps);
+        variant.setBaseServings(base.getBaseServings());
+        variant.setCalories(base.getCalories());
+        variant.setCaloriesPerServing(base.getCaloriesPerServing());
+        variant.setDifficulty(base.getDifficulty());
+        variant.setCookingTime(base.getCookingTime());
+
+        // 등록 알레르기는 요청 문구보다 우선합니다. 바뀐 레시피(더한 재료 포함)로 다시 판정합니다.
+        List<String> conflicts = chatSafetyContextService.findAllergyConflicts(
+                safetyContext, variant.getTitle(), variant, request.getMessage());
+        if (!conflicts.isEmpty()) {
+            return Optional.of(new ChatDto.Response(chatSession.getId(),
+                    chatSafetyContextService.buildAllergyBlockedReply(variant.getTitle(), conflicts), true, false));
+        }
+
+        String reply = recipeResponseSanitizer.buildGeneratedRecipeReply(variant);
+        recipeWorkSessionService.saveRecommendation(userId, chatSession.getId(), reply);
+        ChatDto.Response response = new ChatDto.Response(chatSession.getId(), reply, true, false);
+        response.setRecipe(recipeResponseSanitizer.buildRecipeCard(
+                variant, chatSafetyContextService.buildRecipeSafetyNotes(Optional.of(userId), safetyContext, variant)));
+        return Optional.of(response);
+    }
+
+    // 직전 레시피: 승인 레시피면 저장된 인분·맵기로 다시 렌더링하고, Recipe Agent 답이면 저장된 구조화 레시피를,
+    // 그 밖에는 직전 답변을 파싱합니다. Agent 답변 글은 "[원본 레시피 기준]"으로 시작해 파싱하면 제목이 깨집니다.
+    private Recipe previousRecipe(RecipeWorkSessionDTO workSession) {
+        try {
+            Recipe agentRecipe = agentRecipe(workSession.getAgentSession());
+            if (agentRecipe != null) {
+                return agentRecipe;
+            }
+            if (workSession.getRecipeId() != null) {
+                return approvedRecipeService.renderApprovedRecipe(
+                        workSession.getRecipeId(),
+                        workSession.getRecipeVersion(),
+                        Optional.ofNullable(workSession.getServings()).orElse(2),
+                        parseStoredSpiceLevel(workSession.getSpiceLevel())).recipe();
+            }
+            String last = workSession.getLastRecommendation();
+            if (last == null || last.isBlank()) {
+                return null;
+            }
+            String sanitized = recipeResponseSanitizer.sanitizeRecipeReply(last);
+            return recipeReplyParser.parseRecipeFromReply(recipeReplyParser.extractFollowUpRecipeTitle(sanitized), sanitized);
+        } catch (RuntimeException error) {
+            // 직전 레시피를 읽지 못하면 추측하지 않고 다음 처리 단계로 넘깁니다.
+            return null;
+        }
+    }
+
+    private Recipe agentRecipe(java.util.Map<String, Object> agentSession) {
+        if (agentSession == null || !(agentSession.get("personalizedRecipe") instanceof java.util.Map<?, ?> stored)) {
+            return null;
+        }
+        Recipe recipe = new Recipe();
+        recipe.setTitle(stored.get("title") instanceof String title ? title : "");
+        recipe.setIngredients(strings(stored.get("ingredients")));
+        recipe.setSteps(strings(stored.get("steps")));
+        return recipe.getTitle().isBlank() || recipe.getIngredients().isEmpty() ? null : recipe;
+    }
+
+    private static List<String> strings(Object value) {
+        return value instanceof List<?> list
+                ? list.stream().filter(String.class::isInstance).map(String.class::cast).toList()
+                : List.of();
+    }
+
+    private static List<String> append(List<String> values, String value) {
+        List<String> copy = new java.util.ArrayList<>(values);
+        copy.add(value);
+        return copy;
     }
 
     /**

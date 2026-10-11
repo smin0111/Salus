@@ -9,6 +9,7 @@ import com.salus.healthytable.repository.FridgeItemRepository;
 import com.salus.healthytable.repository.HealthProfileRepository;
 import com.salus.healthytable.service.RecipeNormalizer;
 import com.salus.healthytable.service.RecipeWorkSessionService;
+import com.salus.healthytable.service.ChatSafetyContextService.SafetyContext;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -447,6 +448,65 @@ class RecipeAgentPersonalizationTest {
         assertThat(response.getReply()).contains("제공 제한");
     }
 
+    @Test
+    void chatSafetyContextBlocksDerivedMilkIngredientsAndKeepsStoredAllergies() {
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                userId -> contextWithAllergy("땅콩"),
+                (plan, context) -> {
+                    assertThat(context.allergies()).contains("우유");
+                    if (context.userId() != null) {
+                        assertThat(context.allergies()).contains("땅콩");
+                    }
+                    return List.of(milkCookieSource());
+                },
+                mock(RecipeWorkSessionService.class));
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", true);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("두쫀쿠 레시피 알려줘");
+        SafetyContext safety = new SafetyContext(
+                List.of("우유"), List.of(), List.of(), List.of(), List.of(), true);
+
+        for (Long userId : java.util.Arrays.asList(null, 1L)) {
+            ChatDto.Response response = orchestrator.handle(userId, null, request, safety).block();
+
+            assertThat(response).isNotNull();
+            assertThat(response.getRecipe()).isNull();
+            assertThat(response.getReply()).contains("우유", "제공 차단");
+        }
+    }
+
+    @Test
+    void chatSafetyContextAllowsNoAllergyButBlocksUnavailableHealthContext() {
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                UserRecipeContext::empty,
+                (plan, context) -> List.of(milkCookieSource()),
+                mock(RecipeWorkSessionService.class));
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", true);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("두쫀쿠 레시피 알려줘");
+
+        for (boolean available : List.of(true, false)) {
+            SafetyContext safety = new SafetyContext(
+                    List.of(), List.of(), List.of(), List.of(), List.of(), available);
+            ChatDto.Response response = orchestrator.handle(null, null, request, safety).block();
+            assertThat(response).isNotNull();
+            if (available) {
+                assertThat(response.getRecipe()).isNotNull();
+            } else {
+                assertThat(response.getRecipe()).isNull();
+                assertThat(response.getReply()).contains("불러오지 못해");
+            }
+        }
+    }
+
+    private RecipeSourceDocument milkCookieSource() {
+        return new RecipeSourceDocument(
+                "fixture:milk-cookie", RecipeSourceType.GENERAL_WEB, "두쫀쿠", "fixture",
+                "https://example.com/recipe",
+                "title: 두쫀쿠\ningredients:\n- 버터 20g\n- 탈지분유 10g\nsteps:\n- 버터를 녹입니다.\n- 탈지분유를 섞습니다.",
+                java.time.LocalDateTime.of(2026, 7, 1, 0, 0), 0.95);
+    }
+
     // 구조화 출처를 못 찾으면 호출자가 더 낮은 근거 등급으로 내려갈 수 있게 빈 값을 줘야 합니다.
     // 여기서 거절 응답을 만들어 버리면 마크업이 없는 요리의 커버리지가 통째로 사라집니다.
     @Test
@@ -561,6 +621,49 @@ class RecipeAgentPersonalizationTest {
         assertThat(response.getReply()).contains("깻잎 알레르기").contains("수정 후 추천");
         assertThat(response.getRecipe()).isNotNull();
         assertThat(String.join(" ", response.getRecipe().getIngredients())).doesNotContain("깻잎");
+    }
+
+    @Test
+    void newDishRequestDoesNotReusePreviousSessionRecipe() {
+        RecipeWorkSessionService workSessionService = mock(RecipeWorkSessionService.class);
+        RecipeWorkSessionDTO stored = RecipeWorkSessionDTO.builder()
+                .userId(1L)
+                .chatSessionId(12L)
+                .lastRecommendation("이전 두쫀쿠 추천")
+                .agentSession(agentSessionMap(new RecipeCandidate(
+                        "두바이 쫀득 쿠키", "두바이 쫀득 쿠키 설명", List.of("마시멜로우", "카다이프면"), List.of("마시멜로우를 녹입니다.", "성형합니다."),
+                        null, null, null, List.of("마시멜로우"), List.of(), List.of())))
+                .build();
+        when(workSessionService.find(1L, 12L)).thenReturn(Optional.of(stored));
+
+        RecipeCandidate croiffleRecipe = new RecipeCandidate(
+                "크룽지", "크룽지 설명", List.of("크루아상 생지 2개", "버터 10g", "시럽 1큰술"), List.of("생지를 누릅니다.", "바삭하게 굽습니다."),
+                null, null, null, List.of("크루아상 생지"), List.of(), List.of());
+        RecipeSourceDocument croiffleSource = new RecipeSourceDocument(
+                "fixture:croiffle", RecipeSourceType.INTERNAL_DB, "크룽지", "chef",
+                "https://salus.internal/recipes/croiffle",
+                "title: 크룽지\ningredients:\n- 크루아상 생지 2개\n- 버터 10g\nsteps:\n- 생지를 누릅니다.\n- 바삭하게 굽습니다.",
+                null, 1.0);
+
+        java.util.concurrent.atomic.AtomicBoolean discoveredNewDish = new java.util.concurrent.atomic.AtomicBoolean(false);
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                userId -> UserRecipeContext.empty(userId),
+                (plan, context) -> {
+                    discoveredNewDish.set(true);
+                    return List.of(croiffleSource);
+                },
+                workSessionService);
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", true);
+
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("크룽지 레시피 알려줘");
+        ChatDto.Response response = orchestrator.handle(1L, 12L, request).block();
+
+        assertThat(response).isNotNull();
+        assertThat(discoveredNewDish.get()).isTrue();
+        assertThat(response.getReply()).contains("크룽지").doesNotContain("두바이 쫀득 쿠키");
+        assertThat(response.getRecipe()).isNotNull();
+        assertThat(response.getRecipe().getTitle()).contains("크룽지");
     }
 
     // 현재 로드에 성공하면 이전 스냅샷의 삭제된 프로필/냉장고 값이 최신 값으로 대체되어야 합니다.
@@ -721,6 +824,69 @@ class RecipeAgentPersonalizationTest {
                 "title: 김치찌개\ningredients:\n- 김치 200g\n- 두부 1모\nsteps:\n- 김치를 볶고 물을 부어 끓입니다.",
                 java.time.LocalDateTime.of(2026, 7, 1, 0, 0),
                 0.95);
+    }
+
+    // 뺀 재료가 핵심이라 막히면, 그 재료 없이 만드는 같은 요리를 한 번 더 찾아 검증을 거쳐 답합니다
+    // (2026-10-09 실전 평가: "김치찌개 레시피 알려줘, 돼지고기는 빼줘"가 차단만 되고 대안이 없었음).
+    @Test
+    void excludedCoreIngredientLeadsToAlternativeRecipeWithoutIt() {
+        RecipeSourceDocument porkStew = new RecipeSourceDocument(
+                "fixture:pork-kimchi", RecipeSourceType.INTERNAL_DB, "김치찌개", "chef", "https://salus.internal/recipes/pork-kimchi",
+                "title: 김치찌개\ningredients:\n- 돼지고기 200g\n- 김치 300g\n- 두부 1/2모\nsteps:\n- 돼지고기와 김치를 볶습니다.\n- 물을 붓고 끓입니다.",
+                null, 1.0);
+        RecipeSourceDocument tunaStew = new RecipeSourceDocument(
+                "fixture:tuna-kimchi", RecipeSourceType.INTERNAL_DB, "참치김치찌개", "chef", "https://salus.internal/recipes/tuna-kimchi",
+                "title: 참치김치찌개\ningredients:\n- 참치 1캔\n- 김치 300g\n- 두부 1/2모\nsteps:\n- 김치를 볶습니다.\n- 물과 참치를 넣고 끓입니다.",
+                null, 1.0);
+        List<RecipeResearchPlan> plans = new java.util.ArrayList<>();
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                UserRecipeContext::empty,
+                (plan, context) -> {
+                    plans.add(plan);
+                    return List.of(plan.avoidIngredients().isEmpty() ? porkStew : tunaStew);
+                },
+                mock(RecipeWorkSessionService.class));
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", true);
+
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("김치찌개 레시피 알려줘, 돼지고기는 빼줘");
+        ChatDto.Response response = orchestrator.handle(null, null, request).block();
+
+        assertThat(plans).hasSize(2);
+        assertThat(plans.get(1).avoidIngredients()).containsExactly("돼지고기");
+        assertThat(plans.get(1).searchQueries()).contains("돼지고기 없는 김치찌개 레시피");
+        assertThat(response.getRecipe()).isNotNull();
+        assertThat(response.getRecipe().getTitle()).isEqualTo("참치김치찌개");
+        assertThat(String.join(" ", response.getRecipe().getIngredients())).doesNotContain("돼지고기");
+        assertThat(response.getReply()).contains("요청하신 대로 돼지고기 없이 만드는 김치찌개 레시피를 찾았어요");
+    }
+
+    // 대안에도 뺀 재료가 핵심이면 처음 결과를 그대로 답합니다. 대안 검색은 한 번뿐입니다.
+    @Test
+    void alternativeSearchHappensOnceAndKeepsFirstResultWhenNothingBetterIsFound() {
+        RecipeSourceDocument porkStew = new RecipeSourceDocument(
+                "fixture:pork-kimchi", RecipeSourceType.INTERNAL_DB, "김치찌개", "chef", "https://salus.internal/recipes/pork-kimchi",
+                "title: 김치찌개\ningredients:\n- 돼지고기 200g\n- 김치 300g\nsteps:\n- 돼지고기와 김치를 볶습니다.\n- 물을 붓고 끓입니다.",
+                null, 1.0);
+        List<RecipeResearchPlan> plans = new java.util.ArrayList<>();
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                UserRecipeContext::empty,
+                (plan, context) -> {
+                    plans.add(plan);
+                    return List.of(porkStew);
+                },
+                mock(RecipeWorkSessionService.class));
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", true);
+
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("김치찌개 레시피 알려줘, 돼지고기는 빼줘");
+        ChatDto.Response response = orchestrator.handle(null, null, request).block();
+
+        assertThat(plans).hasSize(2);
+        assertThat(response.getReply()).doesNotContain("없이 만드는 김치찌개 레시피를 찾았어요");
+        if (response.getRecipe() != null) {
+            assertThat(String.join(" ", response.getRecipe().getIngredients())).doesNotContain("돼지고기");
+        }
     }
 
     private RecipeAgentOrchestrator orchestrator(

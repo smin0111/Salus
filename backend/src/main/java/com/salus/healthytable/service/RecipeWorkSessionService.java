@@ -80,6 +80,9 @@ public class RecipeWorkSessionService {
                         .build());
 
         state.setLastRecommendation(recommendation);
+        // 새 추천이 생기면 이전 Recipe Agent 세션은 더는 직전 레시피가 아닙니다. 남겨 두면 승인 레시피 다음의
+        // 후속 요청("양파 빼줘")이 예전 Agent 레시피로 처리됩니다. Agent 추천은 saveAgentSession이 다시 채웁니다.
+        state.setAgentSession(null);
         state.setRecipeId(null);
         state.setRecipeVersion(null);
         state.setServings(null);

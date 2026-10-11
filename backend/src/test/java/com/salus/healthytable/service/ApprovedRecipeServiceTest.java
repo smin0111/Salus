@@ -106,6 +106,44 @@ class ApprovedRecipeServiceTest {
         assertThat(matched).containsSame(approved);
     }
 
+    // 다른 재료가 붙은 변형 요리는 기본 승인 레시피로 답하면 안 됩니다. 참치를 원한 사람에게 돼지고기가 나갔습니다.
+    @Test
+    void variantDishIsNotMatchedToBaseApprovedRecipe() {
+        Recipe kimchi = approvedRecipe(103L, "kimchi-jjigae", 2);
+        Recipe tteokbokki = approvedRecipe(109L, "tteokbokki", 1);
+        when(recipeRepository.findByCatalogKey("kimchi-jjigae")).thenReturn(Optional.of(kimchi));
+        when(recipeRepository.findByCatalogKey("tteokbokki")).thenReturn(Optional.of(tteokbokki));
+
+        assertThat(service.findApprovedMatch("참치김치찌개 레시피 알려줘")).isEmpty();
+        assertThat(service.findApprovedMatch("참치 김치찌개 레시피 알려줘")).isEmpty();
+        assertThat(service.findApprovedMatch("로제떡볶이 만드는 법")).isEmpty();
+    }
+
+    // 요청 표현과 인분·맵기 표현, 붙여 쓴 조사는 걷어 내고 같은 요리면 승인 레시피로 답합니다.
+    @Test
+    void sameDishWithRequestAndAdjustmentWordsStillMatches() {
+        Recipe kimchi = approvedRecipe(103L, "kimchi-jjigae", 2);
+        when(recipeRepository.findByCatalogKey("kimchi-jjigae")).thenReturn(Optional.of(kimchi));
+
+        assertThat(service.findApprovedMatch("김치찌개 3인분 덜 맵게 알려줘")).containsSame(kimchi);
+        assertThat(service.findApprovedMatch("김치 찌개 레시피 알려주세요")).containsSame(kimchi);
+        assertThat(service.findApprovedMatch("김치찌개요")).containsSame(kimchi);
+    }
+
+    // "불닭"이 들어간 다른 요리 요청은 직전 레시피의 맵기 조정이 아닙니다. 조정 표현만 있으면 조정입니다.
+    @Test
+    void distinguishesNewDishRequestFromAdjustment() {
+        assertThat(service.mentionsAnotherDish("불닭계란말이 레시피 알려줘")).isTrue();
+        assertThat(service.mentionsAnotherDish("불닭계란말이 알려줘")).isTrue();
+        assertThat(service.mentionsAnotherDish("김치볶음밥 3인분")).isTrue();
+
+        assertThat(service.mentionsAnotherDish("불닭 수준으로 맵게 해줘")).isFalse();
+        assertThat(service.mentionsAnotherDish("3인분으로 바꿔줘")).isFalse();
+        assertThat(service.mentionsAnotherDish("덜 맵게 해주세요")).isFalse();
+        assertThat(service.mentionsAnotherDish("2인분으로 줄여줘")).isFalse();
+        assertThat(service.mentionsAnotherDish("좀 더 맵게")).isFalse();
+    }
+
     // 검수된 범위(1~6인분)를 벗어난 인분 요청은 거부해야 합니다.
     @Test
     void rejectsServingCountsOutsideReviewedRange() {

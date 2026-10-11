@@ -3,6 +3,7 @@ package com.salus.healthytable.service;
 import com.salus.healthytable.domain.ChatSession;
 import com.salus.healthytable.domain.Recipe;
 import com.salus.healthytable.dto.ChatDto;
+import com.salus.healthytable.service.recipeagent.KnownWebDishLookup;
 import com.salus.healthytable.service.recipeagent.RecipeAgentOrchestrator;
 import com.salus.healthytable.service.ChatSafetyContextService.SafetyContext;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 /**
  * 채팅 메시지 처리의 중심(오케스트레이터) 서비스입니다. POST /api/chat/message의 실제 처리를 담당합니다.
@@ -40,6 +42,10 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ChatService {
 
+    // 요리 이름만 보낸 메시지 판별용: 끝의 문장부호·웃음 표기, 그리고 이름으로 볼 수 있는 모양(한글·영문·숫자 1~3단어)
+    private static final Pattern BARE_DISH_TRAILING = Pattern.compile("[\\s!?.~…ㅋㅎ]+$");
+    private static final Pattern BARE_DISH_NAME = Pattern.compile("[가-힣a-zA-Z0-9]{2,}(?: [가-힣a-zA-Z0-9]+){0,2}");
+
     private final LlmService llmService; // GeminiService 대신 인터페이스 다형성 주입 적용
     private final ChatSafetyContextService chatSafetyContextService;
     private final RecipeResponseSanitizer recipeResponseSanitizer;
@@ -51,6 +57,7 @@ public class ChatService {
     private final RecipeNormalizer recipeNormalizer;
     private final RecipeAgentOrchestrator recipeAgentOrchestrator;
     private final ApprovedRecipeService approvedRecipeService;
+    private final KnownWebDishLookup knownWebDishLookup;
 
     // Recipe Agent 기능 플래그(기본값 false). 켜지 않으면 기존 레시피 생성 경로만 사용합니다.
     @Value("${recipe.agent.enabled:false}")
@@ -83,17 +90,23 @@ public class ChatService {
      */
     public Mono<ChatDto.Response> processChat(Optional<Long> authenticatedUserId, ChatDto.Request request) {
         StringBuilder systemContext = new StringBuilder();
+        rewriteDishSwitchRequest(request);
 
         // 1. 의도(Intent) 식별
         ChatIntentClassifier.ChatIntent intent = chatIntentClassifier.classify(request.getMessage());
         boolean isDetailFollowUp = isRecipeDetailFollowUp(request.getMessage());
         boolean classifiedRecipeRequest = intent == ChatIntentClassifier.ChatIntent.RECIPE_REQUEST;
         Optional<Recipe> approvedCandidate = approvedRecipeService.findApprovedMatch(request.getMessage());
+        // "크룽지!"처럼 요청 표현 없이 요리 이름만 보낸 메시지입니다. 승인 레시피나 저장된 웹 근거가 있는
+        // 요리 이름일 때만 레시피 요청으로 봅니다(2026-10-09 실전 평가에서 일반 대화로 답하던 문제).
+        boolean bareDishRequest = intent == ChatIntentClassifier.ChatIntent.GENERAL_CHAT
+                && !isDetailFollowUp
+                && isBareKnownDishName(request.getMessage(), approvedCandidate.isPresent());
         // 승인 레시피가 있고, 상세 설명 후속 요청이 아니며, 레시피를 요청하는 표현이 있으면 승인 레시피로 바로 답합니다.
         boolean approvedDirectRequest = approvedCandidate.isPresent()
                 && !isDetailFollowUp
-                && (classifiedRecipeRequest || isDirectApprovedRecipeRequest(request.getMessage()));
-        boolean isRecipeRequestIntent = (classifiedRecipeRequest || approvedDirectRequest) && !isDetailFollowUp;
+                && (classifiedRecipeRequest || isDirectApprovedRecipeRequest(request.getMessage()) || bareDishRequest);
+        boolean isRecipeRequestIntent = (classifiedRecipeRequest || approvedDirectRequest || bareDishRequest) && !isDetailFollowUp;
 
         // 로그인 사용자만 채팅방을 만들어 대화를 저장합니다. 게스트는 chatSession이 null입니다.
         ChatSession chatSession = authenticatedUserId
@@ -145,7 +158,7 @@ public class ChatService {
             if (chatSession != null) {
                 saveChatMessage(chatSession, "user", request.getMessage());
             }
-            return recipeAgentOrchestrator.handle(authenticatedUserIdValue, sessionId, request)
+            return recipeAgentOrchestrator.handle(authenticatedUserIdValue, sessionId, request, safetyContext)
                     .map(response -> {
                         if (chatSession != null) {
                             saveChatMessage(chatSession, "model", response.getReply());
@@ -258,6 +271,15 @@ public class ChatService {
                         saveChatMessage(chatSession, "model", substitutionResponse.get().getReply());
                         return Mono.just(substitutionResponse.get());
                     }
+                }
+
+                // "양파 빼줘", "깻잎 말고 상추 넣어줘", "치즈 넣어줘": 직전 레시피에 규칙으로 적용합니다.
+                // 일반 대화로 넘기면 LLM이 검증 없는 레시피를 새로 써서 막히고 70~100초가 걸렸습니다(2026-10-09).
+                Optional<ChatDto.Response> ingredientEditResponse = chatFollowUpService.buildIngredientEditFollowUp(
+                        userIdLong, chatSession, request, safetyContext);
+                if (ingredientEditResponse.isPresent()) {
+                    saveChatMessage(chatSession, "model", ingredientEditResponse.get().getReply());
+                    return Mono.just(ingredientEditResponse.get());
                 }
 
                 if (isDetailFollowUp) {
@@ -522,6 +544,33 @@ public class ChatService {
     }
 
     // "알려줘", "만들어줘" 같은 직접 요청 표현이나 승인 레시피 조정 표현이 있으면 true입니다.
+    /**
+     * "로제떡볶이로 바꿔줘"는 직전 레시피 수정이 아니라 다른 요리 요청입니다. 바꿀 이름이 승인 레시피(또는 그 변형)이거나
+     * 웹 근거가 저장된 요리일 때만 "로제떡볶이 레시피 알려줘"로 바꿔 레시피 요청 경로로 보냅니다.
+     * 일반 대화로 두면 LLM이 검증 없는 레시피를 써서 막혔습니다(2026-10-09 실전 평가).
+     */
+    private void rewriteDishSwitchRequest(ChatDto.Request request) {
+        if (request == null) {
+            return;
+        }
+        IngredientEdits.dishSwitchTarget(request.getMessage())
+                .filter(target -> approvedRecipeService.namesApprovedDishOrVariant(target)
+                        || knownWebDishLookup.hasStoredSource(target))
+                .ifPresent(target -> request.setMessage(target + " 레시피 알려줘"));
+    }
+
+    // 요리 이름만 있는 메시지인지 봅니다. 끝의 느낌표·물음표·웃음 표기는 무시하고, 세 단어·20자 이내만 이름으로 봅니다.
+    private boolean isBareKnownDishName(String message, boolean approvedMatch) {
+        if (message == null) {
+            return false;
+        }
+        String name = BARE_DISH_TRAILING.matcher(message.trim()).replaceAll("").trim().replaceAll("\\s+", " ");
+        if (!BARE_DISH_NAME.matcher(name).matches() || name.replaceAll("\\s+", "").length() > 20) {
+            return false;
+        }
+        return approvedMatch || knownWebDishLookup.hasStoredSource(name);
+    }
+
     private boolean isDirectApprovedRecipeRequest(String message) {
         if (message == null || message.isBlank()) {
             return false;

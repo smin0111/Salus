@@ -3,6 +3,8 @@ package com.salus.healthytable.service.recipeagent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.salus.healthytable.dto.ChatDto;
 import com.salus.healthytable.dto.RecipeWorkSessionDTO;
+import com.salus.healthytable.service.ChatSafetyContextService.SafetyContext;
+import com.salus.healthytable.service.IngredientEdits;
 import com.salus.healthytable.service.RecipeWorkSessionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -56,6 +58,17 @@ public class RecipeAgentOrchestrator {
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
+    // ChatService에서 정규화한 요청·대화·등록 프로필의 건강 조건을 출처 검색 경로에도 전달합니다.
+    public Mono<ChatDto.Response> handle(
+            Long userId, Long chatSessionId, ChatDto.Request request, SafetyContext safetyContext) {
+        // 작업 스레드로 옮겨도 진행 단계("웹 검색 중" 등)를 기록할 수 있게 진행 ID를 묶어 둡니다.
+        return Mono.deferContextual(context -> {
+            String progressId = context.getOrDefault(com.salus.healthytable.service.ChatProgress.CONTEXT_KEY, null);
+            return Mono.fromCallable(() -> com.salus.healthytable.service.ChatProgress.bind(
+                    progressId, () -> execute(userId, chatSessionId, request, false, safetyContext)));
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
     /**
      * 구조화된 출처를 찾았을 때만 응답을 돌려줍니다. 못 찾았으면 {@code Optional.empty()}입니다.
      *
@@ -86,12 +99,29 @@ public class RecipeAgentOrchestrator {
      */
     private ChatDto.Response execute(
             Long userId, Long chatSessionId, ChatDto.Request request, boolean requireReliableSource) {
+        return execute(userId, chatSessionId, request, requireReliableSource, null);
+    }
+
+    private ChatDto.Response execute(
+            Long userId, Long chatSessionId, ChatDto.Request request, boolean requireReliableSource,
+            SafetyContext safetyContext) {
         UserRecipeContextLoadResult contextLoadResult = contextLoader.loadWithStatus(userId);
         Optional<PreviousAgentState> previousState = previousAgentState(userId, chatSessionId);
         // 이전 세션이 있으면 이번에 로드에 실패한 부분만 이전 스냅샷 값으로 보완합니다.
         UserRecipeContext loadedContext = previousState
                 .map(previous -> reconcileContexts(previous.contextSnapshot(), contextLoadResult))
                 .orElse(contextLoadResult.context());
+        if (safetyContext != null) {
+            loadedContext = new UserRecipeContext(
+                    loadedContext.userId(),
+                    merge(loadedContext.allergies(), safetyContext.allergies()),
+                    merge(loadedContext.chronicConditions(), safetyContext.chronicConditions()),
+                    merge(loadedContext.dietaryRestrictions(), safetyContext.dietaryRestrictions()),
+                    merge(loadedContext.medications(), safetyContext.medications()),
+                    merge(loadedContext.healthGoals(), safetyContext.goals()),
+                    loadedContext.fridgeIngredients(),
+                    loadedContext.explicitlyExcludedIngredients());
+        }
         RecipeResearchPlan plan = requestPlanner.plan(
                 request == null ? "" : request.getMessage(),
                 request != null && request.isUseFridge(),
@@ -99,27 +129,113 @@ public class RecipeAgentOrchestrator {
         UserRecipeContext context = loadedContext.withExplicitlyExcludedIngredients(
                 requestPlanner.extractExplicitExclusions(request == null ? "" : request.getMessage()));
 
-        // 후속 요청이면 이전에 찾은 원본 레시피와 출처를 재사용하고, 처음 요청이면 새로 검색합니다.
-        DiscoveryResult discovery = previousState
-                .map(previous -> new DiscoveryResult(
-                        previous.originalRecipe(),
-                        previous.sourceEvidence(),
-                        RecipeResearchStatus.VERIFIED_SOURCE_FOUND))
-                .orElseGet(() -> discoverCandidate(plan, context));
+        // 같은 요리에 대한 후속 요청이면 이전에 찾은 원본 레시피와 출처를 재사용하고, 처음 요청이거나 다른 요리면 새로 검색합니다.
+        boolean isFollowUp = previousState
+                .filter(previous -> isFollowUpToPreviousRecipe(previous, plan, request == null ? "" : request.getMessage()))
+                .isPresent();
+        DiscoveryResult discovery = isFollowUp
+                ? new DiscoveryResult(
+                        previousState.get().originalRecipe(),
+                        previousState.get().sourceEvidence(),
+                        RecipeResearchStatus.VERIFIED_SOURCE_FOUND)
+                : discoverCandidate(plan, context);
         // 구조화 출처가 없으면 여기서 멈춥니다. 호출자가 더 낮은 등급의 근거 경로로 내려갑니다.
         if (requireReliableSource && discovery.status() != RecipeResearchStatus.VERIFIED_SOURCE_FOUND) {
             log.info("[RecipeAgent] No verified source. Deferring to lower evidence tier. dish={}", plan.dishName());
             return null;
         }
         RecipeCandidate originalRecipe = discovery.recipe();
+        Evaluation evaluation = evaluate(originalRecipe, context, safetyContext, contextLoadResult);
+
+        // 사용자가 뺀 재료가 핵심이라 막혔으면 그 재료 없이 만드는 같은 요리를 한 번 더 찾습니다
+        // ("김치찌개, 돼지고기는 빼줘" → 참치·멸치 김치찌개). 찾은 레시피도 같은 개인화·최종 검증을 거치고,
+        // 통과하지 못하면 처음 결과(차단)를 그대로 답합니다. 건강 정보를 못 읽어 막힌 경우는 다시 찾지 않습니다.
+        if (!isFollowUp && sourceDiscoveryEnabled
+                && (evaluation.blocked() || evaluation.excludedCoreIngredient())
+                && !context.explicitlyExcludedIngredients().isEmpty()
+                && contextAvailable(safetyContext, contextLoadResult)) {
+            com.salus.healthytable.service.ChatProgress.report("뺀 재료 없이 만드는 레시피를 찾고 있어요");
+            DiscoveryResult alternative = discoverCandidate(plan.withAvoidIngredients(context.explicitlyExcludedIngredients()), context);
+            if (alternative.status() == RecipeResearchStatus.VERIFIED_SOURCE_FOUND) {
+                Evaluation alternativeEvaluation = evaluate(alternative.recipe(), context, safetyContext, contextLoadResult);
+                if (!alternativeEvaluation.blocked() && !alternativeEvaluation.excludedCoreIngredient()) {
+                    log.info("[RecipeAgent] Found alternative without excluded core ingredient. dish={}", plan.dishName());
+                    discovery = alternative;
+                    originalRecipe = alternative.recipe();
+                    RecipePersonalizationDecision found = alternativeEvaluation.decision();
+                    List<String> notices = new java.util.ArrayList<>(found.userNotices());
+                    notices.add(0, "요청하신 대로 " + String.join(", ", context.explicitlyExcludedIngredients())
+                            + " 없이 만드는 " + plan.dishName() + " 레시피를 찾았어요.");
+                    evaluation = new Evaluation(new RecipePersonalizationDecision(
+                            found.decisionType(), found.conflicts(), found.modifications(), AgentText.distinct(notices),
+                            found.additionalPurchaseItems(), found.fridgeItemsUsed()),
+                            alternativeEvaluation.personalized(), alternativeEvaluation.validation());
+                }
+            }
+        }
+        RecipePersonalizationDecision decision = evaluation.decision();
+        RecipeCandidate personalizedRecipe = evaluation.personalized();
+        RecipeValidationResult validation = evaluation.validation();
+
+        PersonalizedRecipeResult result = new PersonalizedRecipeResult(
+                originalRecipe,
+                personalizedRecipe,
+                decision,
+                discovery.sources());
+        String reply = responseComposer.compose(result, validation);
+
+        if (userId != null && chatSessionId != null) {
+            RecipeAgentSession agentSession = new RecipeAgentSession(
+                    originalRecipe,
+                    personalizedRecipe,
+                    decision,
+                    context,
+                    isFollowUp ? mergedModifiers(previousState, request) : initialModifiers(request),
+                    discovery.sources(),
+                    contextLoadResult.status());
+            recipeWorkSessionService.saveAgentSession(userId, chatSessionId, reply, agentSession);
+        }
+
+        ChatDto.Response response = new ChatDto.Response(chatSessionId, reply, userId != null, false);
+        if (decision.decisionType() != RecipeDecisionType.BLOCK && validation.valid()) {
+            response.setRecipe(responseComposer.toRecipeCard(personalizedRecipe, decision));
+        }
+        return response;
+    }
+
+    private record Evaluation(
+            RecipePersonalizationDecision decision, RecipeCandidate personalized, RecipeValidationResult validation) {
+        boolean blocked() {
+            return decision.decisionType() == RecipeDecisionType.BLOCK || !validation.valid();
+        }
+
+        // 사용자가 뺀 재료가 핵심 재료였는지입니다. 빼고 제공해도 요리의 중심이 빠진 레시피라 대안을 먼저 찾습니다.
+        boolean excludedCoreIngredient() {
+            return decision.conflicts().stream().anyMatch(conflict ->
+                    conflict.type() == RecipeConflictType.USER_EXCLUSION && conflict.severity() == ConflictSeverity.HIGH);
+        }
+    }
+
+    private boolean contextAvailable(SafetyContext safetyContext, UserRecipeContextLoadResult contextLoadResult) {
+        return (safetyContext == null || safetyContext.healthContextAvailable())
+                && contextLoadResult.status() != UserRecipeContextLoadStatus.LOAD_FAILED
+                && contextLoadResult.status() != UserRecipeContextLoadStatus.PARTIALLY_LOADED;
+    }
+
+    // 원본 레시피에 개인화 정책을 적용하고 최종 검증까지 합니다. 건강 정보를 못 읽었거나 검증에 실패하면 차단입니다.
+    private Evaluation evaluate(
+            RecipeCandidate originalRecipe, UserRecipeContext context,
+            SafetyContext safetyContext, UserRecipeContextLoadResult contextLoadResult) {
         RecipePersonalizationDecision decision = personalizationEnabled
                 ? policyEngine.evaluate(originalRecipe, context)
                 : new RecipePersonalizationDecision(RecipeDecisionType.ALLOW, List.of(), List.of(), List.of(), List.of(), List.of());
         // 건강 정보를 확인하지 못했다면 안전을 보장할 수 없으므로 개인화 레시피 제공을 차단합니다(fail closed).
-        if (contextLoadResult.status() == UserRecipeContextLoadStatus.LOAD_FAILED
+        if ((safetyContext != null && !safetyContext.healthContextAvailable())
+                || contextLoadResult.status() == UserRecipeContextLoadStatus.LOAD_FAILED
                 || contextLoadResult.status() == UserRecipeContextLoadStatus.PARTIALLY_LOADED) {
             List<String> notices = new java.util.ArrayList<>(decision.userNotices());
-            notices.add(contextLoadResult.status() == UserRecipeContextLoadStatus.LOAD_FAILED
+            notices.add((safetyContext != null && !safetyContext.healthContextAvailable())
+                    || contextLoadResult.status() == UserRecipeContextLoadStatus.LOAD_FAILED
                     ? "사용자 건강정보와 냉장고 정보를 불러오지 못해 개인화 레시피 제공을 제한합니다."
                     : "사용자 컨텍스트가 일부만 로드되어 개인화 레시피 제공을 제한합니다.");
             decision = new RecipePersonalizationDecision(
@@ -142,31 +258,7 @@ public class RecipeAgentOrchestrator {
                     decision.additionalPurchaseItems(),
                     decision.fridgeItemsUsed());
         }
-
-        PersonalizedRecipeResult result = new PersonalizedRecipeResult(
-                originalRecipe,
-                personalizedRecipe,
-                decision,
-                discovery.sources());
-        String reply = responseComposer.compose(result, validation);
-
-        if (userId != null && chatSessionId != null) {
-            RecipeAgentSession agentSession = new RecipeAgentSession(
-                    originalRecipe,
-                    personalizedRecipe,
-                    decision,
-                    context,
-                    mergedModifiers(previousState, request),
-                    discovery.sources(),
-                    contextLoadResult.status());
-            recipeWorkSessionService.saveAgentSession(userId, chatSessionId, reply, agentSession);
-        }
-
-        ChatDto.Response response = new ChatDto.Response(chatSessionId, reply, userId != null, false);
-        if (decision.decisionType() != RecipeDecisionType.BLOCK && validation.valid()) {
-            response.setRecipe(responseComposer.toRecipeCard(personalizedRecipe, decision));
-        }
-        return response;
+        return new Evaluation(decision, personalizedRecipe, validation);
     }
 
     /**
@@ -300,6 +392,58 @@ public class RecipeAgentOrchestrator {
         List<String> previous = previousState.map(PreviousAgentState::appliedModifiers).orElse(List.of());
         String current = request == null ? "" : string(request.getMessage());
         return current.isBlank() ? previous : merge(previous, List.of(current));
+    }
+
+    private List<String> initialModifiers(ChatDto.Request request) {
+        String current = request == null ? "" : string(request.getMessage());
+        return current.isBlank() ? List.of() : List.of(current);
+    }
+
+    /**
+     * 이번 요청이 이전 세션 레시피에 대한 후속 요청인지(재료 변경, 세부 질문 등) 판단합니다.
+     * 새로운 요리 이름이 명시되어 있고 이전 요리와 다르면 새로운 요리 요청으로 보고 이전 레시피를 재사용하지 않습니다.
+     */
+    private boolean isFollowUpToPreviousRecipe(PreviousAgentState previous, RecipeResearchPlan plan, String message) {
+        if (previous == null || previous.originalRecipe() == null) {
+            return false;
+        }
+        String previousTitle = previous.originalRecipe().title();
+        if (previousTitle == null || previousTitle.isBlank()) {
+            return false;
+        }
+        // "깻잎 말고 상추 넣어줘", "좀 더 자세히 설명해줘"는 요리 이름이 없는 후속 요청입니다. 요청 분석이 메시지 전체나
+        // "상추 넣어줘"를 요리 이름으로 잡아 새로 검색하던 문제를 막습니다.
+        if (IngredientEdits.isFollowUpOnPreviousRecipe(message)) {
+            return true;
+        }
+        String newDish = plan == null ? "" : plan.dishName();
+        // 새 요리명이 추출되지 않은 경우(예: "양파 빼줘", "더 맵게 해줘", "자세히 알려줘"): 이전 요리의 후속 수정
+        if (newDish == null || newDish.isBlank()) {
+            return true;
+        }
+        // 새 요리명이 추출된 경우: 이전 요리와 일치하거나 줄임말/별칭이면 후속 요청, 완전히 다르면 새 요리 요청
+        return isSameOrRelatedDish(newDish, previousTitle);
+    }
+
+    private boolean isSameOrRelatedDish(String requestedDish, String previousTitle) {
+        String reqNorm = RecipeCandidate.normalize(canonicalDishTerms(requestedDish));
+        String prevNorm = RecipeCandidate.normalize(canonicalDishTerms(previousTitle));
+        if (reqNorm.isBlank() || prevNorm.isBlank()) {
+            return false;
+        }
+        if (reqNorm.equals(prevNorm) || reqNorm.contains(prevNorm) || prevNorm.contains(reqNorm)) {
+            return true;
+        }
+        return isKnownAlias(reqNorm, prevNorm);
+    }
+
+    private String canonicalDishTerms(String normalized) {
+        return normalized == null ? "" : normalized.replace("쇠고기", "소고기");
+    }
+
+    private boolean isKnownAlias(String n1, String n2) {
+        return (n1.contains("두쫀쿠") || n1.contains("두바이쫀득쿠키"))
+                && (n2.contains("두쫀쿠") || n2.contains("두바이쫀득쿠키"));
     }
 
     private Double number(Object value) {

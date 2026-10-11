@@ -58,6 +58,19 @@ public class ApprovedRecipeService implements ApplicationRunner {
     private static final int MAX_UNACCOUNTED_MINUTES = 10;
     // "3인분", "2인용"에서 숫자를 찾는 정규식
     private static final Pattern SERVINGS_PATTERN = Pattern.compile("(\\d{1,2})\\s*(?:인분|인용)");
+    // 요리 이름을 뽑기 위해 걷어 내는 요청 표현("레시피 알려줘")과 조정 표현("3인분", "덜 맵게")입니다.
+    private static final Pattern REQUEST_PHRASES = Pattern.compile(
+            "레시피|만드는\\s*(?:법|방법)|조리\\s*법|끓이는\\s*법|굽는\\s*법|어떻게\\s*만들(?:어요|어)?"
+                    + "|알려\\s*(?:주세요|줄래요|줄래|줘)|보여\\s*(?:주세요|줘)|만들어\\s*(?:주세요|줘)"
+                    + "|끓여\\s*(?:주세요|줘)|추천해\\s*(?:주세요|줘)|해\\s*(?:주세요|줘)|부탁(?:합니다|해요|해)?");
+    private static final Pattern ADJUSTMENT_PHRASES = Pattern.compile(
+            "\\d{1,2}\\s*(?:인분|인용)|불닭\\s*수준|극매운\\s*맛?|아주\\s*맵게|매우\\s*맵게|안\\s*맵게|맵지\\s*않게"
+                    + "|덜\\s*맵게|순한\\s*맛|순하게|더\\s*맵게|맵게|매운\\s*맛|기본\\s*맵기|보통\\s*맵기|기본\\s*맛");
+    // 요리 이름 뒤에 붙어도 같은 요리로 보는 조사입니다("김치찌개요", "김치찌개는").
+    private static final List<String> TRAILING_PARTICLES = List.of("", "요", "은", "는", "을", "를", "이", "가", "좀");
+    // 직전 레시피 조정 요청에서 요리 이름이 아닌 말로 보는 표현입니다. 이 말들을 지우고 남는 말이 있으면 새 요리 이름입니다.
+    private static final Pattern ADJUSTMENT_FILLERS = Pattern.compile(
+            "불닭|으로|로|바꿔|바꾸|변경|다시|줄여|늘려|맞춰|해|줘|주세요|그거|이거|이걸|그걸|조금|좀|더|덜|만|정도|맛|맵기|수준|요");
     // "약 5~7분" 같은 단계 시간 문자열에서 분 값을 읽는 정규식(범위면 큰 값을 사용)
     private static final Pattern DURATION_MINUTES_PATTERN = Pattern.compile(
             "(?:약\\s*)?(\\d+)(?:\\s*[~～-]\\s*(\\d+))?\\s*분");
@@ -127,11 +140,61 @@ public class ApprovedRecipeService implements ApplicationRunner {
         if (normalizedRequest.isBlank()) {
             return Optional.empty();
         }
+        // 메시지에 별칭이 "포함"되기만 하면 매칭하던 방식은 "참치김치찌개"를 돼지고기 김치찌개로,
+        // "로제떡볶이"를 기본 떡볶이로 답했습니다(2026-10-07 실기기 확인). 요청 표현과 조정 표현을 걷어 낸
+        // 요리 이름이 별칭과 같을 때만 승인 레시피로 답하고, 나머지는 검색 경로로 넘깁니다.
+        String dish = requestedDishName(requestText);
         return aliases.stream()
-                .filter(alias -> normalizedRequest.contains(alias.normalizedAlias()))
+                .filter(alias -> sameDish(dish, alias.normalizedAlias()))
                 .findFirst()
                 .flatMap(alias -> recipeRepository.findByCatalogKey(alias.catalogKey()))
                 .filter(recipe -> recipe.getApprovalStatus() == RecipeApprovalStatus.APPROVED);
+    }
+
+    // 요청 표현과 조정 표현을 지운 요리 이름(공백·기호 제거)입니다.
+    /**
+     * 승인 레시피 이름으로 끝나는 요리 이름인지 봅니다("로제떡볶이" → 떡볶이, "참치김치찌개" → 김치찌개).
+     * "로제떡볶이로 바꿔줘"를 요리 바꾸기로 볼지 정할 때만 씁니다. 그 요리의 레시피로 답한다는 뜻은 아닙니다.
+     */
+    public boolean namesApprovedDishOrVariant(String dishName) {
+        ensureCatalogLoaded();
+        String normalized = normalizeLookup(dishName);
+        return !normalized.isBlank() && aliases.stream()
+                .anyMatch(alias -> normalized.endsWith(alias.normalizedAlias()));
+    }
+
+    String requestedDishName(String requestText) {
+        String value = requestText == null ? "" : requestText;
+        value = REQUEST_PHRASES.matcher(value).replaceAll(" ");
+        value = ADJUSTMENT_PHRASES.matcher(value).replaceAll(" ");
+        return normalizeLookup(value);
+    }
+
+    private boolean sameDish(String dish, String alias) {
+        if (dish.isBlank() || !dish.startsWith(alias)) {
+            return false;
+        }
+        return TRAILING_PARTICLES.contains(dish.substring(alias.length()));
+    }
+
+    /**
+     * 메시지가 직전 레시피의 조정이 아니라 다른 요리를 요청하는지 판단합니다.
+     * "불닭계란말이 레시피 알려줘"가 "불닭"(아주 맵게) 때문에 직전 김치찌개의 맵기 조정으로 처리되던 문제를 막습니다.
+     * 레시피 요청 표현이 있거나, 조정 표현을 지우고도 요리 이름처럼 보이는 말이 남으면 새 요리 요청입니다.
+     */
+    public boolean mentionsAnotherDish(String message) {
+        if (message == null || message.isBlank()) {
+            return false;
+        }
+        String compact = message.replaceAll("\\s+", "");
+        if (compact.contains("레시피") || compact.contains("만드는법") || compact.contains("조리법")
+                || compact.contains("만드는방법") || compact.contains("끓이는법")) {
+            return true;
+        }
+        String remainder = ADJUSTMENT_PHRASES.matcher(message).replaceAll(" ");
+        remainder = REQUEST_PHRASES.matcher(remainder).replaceAll(" ");
+        remainder = ADJUSTMENT_FILLERS.matcher(normalizeLookup(remainder)).replaceAll("");
+        return remainder.replaceAll("[^가-힣]", "").length() >= 2;
     }
 
     // 메시지에서 인분 수("3인분")와 맵기 요청("덜 맵게", "불닭 수준")을 읽습니다. 둘 다 없으면 빈 Optional입니다.
