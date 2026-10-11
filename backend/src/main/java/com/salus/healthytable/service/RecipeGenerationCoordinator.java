@@ -110,10 +110,11 @@ public class RecipeGenerationCoordinator {
         long generationStartedNanos = System.nanoTime();
 
         return withinStageBudget(
-                recipeGenerationClient.generate(generationRequest),
+                ChatProgress.stage("레시피를 작성하고 있어요", recipeGenerationClient.generate(generationRequest)),
                 deadlineNanos,
                 initialTimeoutSeconds,
                 "INITIAL_GENERATION")
+                .flatMap(draft -> ChatProgress.stage("레시피를 검증하고 있어요", Mono.just(draft)))
                 .flatMap(draft -> validateStructuredDraft(
                         generationRequest,
                         draft,
@@ -293,7 +294,8 @@ public class RecipeGenerationCoordinator {
         log.info("[RECIPE_FALLBACK_MODEL] recipeName={}, fallbackModel={}, previousFailures={}",
                 generationRequest.requestedTitle(), fallbackModel, reasons);
         return withinStageBudget(
-                recipeGenerationClient.generateWith(generationRequest, fallbackModel),
+                ChatProgress.stage("다른 모델로 다시 작성하고 있어요",
+                        recipeGenerationClient.generateWith(generationRequest, fallbackModel)),
                 deadlineNanos,
                 initialTimeoutSeconds,
                 "FALLBACK_MODEL_GENERATION")
@@ -332,7 +334,8 @@ public class RecipeGenerationCoordinator {
         }
         long repairStartedNanos = System.nanoTime();
         return withinStageBudget(
-                recipeGenerationClient.repair(generationRequest, invalidDraft, reasons),
+                ChatProgress.stage("더 좋은 답변으로 다듬고 있어요",
+                        recipeGenerationClient.repair(generationRequest, invalidDraft, reasons)),
                 deadlineNanos,
                 repairTimeoutSeconds,
                 "REPAIR")

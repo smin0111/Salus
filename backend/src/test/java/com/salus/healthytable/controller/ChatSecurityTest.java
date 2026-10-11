@@ -103,6 +103,29 @@ class ChatSecurityTest {
                 .andExpect(jsonPath("$.reply").value("안녕하세요."));
     }
 
+    // 게스트 채팅도 진행 단계를 볼 수 있어야 합니다. 같은 요청 ID로 보낸 메시지의 단계와 경과 시간이 나옵니다.
+    @Test
+    void guestCanReadChatProgressForTheirRequestId() throws Exception {
+        when(authenticatedUserProvider.getCurrentUserId()).thenReturn(Optional.empty());
+        when(chatService.processChat(eq(Optional.empty()), any(ChatDto.Request.class)))
+                .thenReturn(Mono.never());
+
+        mockMvc.perform(post("/api/chat/message")
+                        .header("X-Request-Id", "progress-test-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"두쫀쿠 레시피 알려줘\"}"))
+                .andExpect(request().asyncStarted());
+
+        mockMvc.perform(get("/api/chat/progress/progress-test-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stage").value("답변을 준비하고 있어요"))
+                .andExpect(jsonPath("$.done").value(false));
+        mockMvc.perform(get("/api/chat/progress/unknown-id"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.done").value(false))
+                .andExpect(jsonPath("$.stage").doesNotExist());
+    }
+
     // 게스트는 채팅방 목록을 볼 수 없고 401 JSON 오류를 받아야 합니다.
     @Test
     void guestCannotReadChatSessions() throws Exception {

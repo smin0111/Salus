@@ -35,17 +35,22 @@ const parseRecipeFromText = (text) => {
         return null;
     }
 
-    const title = (text.split('\n').find(line => line.trim()) || '')
+    // Recipe Agent 답변은 "[원본 레시피 기준]" 같은 구역 제목으로 시작하므로, 구역 제목 줄은 제목으로 쓰지 않고
+    // "- 요리명: ..." 줄을 우선합니다. 이 형식에는 설명 문단이 없어 "그대로 추천" 같은 판단 문구를 설명으로 쓰지 않습니다.
+    const isAgentReply = text.includes('[원본 레시피 기준]');
+    const dishNameLine = text.match(/^-\s*요리명:\s*(.+)$/m)?.[1];
+    const title = (dishNameLine || text.split('\n').find(line => line.trim() && !line.trim().startsWith('[')) || '')
         .replace(/\s+\d+인분\s+레시피입니다\.$/, '')
         .replace(' 레시피입니다.', '')
         .trim();
-    const description = text
+    const description = isAgentReply ? null : text
         .split('\n')
         .map(line => line.trim())
         .filter(Boolean)
         .find(line => !line.includes('레시피입니다.') && !line.includes('조리 시간:') && !line.startsWith('[') && !line.startsWith('- ') && !/^\d+\./.test(line));
     const ingredientsBlock = text.split(ingredientHeader)[1]?.split('[조리 순서]')[0] || '';
-    const stepsBlock = text.split('[조리 순서]')[1]?.split('위 내용은')[0] || '';
+    // 조리 순서 다음 구역("[검증 출처]" 등)이나 안내 문구가 나오면 거기서 끊습니다. 출처 줄이 단계로 보이던 문제를 막습니다.
+    const stepsBlock = (text.split('[조리 순서]')[1]?.split('위 내용은')[0] || '').split(/\n\s*\[/)[0];
     const safetyBlock = text.includes('[건강 주의]')
         ? text.split('[건강 주의]')[1]?.split('[재료]')[0] || ''
         : '';
@@ -379,6 +384,10 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     }, [inputText]);
 
     const [loading, setLoading] = useState(false);
+    // 답변 진행 단계("웹에서 레시피를 검색하고 있어요" 등)와 경과 시간(초). 서버가 알려 주는 실제 단계를 보여 줍니다.
+    const [progressStage, setProgressStage] = useState(null);
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
+    const progressTimerRef = useRef(null);
     const [useFridge, setUseFridge] = useState(true); // 기본값 ON
     const [chatSessionId, setChatSessionId] = useState(null);
     const [chatSessions, setChatSessions] = useState([]);
@@ -621,6 +630,10 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         setInputText('');
         setLoading(true);
 
+        // 요청 ID를 직접 만들어 보내고, 같은 ID로 서버의 진행 단계를 1초마다 물어봅니다.
+        const progressId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        startProgressPolling(progressId);
+
         // AI 사용 활동 기록
         if (isLoggedIn) {
             axios.post(
@@ -654,7 +667,12 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                     useFridge: useFridge,
                     healthProfile: healthProfilePayload
                 },
-                { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+                {
+                    headers: {
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                        'X-Request-Id': progressId,
+                    },
+                }
             );
 
             debugLog('[DEBUG] AI Response received');
@@ -713,11 +731,46 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 setMessages(prev => [...prev, errorMessage]);
             }
         } finally {
+            stopProgressPolling();
             if (requestEpoch === authEpochRef.current && requestSeq === requestSeqRef.current) {
                 setLoading(false);
             }
         }
     };
+
+    // 진행 단계 조회를 시작합니다. 경과 시간은 서버 응답과 상관없이 화면에서 1초씩 올립니다.
+    const startProgressPolling = (progressId) => {
+        stopProgressPolling();
+        const startedAt = Date.now();
+        setProgressStage(null);
+        setElapsedSeconds(0);
+        progressTimerRef.current = setInterval(() => {
+            setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+            axios.get(`${config.API_BASE_URL}/chat/progress/${progressId}`, { timeout: 3000 })
+                .then(response => {
+                    if (response.data?.stage) {
+                        setProgressStage(response.data.stage);
+                    }
+                })
+                .catch(() => {}); // 진행 표시는 보조 기능이라 실패해도 답변 대기는 계속합니다.
+        }, 1000);
+    };
+
+    const stopProgressPolling = () => {
+        if (progressTimerRef.current) {
+            clearInterval(progressTimerRef.current);
+            progressTimerRef.current = null;
+        }
+        setProgressStage(null);
+        setElapsedSeconds(0);
+    };
+
+    // 화면을 떠나면 진행 조회를 멈춥니다.
+    useEffect(() => () => {
+        if (progressTimerRef.current) {
+            clearInterval(progressTimerRef.current);
+        }
+    }, []);
 
     // 웹: Enter는 전송, Shift+Enter는 줄바꿈
     const handleKeyPress = (e) => {
@@ -1060,7 +1113,10 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                         {loading && (
                             <View style={styles.loadingContainer}>
                                 <ActivityIndicator size="small" color={colors.secondary} />
-                                <Text style={styles.loadingText}>답변을 생각하고 있어요...</Text>
+                                <Text style={styles.loadingText}>
+                                    {progressStage || '답변을 생각하고 있어요'}...
+                                    {elapsedSeconds > 0 ? ` (${elapsedSeconds}초)` : ''}
+                                </Text>
                             </View>
                         )}
                     </>

@@ -86,7 +86,7 @@ public class RecipeEvidenceService {
             searchCacheRepository.deleteByQuery(normalizedTitle);
         }
 
-        return searchOfficialThenWeb(normalizedTitle)
+        return ChatProgress.stage("웹에서 레시피 근거를 검색하고 있어요", searchOfficialThenWeb(normalizedTitle))
                 .map(searchResponse -> toRagData(normalizedTitle, intent, searchResponse));
     }
 

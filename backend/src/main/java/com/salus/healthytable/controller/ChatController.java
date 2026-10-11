@@ -5,6 +5,7 @@ import com.salus.healthytable.dto.ChatDto;
 import com.salus.healthytable.repository.ChatMessageRepository;
 import com.salus.healthytable.repository.ChatSessionRepository;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
+import com.salus.healthytable.service.ChatProgress;
 import com.salus.healthytable.service.ChatRateLimitService;
 import com.salus.healthytable.service.ChatService;
 import com.salus.healthytable.service.RecipeWorkSessionService;
@@ -141,7 +142,26 @@ public class ChatController {
         validateChatRequest(request);
         Optional<Long> authenticatedUserId = authenticatedUserProvider.getCurrentUserId();
         chatRateLimitService.checkAllowed(authenticatedUserId, servletRequest);
-        return chatService.processChat(authenticatedUserId, request);
+        // 요청 ID(X-Request-Id)를 진행 ID로 씁니다. 앱은 같은 ID로 /api/chat/progress/{id}를 물어 진행 단계를 보여 줍니다.
+        String progressId = org.slf4j.MDC.get("requestId");
+        ChatProgress.start(progressId, "답변을 준비하고 있어요");
+        return chatService.processChat(authenticatedUserId, request)
+                .contextWrite(context -> progressId == null ? context : context.put(ChatProgress.CONTEXT_KEY, progressId))
+                .doFinally(signal -> ChatProgress.finish(progressId));
+    }
+
+    /**
+     * 진행 중인 채팅 답변의 현재 단계와 경과 시간을 돌려줍니다. 단계 문구만 담고 사용자 정보는 담지 않습니다.
+     * 진행 ID는 클라이언트가 만든 요청 ID라 추측하기 어렵고, 없는 ID는 빈 상태로 답합니다.
+     */
+    @GetMapping("/progress/{progressId}")
+    public Map<String, Object> progress(@PathVariable String progressId) {
+        return ChatProgress.get(progressId)
+                .<Map<String, Object>>map(snapshot -> Map.of(
+                        "stage", snapshot.stage(),
+                        "elapsedMs", Math.max(0, System.currentTimeMillis() - snapshot.startedAtMillis()),
+                        "done", snapshot.done()))
+                .orElseGet(() -> Map.of("done", false));
     }
 
     /**
