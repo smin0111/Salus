@@ -82,22 +82,50 @@ class OAuthServiceTest {
         assertThat(paths).containsExactly("/tokeninfo");
     }
 
-    // aud가 허용 목록에 있으면 sub로 식별하고, email_verified를 그대로 전달해야 합니다.
+    // aud가 허용 목록에 있으면 sub로 식별하고, Gmail 주소는 확인된 이메일이어야 합니다.
     @Test
     void googleTokenForSalusClientReturnsVerifiedIdentity() {
         OAuthService service = serviceWith(new ArrayList<>(), Map.of(
                 "/tokeninfo", "{\"aud\":\"ios-client\",\"sub\":\"google-sub\"}",
                 "/oauth2/v3/userinfo",
-                "{\"sub\":\"google-sub\",\"email\":\"a@example.com\",\"email_verified\":true,\"name\":\"홍길동\"}"));
+                "{\"sub\":\"google-sub\",\"email\":\"a@gmail.com\",\"email_verified\":true,\"name\":\"홍길동\"}"));
         ReflectionTestUtils.setField(service, "googleClientIds", "web-client,ios-client");
 
         VerifiedSocialIdentity identity = service.verifyGoogle("token");
 
         assertThat(identity.provider()).isEqualTo(SocialProvider.GOOGLE);
         assertThat(identity.providerUserId()).isEqualTo("google-sub");
-        assertThat(identity.email()).isEqualTo("a@example.com");
+        assertThat(identity.email()).isEqualTo("a@gmail.com");
         assertThat(identity.emailVerified()).isTrue();
         assertThat(identity.name()).isEqualTo("홍길동");
+    }
+
+    // 외부 이메일로 만든 구글 계정은 email_verified가 true여도 미확인이고, 회사·학교(hd) 계정은 확인됨이어야 합니다.
+    // 어느 쪽이든 로그인(sub 식별)은 막지 않습니다.
+    @Test
+    void googleExternalEmailIsUnverifiedButWorkspaceIsVerified() {
+        OAuthService external = serviceWith(new ArrayList<>(), Map.of(
+                "/tokeninfo", "{\"aud\":\"web-client\",\"sub\":\"g-ext\"}",
+                "/oauth2/v3/userinfo",
+                "{\"sub\":\"g-ext\",\"email\":\"me@naver.com\",\"email_verified\":true,\"name\":\"외부\"}"));
+        ReflectionTestUtils.setField(external, "googleClientIds", "web-client");
+        VerifiedSocialIdentity externalIdentity = external.verifyGoogle("token");
+        assertThat(externalIdentity.providerUserId()).isEqualTo("g-ext");
+        assertThat(externalIdentity.emailVerified()).isFalse();
+
+        OAuthService workspace = serviceWith(new ArrayList<>(), Map.of(
+                "/tokeninfo", "{\"aud\":\"web-client\",\"sub\":\"g-ws\"}",
+                "/oauth2/v3/userinfo",
+                "{\"sub\":\"g-ws\",\"email\":\"me@school.ac.kr\",\"email_verified\":true,\"hd\":\"school.ac.kr\"}"));
+        ReflectionTestUtils.setField(workspace, "googleClientIds", "web-client");
+        assertThat(workspace.verifyGoogle("token").emailVerified()).isTrue();
+
+        OAuthService unverifiedGmail = serviceWith(new ArrayList<>(), Map.of(
+                "/tokeninfo", "{\"aud\":\"web-client\",\"sub\":\"g-un\"}",
+                "/oauth2/v3/userinfo",
+                "{\"sub\":\"g-un\",\"email\":\"me@gmail.com\",\"email_verified\":false}"));
+        ReflectionTestUtils.setField(unverifiedGmail, "googleClientIds", "web-client");
+        assertThat(unverifiedGmail.verifyGoogle("token").emailVerified()).isFalse();
     }
 
     // Google 클라이언트 ID 설정이 비어 있으면 검증을 건너뛰지 않고 외부 호출 전에 실패해야 합니다.

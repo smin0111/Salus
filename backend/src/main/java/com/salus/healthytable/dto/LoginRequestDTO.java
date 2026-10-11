@@ -17,4 +17,9 @@ public class LoginRequestDTO {
     private String identityToken;
     private String nonce;
     private String fullName;
+    // 계정 연결: 앱이 로그인 흐름마다 만든 무작위 값, 기존 계정 재인증으로 연결을 마칠 때의 연결 요청 ID
+    private String flowNonce;
+    private String linkRequestId;
+    // 계정 설정의 카카오 재확인: 서버 콜백 방식 카카오 웹 로그인을 마친 뒤 앱이 받은 요청 토큰
+    private String webAuthRequestToken;
 }

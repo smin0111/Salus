@@ -64,15 +64,41 @@ public class JwtTokenProvider {
      * 사용자 ID를 subject로 담은 access token을 발급합니다. 유효기간은 jwt.access-token-validity-seconds(기본 30분)입니다.
      */
     public String createToken(String userId) {
+        return createToken(userId, null);
+    }
+
+    /**
+     * identityConfirmedAt은 서버가 이번 요청에서 소셜 계정을 확인한 시각입니다. 제공자가 보증하는 실제 인증 시각(OIDC auth_time)이나
+     * 토큰 발급 시각과 다릅니다.
+     * 모르거나 인정할 수 없으면 null이고, 그때는 identity_confirmed_at 클레임을 넣지 않습니다.
+     */
+    public String createToken(String userId, java.time.Instant identityConfirmedAt) {
         Date now = new Date();
         Date validity = new Date(now.getTime() + accessTokenValiditySeconds * 1000);
 
-        return Jwts.builder()
+        io.jsonwebtoken.JwtBuilder builder = Jwts.builder()
                 .setSubject(userId)
                 .setIssuedAt(now)
-                .setExpiration(validity)
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
-                .compact();
+                .setExpiration(validity);
+        if (identityConfirmedAt != null) {
+            builder.claim("identity_confirmed_at", identityConfirmedAt.getEpochSecond());
+        }
+        return builder.signWith(getSigningKey(), SignatureAlgorithm.HS256).compact();
+    }
+
+    /**
+     * 검증된 토큰의 identity_confirmed_at을 꺼냅니다. 없거나 토큰이 유효하지 않으면 빈 값입니다.
+     */
+    public java.util.Optional<java.time.Instant> getIdentityConfirmedAt(String token) {
+        try {
+            Object value = Jwts.parserBuilder().setSigningKey(getSigningKey()).build()
+                    .parseClaimsJws(token).getBody().get("identity_confirmed_at");
+            return value instanceof Number seconds
+                    ? java.util.Optional.of(java.time.Instant.ofEpochSecond(seconds.longValue()))
+                    : java.util.Optional.empty();
+        } catch (JwtException | IllegalArgumentException e) {
+            return java.util.Optional.empty();
+        }
     }
 
     /**

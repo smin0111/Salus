@@ -72,11 +72,12 @@ public class OAuthService {
             throw new OAuthVerificationException("subject_mismatch");
         }
 
+        String email = text(userInfo.get("email"));
         return new VerifiedSocialIdentity(
                 SocialProvider.GOOGLE,
                 subject,
-                text(userInfo.get("email")),
-                isTrue(userInfo.get("email_verified")),
+                email,
+                GoogleEmailPolicy.isAuthoritative(email, userInfo.get("email_verified"), userInfo.get("hd")),
                 textOrDefault(userInfo.get("name"), "Google User"));
     }
 

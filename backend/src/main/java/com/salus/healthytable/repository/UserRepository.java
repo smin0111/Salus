@@ -2,8 +2,6 @@ package com.salus.healthytable.repository;
 
 import com.salus.healthytable.domain.User;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -14,11 +12,9 @@ import java.util.List;
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
 
-    // 소셜 계정이 하나도 연결되지 않은 기존 회원(V9 이전 가입자)을 이메일로 찾습니다.
-    // 새 회원은 항상 소셜 계정을 가지므로, 이 조회는 기존 회원의 첫 로그인 연결에만 쓰입니다.
-    @Query("select u from User u where u.email = :email "
-            + "and not exists (select s.id from SocialAccount s where s.userId = u.id)")
-    List<User> findUnlinkedByEmail(@Param("email") String email);
+    // 계정 연결 후보 찾기: 같은 이메일(검증된 이메일만 저장됨)의 회원을 모두 가져옵니다.
+    // 여러 명이면 임의로 고르지 않고 연결을 보류해야 하므로 목록으로 받습니다.
+    List<User> findAllByEmail(String email);
 
     // ID 목록으로 사용자 조회
     List<User> findByIdIn(List<Long> ids);

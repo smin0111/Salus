@@ -43,9 +43,14 @@ public class RefreshTokenService {
 
     public enum Status { ROTATED, INVALID, REUSE_DETECTED }
 
-    public record RotationResult(Status status, Long userId, String refreshToken) {
+    /** identityConfirmedAt은 처음 로그인한 시각으로, 토큰을 교체해도 그대로 이어받습니다(모르면 null). */
+    public record RotationResult(Status status, Long userId, String refreshToken, java.time.Instant identityConfirmedAt) {
+        public RotationResult(Status status, Long userId, String refreshToken) {
+            this(status, userId, refreshToken, null);
+        }
+
         static RotationResult failed(Status status) {
-            return new RotationResult(status, null, null);
+            return new RotationResult(status, null, null, null);
         }
     }
 
@@ -54,6 +59,14 @@ public class RefreshTokenService {
      */
     @Transactional
     public String issue(Long userId) {
+        return issue(userId, null);
+    }
+
+    /**
+     * identityConfirmedAt: 서버가 소셜 계정을 확인한 시각(최근 계정 확인용). 모르면 null로 저장합니다.
+     */
+    @Transactional
+    public String issue(Long userId, java.time.Instant identityConfirmedAt) {
         LocalDateTime now = LocalDateTime.now(clock);
         refreshTokenRepository.deleteExpiredByUserId(userId, now);
 
@@ -66,6 +79,7 @@ public class RefreshTokenService {
         token.setTokenHash(hash(rawToken));
         token.setCreatedAt(now);
         token.setExpiresAt(now.plusDays(validityDays));
+        token.setIdentityConfirmedAt(identityConfirmedAt == null ? null : LocalDateTime.ofInstant(identityConfirmedAt, clock.getZone()));
         refreshTokenRepository.save(token);
         return rawToken;
     }
@@ -101,7 +115,9 @@ public class RefreshTokenService {
         }
 
         token.setUsedAt(now);
-        return new RotationResult(Status.ROTATED, token.getUserId(), issue(token.getUserId()));
+        // 새 토큰은 처음 계정 확인 시각을 그대로 이어받습니다. 갱신을 새 확인으로 바꾸면 최근 확인 제한을 우회하게 됩니다.
+        java.time.Instant identityConfirmedAt = token.getIdentityConfirmedAt() == null ? null : token.getIdentityConfirmedAt().atZone(clock.getZone()).toInstant();
+        return new RotationResult(Status.ROTATED, token.getUserId(), issue(token.getUserId(), identityConfirmedAt), identityConfirmedAt);
     }
 
     /**

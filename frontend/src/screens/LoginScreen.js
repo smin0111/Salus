@@ -101,7 +101,7 @@ const LoginForm = ({ onLogin, onGuest, loading, handleSocialLogin, appleAvailabl
  * 넓은 웹 화면에서는 왼쪽 브랜드 영역 + 오른쪽 로그인 폼의 2단 레이아웃, 모바일에서는 폼만 보여 줍니다.
  */
 export default function LoginScreen({ onLogin, onGuest }) {
-    const { login } = useAuth();
+    const { login, isLoggedIn } = useAuth();
     const [loading, setLoading] = useState(false);
     // 로그인 유지 여부(현재는 항상 true로 전달)
     const [keepLoggedIn, setKeepLoggedIn] = useState(true);
@@ -129,12 +129,17 @@ export default function LoginScreen({ onLogin, onGuest }) {
         // Apple 공식 버튼은 비활성화 속성이 없어 진행 중 중복 요청을 여기서 막습니다.
         if (loading) return;
         setLoading(true);
-        const success = await login(type, keepLoggedIn);
+        await login(type, keepLoggedIn);
         setLoading(false);
-        if (success) {
+    };
+
+    // 화면 이동은 실제 로그인 상태를 기준으로 합니다. 구글처럼 결과가 나중에 오는 흐름이나,
+    // 계정 연결 안내에서 기존 계정으로 로그인한 경우에도 로그인이 끝난 뒤에만 넘어갑니다.
+    useEffect(() => {
+        if (isLoggedIn) {
             onLogin();
         }
-    };
+    }, [isLoggedIn]);
 
     if (isWeb && isSplitLayout) {
         return (

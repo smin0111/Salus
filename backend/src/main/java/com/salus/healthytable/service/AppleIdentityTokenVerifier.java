@@ -6,30 +6,20 @@ import io.jsonwebtoken.JwsHeader;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SigningKeyResolverAdapter;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.Key;
-import java.security.KeyFactory;
 import java.security.MessageDigest;
-import java.security.PublicKey;
-import java.security.spec.RSAPublicKeySpec;
 import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HexFormat;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Sign in with Apple의 identity token(JWT)을 검증합니다.
@@ -39,26 +29,25 @@ import java.util.Map;
  * 토큰만 탈취해서는 원문 nonce를 모르므로 다른 요청에 재사용하기 어렵습니다.
  */
 @Component
-@RequiredArgsConstructor
 public class AppleIdentityTokenVerifier {
 
     static final String APPLE_ISSUER = "https://appleid.apple.com";
     private static final String APPLE_KEYS_URL = "https://appleid.apple.com/auth/keys";
-    private static final Duration KEY_CACHE_TTL = Duration.ofHours(24);
-    // 모르는 kid가 들어올 때마다 Apple을 호출하지 않도록 재조회 간격을 둡니다.
-    private static final Duration MIN_REFRESH_INTERVAL = Duration.ofMinutes(1);
     private static final long CLOCK_SKEW_SECONDS = 60;
     private static final int MAX_NAME_LENGTH = 100;
 
-    private final WebClient.Builder webClientBuilder;
     private final Clock clock;
+    // Apple 공개키 캐시(구글 ID token 검증과 같은 방식)
+    private final JwksKeyCache keys;
 
     // 쉼표로 구분한 aud 허용 목록(iOS 번들 ID, 웹용 Services ID)
     @Value("${oauth.apple.client-ids:}")
     private String appleClientIds;
 
-    private volatile Map<String, PublicKey> cachedKeys = Map.of();
-    private volatile Instant keysFetchedAt = Instant.EPOCH;
+    public AppleIdentityTokenVerifier(WebClient.Builder webClientBuilder, Clock clock) {
+        this.clock = clock;
+        this.keys = new JwksKeyCache(webClientBuilder, clock, APPLE_KEYS_URL);
+    }
 
     /**
      * identity token을 검증하고 로그인에 쓸 사용자 정보를 만듭니다.
@@ -97,7 +86,7 @@ public class AppleIdentityTokenVerifier {
                             if (!"RS256".equals(header.getAlgorithm())) {
                                 throw new OAuthVerificationException("unexpected_algorithm");
                             }
-                            return findKey(header.getKeyId());
+                            return keys.findKey(header.getKeyId());
                         }
                     })
                     .build()
@@ -119,63 +108,6 @@ public class AppleIdentityTokenVerifier {
             throw new OAuthVerificationException("provider_id_missing");
         }
         return claims;
-    }
-
-    private PublicKey findKey(String keyId) {
-        if (keyId == null) {
-            throw new OAuthVerificationException("key_id_missing");
-        }
-        Instant now = clock.instant();
-        PublicKey key = cachedKeys.get(keyId);
-        boolean expired = keysFetchedAt.plus(KEY_CACHE_TTL).isBefore(now);
-        if (key != null && !expired) {
-            return key;
-        }
-        // Apple이 키를 교체하면 새 kid가 먼저 나타날 수 있어, 캐시에 없을 때 한 번 다시 받아옵니다.
-        if (expired || keysFetchedAt.plus(MIN_REFRESH_INTERVAL).isBefore(now)) {
-            refreshKeys(now);
-            key = cachedKeys.get(keyId);
-        }
-        if (key == null) {
-            throw new OAuthVerificationException("unknown_key_id");
-        }
-        return key;
-    }
-
-    @SuppressWarnings("unchecked")
-    private synchronized void refreshKeys(Instant now) {
-        Map<String, Object> body = webClientBuilder.build()
-                .get()
-                .uri(APPLE_KEYS_URL)
-                .retrieve()
-                .bodyToMono(Map.class)
-                .block();
-        Object keys = body != null ? body.get("keys") : null;
-        if (!(keys instanceof Collection<?> list)) {
-            throw new OAuthVerificationException("apple_keys_unavailable");
-        }
-
-        Map<String, PublicKey> parsed = new HashMap<>();
-        for (Object item : list) {
-            if (item instanceof Map<?, ?> jwk && "RSA".equals(jwk.get("kty")) && jwk.get("kid") instanceof String kid) {
-                parsed.put(kid, toRsaPublicKey((Map<String, Object>) jwk));
-            }
-        }
-        if (parsed.isEmpty()) {
-            throw new OAuthVerificationException("apple_keys_unavailable");
-        }
-        cachedKeys = Map.copyOf(parsed);
-        keysFetchedAt = now;
-    }
-
-    private PublicKey toRsaPublicKey(Map<String, Object> jwk) {
-        try {
-            BigInteger modulus = new BigInteger(1, Base64.getUrlDecoder().decode(String.valueOf(jwk.get("n"))));
-            BigInteger exponent = new BigInteger(1, Base64.getUrlDecoder().decode(String.valueOf(jwk.get("e"))));
-            return KeyFactory.getInstance("RSA").generatePublic(new RSAPublicKeySpec(modulus, exponent));
-        } catch (GeneralSecurityException | IllegalArgumentException e) {
-            throw new OAuthVerificationException("apple_keys_unavailable");
-        }
     }
 
     // aud는 문자열 하나이거나 배열일 수 있습니다.

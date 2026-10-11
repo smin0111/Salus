@@ -127,6 +127,33 @@ class RefreshTokenServiceTest {
         assertThat(token.getRevokedAt()).isEqualTo(NOW);
     }
 
+    // 처음 로그인 시각(identity_confirmed_at)은 저장되고, 토큰을 교체해도 현재 시각이 아니라 원래 값을 이어받아야 합니다.
+    @Test
+    void identityConfirmedAtIsStoredAndCarriedAcrossRotation() {
+        java.time.Instant loginAt = java.time.Instant.parse("2026-09-30T00:00:00Z");
+        service.issue(7L, loginAt);
+        ArgumentCaptor<RefreshToken> captor = ArgumentCaptor.forClass(RefreshToken.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getIdentityConfirmedAt()).isEqualTo(LocalDateTime.of(2026, 9, 30, 9, 0));
+
+        RefreshToken token = token(7L, NOW.plusDays(1));
+        token.setIdentityConfirmedAt(LocalDateTime.of(2026, 9, 30, 9, 0));
+        when(repository.findForUpdateByTokenHash(RefreshTokenService.hash("raw"))).thenReturn(Optional.of(token));
+
+        RefreshTokenService.RotationResult result = service.rotate("raw");
+
+        assertThat(result.identityConfirmedAt()).isEqualTo(loginAt);
+    }
+
+    // 인증 시각을 모르는 기존 토큰은 교체해도 계속 모르는 상태(null)여야 합니다(현재 시각으로 채우지 않음).
+    @Test
+    void unknownIdentityConfirmedAtStaysUnknownAfterRotation() {
+        RefreshToken token = token(7L, NOW.plusDays(1));
+        when(repository.findForUpdateByTokenHash(RefreshTokenService.hash("raw"))).thenReturn(Optional.of(token));
+
+        assertThat(service.rotate("raw").identityConfirmedAt()).isNull();
+    }
+
     private RefreshToken token(Long userId, LocalDateTime expiresAt) {
         RefreshToken token = new RefreshToken();
         token.setUserId(userId);

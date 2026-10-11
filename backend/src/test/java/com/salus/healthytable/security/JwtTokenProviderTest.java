@@ -66,4 +66,16 @@ class JwtTokenProviderTest {
         assertThat(provider.isExpired(validToken)).isFalse();
         assertThat(provider.isExpired(expiredToken + "tampered")).isFalse();
     }
+
+    // identity_confirmed_at은 넣었을 때만 토큰에 담기고, 그대로 꺼낼 수 있어야 합니다.
+    @Test
+    void identityConfirmedAtClaimRoundTrips() {
+        JwtTokenProvider provider = new JwtTokenProvider();
+        ReflectionTestUtils.setField(provider, "secretKey", "local-test-secret-must-be-longer-than-32-bytes");
+        java.time.Instant loginAt = java.time.Instant.parse("2026-10-05T03:00:00Z");
+
+        assertThat(provider.getIdentityConfirmedAt(provider.createToken("1", loginAt))).contains(loginAt);
+        assertThat(provider.getIdentityConfirmedAt(provider.createToken("1"))).isEmpty();
+        assertThat(provider.getIdentityConfirmedAt("not-a-token")).isEmpty();
+    }
 }
