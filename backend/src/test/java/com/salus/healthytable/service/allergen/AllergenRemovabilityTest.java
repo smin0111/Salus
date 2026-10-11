@@ -51,10 +51,23 @@ class AllergenRemovabilityTest {
         assertThat(matcher.matchesLiterally("밀", texts)).isFalse();
     }
 
+    // 2026-10-09 규칙 변경: 예전에는 표기만 등장하면 "분리 가능"으로 봤으나, 두쫀쿠("우유맛스틱" + 버터·탈지분유)에서
+    // 표기만 지우고 파생 재료가 남은 레시피가 "우유 제외"로 나갔다. 표기와 파생 재료가 함께 있으면 표기만 지워서는 안 된다.
     @Test
-    @DisplayName("재료명과 파생 재료가 함께 있으면 분리 가능으로 본다")
-    void literalPresenceWinsWhenBothAppear() {
+    @DisplayName("재료명과 파생 재료가 함께 있으면 표기만 지워서는 안전하지 않다")
+    void literalPresenceWithDerivedIsNotEnoughToRemove() {
         List<String> texts = List.of("우유 200ml", "버터 10g");
         assertThat(matcher.matchesLiterally("우유", texts)).isTrue();
+        assertThat(matcher.matchesBeyondLiteral("우유", texts)).isTrue();
+    }
+
+    @Test
+    @DisplayName("표기만 있고 파생 재료가 없으면 표기 너머로 걸리지 않는다")
+    void literalOnlyHasNothingBeyondLiteral() {
+        assertThat(matcher.matchesBeyondLiteral("우유", List.of("우유맛스틱 1개", "코코아파우더 50g"))).isFalse();
+        assertThat(matcher.matchesBeyondLiteral("들깨", List.of("들깨 1큰술", "김 2장"))).isFalse();
+        // 한 글자 알레르겐의 오탐 방지: "밀크"는 밀의 파생 재료가 아니다.
+        assertThat(matcher.matchesBeyondLiteral("밀", List.of("밀 1컵", "밀크티 1잔"))).isFalse();
+        assertThat(matcher.matchesBeyondLiteral("밀", List.of("밀 1컵", "밀가루 200g"))).isTrue();
     }
 }

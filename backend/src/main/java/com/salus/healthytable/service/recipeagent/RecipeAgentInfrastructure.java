@@ -45,9 +45,28 @@ class DefaultRecipeRequestPlanner {
     }
 
     // 검색 계획을 만듭니다. 최대 검색 시도는 3회, 최대 출처 수는 5개로 고정합니다.
+    // 제외 구절("돼지고기는 빼줘", "양파 빼고", "돼지고기 없는")입니다. 제외 재료는 extractExplicitExclusions가 따로 뽑습니다.
+    private static final java.util.regex.Pattern EXCLUSION_CLAUSE = java.util.regex.Pattern.compile(
+            "[,·]?\\s*[가-힣a-zA-Z0-9]+(?:은|는|을|를|이|가)?\\s*(?:빼\\s*주세요|빼\\s*줘|빼고|빼|제외(?:해\\s*줘|하고|해\\s*주세요)?|말고|없는|안\\s*들어간)");
+
+    /**
+     * 요리 이름에서 제외 구절을 떼어 냅니다. "김치찌개 레시피 알려줘, 돼지고기는 빼줘"의 요리 이름이
+     * "김치찌개 , 돼지고기는 빼줘"로 잡혀 검색과 출처 확인이 모두 실패하던 문제를 막습니다(2026-10-09).
+     */
+    static String withoutExclusionClause(String dishName) {
+        if (dishName == null || dishName.isBlank()) {
+            return dishName == null ? "" : dishName;
+        }
+        String cleaned = EXCLUSION_CLAUSE.matcher(dishName).replaceAll(" ")
+                .replaceAll("[,·]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        return cleaned.isBlank() ? dishName.trim() : cleaned;
+    }
+
     RecipeResearchPlan plan(String message, boolean useFridgeIngredients, UserRecipeContext context) {
         String normalizedMessage = message == null ? "" : message.trim();
-        String dishName = recipeNormalizer.normalize(normalizedMessage);
+        String dishName = withoutExclusionClause(recipeNormalizer.normalize(normalizedMessage));
         CreatorDish creatorDish = extractCreatorDish(normalizedMessage, dishName);
         if (!creatorDish.dishName().isBlank()) {
             dishName = creatorDish.dishName();
@@ -164,7 +183,7 @@ class DefaultRecipeRequestPlanner {
         if (message == null || message.isBlank()) {
             return new CreatorDish("", normalizedDish == null ? "" : normalizedDish);
         }
-        String cleaned = recipeNormalizer.normalize(message)
+        String cleaned = withoutExclusionClause(recipeNormalizer.normalize(message))
                 .replaceAll("\\s+", " ")
                 .trim();
         String[] tokens = cleaned.split("\\s+");

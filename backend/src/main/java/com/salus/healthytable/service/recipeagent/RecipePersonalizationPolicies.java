@@ -132,7 +132,9 @@ class AllergyPolicy implements RecipePersonalizationPolicy {
             // 재료명이 그대로 등장하고 핵심 재료가 아니면 그 재료만 빼서 제공할 수 있다.
             // 반면 파생 재료로만 걸린 경우(우유 -> 버터·치즈)는 이름을 지워도 알레르겐이
             // 남으므로 제거로 해결할 수 없다. 이때는 차단한다.
+            // 표기가 등장해도 파생 재료(버터·분유 등)나 별칭이 함께 있으면 표기만 지워서는 안전해지지 않으므로 차단합니다.
             boolean removable = allergenMatcher.matchesLiterally(allergy, texts)
+                    && !allergenMatcher.matchesBeyondLiteral(allergy, texts)
                     && !recipe.isCoreIngredient(allergy);
             if (!removable) {
                 conflicts.add(new RecipeConflict(

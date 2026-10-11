@@ -121,13 +121,40 @@ class RecipeModificationService {
 @Component
 class RecipeValidationPipeline {
 
+    // 최종 레시피에 알레르겐이 남았는지 공용 매처로 검사합니다(표기뿐 아니라 파생 재료까지).
+    private final com.salus.healthytable.service.allergen.AllergenMatcher allergenMatcher;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    RecipeValidationPipeline(com.salus.healthytable.service.allergen.AllergenMatcher allergenMatcher) {
+        this.allergenMatcher = allergenMatcher;
+    }
+
+    // 기본 알레르겐 사전으로 매처를 만들어 쓰는 생성자입니다(테스트용). 검사 강도는 운영과 같습니다.
+    RecipeValidationPipeline() {
+        this(defaultMatcher());
+    }
+
+    private static com.salus.healthytable.service.allergen.AllergenMatcher defaultMatcher() {
+        com.salus.healthytable.service.allergen.AllergenDictionary dictionary =
+                new com.salus.healthytable.service.allergen.AllergenDictionary();
+        dictionary.load();
+        return new com.salus.healthytable.service.allergen.AllergenMatcher(dictionary);
+    }
+
     RecipeValidationResult validate(RecipeCandidate personalizedRecipe, UserRecipeContext context) {
+        com.salus.healthytable.service.ChatProgress.report("건강정보에 맞는지 레시피를 검증하고 있어요");
         List<String> reasons = new ArrayList<>();
         if (personalizedRecipe == null) {
             return new RecipeValidationResult(false, List.of("personalized recipe is missing"));
         }
+        // 표기("우유")만 보지 않고 파생 재료(버터·분유 등)까지 검사합니다. 개인화 단계가 놓쳐도 여기서 막습니다.
+        List<String> finalTexts = new ArrayList<>(personalizedRecipe.ingredients());
+        finalTexts.addAll(personalizedRecipe.steps());
+        for (String allergy : allergenMatcher.findConflicts(context.allergies(), finalTexts)) {
+            reasons.add("알레르기 재료가 최종 레시피에 남아 있습니다: " + allergy);
+        }
         for (String allergy : context.allergies()) {
-            if (personalizedRecipe.containsIngredient(allergy)) {
+            if (personalizedRecipe.containsIngredient(allergy) && !reasons.contains("알레르기 재료가 최종 레시피에 남아 있습니다: " + allergy)) {
                 reasons.add("알레르기 재료가 최종 레시피에 남아 있습니다: " + allergy);
             }
         }
@@ -171,7 +198,12 @@ class RecipeResponseComposer {
             result.sources().stream().limit(3).forEach(source -> reply.append("- ")
                     .append(blank(source.title(), "출처 레시피"))
                     .append(source.url() == null || source.url().isBlank() ? "" : " (" + source.url() + ")")
+                    // 승인 카탈로그(내부 DB)가 아닌 출처는 사람이 검토하지 않은 근거임을 밝힙니다.
+                    .append(source.sourceType() == RecipeSourceType.INTERNAL_DB ? "" : " [외부 출처, 검토 전]")
                     .append("\n"));
+            if (result.sources().stream().anyMatch(source -> source.sourceType() != RecipeSourceType.INTERNAL_DB)) {
+                reply.append("- 외부 출처는 사람이 검토하지 않은 근거입니다. 자세한 내용과 사진은 원문 링크에서 확인해 주세요.\n");
+            }
         }
         reply.append("\n[개인화 판단]\n");
         for (String notice : decision.userNotices()) {

@@ -72,6 +72,32 @@ public class AllergenMatcher {
         return false;
     }
 
+    /**
+     * 선언한 알레르기 표기 말고 다른 탐지 용어(파생 재료·별칭)로도 텍스트가 걸리는지 확인한다.
+     *
+     * <p>표기가 한 번 등장한다고 제거로 해결되는 것이 아니다. 2026-10-09 실측에서 두쫀쿠 단계의 "우유맛스틱" 때문에
+     * 우유가 "표기 등장 → 제거 가능"으로 판정되었고, 버터·탈지분유가 남은 레시피가 "우유 제외"로 나갔다.
+     * 이 메서드가 true면 표기만 지워서는 알레르겐이 사라지지 않는다.
+     */
+    public boolean matchesBeyondLiteral(String declaredAllergy, List<String> texts) {
+        String literal = AllergenDictionary.normalize(declaredAllergy);
+        List<String> tokens = tokenize(texts);
+        if (tokens.isEmpty()) {
+            return false;
+        }
+        for (String term : dictionary.matchTermsFor(declaredAllergy)) {
+            if (term.isBlank() || term.equals(literal)) {
+                continue;
+            }
+            for (String token : tokens) {
+                if (matches(term, token)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     // 탐지 용어 중 하나라도 어떤 토큰과 매칭되면 true입니다.
     private boolean matchesAny(Set<String> terms, List<String> tokens) {
         for (String term : terms) {
