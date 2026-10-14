@@ -22,6 +22,9 @@ class RecipeSourceSelectionTest {
         assertThat(RecipeDisplayTitle.of("두바이 쫀득 쿠키 :-) 두쫀쿠 만들기 :^) 두쫀쿠레시피", "두쫀쿠")).isEqualTo("두바이 쫀득 쿠키");
         assertThat(RecipeDisplayTitle.of("두쫀쿠 레시피 - 피스타치오 스프레드 재료 비율부터", "두쫀쿠")).isEqualTo("두쫀쿠");
         assertThat(RecipeDisplayTitle.of("쇠고기무국(소고기무국) 맛있게 끓이는 법(김진옥요리가좋다)", "쇠고기무국")).isEqualTo("쇠고기무국");
+        // "/"로 이어 쓴 제목도 낱말로 나누고 기호는 뗍니다(2026-10-14 실전 평가: 카드 제목 "감자조림/").
+        assertThat(RecipeDisplayTitle.of("감자조림/밑반찬 감자조림", "감자조림")).isEqualTo("감자조림");
+        assertThat(RecipeDisplayTitle.of("감자조림/ 밑반찬", "감자조림")).isEqualTo("감자조림");
         assertThat(RecipeDisplayTitle.of("경상도식 얼큰 소고기무국 만드는 법, 국물이 칼칼해서", "소고기무국")).isEqualTo("소고기무국");
     }
 
@@ -33,6 +36,7 @@ class RecipeSourceSelectionTest {
         assertThat(RecipeDisplayTitle.of("크림떡볶이 크림소스 베이컨을 넣어 더", "크림떡볶이")).isEqualTo("크림떡볶이");
         assertThat(RecipeDisplayTitle.of("누구나 한번쯤 해봤다는", "달고나 커피")).isEqualTo("달고나 커피");
         assertThat(RecipeDisplayTitle.of("SNS대란템", "약과쿠키")).isEqualTo("약과쿠키");
+        assertThat(RecipeDisplayTitle.of("백종원 골뱅이무침", "골뱅이소면")).isEqualTo("골뱅이소면");
         assertThat(RecipeDisplayTitle.of("로제떡볶이 꾸덕하게", "떡볶이")).isEqualTo("로제떡볶이");
         assertThat(RecipeDisplayTitle.of("로제 떡볶이 만들기- 생크림이 없이 맛있게~", "로제떡볶이")).isEqualTo("로제 떡볶이");
     }

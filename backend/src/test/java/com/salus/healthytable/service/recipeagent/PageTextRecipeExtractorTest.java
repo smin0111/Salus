@@ -198,6 +198,35 @@ class PageTextRecipeExtractorTest {
         assertThat(candidates.get(0).evidence().provenance().sourceUrl()).endsWith("/2");
     }
 
+    // 뺀 재료 없이 만드는 레시피를 다시 찾을 때(대안 검색)는 블로그 본문을 LLM으로 읽지 않습니다.
+    // 2026-10-14 해물파전 94초·육회 175초를 쓰고도 대안을 못 찾았고, 깍두기는 240초를 넘겨 빈 답변이 나감.
+    @Test
+    void adapterSkipsTextExtractionDuringAlternativeSearch() {
+        List<String> calls = new ArrayList<>();
+        RecipeTextLlmPort llm = (prompt, schema) -> {
+            calls.add(prompt);
+            return schema.toString().contains("ingredients")
+                    ? ingredients(true, "두바이 쫀득쿠키", true,
+                    "마시멜로우", "150g", "버터", "30g", "피스타치오 스프레드", "120g", "카다이프면", "100g")
+                    : steps("볶는다", "섞는다", "감싼다");
+        };
+        String withPeanutTitle = "<html><head><title>두쫀쿠 만들기</title></head>" + BLOG.substring("<html>".length());
+        SafeWebPageFetcher fetcher = url -> new WebPageFetchResult(url, 200, "text/html", withPeanutTitle,
+                LocalDateTime.of(2026, 10, 5, 0, 0), "h1");
+        StructuredRecipePageAdapter adapter = new StructuredRecipePageAdapter(
+                fetcher, new SchemaOrgRecipeJsonLdExtractor(objectMapper), new RecipeSourceQualityAssessor(),
+                extractor(llm), 2);
+        RecipeResearchPlan plan = new RecipeResearchPlan(
+                "두쫀쿠", "", RecipeRequestMode.CREATE, false, false, true, List.of("두쫀쿠 레시피"), 3, 5)
+                .withAvoidIngredients(List.of("땅콩"));
+
+        List<RecipeSourceCandidate> candidates = adapter.collect(plan, List.of(
+                new WebRecipeSearchResult("두쫀쿠 만들기", "https://m.blog.naver.com/a/1", "재료", "m.blog.naver.com", 1)));
+
+        assertThat(candidates).isEmpty();
+        assertThat(calls).isEmpty();
+    }
+
     // 요청한 요리 이름이 적힌 페이지가 하나도 없으면 LLM을 부르지 않습니다(없는 요리에 92초 쓰던 문제).
     @Test
     void adapterSkipsTextExtractionWhenNoPageNamesTheDish() {

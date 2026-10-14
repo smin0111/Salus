@@ -33,6 +33,10 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class RecipeAgentOrchestrator {
 
+    // 초보자 설명(선택). 없으면 자세히 요청에 원문 링크 안내로 대신합니다.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private RecipeBeginnerGuide beginnerGuide;
+
     private final UserRecipeContextLoader contextLoader;
     private final DefaultRecipeRequestPlanner requestPlanner;
     private final RecipeSourceDiscoveryPort sourceDiscoveryPort;
@@ -106,7 +110,9 @@ public class RecipeAgentOrchestrator {
             Long userId, Long chatSessionId, ChatDto.Request request, boolean requireReliableSource,
             SafetyContext safetyContext) {
         UserRecipeContextLoadResult contextLoadResult = contextLoader.loadWithStatus(userId);
-        Optional<PreviousAgentState> previousState = previousAgentState(userId, chatSessionId);
+        // 작업 세션은 한 번만 읽고, 직전 레시피와 요리별로 보여 준 출처를 모두 여기서 꺼냅니다.
+        Optional<Map<String, Object>> storedSession = storedAgentSession(userId, chatSessionId);
+        Optional<PreviousAgentState> previousState = previousAgentState(storedSession, userId);
         // 이전 세션이 있으면 이번에 로드에 실패한 부분만 이전 스냅샷 값으로 보완합니다.
         UserRecipeContext loadedContext = previousState
                 .map(previous -> reconcileContexts(previous.contextSnapshot(), contextLoadResult))
@@ -126,31 +132,63 @@ public class RecipeAgentOrchestrator {
                 request == null ? "" : request.getMessage(),
                 request != null && request.isUseFridge(),
                 loadedContext);
-        UserRecipeContext context = loadedContext.withExplicitlyExcludedIngredients(
-                requestPlanner.extractExplicitExclusions(request == null ? "" : request.getMessage()));
+        List<String> currentExclusions = requestPlanner.extractExplicitExclusions(request == null ? "" : request.getMessage());
+        UserRecipeContext context = loadedContext.withExplicitlyExcludedIngredients(currentExclusions);
 
         // 같은 요리에 대한 후속 요청이면 이전에 찾은 원본 레시피와 출처를 재사용하고, 처음 요청이거나 다른 요리면 새로 검색합니다.
         boolean isFollowUp = previousState
                 .filter(previous -> isFollowUpToPreviousRecipe(previous, plan, request == null ? "" : request.getMessage()))
                 .isPresent();
+        // "초보라서 자세히 알려줘"처럼 직전 레시피를 더 자세히 설명해 달라는 요청입니다.
+        boolean detailFollowUp = isFollowUp && IngredientEdits.isDetailRequest(request == null ? "" : request.getMessage());
+        // 빼 달라는 말은 있는데 뺄 재료를 읽지 못했으면 같은 레시피를 다시 보여 주지 않고 되묻습니다. 바뀌지 않은 레시피를
+        // 다시 보여 주면 빠졌다고 오해합니다(2026-10-14 "배는 빼줘"에 배가 든 육회를 그대로 다시 보여 줌).
+        String message = request == null ? "" : request.getMessage();
+        if (isFollowUp && currentExclusions.isEmpty() && REMOVAL_REQUEST.matcher(message == null ? "" : message).find()
+                && IngredientEdits.parse(message).map(edit -> edit.substitutions().isEmpty() && edit.additions().isEmpty()).orElse(true)) {
+            return new ChatDto.Response(chatSessionId,
+                    "어떤 재료를 빼야 할지 알아듣지 못했어요. 레시피는 바꾸지 않았습니다. "
+                            + "\"양파 빼줘\"처럼 재료 이름을 함께 말해 주세요. 알레르기가 있으면 건강 프로필에 등록해 두면 항상 반영돼요.",
+                    userId != null, false);
+        }
+        // 이전 대화에서 뺀 재료는 같은 요리의 후속 요청에서만 이어 씁니다. 새 요리에는 이번에 뺀 재료만 적용합니다
+        // (2026-10-12: "오징어 안 들어간 김치전" 뒤의 북어국·김치전 요청에도 오징어 제외가 계속 붙음).
+        if (!isFollowUp) {
+            context = context.withOnlyExplicitlyExcludedIngredients(currentExclusions);
+        }
         // "다른 두쫀쿠 레시피 알려줘": 이미 보여 준 출처는 빼고 다시 찾습니다(2026-10-09 평가: 같은 출처로 답함).
         // 이전 카드 제목("두바이 쫀득 쿠키")과 요청 이름("두쫀쿠")이 달라도 이전 출처는 뺍니다.
         // 같은 요리인데 다른 출처가 없으면 지어내지 않고 이전 레시피를 다시 보여 주며 그렇게 안내합니다.
-        String notice = null;
+        // 건강 주의가 아닌 안내 문구입니다. 답변 글에는 함께 쓰고, 카드에서는 "건강 주의"와 따로 보여 줍니다.
+        List<String> infoNotices = new java.util.ArrayList<>();
         DiscoveryResult discovery = null;
+        java.util.Map<String, List<String>> shownBefore = shownSourcesByDish(storedSession);
+        String answeredDish = plan.dishName();
         if (previousState.isPresent() && asksForAnotherSource(request == null ? "" : request.getMessage())) {
             PreviousAgentState previous = previousState.get();
-            String dish = plan.dishName().isBlank() ? previous.originalRecipe().title() : plan.dishName();
+            // 요리 이름이 비었거나 한 글자뿐이면 직전 요리를 다시 찾는 것입니다("이거 말고 다른 레시피로").
+            String dish = plan.dishName().replaceAll("\\s+", "").length() < 2 ? previous.originalRecipe().title() : plan.dishName();
+            answeredDish = dish;
+            // 직전 답의 출처와, 이 대화에서 같은 요리로 이미 보여 준 출처를 모두 뺍니다.
+            java.util.LinkedHashSet<String> excluded = new java.util.LinkedHashSet<>();
+            if (isSameOrRelatedDish(dish, previous.originalRecipe().title())) {
+                previous.sourceEvidence().stream().map(RecipeSourceDocument::url).filter(java.util.Objects::nonNull).forEach(excluded::add);
+            }
+            excluded.addAll(shownBefore.getOrDefault(dishKey(dish), List.of()));
             RecipeResearchPlan anotherPlan = requestPlanner.plan(dish, request.isUseFridge(), loadedContext)
-                    .withExcludedSources(previous.sourceEvidence().stream()
-                            .map(RecipeSourceDocument::url).filter(java.util.Objects::nonNull).toList());
+                    .withExcludedSources(List.copyOf(excluded));
             DiscoveryResult another = discoverCandidate(anotherPlan, context);
             if (another.status() == RecipeResearchStatus.VERIFIED_SOURCE_FOUND) {
                 discovery = another;
                 isFollowUp = false;
-                notice = "이전과 다른 출처의 레시피를 찾았어요.";
+                infoNotices.add("이전과 다른 출처의 레시피를 찾았어요.");
             } else if (isFollowUp) {
-                notice = "다른 출처의 레시피를 찾지 못해 이전 레시피를 다시 보여 드려요.";
+                infoNotices.add("다른 출처의 레시피를 찾지 못해 이전 레시피를 다시 보여 드려요.");
+            } else if (!excluded.isEmpty()) {
+                // 직전 답이 다른 요리였으면 그 요리의 예전 레시피를 다시 찾아 보여 주고 그렇게 알립니다.
+                discovery = discoverCandidate(requestPlanner.plan(dish, request.isUseFridge(), loadedContext), context);
+                isFollowUp = false;
+                infoNotices.add("이미 보여 드린 출처 말고 다른 출처를 찾지 못해, 전에 보여 드린 레시피를 다시 보여 드려요.");
             } else {
                 discovery = another;
             }
@@ -174,26 +212,67 @@ public class RecipeAgentOrchestrator {
         // 사용자가 뺀 재료가 핵심이라 막혔으면 그 재료 없이 만드는 같은 요리를 한 번 더 찾습니다
         // ("김치찌개, 돼지고기는 빼줘" → 참치·멸치 김치찌개). 찾은 레시피도 같은 개인화·최종 검증을 거치고,
         // 통과하지 못하면 처음 결과(차단)를 그대로 답합니다. 건강 정보를 못 읽어 막힌 경우는 다시 찾지 않습니다.
-        if (!isFollowUp && sourceDiscoveryEnabled
+        // 후속 요청이어도 이번 질문에서 새로 뺀 재료가 있으면 다시 찾습니다
+        // (2026-10-12 "명란이 안 들어간 계란말이"가 직전 명란계란말이의 후속으로 처리되어 명란 든 레시피를 그대로 받음).
+        if ((!isFollowUp || !currentExclusions.isEmpty()) && sourceDiscoveryEnabled
                 && (evaluation.blocked() || evaluation.excludedCoreIngredient())
                 && !context.explicitlyExcludedIngredients().isEmpty()
                 && contextAvailable(safetyContext, contextLoadResult)) {
             com.salus.healthytable.service.ChatProgress.report("뺀 재료 없이 만드는 레시피를 찾고 있어요");
             DiscoveryResult alternative = discoverCandidate(plan.withAvoidIngredients(context.explicitlyExcludedIngredients()), context);
+            boolean alternativeUsed = false;
             if (alternative.status() == RecipeResearchStatus.VERIFIED_SOURCE_FOUND) {
                 Evaluation alternativeEvaluation = evaluate(alternative.recipe(), context, safetyContext, contextLoadResult);
                 if (!alternativeEvaluation.blocked() && !alternativeEvaluation.excludedCoreIngredient()) {
                     log.info("[RecipeAgent] Found alternative without excluded core ingredient. dish={}", plan.dishName());
+                    isFollowUp = false;
+                    alternativeUsed = true;
                     discovery = alternative;
                     originalRecipe = alternative.recipe();
-                    evaluation = alternativeEvaluation.withNotice("요청하신 대로 "
-                            + String.join(", ", context.explicitlyExcludedIngredients())
+                    evaluation = alternativeEvaluation;
+                    infoNotices.add("요청하신 대로 " + String.join(", ", context.explicitlyExcludedIngredients())
                             + " 없이 만드는 " + plan.dishName() + " 레시피를 찾았어요.");
                 }
             }
+            if (!alternativeUsed) {
+                // 출처를 못 찾은 것과, 찾았지만 뺀 재료가 핵심이거나 건강 정보와 충돌해 쓰지 못한 것을 구분해 알립니다.
+                boolean foundButUnusable = alternative.status() == RecipeResearchStatus.VERIFIED_SOURCE_FOUND;
+                infoNotices.add(String.join(", ", context.explicitlyExcludedIngredients()) + " 없이 만드는 " + plan.dishName()
+                        + (foundButUnusable
+                        ? " 레시피도 찾아봤지만, 찾은 레시피도 뺀 재료가 핵심이거나 등록된 건강 정보와 맞지 않아 쓰지 않았어요."
+                        : " 레시피도 찾아봤지만 믿을 만한 출처를 찾지 못했어요."));
+            }
         }
-        if (notice != null) {
-            evaluation = evaluation.withNotice(notice);
+        // 새로 찾은 웹 출처가 여럿이면 비교했다는 것과 카드의 레시피가 그중 한 곳이라는 것을 알려 줍니다.
+        long webSources = discovery.sources().stream()
+                .filter(source -> source.sourceType() != RecipeSourceType.INTERNAL_DB)
+                .count();
+        if (!isFollowUp && webSources >= 2 && !evaluation.blocked()) {
+            infoNotices.add("레시피 " + webSources + "곳을 찾아 비교했어요. 다른 출처와 겹치는 재료가 많은 레시피를 우선해 한 곳을 보여 드리고, "
+                    + "나머지는 '참고한 출처'에서 원문으로 볼 수 있어요.");
+        }
+        // 요리 두 개 이상을 한 번에 물으면 첫 요리만 찾고 나머지는 이어서 물어보도록 안내합니다.
+        List<String> otherDishes = requestPlanner.otherRequestedDishes(request == null ? "" : request.getMessage());
+        if (!otherDishes.isEmpty()) {
+            infoNotices.add("여러 요리를 한 번에 찾지 않고 '" + plan.dishName() + "'부터 보여 드려요. '"
+                    + String.join("', '", otherDishes) + "'은(는) 이어서 물어봐 주세요.");
+        }
+        // 자세히 요청에는 단계별 초보 팁을 덧붙입니다. 원문에 없는 설명이라 단계와 따로 보여 주고 그렇게 안내합니다.
+        // 팁을 만들 수 없으면 지어내지 않고 원문 링크에서 자세한 설명을 보도록 안내합니다.
+        List<String> stepTips = List.of();
+        if (detailFollowUp && !evaluation.blocked()) {
+            Optional<List<String>> tips = beginnerGuide == null
+                    ? Optional.empty()
+                    : beginnerGuide.explain(evaluation.personalized(), context.allergies());
+            if (tips.isPresent()) {
+                stepTips = tips.get();
+                infoNotices.add("단계마다 덧붙인 초보 팁은 Salus가 쓴 설명이라 원문에 없는 내용이에요. 분량·시간·불 세기는 원래 단계를 따라 주세요.");
+            } else {
+                infoNotices.add("더 자세한 설명과 사진은 아래 '참고한 출처'의 원문에서 확인해 주세요.");
+            }
+        }
+        for (int i = infoNotices.size() - 1; i >= 0; i--) {
+            evaluation = evaluation.withNotice(infoNotices.get(i));
         }
         RecipePersonalizationDecision decision = evaluation.decision();
         RecipeCandidate personalizedRecipe = evaluation.personalized();
@@ -205,6 +284,15 @@ public class RecipeAgentOrchestrator {
                 decision,
                 discovery.sources());
         String reply = responseComposer.compose(result, validation);
+        if (stepTips.stream().anyMatch(tip -> !tip.isBlank())) {
+            StringBuilder tipText = new StringBuilder("\n\n[초보 팁 - Salus 설명, 원문에 없는 내용]\n");
+            for (int i = 0; i < stepTips.size(); i++) {
+                if (!stepTips.get(i).isBlank()) {
+                    tipText.append(i + 1).append(". ").append(stepTips.get(i)).append("\n");
+                }
+            }
+            reply = reply + tipText.toString().stripTrailing();
+        }
 
         if (userId != null && chatSessionId != null) {
             RecipeAgentSession agentSession = new RecipeAgentSession(
@@ -214,13 +302,28 @@ public class RecipeAgentOrchestrator {
                     context,
                     isFollowUp ? mergedModifiers(previousState, request) : initialModifiers(request),
                     discovery.sources(),
-                    contextLoadResult.status());
+                    contextLoadResult.status(),
+                    withShownSources(shownBefore,
+                            answeredDish == null || answeredDish.isBlank() ? originalRecipe.title() : answeredDish,
+                            discovery.sources()));
             recipeWorkSessionService.saveAgentSession(userId, chatSessionId, reply, agentSession);
         }
 
         ChatDto.Response response = new ChatDto.Response(chatSessionId, reply, userId != null, false);
         if (decision.decisionType() != RecipeDecisionType.BLOCK && validation.valid()) {
-            response.setRecipe(responseComposer.toRecipeCard(personalizedRecipe, decision));
+            ChatDto.RecipeCard card = responseComposer.toRecipeCard(personalizedRecipe, decision);
+            card.setSafetyNotes(card.getSafetyNotes().stream().filter(note -> !infoNotices.contains(note)).toList());
+            // 원문 재료 목록에는 없지만 조리 순서에 나오는 재료를 알려 줍니다(2026-10-14 배추찜: 레몬즙·홍고추·통깨).
+            List<String> stepOnly = RecipeStepSummarizer.stepOnlyIngredients(
+                    personalizedRecipe.ingredients(), personalizedRecipe.steps(), personalizedRecipe.title());
+            if (!stepOnly.isEmpty()) {
+                infoNotices.add("원문 재료 목록에는 없지만 조리 순서에 나오는 재료가 있어요: " + String.join(", ", stepOnly)
+                        + ". 필요하면 함께 준비해 주세요.");
+            }
+            card.setNotices(List.copyOf(infoNotices));
+            card.setSources(sourceLinks(discovery.sources()));
+            card.setStepTips(stepTips);
+            response.setRecipe(card);
         }
         return response;
     }
@@ -313,13 +416,21 @@ public class RecipeAgentOrchestrator {
     }
 
     // Redis 작업 세션에 JSON(Map)으로 저장된 이전 Agent 상태를 다시 객체로 복원합니다.
-    private Optional<PreviousAgentState> previousAgentState(Long userId, Long chatSessionId) {
+    private Optional<Map<String, Object>> storedAgentSession(Long userId, Long chatSessionId) {
         if (userId == null || chatSessionId == null) {
             return Optional.empty();
         }
         return recipeWorkSessionService.find(userId, chatSessionId)
                 .map(RecipeWorkSessionDTO::getAgentSession)
-                .filter(session -> session != null && !session.isEmpty())
+                .filter(session -> session != null && !session.isEmpty());
+    }
+
+    private Optional<PreviousAgentState> previousAgentState(Optional<Map<String, Object>> storedSession, Long userId) {
+        return storedSession
+                // 레시피를 찾지 못한 답(재료 없음)은 이어서 다룰 직전 레시피가 아닙니다. 남겨 두면 다음 "김치전 레시피"
+                // 요청이 실패한 "그냥 김치전"의 후속으로 처리되어 같은 실패를 되풀이합니다(2026-10-12).
+                .filter(session -> session.get("personalizedRecipe") instanceof Map<?, ?> recipe
+                        && recipe.get("ingredients") instanceof List<?> ingredients && !ingredients.isEmpty())
                 .map(session -> new PreviousAgentState(
                         candidateFromMap(map(session.containsKey("originalRecipe")
                                 ? session.get("originalRecipe")
@@ -327,6 +438,42 @@ public class RecipeAgentOrchestrator {
                         contextFromMap(map(session.get("contextSnapshot")), userId),
                         sourceDocuments(session.get("sourceEvidence")),
                         stringList(session.get("appliedModifiers"))));
+    }
+
+    // 이 대화에서 요리별로 보여 준 출처입니다. 직전 답이 실패한 답이어도 기록은 읽습니다.
+    private java.util.Map<String, List<String>> shownSourcesByDish(Optional<Map<String, Object>> storedSession) {
+        try {
+            Object raw = storedSession.map(session -> session.get("shownSourcesByDish")).orElse(null);
+            java.util.Map<String, List<String>> shown = new java.util.LinkedHashMap<>();
+            map(raw).forEach((key, value) -> shown.put(String.valueOf(key), stringList(value)));
+            return shown;
+        } catch (RuntimeException e) {
+            return java.util.Map.of();
+        }
+    }
+
+    // 이번 답의 출처를 요리별 기록에 더합니다. 요리 10개, 요리당 주소 20개까지만 둡니다.
+    private java.util.Map<String, List<String>> withShownSources(
+            java.util.Map<String, List<String>> before, String dish, List<RecipeSourceDocument> sources) {
+        java.util.LinkedHashMap<String, List<String>> merged = new java.util.LinkedHashMap<>(before);
+        String key = dishKey(dish);
+        if (key.isBlank()) {
+            return merged;
+        }
+        java.util.LinkedHashSet<String> urls = new java.util.LinkedHashSet<>(merged.getOrDefault(key, List.of()));
+        sources.stream().map(RecipeSourceDocument::url)
+                .filter(url -> url != null && !url.isBlank() && !url.contains("salus.internal"))
+                .forEach(urls::add);
+        merged.remove(key);
+        merged.put(key, urls.stream().skip(Math.max(0, urls.size() - 20)).toList());
+        while (merged.size() > 10) {
+            merged.remove(merged.keySet().iterator().next());
+        }
+        return merged;
+    }
+
+    private String dishKey(String dish) {
+        return RecipeCandidate.normalize(canonicalDishTerms(dish == null ? "" : dish));
     }
 
     // 아래 private 메서드들은 JSON에서 읽은 Map/List 값을 타입에 맞게 안전하게 꺼내는 변환 도우미입니다.
@@ -434,12 +581,38 @@ public class RecipeAgentOrchestrator {
      * 이번 요청이 이전 세션 레시피에 대한 후속 요청인지(재료 변경, 세부 질문 등) 판단합니다.
      * 새로운 요리 이름이 명시되어 있고 이전 요리와 다르면 새로운 요리 요청으로 보고 이전 레시피를 재사용하지 않습니다.
      */
+    /**
+     * 카드에 보여 줄 참고 출처입니다. 내부 DB(승인 카탈로그) 출처는 검토된 출처로 표시하고, 내부 주소는 링크로 내보내지 않습니다.
+     * 같은 주소는 한 번만 보여 줍니다.
+     */
+    static List<ChatDto.SourceLink> sourceLinks(List<RecipeSourceDocument> sources) {
+        java.util.LinkedHashMap<String, ChatDto.SourceLink> links = new java.util.LinkedHashMap<>();
+        for (RecipeSourceDocument source : sources == null ? List.<RecipeSourceDocument>of() : sources) {
+            boolean reviewed = source.sourceType() == RecipeSourceType.INTERNAL_DB;
+            String url = source.url() == null || source.url().isBlank() || source.url().contains("salus.internal")
+                    ? null : source.url();
+            String title = source.title() == null || source.title().isBlank()
+                    ? (reviewed ? "Salus 검토 레시피" : "웹 레시피") : source.title();
+            links.putIfAbsent(url == null ? "title:" + title : url, new ChatDto.SourceLink(title, url, reviewed));
+        }
+        List<ChatDto.SourceLink> result = links.values().stream().limit(3).toList();
+        // 출처가 여럿이면 첫 출처(레시피를 만든 출처)를 대표로 표시하고 나머지는 비교한 출처입니다.
+        if (result.size() > 1) {
+            result.get(0).setPrimary(true);
+        }
+        return result;
+    }
+
     // "다른 레시피", "다른 버전", "다른 방법"처럼 같은 요리의 다른 출처를 묻는지 봅니다.
     static boolean asksForAnotherSource(String message) {
         String compact = message == null ? "" : message.replaceAll("\\s+", "");
         return compact.contains("다른") && (compact.contains("레시피") || compact.contains("버전")
                 || compact.contains("방법") || compact.contains("만드는법"));
     }
+
+    // 재료를 빼 달라는 요청 표현입니다.
+    private static final java.util.regex.Pattern REMOVAL_REQUEST = java.util.regex.Pattern.compile(
+            "빼\\s*(?:줘|주세요|줄래|고|달라)|제외|알레르기|알러지");
 
     private boolean isFollowUpToPreviousRecipe(PreviousAgentState previous, RecipeResearchPlan plan, String message) {
         if (previous == null || previous.originalRecipe() == null) {
@@ -452,6 +625,16 @@ public class RecipeAgentOrchestrator {
         // "깻잎 말고 상추 넣어줘", "좀 더 자세히 설명해줘"는 요리 이름이 없는 후속 요청입니다. 요청 분석이 메시지 전체나
         // "상추 넣어줘"를 요리 이름으로 잡아 새로 검색하던 문제를 막습니다.
         if (IngredientEdits.isFollowUpOnPreviousRecipe(message)) {
+            return true;
+        }
+        // "배 알러지 있다고"처럼 알레르기만 말하면 직전 레시피에 반영해 달라는 뜻입니다. 이 말을 요리 이름으로 읽어
+        // 새로 검색하지 않습니다(2026-10-14). "레시피"·"만드는 법"이 있으면 새 요리 요청으로 둡니다.
+        if (requestPlanner.mentionsAllergy(message) && !message.contains("레시피") && !message.contains("만드는")) {
+            return true;
+        }
+        // "그거 좀 빼줘"처럼 재료 이름 없이 빼 달라고 하면 직전 레시피에 대한 요청입니다. 새 요리로 검색하지 않고
+        // 어떤 재료인지 되묻습니다.
+        if (REMOVAL_REQUEST.matcher(message).find() && !message.contains("레시피") && !message.contains("만드는")) {
             return true;
         }
         String newDish = plan == null ? "" : plan.dishName();

@@ -168,7 +168,47 @@ class RecipeSourceQualityAssessor {
         if (normalizedTitle.isBlank()) {
             return false;
         }
-        return normalizedTitle.contains(requested) || requested.contains(normalizedTitle);
+        if (normalizedTitle.contains(requested) && isComponentOf(requested, normalizedTitle)) {
+            return false;
+        }
+        return normalizedTitle.contains(requested) || requested.contains(normalizedTitle)
+                || containsAllWords(requestedDish, title);
+    }
+
+    /**
+     * 요청한 이름의 낱말이 순서와 상관없이 모두 들어 있는지 봅니다("류수영 어남선생 제육볶음" ↔ "어남선생 류수영 제육볶음").
+     * 2026-10-14 낱말 순서만 달라 맞는 페이지를 모두 거름. 낱말이 둘 이상이고 각 낱말이 두 글자 이상일 때만 씁니다.
+     */
+    static boolean containsAllWords(String requested, String text) {
+        if (requested == null || text == null) {
+            return false;
+        }
+        List<String> words = java.util.Arrays.stream(requested.trim().split("\\s+"))
+                .map(RecipeCandidate::normalize)
+                .filter(word -> !word.isBlank())
+                .toList();
+        if (words.size() < 2 || words.stream().anyMatch(word -> word.length() < 2)) {
+            return false;
+        }
+        String compact = RecipeCandidate.normalize(text);
+        return words.stream().allMatch(compact::contains);
+    }
+
+    // 요리 이름 바로 뒤에 붙으면 그 요리가 아니라 재료·부속을 만드는 레시피입니다("부대찌개양념장", "떡볶이소스").
+    // 2026-10-14 "부대찌개 레시피"에 양념장 레시피 4단계를 답함. "양념"은 "닭갈비 양념 황금레시피"처럼 완성 요리
+    // 제목에도 흔해 넣지 않습니다.
+    private static final List<String> COMPONENT_SUFFIXES = List.of("양념장", "소스", "육수", "드레싱", "시즈닝", "밀키트");
+
+    // 제목에 요리 이름이 여러 번 나오면("떡볶이소스로 만든 떡볶이") 한 번이라도 부속 없이 나오면 그 요리로 봅니다.
+    private boolean isComponentOf(String requested, String normalizedTitle) {
+        for (int index = normalizedTitle.indexOf(requested); index >= 0;
+             index = normalizedTitle.indexOf(requested, index + 1)) {
+            String after = normalizedTitle.substring(index + requested.length());
+            if (COMPONENT_SUFFIXES.stream().noneMatch(suffix -> after.startsWith(suffix) && !requested.endsWith(suffix))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // 같은 재료의 다른 표기를 하나로 맞춥니다. "쇠고기무국" 요청이 "소고기무국" 출처를 거절하던 문제를 막습니다.
@@ -305,6 +345,10 @@ class StructuredRecipePageAdapter {
                     if (!qualityScore.usable() && !isIngredientsOnlyEvidence(qualityScore)) {
                         continue;
                     }
+                    // 뺀 재료 없이 만드는 레시피를 찾는 중이면 그 재료가 든 출처는 후보로 세지 않습니다.
+                    if (containsAvoidedIngredient(plan, evidence)) {
+                        continue;
+                    }
                     candidates.add(toSourceCandidate(plan, evidence, qualityScore));
                 }
             } catch (SafeWebPageFetchException e) {
@@ -321,6 +365,38 @@ class StructuredRecipePageAdapter {
                 .toList();
     }
 
+    // 재료 목록에 없고 조리 순서에만 적힌 경우도 봅니다(2026-10-12 오징어김치전: 재료 목록에 오징어가 빠져 있음).
+    private static final java.util.regex.Pattern COLLECTION_TITLE = java.util.regex.Pattern.compile(
+            "모음|총정리|모아\\s*보기|모아봤|베스트|BEST|\\d+\\s*가지");
+
+    static boolean isCollectionWithoutDish(String title, String dishName) {
+        if (title == null || !COLLECTION_TITLE.matcher(title).find()) {
+            return false;
+        }
+        String dish = dishName == null ? "" : dishName.replaceAll("\\s+", "");
+        return dish.isBlank() || !title.replaceAll("\\s+", "").contains(dish);
+    }
+
+    // 로그용 도메인입니다. 주소가 이상해도 예외를 던지지 않습니다.
+    private static String hostOf(String url) {
+        try {
+            String host = url == null ? null : java.net.URI.create(url).getHost();
+            return host == null ? "?" : host;
+        } catch (RuntimeException e) {
+            return "?";
+        }
+    }
+
+    private static boolean containsAvoidedIngredient(RecipeResearchPlan plan, ExtractedRecipeEvidence evidence) {
+        if (plan == null || plan.avoidIngredients().isEmpty()) {
+            return false;
+        }
+        List<String> texts = new ArrayList<>();
+        evidence.ingredients().forEach(line -> texts.add(java.util.Objects.toString(line.originalText(), "")));
+        evidence.steps().forEach(step -> texts.add(java.util.Objects.toString(step.text(), "")));
+        return CompositeRecipeSourceDiscoveryAdapter.containsAvoided(String.join("\n", texts), plan.avoidIngredients());
+    }
+
     /**
      * 사용할 수 있는 구조화 출처가 하나도 없을 때만 본문 추출을 시도합니다.
      * 한 페이지에 1~2분이 걸리므로 검색 순위가 높은 페이지부터 최대 maxTextExtractionPages개만 보고,
@@ -330,22 +406,42 @@ class StructuredRecipePageAdapter {
         if (textExtractor == null || !textExtractor.enabled() || plan == null || pages.isEmpty()) {
             return List.of();
         }
+        // 뺀 재료 없이 만드는 레시피를 다시 찾을 때(대안 검색)는 블로그 본문 추출(페이지당 LLM 50~60초)을 하지 않습니다.
+        // 대안은 덤으로 한 번 더 찾는 것이라, 여기서 3분을 넘기면 첫 결과까지 버려집니다(2026-10-14 깍두기 "무 말고":
+        // 대안 검색 본문 추출로 240초를 넘겨 요청 시간 초과·빈 답변, 육회 "배 알러지": 175초 쓰고도 대안 없음).
+        if (!plan.avoidIngredients().isEmpty()) {
+            log.info("[RecipeTextExtraction] Skipped. reason=ALTERNATIVE_SEARCH, pages={}", pages.size());
+            return List.of();
+        }
         List<RecipeSourceCandidate> textCandidates = new ArrayList<>();
         com.salus.healthytable.service.ChatProgress.report("블로그 글에서 레시피를 옮겨 적고 있어요");
         // 요청한 요리 이름이 적힌 페이지만 봅니다(검색 순위 유지). 이름이 없는 페이지는 거의 항상 근거 확인
         // (DISH_NOT_GROUNDED_IN_SOURCE)에서 떨어져 LLM 호출(페이지당 30~60초)만 버립니다. 2026-10-09 없는 요리
         // "쿼르텔바즈 스튜"가 이런 페이지 두 곳을 추출하느라 92초 걸린 뒤 "찾지 못함"으로 답했습니다.
         // 대가: 다른 이름으로만 적힌 페이지("두쫀쿠"를 물었는데 "두바이 쫀득쿠키"만 적힘)는 본문 추출을 하지 않습니다.
+        // "편스토랑 레시피 모음"처럼 여러 요리를 모은 글은 제목에 요청한 요리 이름이 없으면 보지 않습니다. 본문 어딘가에
+        // 요리 이름이 있어도 다른 요리 레시피를 옮겨 적기 쉽습니다(2026-10-14 "편스토랑 마늘간장치킨").
         List<WebPageFetchResult> ordered = pages.stream()
                 .filter(page -> textExtractor.namesDish(plan.dishName(), page))
+                .filter(page -> !isCollectionWithoutDish(textExtractor.pageTitle(page), plan.dishName()))
                 .toList();
         if (ordered.isEmpty()) {
-            log.info("[RecipeTextExtraction] Skipped. reason=NO_PAGE_NAMES_DISH, pages={}", pages.size());
+            // 사이트가 차단·안내 페이지를 200으로 돌려주면 여기로 옵니다. 원인을 가리도록 도메인·크기·제목을 남깁니다
+            // (2026-10-14 서버 시작 직후 비빔국수가 페이지 5개 모두 이름 없음으로 끝나고, 다시 물으면 정상).
+            log.info("[RecipeTextExtraction] Skipped. reason=NO_PAGE_NAMES_DISH, pages={}, samples={}", pages.size(),
+                    pages.stream().limit(5).map(page -> hostOf(page.finalUrl()) + ":" + page.statusCode()
+                            + ":" + (page.body() == null ? 0 : page.body().length()) + ":"
+                            + textExtractor.pageTitle(page).replaceAll("\\s+", " ").trim()).toList());
             return List.of();
         }
         for (WebPageFetchResult page : ordered.subList(0, Math.min(ordered.size(), maxTextExtractionPages))) {
             Optional<ExtractedRecipeEvidence> evidence = textExtractor.extract(plan.dishName(), page);
             if (evidence.isEmpty()) {
+                continue;
+            }
+            // 뺀 재료가 든 글이면 다음 페이지를 봅니다(2026-10-12 "오징어 없는 김치전"을 찾다 첫 글도 오징어김치전이라
+            // 거기서 멈추고 결과 없음으로 끝남).
+            if (containsAvoidedIngredient(plan, evidence.get())) {
                 continue;
             }
             RecipeSourceQualityScore qualityScore = qualityAssessor.assess(plan, evidence.get());
@@ -658,6 +754,19 @@ class InMemoryRecipeSourceCache {
         return Optional.of(cached);
     }
 
+    // 대표 레시피와 함께 비교한 출처 문서(재료와 링크만)입니다. 대표와 같은 기간만 둡니다.
+    private final Map<String, List<RecipeSourceDocument>> supporting = new ConcurrentHashMap<>();
+
+    void putSupporting(String key, List<RecipeSourceDocument> documents) {
+        if (key != null && !key.isBlank() && documents != null) {
+            supporting.put(key, List.copyOf(documents));
+        }
+    }
+
+    List<RecipeSourceDocument> supporting(String key) {
+        return get(key).isPresent() ? supporting.getOrDefault(key, List.of()) : List.of();
+    }
+
     void put(String key, RecipeSourceCandidate candidate) {
         if (key == null || key.isBlank() || candidate == null) {
             return;
@@ -680,7 +789,21 @@ class InMemoryRecipeSourceCache {
     // v5(2026-10-09): 본문 추출 때 요청한 요리 이름이 적힌 페이지를 먼저 봄.
     // v6(2026-10-09): 요약 첫 요청부터 원문의 온도·시간·불 세기를 넣을 정보로 알려 줌(저장된 요약이 달라짐).
     // (v6 유지) 요리 이름이 없는 페이지는 본문 추출을 건너뜀. 저장된 출처는 계속 쓰므로 버전은 올리지 않음.
-    static final String SELECTION_VERSION = "v6";
+    // v7(2026-10-12): 요약이 원문에 없는 분량·단위를 쓰면 버림(짬뽕탕 2T→2t), "STEP n" 표기 제거. 이전 요약은 다시 만듦.
+    // v8(2026-10-12): 요약에서 후기·권유 단계와 팁·반복 단계를 뺌.
+    // v9(2026-10-12): 요약 길이 강제 제한 제거(문장 잘림), 한글 숫자 분량을 바뀐 값으로 봄, 조건·동작 관계 보존 지시.
+    // v10(2026-10-12): 한글 숫자 분량 단위에 줌·잔·개·대 등 추가("한 줌" → "한 잔" 변경을 거름).
+    // v11(2026-10-12): 요약이 원문 마지막 조리 단계를 빼먹으면 다시 요청·거름, 뺀 재료가 든 출처는 후보에서 뺌.
+    // v12(2026-10-13): 끝 단계만 빠진 요약은 재요청 없이 버림(원문 사용), 끝 단계 비교에서 장소 낱말 제외,
+    //                   조리 순서에만 나오는 뺀 재료도 거름.
+    // v13(2026-10-14): 요약 칸 10~15개(원문 단계 수에 맞춤), 원문 단계의 재료가 요약에서 빠지면 거름,
+    //                   원문과 반대 지시(뚜껑 열기↔덮기, 센 불↔약불, 찬물↔끓는 물)면 다시 요청·거름(곱도리탕).
+    // v14(2026-10-14): 요리 이름 뒤에 양념장·소스 등이 붙은 부속 레시피 제외(부대찌개 → 양념장), 재료 보존 검사는
+    //                   원문 마지막 조리 단계 두 개만 봄(떡국 재료 나열 단계 오탐).
+    // v15(2026-10-14): 원문에 없는 값·반대 지시가 생긴 요약은 재요청 없이 버림(재요청 성공률 8%), 카드 제목의 "/" 정리.
+    // v16(2026-10-14): 저장 전 단계 정리(다른 변형 레시피 단계 제외, 원문 소제목 번호 정리).
+    // v17(2026-10-14): 제목에 기본 요리 이름이 단독으로 있으면 변형 단계 제외(요리픽 비빔국수 제목에 변형 이름 나열).
+    static final String SELECTION_VERSION = "v17";
 
     String key(RecipeResearchPlan plan) {
         if (plan == null) {
@@ -731,16 +854,19 @@ final class RecipeDisplayTitle {
         // "배떡 로제떡볶이" → "로제떡볶이"). 꾸밈말은 버리고 "로제"처럼 요리 이름에 붙은 변형은 남습니다.
         String compactDish = RecipeCandidate.normalize(dish);
         if (!compactDish.isBlank()) {
-            for (String word : cleaned.split(" ")) {
-                if (RecipeCandidate.normalize(word).contains(compactDish) && word.length() <= MAX_LENGTH) {
-                    return word;
+            // "/"로 이어 쓴 제목도 낱말로 나누고, 낱말 앞뒤 기호는 뗍니다(2026-10-14 "감자조림/" 제목).
+            for (String word : cleaned.split("[\\s/]+")) {
+                String trimmed = word.replaceAll("^[^가-힣a-zA-Z0-9]+|[^가-힣a-zA-Z0-9]+$", "");
+                if (RecipeCandidate.normalize(trimmed).contains(compactDish) && trimmed.length() <= MAX_LENGTH) {
+                    return trimmed;
                 }
             }
         }
-        // 요리 이름이 없는 제목은 요청한 이름과 글자가 절반 이상 겹치고(두쫀쿠 → "두바이 쫀득 쿠키") 꾸미는 말로
-        // 끝나지 않을 때만 씁니다. "누구나 한번쯤 해봤다는", "SNS대란템"은 요리 이름이 아니므로 요청한 이름을 씁니다.
+        // 요리 이름이 없는 제목은 요청한 이름의 글자가 순서대로 모두 들어 있는 줄임말 관계일 때만 씁니다
+        // (두쫀쿠 → "두바이 쫀득 쿠키"). 그 밖에는 요청한 이름을 씁니다: "누구나 한번쯤 해봤다는", "SNS대란템",
+        // 2026-10-12 "골뱅이소면"을 물었는데 "백종원 골뱅이무침"이 제목으로 나옴(글자가 절반 넘게 겹친다는 이유).
         if (cleaned.length() >= 2 && cleaned.length() <= MAX_LENGTH && !MODIFIER_ENDING.matcher(cleaned).find()
-                && (compactDish.isBlank() || sharedCharRatio(compactDish, RecipeCandidate.normalize(cleaned)) >= 0.5)) {
+                && (compactDish.isBlank() || isSubsequence(compactDish, RecipeCandidate.normalize(cleaned)))) {
             return cleaned;
         }
         if (!dish.isBlank()) {
@@ -749,10 +875,17 @@ final class RecipeDisplayTitle {
         return cleaned.isBlank() ? "웹 레시피" : cleaned.substring(0, Math.min(cleaned.length(), MAX_LENGTH));
     }
 
-    private static double sharedCharRatio(String dish, String title) {
-        long distinct = dish.chars().distinct().count();
-        long shared = dish.chars().distinct().filter(c -> title.indexOf(c) >= 0).count();
-        return distinct == 0 ? 0 : (double) shared / distinct;
+    // 요청 이름의 글자가 제목 안에 순서대로 모두 있는지 봅니다("두쫀쿠" ⊂ "두바이쫀득쿠키").
+    private static boolean isSubsequence(String dish, String title) {
+        int position = 0;
+        for (char c : dish.toCharArray()) {
+            position = title.indexOf(c, position);
+            if (position < 0) {
+                return false;
+            }
+            position++;
+        }
+        return true;
     }
 
     static String clean(String title) {

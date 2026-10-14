@@ -32,7 +32,8 @@ class TavilySearchEngineTest {
                 .build());
         TavilySearchEngine engine = new TavilySearchEngine(
                 WebClient.builder().exchangeFunction(exchange),
-                "test-key");
+                "test-key",
+                3);
 
         SearchEngine.SearchResponse response = engine.search("김치찌개").block();
 
@@ -55,7 +56,8 @@ class TavilySearchEngineTest {
                 .build());
         TavilySearchEngine engine = new TavilySearchEngine(
                 WebClient.builder().exchangeFunction(exchange),
-                "test-key");
+                "test-key",
+                3);
 
         SearchEngine.SearchResponse response = engine.search("김치찌개").block();
 

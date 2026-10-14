@@ -57,6 +57,7 @@ class YouTubeRecipeSourceDiscoveryAdapter {
         try {
             List<YouTubeVideoSearchResult> searchResults = searchVideos(plan);
             if (searchResults.isEmpty()) {
+                log.info("[RecipeAgentYouTube] Searched. videos=0, candidates=0");
                 return List.of();
             }
             List<YouTubeVideoMetadata> metadata = metadata(searchResults.stream()
@@ -66,6 +67,8 @@ class YouTubeRecipeSourceDiscoveryAdapter {
             for (YouTubeVideoMetadata video : metadata) {
                 candidates.addAll(toCandidates(plan, video));
             }
+            // 유튜브가 실제로 출처를 냈는지 볼 수 있게 개수만 남깁니다(영상 제목·설명은 남기지 않음).
+            log.info("[RecipeAgentYouTube] Searched. videos={}, candidates={}", metadata.size(), candidates.size());
             return candidates.stream()
                     .sorted(Comparator.comparing((YouTubeRecipeSourceCandidate candidate) -> candidate.score().finalSourceScore()).reversed())
                     .map(YouTubeRecipeSourceCandidate::source)

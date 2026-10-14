@@ -66,4 +66,30 @@ class AgentAllergyRemovalSafetyTest {
         assertThat(result.valid()).isFalse();
         assertThat(result.reasons()).anyMatch(reason -> reason.contains("우유"));
     }
+
+    // 밀 알레르기에 간장·고추장은 차단하지 않고 성분 표시 확인을 안내합니다(2026-10-14 사용자 결정 "다").
+    // 진짜 밀 재료(밀가루)는 그대로 막고, 안내는 막히지 않은 알레르기에만 붙입니다.
+    @Test
+    void wheatAllergyGetsLabelCheckNoticeForSoySauceButStillBlocksFlour() {
+        UserRecipeContext wheat = new UserRecipeContext(1L, List.of("밀"), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+        RecipeCandidate jorim = new RecipeCandidate("감자조림", "", List.of("감자 2개", "진간장 4큰술", "물엿 2큰술"),
+                List.of("감자를 썬다.", "간장과 물엿을 넣고 조린다."), null, null, null, List.of("감자"), List.of(), List.of());
+
+        PolicyEvaluation evaluation = new AllergyPolicy(matcher).evaluate(jorim, wheat);
+
+        assertThat(evaluation.conflicts()).isEmpty();
+        assertThat(evaluation.modifications()).isEmpty();
+        assertThat(evaluation.userNotices()).singleElement().asString()
+                .startsWith("간장은 제품에 따라 밀 성분이 들어 있을 수 있어요.").contains("성분 표시");
+
+        RecipeCandidate jeon = new RecipeCandidate("감자전", "", List.of("감자 2개", "밀가루 2큰술", "간장 1큰술"),
+                List.of("감자를 간다.", "밀가루를 섞어 부친다."), null, null, null, List.of("감자"), List.of(), List.of());
+        PolicyEvaluation blocked = new AllergyPolicy(matcher).evaluate(jeon, wheat);
+        assertThat(blocked.conflicts()).isNotEmpty();
+        assertThat(blocked.userNotices()).noneMatch(notice -> notice.contains("성분 표시"));
+
+        // 다른 알레르기에는 이 안내가 붙지 않습니다.
+        UserRecipeContext egg = new UserRecipeContext(1L, List.of("계란"), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+        assertThat(new AllergyPolicy(matcher).evaluate(jorim, egg).userNotices()).isEmpty();
+    }
 }

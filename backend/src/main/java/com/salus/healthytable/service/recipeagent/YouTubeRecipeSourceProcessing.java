@@ -431,6 +431,14 @@ class YouTubeExternalLinkResolver {
                 || host.contains("open.kakao.com")) {
             return YouTubeExternalLinkType.SOCIAL_MEDIA;
         }
+        // 배경음악 출처 표시·음원·링크 모음 서비스도 레시피 페이지가 아닙니다(2026-10-14 bensound.com을 레시피 후보로 가져옴).
+        if (List.of("bensound.com", "epidemicsound.com", "artlist.io", "soundcloud.com", "spotify.com", "melon.com",
+                        "music.youtube.com", "linktr.ee", "litt.ly", "link.inpock.co.kr", "instabio.cc",
+                        // 방송사 홈페이지(2026-10-14 설명란의 mbn.co.kr을 레시피 후보로 가져옴)
+                        "mbn.co.kr", "kbs.co.kr", "imbc.com", "sbs.co.kr", "jtbc.co.kr", "tving.com", "tvn.cjenm.com", "ichannela.com", "tvchosun.com")
+                .stream().anyMatch(host::contains)) {
+            return YouTubeExternalLinkType.SOCIAL_MEDIA;
+        }
         if (host.contains("coupang.com")
                 || host.contains("gmarket.co.kr")
                 || host.contains("11st.co.kr")

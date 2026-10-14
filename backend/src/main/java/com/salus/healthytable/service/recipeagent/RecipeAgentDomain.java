@@ -48,6 +48,12 @@ record UserRecipeContext(
         return new UserRecipeContext(userId, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
+    // 제외 재료를 이번 요청에서 뺀 재료로만 바꿉니다(다른 요리 요청에 이전 대화의 제외 재료를 끌고 가지 않기 위해).
+    UserRecipeContext withOnlyExplicitlyExcludedIngredients(List<String> exclusions) {
+        return new UserRecipeContext(userId, allergies, chronicConditions, dietaryRestrictions, medications, healthGoals,
+                fridgeIngredients, exclusions == null ? List.of() : List.copyOf(new LinkedHashSet<>(exclusions)));
+    }
+
     // 기존 제외 재료에 새 제외 재료를 합친 새 객체를 반환합니다(record는 불변이라 수정 대신 새로 만듭니다).
     UserRecipeContext withExplicitlyExcludedIngredients(List<String> exclusions) {
         LinkedHashSet<String> mergedExclusions = new LinkedHashSet<>(explicitlyExcludedIngredients);
@@ -375,8 +381,14 @@ record RecipeResearchPlan(
      * "다른 두쫀쿠 레시피"처럼 이미 보여 준 출처를 빼고 같은 요리를 다시 찾는 계획입니다.
      */
     RecipeResearchPlan withExcludedSources(List<String> urls) {
+        // 이미 보여 준 출처를 빼면 후보가 모자라기 쉬워 검색어를 넓힙니다(2026-10-12 짬뽕탕: 검색어당 결과 3개뿐).
+        java.util.LinkedHashSet<String> queries = new java.util.LinkedHashSet<>(searchQueries);
+        if (dishName != null && !dishName.isBlank()) {
+            queries.add(dishName + " 황금레시피");
+            queries.add(dishName + " 만들기");
+        }
         return new RecipeResearchPlan(dishName, creatorName, mode, latestSourceRequested, useFridgeIngredients,
-                personalizationRequired, searchQueries, maxSearchAttempts, maxSources, avoidIngredients, urls);
+                personalizationRequired, List.copyOf(queries), maxSearchAttempts, maxSources, avoidIngredients, urls);
     }
 }
 
@@ -439,7 +451,10 @@ record RecipeAgentSession(
         UserRecipeContext contextSnapshot,
         List<String> appliedModifiers,
         List<RecipeSourceDocument> sourceEvidence,
-        UserRecipeContextLoadStatus contextLoadStatus
+        UserRecipeContextLoadStatus contextLoadStatus,
+        // 이 대화에서 요리별로 보여 준 출처 주소입니다. "다른 레시피" 요청 때 모두 뺍니다(직전 답만 빼면 중간에 다른 요리를
+        // 물은 뒤 같은 출처를 다시 보여 줌, 2026-10-14 삼겹살 배추찜).
+        java.util.Map<String, List<String>> shownSourcesByDish
 ) {
     // 출처 근거 없이 만드는 보조 생성자. 사용자 ID가 없으면 NOT_REGISTERED, 있으면 LOADED로 봅니다.
     RecipeAgentSession(
@@ -457,13 +472,15 @@ record RecipeAgentSession(
                 List.of(),
                 contextSnapshot == null || contextSnapshot.userId() == null
                         ? UserRecipeContextLoadStatus.NOT_REGISTERED
-                        : UserRecipeContextLoadStatus.LOADED);
+                        : UserRecipeContextLoadStatus.LOADED,
+                java.util.Map.of());
     }
 
     RecipeAgentSession {
         appliedModifiers = appliedModifiers == null ? List.of() : List.copyOf(appliedModifiers);
         sourceEvidence = sourceEvidence == null ? List.of() : List.copyOf(sourceEvidence);
         contextLoadStatus = contextLoadStatus == null ? UserRecipeContextLoadStatus.NOT_REGISTERED : contextLoadStatus;
+        shownSourcesByDish = shownSourcesByDish == null ? java.util.Map.of() : java.util.Map.copyOf(shownSourcesByDish);
     }
 }
 
@@ -688,6 +705,85 @@ record RecipeValidationResult(boolean valid, List<String> reasons) {
 // Recipe Agent 코드에서 공통으로 쓰는 문자열/목록 처리 유틸리티입니다.
 final class AgentText {
     private AgentText() {
+    }
+
+    /**
+     * 사용자가 뺀 재료를 출처에서 찾을 때 쓸 표기들입니다. "○○버섯"은 출처에 "○○"로만 적히는 경우가 많아
+     * 함께 찾습니다(2026-10-14 "팽이버섯은 빼줘"인데 재료가 "다양한버섯 (느타리/표고/팽이)"). 앞부분이 두 글자 이상일 때만 씁니다.
+     */
+    static List<String> exclusionForms(String excluded) {
+        if (excluded == null || excluded.isBlank()) {
+            return List.of();
+        }
+        String term = excluded.trim();
+        if (term.endsWith("버섯") && term.length() - 2 >= 2) {
+            return List.of(term, term.substring(0, term.length() - 2));
+        }
+        return List.of(term);
+    }
+
+    // 받침 여부로 주격 조사를 붙입니다("오징어가", "돼지고기가", "명란이"). 한글이 아니면 "이(가)"로 둡니다.
+    static String withSubjectParticle(String word) {
+        if (word == null || word.isBlank()) {
+            return "";
+        }
+        char last = word.charAt(word.length() - 1);
+        if (last < 0xAC00 || last > 0xD7A3) {
+            return word + "이(가)";
+        }
+        return word + ((last - 0xAC00) % 28 == 0 ? "가" : "이");
+    }
+
+    /**
+     * 텍스트에 재료가 나오는지 봅니다. 두 글자 이상은 공백·기호를 무시하고 포함 여부로, 한 글자("배", "무")는 낱말 단위로
+     * 봅니다(조사만 붙은 "배를", "배는"은 맞고 "배추", "배달", "두배"는 아님). 2026-10-14 "배는 빼줘".
+     */
+    static boolean mentions(String text, String ingredient) {
+        if (text == null || ingredient == null || ingredient.isBlank()) {
+            return false;
+        }
+        String term = ingredient.trim();
+        if (term.length() == 1) {
+            return singleSyllablePattern(term).matcher(text).find();
+        }
+        String normalized = RecipeCandidate.normalize(term);
+        return !normalized.isBlank() && RecipeCandidate.normalize(text).contains(normalized);
+    }
+
+    static boolean mentionsAny(List<String> texts, String ingredient) {
+        return texts != null && texts.stream().anyMatch(text -> mentions(text, ingredient));
+    }
+
+    // 한 글자 재료를 낱말로 찾는 정규식입니다. 앞은 한글이 아니고, 뒤는 한글이 아니거나 조사 한 글자입니다.
+    static java.util.regex.Pattern singleSyllablePattern(String term) {
+        return java.util.regex.Pattern.compile("(?<![가-힣])" + java.util.regex.Pattern.quote(term)
+                // 재료로 만든 낱말("배즙", "무채", "파채")도 그 재료입니다.
+                // "무에", "무에서", "무랑"도 그 재료입니다(2026-10-14 깍두기 "깍둑썬 무에"가 남음).
+                + "(?=$|[^가-힣]|(?:은|는|이|가|을|를|와|과|도|로|의|만|에|에서|랑)(?![가-힣])|채|즙|가루|슬라이스)");
+    }
+
+    // 받침 여부로 보조사 은/는을 붙입니다("간장은", "고추장은", "굴소스는"). 한글이 아니면 "은(는)"으로 둡니다.
+    static String withTopicParticle(String word) {
+        if (word == null || word.isBlank()) {
+            return "";
+        }
+        char last = word.charAt(word.length() - 1);
+        if (last < 0xAC00 || last > 0xD7A3) {
+            return word + "은(는)";
+        }
+        return word + ((last - 0xAC00) % 28 == 0 ? "는" : "은");
+    }
+
+    // 받침 여부로 목적격 조사를 붙입니다("깻잎을", "오이를"). 한글이 아니면 "을(를)"로 둡니다.
+    static String withObjectParticle(String word) {
+        if (word == null || word.isBlank()) {
+            return "";
+        }
+        char last = word.charAt(word.length() - 1);
+        if (last < 0xAC00 || last > 0xD7A3) {
+            return word + "을(를)";
+        }
+        return word + ((last - 0xAC00) % 28 == 0 ? "를" : "을");
     }
 
     // 정규화한 텍스트에 키워드 중 하나라도 포함되면 true입니다.

@@ -340,6 +340,144 @@ class ChatServiceSafetyTest {
         assertThat(ingredientSwap.getMessage()).isEqualTo("간장을 굴소스로 바꿔줘");
     }
 
+    // "불세기는 어떻게해?"는 일반 대화 LLM 대신 직전 레시피 단계에 적힌 값만으로 답합니다(게스트는 대화 기록의 레시피).
+    // 2026-10-12 일반 대화가 원문(중약불 한 곳)에 없는 "양파와 조개는 약불, 와인은 중불"을 지어냄.
+    @Test
+    void heatQuestionIsAnsweredFromRecipeStepsWithoutLlm() {
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("불세기는 어떻게해?");
+        request.setHistory(List.of(
+                new ChatDto.Message("user", "봉골레파스타 레시피 알려줘"),
+                new ChatDto.Message("model", """
+                        봉골레파스타 레시피입니다.
+
+                        [재료]
+                        - 카펠리니면 100g
+                        - 바지락 1줌
+
+                        [조리 순서]
+                        1. 마늘과 양파를 슬라이스한다.
+                        2. 면을 4분 삶는다.
+                        3. 팬에 올리브오일을 두르고 마늘과 페페로치노를 중약불에서 볶는다.
+                        4. 조개가 입을 벌리면 화이트와인을 넣는다.
+                        """)));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response.getReply()).contains("3단계").contains("중약불")
+                .contains("1, 2, 4단계: 원문에 불 세기가 적혀 있지 않아요").doesNotContain("약불,").doesNotContain("중불에서 끓");
+        verify(llmService, never()).getChatResponse(anyString(), any());
+    }
+
+    @Test
+    void stepValueAnswerUsesApprovedRecipeAnnotationsAndSaysWhenNothingIsWritten() {
+        assertThat(ChatFollowUpService.describeStepValues(List.of(
+                "감자와 당근을 넣고 끓인다. [불: 중불 / 시간: 18분 / 완료 기준: 감자가 익은 상태]",
+                "양파와 대파를 넣고 졸인다. [불: 중강불 / 시간: 7분 / 완료 기준: 국물이 걸쭉한 상태]"), true, true))
+                .contains("1단계(감자와 당근을 넣고 끓인다.): 불 중불, 18분").contains("2단계").contains("불 중강불, 7분");
+        assertThat(ChatFollowUpService.describeStepValues(List.of("마늘을 볶는다.", "면을 삶는다."), true, false))
+                .startsWith("이 레시피의 원문에는 불 세기가 적혀 있지 않아요.");
+    }
+
+    // "어떻게 삶아?"는 그 동작이 나오는 단계만 보여 주고, 단계에 없으면 지어내지 않고 원문을 안내합니다.
+    // 2026-10-12 "삶은 소면? 어떻게 삶아"가 일반 대화로 가서 71초 뒤 안내문만 받음.
+    @Test
+    void methodQuestionShowsMatchingStepsOrPointsToSource() {
+        assertThat(ChatFollowUpService.methodQuestionRoot("삶은 소면? 어떻게 삶아")).isEqualTo("삶");
+        assertThat(ChatFollowUpService.methodQuestionRoot("어떻게 구워요?")).isEqualTo("구워");
+        assertThat(ChatFollowUpService.methodQuestionRoot("김밥 마는 방법 알려줘")).isEqualTo("마는");
+        // 조리 방법이 아닌 질문은 잡지 않습니다.
+        assertThat(ChatFollowUpService.methodQuestionRoot("이거 말고 어떻게 해?")).isNull();
+        assertThat(ChatFollowUpService.methodQuestionRoot("재료는 어떻게 구해?")).isNull();
+        assertThat(ChatFollowUpService.methodQuestionRoot("어떻게 말해야 할지 모르겠어")).isNull();
+        assertThat(ChatFollowUpService.methodQuestionRoot("어떻게 찌개로 바꿔?")).isNull();
+        assertThat(ChatFollowUpService.methodQuestionRoot("볶음밥 어떻게 해?")).isNull();
+        assertThat(ChatFollowUpService.methodQuestionRoot("어떻게 볶음 요리로 바꿔?")).isNull();
+        assertThat(ChatFollowUpService.methodQuestionRoot("끓이는 방법 알려줘")).isEqualTo("끓");
+        assertThat(ChatFollowUpService.methodQuestionRoot("어떻게 볶아?")).isEqualTo("볶");
+
+        String answer = ChatFollowUpService.describeMethodSteps(List.of(
+                "물이 끓으면 소면을 넣고 3분 삶는다. [불: 강불 / 시간: 3분 / 완료 기준: 면이 투명]",
+                "찬물에 헹군다.",
+                "양념에 버무린다."), "삶");
+        assertThat(answer).contains("1단계: 물이 끓으면 소면을 넣고 3분 삶는다.")
+                .doesNotContain("[불:").doesNotContain("2단계").doesNotContain("3단계");
+        assertThat(ChatFollowUpService.describeMethodSteps(List.of("양념에 버무린다.", "그릇에 담는다."), "삶"))
+                .startsWith("이 레시피 단계에는 그 방법이 따로 적혀 있지 않아요.")
+                .contains("원문에서 확인해 주세요");
+    }
+
+    // 분량 기준 질문은 LLM 없이 원문 표기와 일반 계량 기준으로 답합니다(2026-10-14 "반 컵은 종이컵 기준이야?"에 LLM이 지어냄).
+    @Test
+    void amountUnitQuestionAnswersFromRecipeTextWithoutLlm() {
+        assertThat(ChatFollowUpService.amountQuestionUnit("화이트 와인 반 컵은 종이컵 기준이야?")).isEqualTo("컵");
+        assertThat(ChatFollowUpService.amountQuestionUnit("간장 1큰술은 몇 ml야?")).isEqualTo("큰술");
+        assertThat(ChatFollowUpService.amountQuestionUnit("컵라면 끓이는 법")).isNull();
+
+        String answer = ChatFollowUpService.describeAmountUnit(List.of("화이트 와인 1/2컵", "간장 3큰술"),
+                List.of("화이트 와인 반 컵을 냄비 가장자리로 붓는다.", "간장을 섞는다."), "컵");
+        assertThat(answer).contains("재료: 화이트 와인 1/2컵").contains("1단계: 화이트 와인 반 컵을")
+                .contains("원문에는 어떤 컵 기준인지 적혀 있지 않아요").contains("종이컵 1컵은 약 180ml")
+                .doesNotContain("소주");
+    }
+
+    // "명란이 안 들어간 계란말이!"처럼 제외 구절이 붙어도 남는 말이 아는 요리면 레시피 요청으로 보냅니다.
+    @Test
+    void bareDishNameWithExclusionClauseRoutesToRecipeAgent() {
+        ReflectionTestUtils.setField(chatService, "recipeAgentEnabled", true);
+        ReflectionTestUtils.setField(chatService, "recipeAgentInitialRoutingEnabled", true);
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        when(knownWebDishLookup.hasStoredSource("계란말이")).thenReturn(true);
+        when(recipeAgentOrchestrator.handle(any(), any(), any(), any()))
+                .thenReturn(Mono.just(new ChatDto.Response("agent response")));
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("명란이 안 들어간 계란말이!");
+
+        assertThat(chatService.processChat(Optional.empty(), request).block().getReply()).isEqualTo("agent response");
+        verify(llmService, never()).getChatResponse(anyString(), any());
+    }
+
+    // 직전에 같은 요리의 레시피를 물었으면 요리 이름만 다시 보내도 레시피 요청입니다(2026-10-14 "삼겹살 배추찜").
+    @Test
+    void bareDishNameRepeatingRecentRecipeRequestRoutesToRecipeAgent() {
+        ReflectionTestUtils.setField(chatService, "recipeAgentEnabled", true);
+        ReflectionTestUtils.setField(chatService, "recipeAgentInitialRoutingEnabled", true);
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        when(knownWebDishLookup.hasStoredSource(anyString())).thenReturn(false);
+        when(recipeAgentOrchestrator.handle(any(), any(), any(), any()))
+                .thenReturn(Mono.just(new ChatDto.Response("agent response")));
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("삼겹살 배추찜");
+        request.setHistory(List.of(new ChatDto.Message("user", "삼겹살 배추찜 레시피 알려줘")));
+
+        assertThat(chatService.processChat(Optional.empty(), request).block().getReply()).isEqualTo("agent response");
+        verify(llmService, never()).getChatResponse(anyString(), any());
+    }
+
+    // 직전 레시피의 조리 도구를 바꾸는 질문은 "전자레인지 마늘빵 레시피"로 바꿔 출처에서 다시 찾습니다.
+    // 2026-10-14 "오븐 없는데 전자레인지로는 안돼?"가 일반 대화로 가서 질문과 상관없는 안내문만 받음.
+    @Test
+    void equipmentSwitchQuestionSearchesVariantRecipe() {
+        ReflectionTestUtils.setField(chatService, "recipeAgentEnabled", true);
+        ReflectionTestUtils.setField(chatService, "recipeAgentInitialRoutingEnabled", true);
+        when(chatIntentClassifier.classify(anyString())).thenAnswer(invocation ->
+                ((String) invocation.getArgument(0)).contains("레시피")
+                        ? ChatIntentClassifier.ChatIntent.RECIPE_REQUEST : ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        org.mockito.ArgumentCaptor<ChatDto.Request> captured = org.mockito.ArgumentCaptor.forClass(ChatDto.Request.class);
+        when(recipeAgentOrchestrator.handle(any(), any(), captured.capture(), any()))
+                .thenReturn(Mono.just(new ChatDto.Response("agent response")));
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("오븐 없는데 전자레인지로는 안돼?");
+        request.setHistory(List.of(new ChatDto.Message("user", "마늘빵 레시피 알려줘"),
+                new ChatDto.Message("model", "[원본 레시피 기준]\n- 요리명: 마늘빵\n- 일반 구성: 바게트, 버터")));
+
+        assertThat(chatService.processChat(Optional.empty(), request).block().getReply()).isEqualTo("agent response");
+        assertThat(captured.getValue().getMessage()).isEqualTo("전자레인지 마늘빵 레시피 알려줘");
+        verify(llmService, never()).getChatResponse(anyString(), any());
+        assertThat(ChatService.previousDishFromHistory(List.of(new ChatDto.Message("model", "안녕하세요")))).isNull();
+    }
+
     // "크룽지!"처럼 요리 이름만 보내도, 근거가 저장된 요리면 레시피 요청으로 Recipe Agent에 보냅니다.
     @Test
     void bareKnownDishNameRoutesToRecipeAgent() {
@@ -1005,7 +1143,8 @@ class ChatServiceSafetyTest {
                         2,
                         ApprovedRecipeService.SpiceLevel.EXTREME,
                         2,
-                        List.of()));
+                        List.of(new ApprovedRecipeCatalogDefinition.SourceDefinition(
+                                "recipe", "Maangchi - Kimchi stew", "https://www.maangchi.com/recipe/kimchi-jjigae", "2026-08-01"))));
 
         ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
 
@@ -1014,6 +1153,12 @@ class ChatServiceSafetyTest {
         assertThat(response.getRecipe()).isNotNull();
         assertThat(response.getRecipe().getServings()).isEqualTo(2);
         assertThat(response.getRecipe().getCaloriesPerServing()).isEqualTo(360);
+        // 승인 레시피 카드에는 검증 출처를 링크로 담습니다(사람이 검토한 출처).
+        assertThat(response.getRecipe().getSources()).singleElement().satisfies(source -> {
+            assertThat(source.getTitle()).isEqualTo("Maangchi - Kimchi stew");
+            assertThat(source.getUrl()).isEqualTo("https://www.maangchi.com/recipe/kimchi-jjigae");
+            assertThat(source.isReviewed()).isTrue();
+        });
         verify(llmService, never()).getChatResponse(anyString(), any());
         verify(recipeAgentOrchestrator, never()).handle(any(), any(), any());
     }

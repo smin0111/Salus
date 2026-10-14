@@ -1,6 +1,7 @@
 package com.salus.healthytable.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,9 @@ public class FallbackSearchEngine implements SearchEngine {
     private final SearchEngine primary;
     private final SearchEngine secondary;
 
+    // 생성자가 둘이라 Spring이 쓸 생성자를 지정합니다. 없으면 기본 생성자를 찾다 서버가 뜨지 않습니다
+    // (search.provider=searxng, 2026-10-13 확인).
+    @Autowired
     public FallbackSearchEngine(SearxngSearchEngine primary) {
         this(primary, new DuckDuckGoSearchEngine());
     }

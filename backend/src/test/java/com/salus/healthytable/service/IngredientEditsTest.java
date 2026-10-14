@@ -48,4 +48,14 @@ class IngredientEditsTest {
         assertThat(IngredientEdits.dishSwitchTarget("그럼 참치김치찌개로 바꿔줘")).contains("참치김치찌개");
         assertThat(IngredientEdits.dishSwitchTarget("간장을 굴소스로 바꿔줘")).isEmpty();
     }
+
+    // "레시피를 좀 더 자세히"처럼 "레시피"가 들어가도 요리 이름이 없으면 직전 레시피를 자세히 해 달라는 요청입니다.
+    @Test
+    void detailRequestsWithoutDishNameFollowThePreviousRecipe() {
+        assertThat(IngredientEdits.isDetailRequest("레시피를 좀 더 자세히")).isTrue();
+        assertThat(IngredientEdits.isDetailRequest("나 초보라서 좀더 자세히 알려줘")).isTrue();
+        assertThat(IngredientEdits.isFollowUpOnPreviousRecipe("레시피를 좀 더 자세히")).isTrue();
+        assertThat(IngredientEdits.isDetailRequest("김치찌개 레시피 자세히 알려줘")).isFalse();
+        assertThat(IngredientEdits.isDetailRequest("김치전 레시피 알려줘")).isFalse();
+    }
 }

@@ -155,8 +155,21 @@ class AllergyPolicy implements RecipePersonalizationPolicy {
                     ConflictSeverity.HIGH,
                     "user-health-profile"));
             modifications.add(new RecipeModification(allergy, "REMOVE", null, "등록된 알레르기 때문에 제외"));
-            notices.add("일반적인 " + recipe.title() + "에는 " + allergy + "을(를) 넣는 경우가 있지만, "
+            notices.add("일반적인 " + recipe.title() + "에는 " + AgentText.withObjectParticle(allergy) + " 넣는 경우가 있지만, "
                     + allergy + " 알레르기 때문에 제외했습니다.");
+        }
+        // 차단 대상은 아니지만 제품에 따라 알레르겐이 들어 있을 수 있는 재료는 성분 표시 확인을 안내합니다
+        // (밀 알레르기의 간장·고추장, 2026-10-14 사용자 결정). 이미 충돌로 막힌 알레르기는 안내하지 않습니다.
+        List<String> conflicted = conflicts.stream().map(RecipeConflict::ingredient).toList();
+        for (String allergy : userContext.allergies()) {
+            if (conflicted.contains(allergy)) {
+                continue;
+            }
+            List<String> labelCheck = allergenMatcher.findLabelCheckTerms(allergy, texts);
+            if (!labelCheck.isEmpty()) {
+                notices.add(AgentText.withTopicParticle(String.join("·", labelCheck)) + " 제품에 따라 " + allergy + " 성분이 들어 있을 수 있어요. "
+                        + "사용하는 제품의 성분 표시에서 " + allergy + " 함유 여부를 확인해 주세요.");
+            }
         }
         return new PolicyEvaluation(conflicts, modifications, notices, List.of(), List.of());
     }
@@ -352,6 +365,26 @@ class DietaryRestrictionPolicy implements RecipePersonalizationPolicy {
 @Order(50)
 class ExplicitExclusionPolicy implements RecipePersonalizationPolicy {
 
+    // 사전에 있는 재료(돼지고기 → 삼겹살·목살 등)는 알레르기와 같은 매처로 파생 재료까지 봅니다.
+    private final AllergenMatcher allergenMatcher;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    ExplicitExclusionPolicy(AllergenMatcher allergenMatcher) {
+        this.allergenMatcher = allergenMatcher;
+    }
+
+    // 기본 알레르겐 사전으로 매처를 만들어 쓰는 생성자입니다(테스트용). 검사 강도는 운영과 같습니다.
+    ExplicitExclusionPolicy() {
+        this(defaultMatcher());
+    }
+
+    private static AllergenMatcher defaultMatcher() {
+        com.salus.healthytable.service.allergen.AllergenDictionary dictionary =
+                new com.salus.healthytable.service.allergen.AllergenDictionary();
+        dictionary.load();
+        return new AllergenMatcher(dictionary);
+    }
+
     @Override
     public PolicyEvaluation evaluate(RecipeCandidate recipe, UserRecipeContext userContext) {
         if (userContext == null || userContext.explicitlyExcludedIngredients().isEmpty()) {
@@ -359,19 +392,46 @@ class ExplicitExclusionPolicy implements RecipePersonalizationPolicy {
         }
         List<RecipeConflict> conflicts = new ArrayList<>();
         List<RecipeModification> modifications = new ArrayList<>();
+        List<String> texts = new ArrayList<>();
+        texts.add(recipe.title());
+        texts.addAll(recipe.ingredients());
+        texts.addAll(recipe.steps());
         for (String excluded : userContext.explicitlyExcludedIngredients()) {
-            if (!recipe.containsIngredient(excluded)) {
+            // 이름 대신 파생 재료로만 들어 있으면("돼지고기는 빼줘"인데 재료는 "삼겹살 200g") 이름을 지워도 남습니다.
+            // 2026-10-13 실전 평가에서 삼겹살 김치찌개가 "그대로 추천"으로 나감. 제거로 해결할 수 없으니 HIGH로 두어
+            // 그 재료 없이 만드는 레시피를 다시 찾게 하고, 최종 검증에서도 파생 재료를 검사합니다.
+            if (allergenMatcher.matchesBeyondLiteral(excluded, texts)) {
+                conflicts.add(new RecipeConflict(
+                        RecipeConflictType.USER_EXCLUSION,
+                        excluded,
+                        "사용자 제외 요청",
+                        "뺀 재료(" + excluded + ")가 다른 이름의 재료로 들어 있어 이름만 지워서는 뺄 수 없어요.",
+                        ConflictSeverity.HIGH,
+                        "user-request-derived"));
+                if (recipe.containsIngredient(excluded)) {
+                    modifications.add(new RecipeModification(excluded, "REMOVE", null, "사용자 제외 요청"));
+                }
                 continue;
             }
-            ConflictSeverity severity = recipe.isCoreIngredient(excluded) ? ConflictSeverity.HIGH : ConflictSeverity.CAUTION;
+            List<String> foundForms = AgentText.exclusionForms(excluded).stream()
+                    .filter(form -> AgentText.mentionsAny(texts, form))
+                    .toList();
+            if (foundForms.isEmpty()) {
+                continue;
+            }
+            // 한 글자 재료는 낱말 단위로 핵심 재료인지 봅니다("배"가 "배추김치"의 핵심 재료로 잡히지 않게).
+            boolean core = excluded.trim().length() == 1
+                    ? AgentText.mentionsAny(recipe.coreIngredients(), excluded) || AgentText.mentions(recipe.title(), excluded)
+                    : recipe.isCoreIngredient(excluded);
+            ConflictSeverity severity = core ? ConflictSeverity.HIGH : ConflictSeverity.CAUTION;
             conflicts.add(new RecipeConflict(
                     RecipeConflictType.USER_EXCLUSION,
                     excluded,
                     "사용자 제외 요청",
-                    recipe.isCoreIngredient(excluded) ? "제외 재료가 핵심 재료라 다른 메뉴 검토가 필요합니다." : "사용자가 명시적으로 제외를 요청했습니다.",
+                    core ? "제외 재료가 핵심 재료라 다른 메뉴 검토가 필요합니다." : "사용자가 명시적으로 제외를 요청했습니다.",
                     severity,
                     "user-request"));
-            modifications.add(new RecipeModification(excluded, "REMOVE", null, "사용자 제외 요청"));
+            foundForms.forEach(form -> modifications.add(new RecipeModification(form, "REMOVE", null, "사용자 제외 요청")));
         }
         return new PolicyEvaluation(conflicts, modifications, List.of(), List.of(), List.of());
     }

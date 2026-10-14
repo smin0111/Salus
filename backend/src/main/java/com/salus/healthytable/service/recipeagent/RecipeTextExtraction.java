@@ -198,6 +198,14 @@ class PageTextRecipeExtractor {
      * 페이지 제목이나 본문에 요청한 요리 이름이 그대로 적혀 있는지 봅니다. LLM을 부르지 않습니다.
      * 이름이 없는 페이지는 본문 추출(LLM 호출)을 하지 않습니다.
      */
+    // 페이지 제목입니다. 본문 추출(LLM) 전에 거를 때 씁니다.
+    String pageTitle(WebPageFetchResult page) {
+        if (page == null || page.body() == null) {
+            return "";
+        }
+        return Jsoup.parse(page.body()).title();
+    }
+
     boolean namesDish(String requestedDish, WebPageFetchResult page) {
         if (requestedDish == null || page == null || page.body() == null || compact(requestedDish).isBlank()) {
             return false;
@@ -207,7 +215,9 @@ class PageTextRecipeExtractor {
         // 쇠고기/소고기처럼 같은 요리의 다른 표기도 이름이 적힌 것으로 봅니다.
         return identity.contains(dish)
                 || identity.contains(dish.replace("쇠고기", "소고기"))
-                || identity.contains(dish.replace("소고기", "쇠고기"));
+                || identity.contains(dish.replace("소고기", "쇠고기"))
+                // 낱말 순서만 다른 경우("어남선생 류수영 제육볶음")도 이름이 적힌 것으로 봅니다.
+                || RecipeSourceQualityAssessor.containsAllWords(requestedDish, identity);
     }
 
     /**
@@ -330,7 +340,9 @@ class PageTextRecipeExtractor {
         Map<String, Object> step = new LinkedHashMap<>();
         step.put("type", "object");
         step.put("required", List.of("text"));
-        step.put("properties", Map.of("text", Map.of("type", "string", "maxLength", 120)));
+        // 글자 수를 문법으로 강제하면 모델이 길게 쓸 때 문장이 중간에서 잘립니다(2026-10-12 골뱅이소면 "…먹기 좋은 크기").
+        // 길이는 지시문으로만 요청합니다. 전체 출력은 num_predict로 막히고, 넘치면 응답 전체를 실패로 처리합니다.
+        step.put("properties", Map.of("text", Map.of("type", "string")));
         Map<String, Object> props = new LinkedHashMap<>();
         props.put("steps", Map.of("type", "array", "maxItems", 10, "items", step));
         Map<String, Object> schema = new LinkedHashMap<>();

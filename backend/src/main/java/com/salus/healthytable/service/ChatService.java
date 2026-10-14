@@ -20,6 +20,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -44,6 +45,8 @@ public class ChatService {
 
     // 요리 이름만 보낸 메시지 판별용: 끝의 문장부호·웃음 표기, 그리고 이름으로 볼 수 있는 모양(한글·영문·숫자 1~3단어)
     private static final Pattern BARE_DISH_TRAILING = Pattern.compile("[\\s!?.~…ㅋㅎ]+$");
+    private static final Pattern BARE_DISH_EXCLUSION = Pattern.compile(
+            "^\\s*[가-힣a-zA-Z]{1,12}(?:이|가|은|는|을|를)?\\s*(?:안\\s*들어간|없는|뺀|빼고|제외한)\\s+");
     private static final Pattern BARE_DISH_NAME = Pattern.compile("[가-힣a-zA-Z0-9]{2,}(?: [가-힣a-zA-Z0-9]+){0,2}");
 
     private final LlmService llmService; // GeminiService 대신 인터페이스 다형성 주입 적용
@@ -91,6 +94,7 @@ public class ChatService {
     public Mono<ChatDto.Response> processChat(Optional<Long> authenticatedUserId, ChatDto.Request request) {
         StringBuilder systemContext = new StringBuilder();
         rewriteDishSwitchRequest(request);
+        rewriteEquipmentSwitchRequest(request);
 
         // 1. 의도(Intent) 식별
         ChatIntentClassifier.ChatIntent intent = chatIntentClassifier.classify(request.getMessage());
@@ -101,7 +105,8 @@ public class ChatService {
         // 요리 이름일 때만 레시피 요청으로 봅니다(2026-10-09 실전 평가에서 일반 대화로 답하던 문제).
         boolean bareDishRequest = intent == ChatIntentClassifier.ChatIntent.GENERAL_CHAT
                 && !isDetailFollowUp
-                && isBareKnownDishName(request.getMessage(), approvedCandidate.isPresent());
+                && (isBareKnownDishName(request.getMessage(), approvedCandidate.isPresent())
+                    || repeatsRecentRecipeRequest(request));
         // 승인 레시피가 있고, 상세 설명 후속 요청이 아니며, 레시피를 요청하는 표현이 있으면 승인 레시피로 바로 답합니다.
         boolean approvedDirectRequest = approvedCandidate.isPresent()
                 && !isDetailFollowUp
@@ -150,6 +155,19 @@ public class ChatService {
                 saveChatMessage(chatSession, "user", request.getMessage());
                 saveChatMessage(chatSession, "model", approvedAdjustment.get().getReply());
                 return Mono.just(approvedAdjustment.get());
+            }
+        }
+
+        // 직전 레시피의 불 세기·시간 질문은 레시피에 적힌 값만으로 답합니다(일반 대화 LLM이 값을 지어내지 않게).
+        if (!classifiedRecipeRequest) {
+            Optional<ChatDto.Response> recipeQuestion = chatFollowUpService.buildRecipeQuestionAnswer(
+                    authenticatedUserIdValue, chatSession, request);
+            if (recipeQuestion.isPresent()) {
+                if (chatSession != null) {
+                    saveChatMessage(chatSession, "user", request.getMessage());
+                    saveChatMessage(chatSession, "model", recipeQuestion.get().getReply());
+                }
+                return Mono.just(recipeQuestion.get());
             }
         }
 
@@ -222,7 +240,9 @@ public class ChatService {
                         rendered.reply(),
                         chatSession != null,
                         false);
-                response.setRecipe(recipeResponseSanitizer.buildRecipeCard(rendered.recipe(), safetyNotes));
+                ChatDto.RecipeCard card = recipeResponseSanitizer.buildRecipeCard(rendered.recipe(), safetyNotes);
+                card.setSources(ApprovedRecipeService.sourceLinks(rendered));
+                response.setRecipe(card);
                 return Mono.just(response);
             // 렌더링할 수 없는 요청(지원하지 않는 조정 등)은 예외 메시지를 그대로 안내합니다.
             } catch (IllegalArgumentException | IllegalStateException error) {
@@ -381,7 +401,8 @@ public class ChatService {
                         String responseReply = reply;
                         if (!isLlmUnavailableReply(reply) && looksLikeRecipeResponse(reply)) {
                             logRequestFailure(intent.name(), request.getMessage(), "NON_RECIPE_INTENT_RECIPE_OUTPUT", null);
-                            responseReply = buildNonRecipeIntentReply(intent, request.getMessage());
+                            responseReply = buildNonRecipeIntentReply(intent, request.getMessage(),
+                                    previousDishFromHistory(request.getHistory()));
                         }
                         // 일반 대화 답변은 검증기를 거치지 않으므로 등록 알레르겐이 보이면 주의 문구를 붙입니다.
                         if (!isLlmUnavailableReply(reply)) {
@@ -559,16 +580,92 @@ public class ChatService {
                 .ifPresent(target -> request.setMessage(target + " 레시피 알려줘"));
     }
 
+    // 조리 도구를 바꾸는 질문입니다: "오븐 없는데 전자레인지로는 안돼?", "에어프라이어로 해도 돼?". 새로 쓸 도구를 잡습니다.
+    private static final Pattern EQUIPMENT_SWITCH = Pattern.compile(
+            "(전자레인지|에어\\s*프라이어|에프|프라이팬|후라이팬|냄비|찜기|밥솥|토스터\\s*오븐|토스터기|오븐|그릴)\\s*(?:으로|로)"
+                    + "\\s*(?:는|도|만)?\\s*(?:안\\s*돼|안\\s*되|돼|되|해도|하면|가능|만들|구워|구울|할\\s*수|어떻게|\\?|$)");
+    private static final Pattern PREVIOUS_DISH_LINE = Pattern.compile("요리명:\\s*([^\\n]+)");
+
+    /**
+     * 직전 레시피의 조리 도구를 바꾸는 질문을 "전자레인지 마늘빵 레시피 알려줘"로 바꿔 출처에서 다시 찾게 합니다.
+     * 원문에 없는 조리법을 LLM이 지어내지 않게 하기 위해서입니다(2026-10-14 마늘빵: 일반 대화로 가서 안내문만 받음).
+     */
+    private void rewriteEquipmentSwitchRequest(ChatDto.Request request) {
+        if (request == null || request.getMessage() == null || request.getMessage().contains("레시피")) {
+            return;
+        }
+        Matcher matcher = EQUIPMENT_SWITCH.matcher(request.getMessage());
+        if (!matcher.find()) {
+            return;
+        }
+        String dish = previousDishFromHistory(request.getHistory());
+        if (dish == null || dish.isBlank()) {
+            return;
+        }
+        String equipment = matcher.group(1).replaceAll("\\s+", "");
+        equipment = equipment.equals("에프") ? "에어프라이어" : equipment.equals("후라이팬") ? "프라이팬" : equipment;
+        request.setMessage(equipment + " " + dish + " 레시피 알려줘");
+    }
+
+    // 대화 기록의 마지막 레시피 답에서 요리 이름을 찾습니다("- 요리명: 마늘빵"). 없으면 null입니다.
+    static String previousDishFromHistory(List<ChatDto.Message> history) {
+        if (history == null) {
+            return null;
+        }
+        for (int i = history.size() - 1; i >= 0; i--) {
+            ChatDto.Message message = history.get(i);
+            if (message == null || !"model".equals(message.getRole()) || message.getContent() == null) {
+                continue;
+            }
+            Matcher matcher = PREVIOUS_DISH_LINE.matcher(message.getContent());
+            if (matcher.find()) {
+                return matcher.group(1).trim();
+            }
+        }
+        return null;
+    }
+
     // 요리 이름만 있는 메시지인지 봅니다. 끝의 느낌표·물음표·웃음 표기는 무시하고, 세 단어·20자 이내만 이름으로 봅니다.
     private boolean isBareKnownDishName(String message, boolean approvedMatch) {
         if (message == null) {
             return false;
         }
-        String name = BARE_DISH_TRAILING.matcher(message.trim()).replaceAll("").trim().replaceAll("\\s+", " ");
+        // "명란이 안 들어간 계란말이!"처럼 앞에 제외 구절이 있어도 남는 말이 아는 요리면 레시피 요청으로 봅니다.
+        String withoutExclusion = BARE_DISH_EXCLUSION.matcher(message.trim()).replaceAll("");
+        String name = BARE_DISH_TRAILING.matcher(withoutExclusion.trim()).replaceAll("").trim().replaceAll("\\s+", " ");
         if (!BARE_DISH_NAME.matcher(name).matches() || name.replaceAll("\\s+", "").length() > 20) {
             return false;
         }
-        return approvedMatch || knownWebDishLookup.hasStoredSource(name);
+        return approvedMatch
+                || (!name.equals(message.trim()) && approvedRecipeService.findApprovedMatch(name).isPresent())
+                || knownWebDishLookup.hasStoredSource(name);
+    }
+
+    /**
+     * 요리 이름만 보냈는데 최근 사용자 메시지(3개)에서 같은 요리의 레시피를 물었으면 레시피 요청으로 봅니다.
+     * 2026-10-14 "삼겹살 배추찜 레시피 알려줘" 답을 기다리다 화면이 초기화되어 "삼겹살 배추찜"을 다시 보냈더니
+     * 일반 대화 LLM으로 감(첫 요청이 아직 저장 전이라 저장된 요리로도 못 찾음).
+     */
+    private boolean repeatsRecentRecipeRequest(ChatDto.Request request) {
+        String message = request.getMessage();
+        if (message == null || request.getHistory() == null) {
+            return false;
+        }
+        String name = BARE_DISH_TRAILING.matcher(message.trim()).replaceAll("").trim();
+        if (!BARE_DISH_NAME.matcher(name).matches()) {
+            return false;
+        }
+        String compactName = name.replaceAll("\\s+", "");
+        if (compactName.length() < 2 || compactName.length() > 20) {
+            return false;
+        }
+        List<ChatDto.Message> userMessages = request.getHistory().stream()
+                .filter(item -> item != null && "user".equals(item.getRole()) && item.getContent() != null)
+                .toList();
+        return userMessages.subList(Math.max(0, userMessages.size() - 3), userMessages.size()).stream()
+                .map(item -> item.getContent().replaceAll("\\s+", ""))
+                .anyMatch(previous -> previous.contains(compactName)
+                        && (previous.contains("레시피") || previous.contains("만드는") || previous.contains("조리법")));
     }
 
     private boolean isDirectApprovedRecipeRequest(String message) {
@@ -593,7 +690,13 @@ public class ChatService {
     }
 
     // 레시피 요청이 아닌데 LLM이 레시피를 쓴 경우, 의도에 맞춰 대신 보여 줄 안내 문구를 고릅니다.
-    private String buildNonRecipeIntentReply(ChatIntentClassifier.ChatIntent intent, String message) {
+    // 직전 레시피가 있으면 그 요리로 다시 묻는 방법을 알려 줍니다(2026-10-14 마늘빵 "오븐 없는데 전자레인지로는 안돼?"에
+    // 질문과 상관없는 "음식명과 함께 '레시피'라고 말해 주세요"가 나감).
+    private String buildNonRecipeIntentReply(ChatIntentClassifier.ChatIntent intent, String message, String previousDish) {
+        if (previousDish != null && !previousDish.isBlank()) {
+            return "조리 방법이나 재료를 바꾸는 내용은 출처 없이 지어서 알려 드리지 않아요. '" + previousDish
+                    + "'을(를) 다르게 만드는 방법이 궁금하면 '전자레인지 " + previousDish + " 레시피 알려줘'처럼 말씀해 주시면 출처에서 찾아 드릴게요.";
+        }
         if (intent == ChatIntentClassifier.ChatIntent.MENU_RECOMMENDATION) {
             return "좋아요. 메뉴 추천으로만 짧게 도와드릴게요. 상세 레시피가 필요하면 음식명과 함께 '레시피'나 '만드는 법'이라고 말씀해 주세요.";
         }

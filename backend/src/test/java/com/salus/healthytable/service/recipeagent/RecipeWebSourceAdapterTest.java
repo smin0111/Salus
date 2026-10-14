@@ -137,6 +137,13 @@ class RecipeWebSourceAdapterTest {
         assertThat(assessor.dishMatches("쇠고기무국", "얼큰소고기무국 만드는 법")).isTrue();
         assertThat(assessor.dishMatches("소고기무국", "쇠고기무국")).isTrue();
         assertThat(assessor.dishMatches("쇠고기무국", "된장찌개 끓이는 법")).isFalse();
+        // 요리 이름 뒤에 양념장·소스 등이 붙으면 그 요리가 아니라 부속 레시피입니다(2026-10-14 부대찌개 → 양념장).
+        assertThat(assessor.dishMatches("부대찌개", "부대찌개 양념장 황금레시피")).isFalse();
+        assertThat(assessor.dishMatches("떡볶이", "떡볶이소스 만들기")).isFalse();
+        assertThat(assessor.dishMatches("떡볶이", "떡볶이소스로 만든 국물 떡볶이")).isTrue();
+        assertThat(assessor.dishMatches("떡볶이소스", "떡볶이소스 만들기")).isTrue();
+        assertThat(assessor.dishMatches("닭갈비", "닭갈비 양념 황금레시피")).isTrue();
+        assertThat(assessor.dishMatches("부대찌개", "부대찌개 끓이는 법")).isTrue();
     }
 
     // 네이버 블로그 PC 주소는 본문 없는 iframe만 오므로 같은 경로의 모바일 주소로 받습니다.
@@ -205,6 +212,32 @@ class RecipeWebSourceAdapterTest {
         assertThat(candidates).hasSize(2);
         assertThat(candidates).extracting(candidate -> candidate.evidence().creatorName())
                 .contains("Salus Kitchen", "다른 작성자");
+    }
+
+    // 뺀 재료 없이 만드는 레시피를 찾는 중이면 그 재료가 든 출처는 후보로 세지 않고 다음 출처를 봅니다.
+    // 2026-10-12 "오징어 안 들어간 김치전": 대안 검색의 첫 글도 오징어김치전이라 결과 없음으로 끝남.
+    @Test
+    void alternativeSearchSkipsSourcesContainingAvoidedIngredient() {
+        StructuredRecipePageAdapter adapter = structuredAdapter(Map.of(
+                "https://recipes.example.com/squid", recipeHtml("김치전", "A", List.of("오징어 1마리", "김치 1컵", "부침가루 1컵"),
+                        List.of("반죽을 만든다.", "팬에 부친다.")),
+                "https://recipes.example.com/plain", recipeHtml("김치전", "B", List.of("김치 1컵", "부침가루 1컵", "물 100ml"),
+                        List.of("반죽을 만든다.", "팬에 부친다.")),
+                // 재료 목록에는 없고 조리 순서에만 오징어가 나오는 글도 거릅니다.
+                "https://recipes.example.com/squid-in-steps", recipeHtml("김치전", "C", List.of("김치 1컵", "부침가루 1컵", "물 100ml"),
+                        List.of("반죽을 만든다.", "손질한 오징어를 넣고 섞는다.", "팬에 부친다."))));
+        RecipeResearchPlan plan = plan("김치전", "", List.of("오징어 없는 김치전 레시피")).withAvoidIngredients(List.of("오징어"));
+
+        List<RecipeSourceCandidate> candidates = adapter.collect(plan, List.of(
+                searchResult("https://recipes.example.com/squid", 1),
+                searchResult("https://recipes.example.com/plain", 2),
+                searchResult("https://recipes.example.com/squid-in-steps", 3)));
+
+        assertThat(candidates).isNotEmpty();
+        assertThat(candidates).allSatisfy(candidate -> {
+            assertThat(String.join(" ", candidate.originalRecipe().ingredients())).doesNotContain("오징어");
+            assertThat(String.join(" ", candidate.originalRecipe().steps())).doesNotContain("오징어");
+        });
     }
 
     // 작성자가 다른 출처를 요청한 크리에이터의 레시피로 사용하지 않아야 합니다.
@@ -324,7 +357,8 @@ class RecipeWebSourceAdapterTest {
         ChatDto.Response response = orchestrator.handle(1L, 10L, request).block();
 
         assertThat(response).isNotNull();
-        assertThat(response.getReply()).contains("검증된 레시피 출처를 확보하지 못해 전체 레시피를 임의 생성하지 않았습니다.");
+        assertThat(response.getReply()).contains("믿을 만한 출처에서 찾지 못했어요").contains("지어내지 않기 위해")
+                .doesNotContain("[원본 레시피 기준]");
         assertThat(response.getRecipe()).isNull();
     }
 

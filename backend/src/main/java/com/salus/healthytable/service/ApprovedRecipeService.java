@@ -829,6 +829,18 @@ public class ApprovedRecipeService implements ApplicationRunner {
     }
 
     // 렌더링 결과: 화면용 레시피, 답변 텍스트, 적용한 인분/맵기, 원본 버전, 출처
+    /**
+     * 승인 레시피의 검증 출처를 카드에 보여 줄 링크로 바꿉니다(사람이 검토한 출처).
+     */
+    public static List<com.salus.healthytable.dto.ChatDto.SourceLink> sourceLinks(RenderedRecipe rendered) {
+        if (rendered == null || rendered.sources() == null) {
+            return List.of();
+        }
+        return rendered.sources().stream()
+                .map(source -> new com.salus.healthytable.dto.ChatDto.SourceLink(source.name(), source.url(), true))
+                .toList();
+    }
+
     public record RenderedRecipe(
             Recipe recipe,
             String reply,

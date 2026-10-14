@@ -72,7 +72,8 @@ class YouTubeRecipeSourceAdapterTest {
             YouTubeApiClientAdapter adapter = new YouTubeApiClientAdapter(
                     WebClient.builder(),
                     "test-key",
-                    "http://127.0.0.1:" + server.getAddress().getPort());
+                    "http://127.0.0.1:" + server.getAddress().getPort(),
+                    allowAllQuota());
 
             List<YouTubeVideoSearchResult> search = adapter.search(new YouTubeRecipeSearchQuery(
                     "참치김밥 레시피",
@@ -115,7 +116,8 @@ class YouTubeRecipeSourceAdapterTest {
             YouTubeApiClientAdapter adapter = new YouTubeApiClientAdapter(
                     WebClient.builder(),
                     "",
-                    "http://127.0.0.1:" + server.getAddress().getPort());
+                    "http://127.0.0.1:" + server.getAddress().getPort(),
+                    allowAllQuota());
 
             assertThat(adapter.search(new YouTubeRecipeSearchQuery("김치찌개", "", "ko", "KR", false, YouTubeSearchOrder.RELEVANCE, 1))).isEmpty();
             assertThat(adapter.findByVideoIds(List.of("v1"))).isEmpty();
@@ -202,6 +204,10 @@ class YouTubeRecipeSourceAdapterTest {
                         YouTubeExternalLinkType.SHOPPING,
                         YouTubeExternalLinkType.AFFILIATE,
                         YouTubeExternalLinkType.UNKNOWN);
+        // 배경음악 출처·링크 모음은 레시피 후보가 아닙니다(2026-10-14 bensound.com을 가져옴).
+        assertThat(resolver.classify("https://www.bensound.com/royalty-free-music")).isEqualTo(YouTubeExternalLinkType.SOCIAL_MEDIA);
+        assertThat(resolver.classify("https://linktr.ee/cookchannel")).isEqualTo(YouTubeExternalLinkType.SOCIAL_MEDIA);
+        assertThat(resolver.classify("https://www.mbn.co.kr/vod/programContents/123")).isEqualTo(YouTubeExternalLinkType.SOCIAL_MEDIA);
         assertThat(resolver.recipeEvidenceUrls(evidence)).containsExactly("https://recipes.example.com/tofu-recipe");
     }
 
@@ -618,5 +624,15 @@ class YouTubeRecipeSourceAdapterTest {
                     .filter(video -> video != null)
                     .toList();
         }
+    }
+
+    // 할당량 검사를 통과시키는 테스트용 가드입니다(할당량 검사 자체는 YouTubeQuotaGuardTest에서 확인).
+    private static YouTubeQuotaGuard allowAllQuota() {
+        return new YouTubeQuotaGuard((org.springframework.data.redis.core.StringRedisTemplate) null, 8000) {
+            @Override
+            boolean tryReserve(int units) {
+                return true;
+            }
+        };
     }
 }

@@ -32,6 +32,13 @@ public final class IngredientEdits {
     // "알려줘"는 넣지 않습니다("양파 빼고 다시 알려줘"는 후속 변경).
     private static final Pattern NEW_REQUEST = Pattern.compile("레시피|만드는\\s*(?:법|방법)|조리\\s*법");
     private static final Pattern DETAIL = Pattern.compile("자세(?:히|하게)|상세(?:히|하게)|설명해|더\\s*알려|풀어서");
+    // 자세히 요청에서 요리 이름이 아닌 말들입니다. 이것들을 지우고 남는 말이 없으면 직전 레시피에 대한 요청입니다.
+    private static final Pattern DETAIL_FILLER = Pattern.compile(
+            "레시피|조리\\s*법|만드는\\s*(?:법|방법)|순서|방법|자세(?:히|하게)|상세(?:히|하게)|설명(?:해|해서)?|풀어서|쉽게"
+                    + "|알려|가르쳐|보여|주세요|줘|줄래|해|좀|더|조금|나|저|제가|내가|초보(?:라서|여서|니까|자)?|처음(?:이라서|이라)?"
+                    + "|요리|잘\\s*못해(?:서)?|몰라(?:서)?|ㅠ+|ㅜ+|ㅎ+");
+    // 낱말 끝에 붙은 조사만 지웁니다("가지"의 "가"처럼 낱말 안의 글자는 건드리지 않음).
+    private static final Pattern TRAILING_PARTICLE = Pattern.compile("(?:를|을|이|가|는|은|도|요)(?=\\s|$)");
     private static final Pattern SUBSTITUTE_INSTEAD_OF = Pattern.compile(
             WORD + "(?:은|는|을|를)?\\s*(?:말고|대신에?)\\s*" + WORD + "(?:을|를|으로|로)?\\s*(?:넣어|써|사용|해|줘|주세요|$)");
     private static final Pattern SUBSTITUTE_CHANGE = Pattern.compile(
@@ -80,10 +87,26 @@ public final class IngredientEdits {
      * 직전 레시피를 이어서 다루는 요청인지 봅니다(재료 변경이나 "더 자세히"). 새 요리 요청이면 false입니다.
      */
     public static boolean isFollowUpOnPreviousRecipe(String message) {
-        if (message == null || message.isBlank() || NEW_REQUEST.matcher(message).find()) {
+        if (message == null || message.isBlank()) {
             return false;
         }
-        return parse(message).isPresent() || DETAIL.matcher(message).find();
+        if (isDetailRequest(message)) {
+            return true;
+        }
+        return !NEW_REQUEST.matcher(message).find() && parse(message).isPresent();
+    }
+
+    /**
+     * 직전 레시피를 더 자세히 설명해 달라는 요청인지 봅니다. "레시피를 좀 더 자세히"처럼 "레시피"가 들어가도
+     * 요리 이름으로 보이는 말이 남지 않으면 자세히 요청입니다(2026-10-12 "를 좀 더 자세히"를 요리 이름으로 찾음).
+     */
+    public static boolean isDetailRequest(String message) {
+        if (message == null || !DETAIL.matcher(message).find()) {
+            return false;
+        }
+        String rest = DETAIL_FILLER.matcher(message).replaceAll(" ").replaceAll("[^가-힣a-zA-Z]+", " ").trim();
+        rest = TRAILING_PARTICLE.matcher(rest).replaceAll("").replaceAll("\\s+", " ").trim();
+        return rest.isEmpty() || java.util.Arrays.stream(rest.split(" ")).allMatch(word -> word.length() < 2);
     }
 
     /**

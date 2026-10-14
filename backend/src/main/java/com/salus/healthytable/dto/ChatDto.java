@@ -96,6 +96,38 @@ public class ChatDto {
         private String imageUrl;
         // 알레르기/건강 관련 주의 문구 목록
         private List<String> safetyNotes;
+        // 건강 주의가 아닌 안내 문구("다른 출처를 찾지 못해 이전 레시피를 다시 보여 드려요" 등)
+        private List<String> notices = List.of();
+        // 이 레시피를 만들 때 참고한 출처(원문 링크). 사용자가 원문을 직접 확인할 수 있게 카드에 보여 줍니다.
+        private List<SourceLink> sources = List.of();
+        // "초보라서 자세히"에 덧붙인 단계별 초보 팁(steps와 같은 순서, 없는 단계는 빈 문자열). 원문에 없는 설명입니다.
+        private List<String> stepTips = List.of();
+
+        public RecipeCard(Long id, String title, String description, List<String> ingredients, List<String> steps,
+                          Integer servings, Integer calories, Integer caloriesPerServing, Integer difficulty,
+                          Integer cookingTime, String imageUrl, List<String> safetyNotes) {
+            this(id, title, description, ingredients, steps, servings, calories, caloriesPerServing, difficulty,
+                    cookingTime, imageUrl, safetyNotes, List.of(), List.of(), List.of());
+        }
+    }
+
+    /**
+     * 레시피 카드에 보여 줄 참고 출처입니다. reviewed가 true면 사람이 검토한 출처(승인 레시피의 검증 출처),
+     * false면 웹에서 찾아 아직 검토하지 않은 외부 출처입니다. url이 없으면 링크 없이 이름만 보여 줍니다.
+     */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SourceLink {
+        private String title;
+        private String url;
+        private boolean reviewed;
+        // 여러 출처를 비교했을 때 카드에 보이는 레시피의 출처이면 true, 함께 비교한 출처이면 false입니다.
+        private boolean primary;
+
+        public SourceLink(String title, String url, boolean reviewed) {
+            this(title, url, reviewed, false);
+        }
     }
 
     /** 채팅방 목록에 표시할 요약 정보입니다. */
