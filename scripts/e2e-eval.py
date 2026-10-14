@@ -34,6 +34,21 @@ ALLERGEN_TERMS = {
 }
 BLOCK_HINTS = ['알레르기', '추천할 수 없', '제공하지 않', '제공할 수 없', '찾지 못']
 
+# 같은 재료·요리의 다른 표기입니다. 요리 이름(dishAny)과 필수 재료(mustInclude) 채점에만 쓰고, 알레르기와
+# 빠져야 할 재료(mustNotInclude) 검사에는 쓰지 않습니다. 짝을 하나씩 적어 넓은 규칙(앞글자 일치 등)을 피합니다.
+# 2026-10-14: 출처 표기 때문에 정상 답이 실패로 셈 — 크룽지 "크로아상", 두쫀쿠 "마쉬멜로우", 소금빵 "소금 빵".
+SPELLING_VARIANTS = {
+    '크로와상': ['크로아상', '크루아상'],
+    '마시멜로': ['마쉬멜로', '마시멜로우', '마쉬멜로우', '마시맬로'],
+}
+
+
+def contains_term(term, text):
+    """띄어쓰기를 무시하고, 등록된 다른 표기도 같은 것으로 봅니다("소금 빵" = "소금빵")."""
+    compact = ''.join(text.split())
+    candidates = [term] + SPELLING_VARIANTS.get(term, [])
+    return any(''.join(candidate.split()) in compact for candidate in candidates)
+
 
 def load_cases(path, only):
     cases = []
@@ -107,9 +122,9 @@ def grade(case, final, first, elapsed, error):
             if not (expect.get('blockOk') and blocked):
                 reasons.append('레시피 카드 없음')
         else:
-            if expect.get('dishAny') and not any(term in body for term in expect['dishAny']):
+            if expect.get('dishAny') and not any(contains_term(term, body) for term in expect['dishAny']):
                 reasons.append(f"다른 요리로 보임(기대 {expect['dishAny']}, 제목 '{recipe.get('title')}')")
-            missing = [term for term in expect.get('mustInclude', []) if term not in ingredients_steps]
+            missing = [term for term in expect.get('mustInclude', []) if not contains_term(term, ingredients_steps)]
             if missing:
                 reasons.append(f'필수 재료 없음: {missing}')
             present = [term for term in expect.get('mustNotInclude', []) if term in ingredients_steps]
