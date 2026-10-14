@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Modal, Alert, Switch, Animated, Dimensions } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Modal, Alert, Switch, Animated, Dimensions, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import * as Speech from 'expo-speech'; // 음성 읽기 기능
@@ -168,6 +168,19 @@ const RecipeMessageCard = ({ recipe }) => {
                 </View>
             )}
 
+            {/* 건강 주의가 아닌 안내("다른 출처를 찾지 못해 이전 레시피를 다시 보여 드려요" 등) */}
+            {recipe.notices?.length > 0 && (
+                <View style={styles.recipeNoticeBox}>
+                    <View style={styles.recipeSectionTitleRow}>
+                        <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
+                        <Text style={styles.recipeNoticeTitle}>안내</Text>
+                    </View>
+                    {recipe.notices.map((note, index) => (
+                        <Text key={`${note}-${index}`} style={styles.recipeSafetyText}>- {note}</Text>
+                    ))}
+                </View>
+            )}
+
             {recipe.safetyNotes?.length > 0 && (
                 <View style={styles.recipeSafetyBox}>
                     <View style={styles.recipeSectionTitleRow}>
@@ -194,16 +207,71 @@ const RecipeMessageCard = ({ recipe }) => {
             {recipe.steps?.length > 0 && (
                 <View style={styles.recipeSection}>
                     <Text style={styles.recipeSectionTitle}>조리 순서</Text>
-                    {recipe.steps.map((step, index) => (
-                        <View key={`${index}-${step}`} style={styles.recipeStepRow}>
-                            <Text style={styles.recipeStepNumber}>{index + 1}</Text>
-                            <Text style={styles.recipeStepText}>{step}</Text>
-                        </View>
+                    {recipe.steps.map((step, index) => {
+                        const { text, heat, time, doneness } = splitStepAnnotation(step);
+                        const tip = recipe.stepTips?.[index];
+                        return (
+                            <View key={`${index}-${step}`} style={styles.recipeStepRow}>
+                                <Text style={styles.recipeStepNumber}>{index + 1}</Text>
+                                <View style={styles.recipeStepBody}>
+                                    <Text style={styles.recipeStepText}>{text}</Text>
+                                    {(heat || time) && (
+                                        <Text style={styles.recipeStepMeta}>
+                                            {[heat && `불: ${heat}`, time && `시간: ${time}`].filter(Boolean).join(' · ')}
+                                        </Text>
+                                    )}
+                                    {!!doneness && <Text style={styles.recipeStepMeta}>완료 기준: {doneness}</Text>}
+                                    {!!tip && <Text style={styles.recipeStepTip}>초보 팁: {tip}</Text>}
+                                </View>
+                            </View>
+                        );
+                    })}
+                </View>
+            )}
+
+            {/* 이 레시피를 만들 때 참고한 출처. 누르면 원문이 열립니다. */}
+            {recipe.sources?.length > 0 && (
+                <View style={styles.recipeSection}>
+                    <Text style={styles.recipeSectionTitle}>참고한 출처</Text>
+                    {recipe.sources.map((source, index) => (
+                        <TouchableOpacity
+                            key={`${source.url || source.title}-${index}`}
+                            disabled={!source.url}
+                            onPress={() => source.url && Linking.openURL(source.url).catch(() => {})}
+                            style={styles.recipeSourceRow}
+                        >
+                            <Ionicons name={source.url ? 'link-outline' : 'document-text-outline'} size={14} color={colors.primary} />
+                            <View style={styles.recipeSourceTextGroup}>
+                                <Text style={[styles.recipeSourceTitle, source.url && styles.recipeSourceLink]} numberOfLines={2}>
+                                    {source.title || source.url}
+                                </Text>
+                                <Text style={styles.recipeSourceBadge}>
+                                    {[source.primary ? '이 레시피의 출처' : (recipe.sources.some(item => item.primary) ? '비교한 출처' : null),
+                                        source.reviewed ? '검토된 출처' : '웹 출처 · 검토 전'].filter(Boolean).join(' · ')}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
                     ))}
+                    {recipe.sources.some(source => !source.reviewed) && (
+                        <Text style={styles.recipeSourceNote}>
+                            웹 출처는 사람이 검토하지 않은 근거입니다. 자세한 내용과 사진은 원문에서 확인해 주세요.
+                        </Text>
+                    )}
                 </View>
             )}
         </View>
     );
+};
+
+// 승인 레시피 단계 끝의 "[불: 중불 / 시간: 18분 / 완료 기준: …]"을 본문과 나눠 따로 보여 줍니다.
+// 형식이 다르면 문장을 그대로 둡니다.
+const STEP_ANNOTATION = /^(.*?)\s*\[불:\s*([^/\]]*?)\s*\/\s*시간:\s*([^/\]]*?)\s*\/\s*완료 기준:\s*([^\]]*?)\s*\]\s*$/;
+const splitStepAnnotation = (step) => {
+    const match = typeof step === 'string' ? step.match(STEP_ANNOTATION) : null;
+    if (!match) {
+        return { text: step };
+    }
+    return { text: match[1], heat: match[2], time: match[3], doneness: match[4] };
 };
 
 // 레시피 카드를 보여 주기 직전에 잠깐 표시하는 "정리 중" 안내
@@ -446,6 +514,8 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
     // 로그인 상태 변경 시 전체 초기화합니다.
     // 사용자 전환 직전에 도착한 AI 응답이 다른 사용자의 대화에 섞이지 않도록 epoch와 요청 번호를 올립니다.
+    // 토큰은 조건에 넣지 않습니다. 같은 사용자의 토큰 자동 갱신(30분)만으로 대화가 지워지고 기다리던 답이 버려졌습니다
+    // (2026-10-14 "삼겹살 배추찜 레시피" 대기 중 화면 초기화). 세션 목록은 아래 토큰 효과에서 다시 불러옵니다.
     useEffect(() => {
         authEpochRef.current += 1;
         requestSeqRef.current += 1;
@@ -471,7 +541,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             setChatSessions([]);
             setMessages([initialGreeting]);
         }
-    }, [isLoggedIn, user?.id, token]);
+    }, [isLoggedIn, user?.id]);
 
     // 컴포넌트 마운트 및 토큰 준비 시 세션 목록 복원
     useEffect(() => {
@@ -1543,6 +1613,49 @@ const styles = StyleSheet.create({
     recipeSection: {
         marginTop: 16,
     },
+    recipeNoticeBox: {
+        marginTop: 14,
+        borderWidth: 1,
+        borderColor: colors.primary,
+        borderRadius: 8,
+        padding: 12,
+        gap: 6,
+    },
+    recipeNoticeTitle: {
+        color: colors.primary,
+        fontSize: 13,
+        fontWeight: '800',
+    },
+    recipeSourceRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+        paddingVertical: 6,
+    },
+    recipeSourceTextGroup: {
+        flex: 1,
+        minWidth: 0,
+    },
+    recipeSourceTitle: {
+        color: colors.text,
+        fontSize: 13,
+        lineHeight: 19,
+    },
+    recipeSourceLink: {
+        color: colors.primary,
+        textDecorationLine: 'underline',
+    },
+    recipeSourceBadge: {
+        color: colors.textSecondary,
+        fontSize: 11,
+        marginTop: 2,
+    },
+    recipeSourceNote: {
+        color: colors.textSecondary,
+        fontSize: 11,
+        lineHeight: 16,
+        marginTop: 4,
+    },
     recipeSectionTitle: {
         color: colors.text,
         fontSize: 14,
@@ -1590,6 +1703,22 @@ const styles = StyleSheet.create({
         color: colors.text,
         fontSize: 14,
         lineHeight: 22,
+    },
+    recipeStepBody: {
+        flex: 1,
+        minWidth: 0,
+        gap: 2,
+    },
+    recipeStepMeta: {
+        color: colors.textSecondary,
+        fontSize: 12,
+        lineHeight: 18,
+    },
+    recipeStepTip: {
+        color: colors.primary,
+        fontSize: 12,
+        lineHeight: 18,
+        marginTop: 2,
     },
     loadingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 20 },
     loadingText: { marginLeft: 10, color: colors.textSecondary, fontSize: 14 },
