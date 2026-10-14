@@ -98,6 +98,21 @@ public class AllergenMatcher {
         return false;
     }
 
+    /**
+     * 차단 대상은 아니지만 제품에 따라 그 알레르겐이 들어 있을 수 있는 재료 가운데 텍스트에 나온 것입니다
+     * (밀 알레르기의 간장·고추장). 성분 표시 확인 안내에만 씁니다.
+     */
+    public List<String> findLabelCheckTerms(String declaredAllergy, List<String> texts) {
+        List<String> tokens = tokenize(texts);
+        List<String> found = new java.util.ArrayList<>();
+        for (String term : dictionary.labelCheckTermsFor(declaredAllergy)) {
+            if (!term.isBlank() && tokens.stream().anyMatch(token -> matches(term, token))) {
+                found.add(term);
+            }
+        }
+        return found;
+    }
+
     // 탐지 용어 중 하나라도 어떤 토큰과 매칭되면 true입니다.
     private boolean matchesAny(Set<String> terms, List<String> tokens) {
         for (String term : terms) {

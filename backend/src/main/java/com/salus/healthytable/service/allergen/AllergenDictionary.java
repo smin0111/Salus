@@ -32,6 +32,8 @@ public class AllergenDictionary {
     private final List<Allergen> allergens = new ArrayList<>();
     private List<AllergenAlias> registryAliases = List.of();
     private Map<String, String> registryParents = Map.of();
+    // 제품에 따라 그 알레르겐이 들어 있을 수 있는 재료(라벨 확인 안내용). 차단하지 않고 안내만 합니다.
+    private final Map<String, Set<String>> labelCheckById = new LinkedHashMap<>();
 
     // 기본값을 두어 Spring 컨텍스트 없이도 로드된다. 사전 단위 테스트를 위해 필요하다.
     @Value("classpath:allergens/ko-allergens.yaml")
@@ -57,6 +59,10 @@ public class AllergenDictionary {
                         String.valueOf(entry.get("name")),
                         normalizeAll((List<String>) entry.getOrDefault("aliases", List.of())),
                         normalizeAll((List<String>) entry.getOrDefault("derived", List.of()))));
+                Set<String> labelCheck = normalizeAll((List<String>) entry.getOrDefault("labelCheck", List.of()));
+                if (!labelCheck.isEmpty()) {
+                    labelCheckById.put(String.valueOf(entry.get("id")), labelCheck);
+                }
             }
             // 라벨 전용 ID/별칭/계층은 기존 프로필 Matcher의 탐지 범위를 바꾸지 않는다.
             List<Map<String, Object>> registryDefinitions = new ArrayList<>(entries);
@@ -98,6 +104,24 @@ public class AllergenDictionary {
         }
         if (terms.isEmpty()) {
             terms.add(normalized);
+        }
+        return terms;
+    }
+
+    /**
+     * 제품에 따라 그 알레르겐이 들어 있을 수 있어 성분 표시 확인을 안내할 재료입니다(차단 대상 아님).
+     * 사전에 없는 표기면 비어 있습니다.
+     */
+    public Set<String> labelCheckTermsFor(String declaredAllergy) {
+        String normalized = normalize(declaredAllergy);
+        Set<String> terms = new LinkedHashSet<>();
+        if (normalized.isBlank()) {
+            return terms;
+        }
+        for (Allergen allergen : allergens) {
+            if (allergen.matchesDeclaration(normalized)) {
+                terms.addAll(labelCheckById.getOrDefault(allergen.id(), Set.of()));
+            }
         }
         return terms;
     }
