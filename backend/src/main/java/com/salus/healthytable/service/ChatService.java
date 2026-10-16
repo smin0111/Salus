@@ -325,7 +325,6 @@ public class ChatService {
                 chatFollowUpService.appendWorkSessionContext(
                         userIdLong, chatSession.getId(), request.getMessage(), systemContext);
 
-                // 일반 레시피 정확도 검증이 끝날 때까지 냉장고 조회와 활용은 수행하지 않는다.
                 if (!isRecipeRequestIntent) {
                     systemContext.append("\n=== 일반 대화 ===\n");
                     systemContext.append("사용자가 인사, 자기소개 요청, 잡담을 한 경우 레시피를 만들지 말고 Salus를 짧게 소개하며 자연스럽게 답하세요.\n");

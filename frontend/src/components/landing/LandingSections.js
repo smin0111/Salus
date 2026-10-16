@@ -187,7 +187,7 @@ export function FinalCtaSection({ width, isLoggedIn, userName, onStart, onLogin,
                     나의 건강정보를,{compact ? '\n' : ' '}오늘의 한 끼로.
                 </Text>
                 <Text style={styles.ctaBody}>
-                    건강 프로필을 먼저 등록하고, 냉장고 재료와 현재 요청을 추가 정보로 더해 나에게 맞는 레시피 후보를 살펴보세요.
+                    건강 프로필을 먼저 등록하고, 현재 요청을 추가 정보로 더해 나에게 맞는 레시피 후보를 살펴보세요.
                 </Text>
                 <View style={[styles.ctaActions, compact && styles.ctaActionsCompact]}>
                     <LandingButton

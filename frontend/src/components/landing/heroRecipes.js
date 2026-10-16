@@ -8,10 +8,9 @@ export const HERO_CONTEXT_META = [
     { id: 'health', number: '02', code: 'HEALTH', label: '건강 상태', side: 'left', reasonLabel: '건강 관리 정보 참고' },
     { id: 'diet', number: '03', code: 'DIET', label: '식단 기준', side: 'right', reasonLabel: '식단 기준 반영' },
     { id: 'medication', number: '04', code: 'MEDICATION', label: '복용 정보', side: 'right', reasonLabel: '복용 정보 함께 참고' },
-    { id: 'fridge', number: '05', code: 'FRIDGE', label: '냉장고 재료', side: 'left', reasonLabel: '냉장고 재료 활용' },
 ];
 
-// 캐러셀 장면 목록: 요리 이미지, 색상 팔레트, 예시 건강 조건, 이미지 위 재료 라벨 위치(%)
+// 캐러셀 장면 목록: 요리 이미지, 색상 팔레트, 예시 건강 조건
 export const HERO_RECIPES = [
     {
         id: 'bibimbap',
@@ -24,15 +23,8 @@ export const HERO_RECIPES = [
             health: '저당 관리',
             diet: '저당 · 고단백 식단',
             medication: '등록한 복용 정보 참고',
-            fridge: '계란 · 버섯 · 애호박 · 대파',
         },
-        recommendation: '보유 재료를 활용하고 고단백·저당 식사 기준을 함께 참고한 한 끼입니다.',
-        ingredients: [
-            { id: 'egg', label: '계란', left: '48%', top: '62%' },
-            { id: 'mushroom', label: '버섯', left: '25%', top: '69%' },
-            { id: 'zucchini', label: '애호박', left: '14%', top: '43%' },
-            { id: 'scallion', label: '대파', left: '58%', top: '35%' },
-        ],
+        recommendation: '땅콩을 피하고 고단백·저당 식사 기준을 함께 참고한 한 끼입니다.',
     },
     {
         id: 'salmon',
@@ -45,15 +37,8 @@ export const HERO_RECIPES = [
             health: '균형 식사 관리',
             diet: '단백질 중심 식단',
             medication: '등록한 건강 정보와 함께 참고',
-            fridge: '연어 · 브로콜리 · 레몬 · 채소',
         },
         recommendation: '단백질 중심의 가벼운 저녁 기준과 채소 구성을 함께 고려한 메뉴입니다.',
-        ingredients: [
-            { id: 'salmon', label: '연어', left: '31%', top: '57%' },
-            { id: 'broccoli', label: '브로콜리', left: '52%', top: '25%' },
-            { id: 'lemon', label: '레몬', left: '67%', top: '46%' },
-            { id: 'vegetable', label: '허브 채소', left: '73%', top: '34%' },
-        ],
     },
     {
         id: 'beef',
@@ -66,15 +51,8 @@ export const HERO_RECIPES = [
             health: '철분을 신경 쓰는 식사',
             diet: '고단백 · 채소 곁들임',
             medication: '등록한 복용 정보 참고',
-            fridge: '소고기 · 버섯 · 파프리카 · 브로콜리',
         },
-        recommendation: '단백질 중심 식사와 보유한 버섯·채소 활용을 함께 고려한 메뉴입니다.',
-        ingredients: [
-            { id: 'beef', label: '소고기', left: '45%', top: '50%' },
-            { id: 'mushroom', label: '버섯', left: '28%', top: '58%' },
-            { id: 'pepper', label: '파프리카', left: '59%', top: '62%' },
-            { id: 'broccoli', label: '브로콜리', left: '64%', top: '34%' },
-        ],
+        recommendation: '단백질 중심 식사와 채소 구성을 함께 고려한 메뉴입니다.',
     },
     {
         id: 'stew',
@@ -87,15 +65,8 @@ export const HERO_RECIPES = [
             health: '나트륨 섭취 관리',
             diet: '저염 · 균형 식단',
             medication: '등록한 건강 정보와 함께 참고',
-            fridge: '닭고기 · 토마토 · 양파 · 버섯',
         },
-        recommendation: '포만감 있는 식사 기준과 닭고기·토마토 활용을 함께 고려한 따뜻한 메뉴입니다.',
-        ingredients: [
-            { id: 'chicken', label: '닭고기', left: '42%', top: '54%' },
-            { id: 'tomato', label: '토마토', left: '27%', top: '46%' },
-            { id: 'mushroom', label: '버섯', left: '63%', top: '57%' },
-            { id: 'baguette', label: '바게트', left: '69%', top: '25%' },
-        ],
+        recommendation: '포만감 있는 식사 기준을 함께 고려한 따뜻한 메뉴입니다.',
     },
     {
         id: 'omurice',
@@ -108,15 +79,8 @@ export const HERO_RECIPES = [
             health: '자극 적은 식사 선호',
             diet: '부드러운 한 그릇 식단',
             medication: '등록한 복용 정보 참고',
-            fridge: '계란 · 양파 · 버섯 · 밥',
         },
-        recommendation: '편안하게 먹는 식사 기준과 계란·버섯·밥의 재료 구성을 참고한 메뉴입니다.',
-        ingredients: [
-            { id: 'egg', label: '계란', left: '43%', top: '35%' },
-            { id: 'rice', label: '밥', left: '49%', top: '57%' },
-            { id: 'mushroom', label: '버섯', left: '69%', top: '62%' },
-            { id: 'sauce', label: '데미소스', left: '27%', top: '66%' },
-        ],
+        recommendation: '편안하게 먹는 식사 기준을 참고한 메뉴입니다.',
     },
 ];
 
@@ -128,7 +92,6 @@ export function createHealthContexts(scene) {
         if (item.id === 'health') reasonDetail = `${value} 정보를 식사 선택 기준과 함께 참고합니다.`;
         if (item.id === 'diet') reasonDetail = `${value}을 레시피 구성 기준에 반영합니다.`;
         if (item.id === 'medication') reasonDetail = '등록한 복용 정보는 개인 건강 정보의 일부로만 함께 참고합니다.';
-        if (item.id === 'fridge') reasonDetail = `${value.replaceAll(' · ', ', ')}를 활용할 수 있는 구성을 우선 살펴봅니다.`;
         return { ...item, value, reasonDetail };
     });
 }

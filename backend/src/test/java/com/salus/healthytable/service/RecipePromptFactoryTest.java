@@ -34,7 +34,6 @@ class RecipePromptFactoryTest {
                           내용: 물 500ml를 붓고 15분 끓인 뒤 두부 반 모를 넣는다.
                         """,
                 "test",
-                List.of(),
                 new RecipeGenerationRequest.SafetyConditions(List.of(), List.of(), List.of(), List.of(), List.of()),
                 "",
                 List.of(),
@@ -61,7 +60,6 @@ class RecipePromptFactoryTest {
                 List.of(),
                 oversizedEvidence,
                 "test",
-                List.of(),
                 new RecipeGenerationRequest.SafetyConditions(List.of(), List.of(), List.of(), List.of(), List.of()),
                 "",
                 List.of(),
@@ -107,7 +105,7 @@ class RecipePromptFactoryTest {
     void createRequestDoesNotRequireAdjustments() {
         RecipeGenerationRequest request = new RecipeGenerationRequest(
                 RecipeGenerationRequest.Mode.CREATE, "김치찌개 알려줘", "김치찌개",
-                List.of(), "근거", "searxng", List.of(),
+                List.of(), "근거", "searxng",
                 new RecipeGenerationRequest.SafetyConditions(List.of(), List.of(), List.of(), List.of(), List.of()),
                 "", List.of(), List.of(), List.of());
 
@@ -121,7 +119,7 @@ class RecipePromptFactoryTest {
     void substituteModeWithoutSubstitutionsDoesNotRequireAdjustments() {
         RecipeGenerationRequest request = new RecipeGenerationRequest(
                 RecipeGenerationRequest.Mode.SUBSTITUTE, "바꿔줘", "김치찌개",
-                List.of(), "근거", "searxng", List.of(),
+                List.of(), "근거", "searxng",
                 new RecipeGenerationRequest.SafetyConditions(List.of(), List.of(), List.of(), List.of(), List.of()),
                 "", List.of(), List.of(), List.of());
 
@@ -140,7 +138,7 @@ class RecipePromptFactoryTest {
         return new RecipeGenerationRequest(
                 RecipeGenerationRequest.Mode.SUBSTITUTE,
                 "돼지고기를 두부로 바꿔줘", "김치찌개",
-                List.of(), "근거", "searxng", List.of(),
+                List.of(), "근거", "searxng",
                 new RecipeGenerationRequest.SafetyConditions(List.of(), List.of(), List.of(), List.of(), List.of()),
                 "", List.of(), List.of(),
                 List.of(new RecipeGenerationRequest.IngredientSubstitution("돼지고기", "두부")));
@@ -173,7 +171,7 @@ class RecipePromptFactoryTest {
     void multipleSubstitutionsDoNotPinDirection() {
         RecipeGenerationRequest request = new RecipeGenerationRequest(
                 RecipeGenerationRequest.Mode.SUBSTITUTE, "바꿔줘", "김치찌개",
-                List.of(), "근거", "searxng", List.of(),
+                List.of(), "근거", "searxng",
                 new RecipeGenerationRequest.SafetyConditions(List.of(), List.of(), List.of(), List.of(), List.of()),
                 "", List.of(), List.of(),
                 List.of(new RecipeGenerationRequest.IngredientSubstitution("돼지고기", "두부"),
@@ -194,7 +192,7 @@ class RecipePromptFactoryTest {
     void airFryerRequestRequiresTemperatureInAtLeastOneStep() {
         RecipeGenerationRequest request = new RecipeGenerationRequest(
                 RecipeGenerationRequest.Mode.CREATE, "에어프라이어 감자구이 알려줘", "에어프라이어 감자구이",
-                List.of(), "근거", "searxng", List.of(),
+                List.of(), "근거", "searxng",
                 new RecipeGenerationRequest.SafetyConditions(List.of(), List.of(), List.of(), List.of(), List.of()),
                 "", List.of(), List.of(), List.of());
 
@@ -211,7 +209,7 @@ class RecipePromptFactoryTest {
     void stovetopRequestDoesNotRequireTemperature() {
         RecipeGenerationRequest request = new RecipeGenerationRequest(
                 RecipeGenerationRequest.Mode.CREATE, "김치찌개 알려줘", "김치찌개",
-                List.of(), "근거", "searxng", List.of(),
+                List.of(), "근거", "searxng",
                 new RecipeGenerationRequest.SafetyConditions(List.of(), List.of(), List.of(), List.of(), List.of()),
                 "", List.of(), List.of(), List.of());
 
@@ -225,7 +223,7 @@ class RecipePromptFactoryTest {
     void schemaPropertyOrderIsFixedForEveryRequestKind() throws Exception {
         RecipeGenerationRequest airFryer = new RecipeGenerationRequest(
                 RecipeGenerationRequest.Mode.CREATE, "에어프라이어 감자구이 알려줘", "에어프라이어 감자구이",
-                List.of(), "근거", "searxng", List.of(),
+                List.of(), "근거", "searxng",
                 new RecipeGenerationRequest.SafetyConditions(List.of(), List.of(), List.of(), List.of(), List.of()),
                 "", List.of(), List.of(), List.of());
         List<Map<String, Object>> schemas = List.of(

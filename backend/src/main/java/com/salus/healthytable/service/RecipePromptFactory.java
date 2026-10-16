@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 /**
  * 구조화 레시피 생성에 쓰는 LLM 프롬프트와 JSON Schema를 만드는 클래스입니다.
  *
- * - buildGenerationPrompt: 새 레시피 생성용 프롬프트 (요청, 근거, 냉장고 재료, 건강 제한, 대체/제외 조건 포함)
+ * - buildGenerationPrompt: 새 레시피 생성용 프롬프트 (요청, 근거, 건강 제한, 대체/제외 조건 포함)
  * - buildRepairPrompt: 검증에 실패한 JSON을 최소 범위로 고치게 하는 복구 프롬프트
  * - jsonSchema: Ollama format 옵션으로 넘겨 출력 JSON 구조를 강제하는 스키마
  * 프롬프트 문장을 바꾸면 LLM 출력 품질이 크게 달라질 수 있으므로, 변경 시 평가(eval) 결과를 함께 확인해야 합니다.
@@ -49,9 +49,6 @@ public class RecipePromptFactory {
                 %s
 
                 외부 근거(최대 3개):
-                %s
-
-                냉장고 재료:
                 %s
 
                 건강 및 안전 제한:
@@ -93,7 +90,6 @@ public class RecipePromptFactory {
                 nullToBlank(request.requestedTitle()),
                 formatTrustedRecipes(request.trustedRecipes()),
                 summarizeSearchContext(request.searchContext(), 5_000),
-                formatList(request.fridgeItems()),
                 formatSafetyConditions(request.safetyConditions()),
                 formatPreviousRecipeContext(request));
     }

@@ -138,7 +138,7 @@ class LongtailSummaryEval {
         StructuredRecipePageAdapter adapter = new StructuredRecipePageAdapter(
                 fetcher, new SchemaOrgRecipeJsonLdExtractor(objectMapper), new RecipeSourceQualityAssessor());
         RecipeResearchPlan plan = new RecipeResearchPlan(
-                dish, "", RecipeRequestMode.CREATE, false, false, true, List.of(dish + " 레시피"), 3, 5);
+                dish, "", RecipeRequestMode.CREATE, false, true, List.of(dish + " 레시피"), 3, 5);
         return adapter.collect(plan, results).stream()
                 .filter(candidate -> candidate.qualityScore().usable())
                 .filter(candidate -> candidate.originalRecipe() != null && candidate.originalRecipe().steps().size() >= 2)

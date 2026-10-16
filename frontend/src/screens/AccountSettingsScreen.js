@@ -12,7 +12,6 @@ import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/api
 const SUMMARY_LABELS = [
     ['healthProfiles', '건강정보'],
     ['healthCheckups', '건강검진'],
-    ['fridgeItems', '냉장고 재료'],
     ['mealLogs', '식단 기록'],
     ['recommendations', '추천 기록'],
     ['activityLogs', '활동 기록'],
@@ -116,7 +115,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
     const confirmDeleteAccount = () => {
         Alert.alert(
             '계정 삭제',
-            '계정과 건강정보, 검진 결과, 냉장고, 식단 기록, 대화 기록 등 개인 데이터가 삭제됩니다. 계속할까요?',
+            '계정과 건강정보, 검진 결과, 식단 기록, 대화 기록 등 개인 데이터가 삭제됩니다. 계속할까요?',
             [
                 { text: '취소', style: 'cancel' },
                 { text: '삭제', style: 'destructive', onPress: deleteAccount },

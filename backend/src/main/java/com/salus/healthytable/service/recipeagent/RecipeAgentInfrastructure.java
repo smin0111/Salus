@@ -41,8 +41,8 @@ class DefaultRecipeRequestPlanner {
     private final RecipeNormalizer recipeNormalizer;
 
     // 사용자 맥락 객체 없이 "맥락이 있는지"만 알 때 쓰는 편의 메서드입니다.
-    RecipeResearchPlan plan(String message, boolean useFridgeIngredients, boolean hasUserContext) {
-        return plan(message, useFridgeIngredients, hasUserContext ? UserRecipeContext.empty(null) : null);
+    RecipeResearchPlan plan(String message, boolean hasUserContext) {
+        return plan(message, hasUserContext ? UserRecipeContext.empty(null) : null);
     }
 
     // 제외 구절("돼지고기는 빼줘", "양파 빼고", "돼지고기 없는")입니다. 제외 재료는 extractExplicitExclusions가 따로 뽑습니다.
@@ -159,7 +159,7 @@ class DefaultRecipeRequestPlanner {
     }
 
     // 검색 계획을 만듭니다. 최대 검색 시도는 3회, 최대 출처 수는 5개로 고정합니다.
-    RecipeResearchPlan plan(String message, boolean useFridgeIngredients, UserRecipeContext context) {
+    RecipeResearchPlan plan(String message, UserRecipeContext context) {
         String normalizedMessage = message == null ? "" : message.trim();
         String dishName = withoutExclusionClause(recipeNormalizer.normalize(normalizedMessage));
         List<String> dishes = splitDishes(dishName);
@@ -185,13 +185,12 @@ class DefaultRecipeRequestPlanner {
         boolean latest = normalizedMessage.contains("최신") || normalizedMessage.toLowerCase().contains("latest");
         List<String> searchQueries = searchQueries(dishName,
                 creatorDish.creatorName().isBlank() ? showPrefix : creatorDish.creatorName(),
-                normalizedMessage, useFridgeIngredients, context);
+                normalizedMessage);
         return new RecipeResearchPlan(
                 dishName,
                 creatorDish.creatorName(),
                 mode,
                 latest,
-                useFridgeIngredients,
                 context != null,
                 searchQueries,
                 3,
@@ -267,13 +266,11 @@ class DefaultRecipeRequestPlanner {
         return RecipeRequestMode.CREATE;
     }
 
-    // "요리 레시피", "요리 만드는 법" 검색어를 만들고, 냉장고 재료 활용 시 재료 이름을 붙인 검색어도 추가합니다.
+    // "요리 레시피", "요리 만드는 법" 검색어를 만듭니다.
     private List<String> searchQueries(
             String dishName,
             String creatorName,
-            String originalMessage,
-            boolean useFridgeIngredients,
-            UserRecipeContext context) {
+            String originalMessage) {
         LinkedHashSet<String> queries = new LinkedHashSet<>();
         String prefix = creatorName == null || creatorName.isBlank() ? "" : creatorName.trim() + " ";
         if (dishName != null && !dishName.isBlank()) {
@@ -282,35 +279,7 @@ class DefaultRecipeRequestPlanner {
         } else if (originalMessage != null && !originalMessage.isBlank()) {
             queries.add(originalMessage);
         }
-        if (useFridgeIngredients && context != null) {
-            fridgeSearchTerms(dishName, context).forEach(term -> {
-                if (dishName != null && !dishName.isBlank()) {
-                    queries.add(prefix + dishName + " " + term + " 레시피");
-                } else {
-                    queries.add(term + " 레시피");
-                }
-            });
-        }
         return List.copyOf(queries);
-    }
-
-    // 요리 이름에 들어 있거나 3일 이내에 유통기한이 끝나는 냉장고 재료를 최대 2개 고릅니다.
-    private List<String> fridgeSearchTerms(String dishName, UserRecipeContext context) {
-        if (context == null || context.fridgeIngredients().isEmpty()) {
-            return List.of();
-        }
-        String normalizedDish = RecipeCandidate.normalize(dishName);
-        return context.fridgeIngredients().stream()
-                .filter(fridge -> fridge.name() != null && !fridge.name().isBlank())
-                .filter(fridge -> {
-                    String normalizedName = RecipeCandidate.normalize(fridge.name());
-                    return normalizedDish.contains(normalizedName)
-                            || (fridge.expirationDate() != null && !fridge.expirationDate().isAfter(java.time.LocalDate.now().plusDays(3)));
-                })
-                .map(FridgeIngredientContext::name)
-                .distinct()
-                .limit(2)
-                .toList();
     }
 
     /**

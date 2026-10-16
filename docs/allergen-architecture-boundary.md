@@ -330,8 +330,8 @@ reflection, Unicode escape를 이용한 난독화, wrapper를 통한 간접 노�
 | --- | --- | --- |
 | normalization 누락 (6a.1 해결) | `service/ChatSafetyContextService.java`의 `appendNormalizedValue` | stored/request profile을 자연어 heuristic에서 분리. normalized non-blank 값 보존 |
 | profile source 분리 | `service/recipeagent/RepositoryUserRecipeContextLoader.java:63`, `RecipeAgentOrchestrator.java:63` | Agent는 DB/이전 세션 context 사용. 채팅이 합친 request/history allergies를 그대로 소비하지 않음 |
-| matching 의미 차이 | `service/RecommendationService.java:81` | 재료만 대소문자 무시 substring 검사. dictionary/derived/한 글자 token 규칙과 다름; 저장 추천은 항상 재검사하지 않음 |
-| 보조 필터 의미 차이 | `service/recipeagent/RecipePersonalizationPolicies.java:394`, `RecipeAgentPipeline.java:124` | 냉장고 후보 필터와 최종 잔존 검증은 normalized substring 계열. AllergyPolicy의 Matcher 호출과 별개 |
+| matching 의미 차이 | (해소) `service/RecommendationService.java` | 2026-10-15 냉장고 기능 제거로 추천을 계산하지 않아 별도 substring 검사가 없어짐 |
+| 보조 필터 의미 차이 | `service/recipeagent/RecipePersonalizationPolicies.java:394`, `RecipeAgentPipeline.java:124` | 최종 잔존 검증은 normalized substring 계열(냉장고 후보 필터는 2026-10-15 제거). AllergyPolicy의 Matcher 호출과 별개 |
 
 위 항목은 6a에서는 수정하지 않았다. 6a.1에서는 첫 항목만 수정했다.
 나머지는 정책 승인이나 안전성 보증이 아닌 기존 경로 차이의 기록이다.

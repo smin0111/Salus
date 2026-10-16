@@ -11,7 +11,7 @@ import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/api
 
 /*
  * AI 셰프 채팅 화면입니다.
- * 사용자가 메시지를 보내면 백엔드(POST /api/chat/message)가 건강 프로필/냉장고 재료를 반영해 답변하고,
+ * 사용자가 메시지를 보내면 백엔드(POST /api/chat/message)가 건강 프로필을 반영해 답변하고,
  * 레시피가 포함되면 레시피 카드로 보여 줍니다. 로그인 사용자는 대화 세션 관리, 음성 읽기(TTS), 식단 저장을 쓸 수 있습니다.
  */
 // 백엔드가 구조화된 recipe를 주지 못한 경우를 대비해 텍스트 레시피도 화면용으로 정리합니다.
@@ -456,7 +456,6 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     const [progressStage, setProgressStage] = useState(null);
     const [elapsedSeconds, setElapsedSeconds] = useState(0);
     const progressTimerRef = useRef(null);
-    const [useFridge, setUseFridge] = useState(true); // 기본값 ON
     const [chatSessionId, setChatSessionId] = useState(null);
     const [chatSessions, setChatSessions] = useState([]);
     const [renameModalVisible, setRenameModalVisible] = useState(false);
@@ -723,7 +722,6 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             const healthProfilePayload = buildHealthProfilePayload(healthProfile);
 
             debugLog('[DEBUG] Sending to AI:', {
-                useFridge,
                 messageLength: messageText.trim().length,
                 healthProfileIncluded: Object.values(healthProfilePayload).some(values => values.length > 0)
             });
@@ -734,8 +732,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                     sessionId: chatSessionId,
                     message: messageText,
                     history: history,
-                    useFridge: useFridge,
-                    healthProfile: healthProfilePayload
+                    healthProfile: healthProfilePayload,
                 },
                 {
                     headers: {
@@ -1156,9 +1153,9 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                             <View style={styles.suggestionChips}>
                                 <TouchableOpacity
                                     style={styles.suggestionChip}
-                                    onPress={() => { setInputText('냉장고 재료로 만들 수 있는 요리'); }}
+                                    onPress={() => { setInputText('양파 빼고 제육볶음 레시피 알려줘'); }}
                                 >
-                                    <Text style={styles.suggestionText}>냉장고 재료로 만들 수 있는 요리</Text>
+                                    <Text style={styles.suggestionText}>양파 빼고 제육볶음 레시피</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={styles.suggestionChip}
@@ -1199,25 +1196,9 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
                 style={styles.inputContainerWrapper}
             >
-                {/* 냉장고 재료 사용 토글(로그인 시), 입력창, 음성 입력(준비 중), 전송 버튼 */}
+                {/* 입력창, 음성 입력(준비 중), 전송 버튼 */}
                 <View style={styles.inputFloatingContainer}>
                     <View style={styles.inputWrapper}>
-                        {isLoggedIn && (
-                            <TouchableOpacity
-                                style={[styles.fridgeToggleBtn, useFridge && styles.fridgeToggleBtnActive]}
-                                onPress={() => setUseFridge(!useFridge)}
-                                activeOpacity={0.7}
-                                accessibilityRole="switch"
-                                accessibilityLabel="냉장고 재료 사용"
-                                accessibilityState={{ checked: useFridge }}
-                            >
-                                <Ionicons
-                                    name={useFridge ? "restaurant" : "restaurant-outline"}
-                                    size={20}
-                                    color={useFridge ? colors.primary : colors.textTertiary}
-                                />
-                            </TouchableOpacity>
-                        )}
                         <TextInput
                             style={[
                                 styles.input,
@@ -1775,17 +1756,6 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         minHeight: Platform.OS === 'web' ? 44 : 48,
     },
-    fridgeToggleBtn: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 2,
-    },
-    fridgeToggleBtnActive: {
-        backgroundColor: colors.secondaryLight,
-    },
     micButton: { padding: 6, marginLeft: 2 },
     input: {
         flex: 1,
@@ -1902,46 +1872,6 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: colors.primary,
         position: 'relative',
-    },
-    fridgeChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: colors.surfaceAlt,
-        paddingVertical: 8,
-        paddingHorizontal: 14,
-        borderRadius: 20,
-        gap: 6,
-        borderWidth: 2,
-        borderColor: colors.border,
-        shadowColor: colors.text,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
-    },
-    fridgeChipActive: {
-        backgroundColor: colors.secondary,
-        borderColor: colors.secondary,
-        shadowColor: colors.secondary,
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
-        transform: [{ scale: 1.02 }]
-    },
-    fridgeChipText: {
-        fontSize: 13,
-        color: colors.textSecondary,
-        fontWeight: '700',
-        letterSpacing: -0.2
-    },
-    fridgeChipTextActive: {
-        color: 'white',
-    },
-    fridgeIndicator: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        marginRight: 4,
     },
     activeBadge: {
         backgroundColor: 'rgba(255, 255, 255, 0.2)',

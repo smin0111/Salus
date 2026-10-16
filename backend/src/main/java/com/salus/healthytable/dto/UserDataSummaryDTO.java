@@ -12,7 +12,6 @@ import lombok.Data;
 public class UserDataSummaryDTO {
     private long healthProfiles;
     private long healthCheckups;
-    private long fridgeItems;
     private long mealLogs;
     private long recommendations;
     private long activityLogs;

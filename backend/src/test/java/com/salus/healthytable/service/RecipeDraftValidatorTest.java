@@ -631,7 +631,6 @@ class RecipeDraftValidatorTest {
                 List.of(),
                 title + " 근거",
                 "test",
-                List.of(),
                 new RecipeGenerationRequest.SafetyConditions(List.of(), List.of(), dietaryRestrictions, List.of(), List.of()),
                 "",
                 List.of(),

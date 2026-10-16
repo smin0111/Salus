@@ -9,7 +9,6 @@ import java.util.List;
  *
  * - mode: 새로 만들기, 상세 설명, 재료 대체, 재료 제외 중 어떤 작업인지
  * - trustedRecipes / searchContext / searchSource: LLM이 참고할 근거(신뢰 레시피, 검색 결과, 출처)
- * - fridgeItems: 사용자의 냉장고 재료
  * - safetyConditions: 반드시 지켜야 할 알레르기/건강 조건
  * - previousRecipeText, modifiers, excludedIngredients, substitutions: 기존 레시피를 수정할 때 사용하는 값
  */
@@ -20,7 +19,6 @@ public record RecipeGenerationRequest(
         List<Recipe> trustedRecipes,
         String searchContext,
         String searchSource,
-        List<String> fridgeItems,
         SafetyConditions safetyConditions,
         String previousRecipeText,
         List<String> modifiers,

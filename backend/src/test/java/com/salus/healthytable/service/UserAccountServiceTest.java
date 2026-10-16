@@ -7,7 +7,6 @@ import com.salus.healthytable.repository.ActivityLogRepository;
 import com.salus.healthytable.repository.ChatMessageRepository;
 import com.salus.healthytable.repository.ChatSessionRepository;
 import com.salus.healthytable.repository.CommunityPostRepository;
-import com.salus.healthytable.repository.FridgeItemRepository;
 import com.salus.healthytable.repository.HealthCheckupRepository;
 import com.salus.healthytable.repository.HealthProfileRepository;
 import com.salus.healthytable.repository.MealLogRepository;
@@ -41,7 +40,6 @@ class UserAccountServiceTest {
     private final UserRepository userRepository = mock(UserRepository.class);
     private final HealthProfileRepository healthProfileRepository = mock(HealthProfileRepository.class);
     private final HealthCheckupRepository healthCheckupRepository = mock(HealthCheckupRepository.class);
-    private final FridgeItemRepository fridgeItemRepository = mock(FridgeItemRepository.class);
     private final MealLogRepository mealLogRepository = mock(MealLogRepository.class);
     private final RecommendationRepository recommendationRepository = mock(RecommendationRepository.class);
     private final ActivityLogRepository activityLogRepository = mock(ActivityLogRepository.class);
@@ -57,7 +55,6 @@ class UserAccountServiceTest {
             userRepository,
             healthProfileRepository,
             healthCheckupRepository,
-            fridgeItemRepository,
             mealLogRepository,
             recommendationRepository,
             activityLogRepository,
@@ -76,7 +73,6 @@ class UserAccountServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(healthProfileRepository.countByUserId(1L)).thenReturn(1L);
         when(healthCheckupRepository.countByUserId(1L)).thenReturn(2L);
-        when(fridgeItemRepository.countByUserId(1L)).thenReturn(3L);
         when(mealLogRepository.countByUser(user)).thenReturn(4L);
         when(recommendationRepository.countByUserId(1L)).thenReturn(5L);
         when(activityLogRepository.countByUser(user)).thenReturn(6L);
@@ -92,7 +88,6 @@ class UserAccountServiceTest {
 
         assertThat(summary.getHealthProfiles()).isEqualTo(1L);
         assertThat(summary.getHealthCheckups()).isEqualTo(2L);
-        assertThat(summary.getFridgeItems()).isEqualTo(3L);
         assertThat(summary.getMealLogs()).isEqualTo(4L);
         assertThat(summary.getRecommendations()).isEqualTo(5L);
         assertThat(summary.getActivityLogs()).isEqualTo(6L);
@@ -123,7 +118,6 @@ class UserAccountServiceTest {
                 communityPostRepository,
                 recipeShareRepository,
                 recommendationRepository,
-                fridgeItemRepository,
                 healthCheckupRepository,
                 healthProfileRepository,
                 mealLogRepository,
@@ -140,7 +134,6 @@ class UserAccountServiceTest {
         inOrder.verify(communityPostRepository).deleteByUserId(1L);
         inOrder.verify(recipeShareRepository).deleteByUserId(1L);
         inOrder.verify(recommendationRepository).deleteByUserId(1L);
-        inOrder.verify(fridgeItemRepository).deleteByUserId(1L);
         inOrder.verify(healthCheckupRepository).deleteByUserId(1L);
         inOrder.verify(healthProfileRepository).deleteByUserId(1L);
         inOrder.verify(mealLogRepository).deleteByUser(user);

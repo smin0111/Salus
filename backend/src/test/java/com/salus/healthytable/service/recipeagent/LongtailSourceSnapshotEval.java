@@ -39,7 +39,7 @@ class LongtailSourceSnapshotEval {
         for (JsonNode row : report) {
             String dish = row.path("dish").asText();
             RecipeResearchPlan plan = new RecipeResearchPlan(
-                    dish, "", RecipeRequestMode.CREATE, false, false, true, List.of(dish + " 레시피"), 3, 5);
+                    dish, "", RecipeRequestMode.CREATE, false, true, List.of(dish + " 레시피"), 3, 5);
             int usable = 0;
             List<String> notes = new ArrayList<>();
             for (JsonNode page : row.path("pages")) {

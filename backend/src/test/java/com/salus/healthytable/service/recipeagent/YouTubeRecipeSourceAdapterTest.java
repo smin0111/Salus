@@ -344,7 +344,7 @@ class YouTubeRecipeSourceAdapterTest {
                 .search(tunaPlan, UserRecipeContext.empty(1L))
                 .get(0);
         RecipeCandidate originalTuna = builder.build(tunaPlan, List.of(tunaSource));
-        UserRecipeContext allergy = new UserRecipeContext(1L, List.of("깻잎"), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+        UserRecipeContext allergy = new UserRecipeContext(1L, List.of("깻잎"), List.of(), List.of(), List.of(), List.of(), List.of());
 
         RecipePersonalizationDecision tunaDecision = engine.evaluate(originalTuna, allergy);
         RecipeCandidate personalizedTuna = modifications.apply(originalTuna, tunaDecision);
@@ -363,7 +363,7 @@ class YouTubeRecipeSourceAdapterTest {
                 .search(bruleePlan, UserRecipeContext.empty(1L))
                 .get(0);
         RecipeCandidate brulee = builder.build(bruleePlan, List.of(bruleeSource));
-        UserRecipeContext diabetes = new UserRecipeContext(1L, List.of(), List.of("당뇨"), List.of(), List.of(), List.of("당류 줄이기"), List.of(), List.of());
+        UserRecipeContext diabetes = new UserRecipeContext(1L, List.of(), List.of("당뇨"), List.of(), List.of(), List.of("당류 줄이기"), List.of());
 
         assertThat(engine.evaluate(brulee, diabetes).decisionType()).isEqualTo(RecipeDecisionType.RECOMMEND_ALTERNATIVE);
     }
@@ -463,7 +463,6 @@ class YouTubeRecipeSourceAdapterTest {
                 creatorName,
                 creatorName == null || creatorName.isBlank() ? RecipeRequestMode.CREATE : RecipeRequestMode.CREATOR_SPECIFIC,
                 false,
-                false,
                 true,
                 queries,
                 3,
@@ -476,8 +475,7 @@ class YouTubeRecipeSourceAdapterTest {
                 new MedicationInteractionPolicy(new UnknownMedicationFoodInteractionAdapter()),
                 new ChronicConditionPolicy(),
                 new DietaryRestrictionPolicy(),
-                new ExplicitExclusionPolicy(),
-                new FridgeAdaptationPolicy(clock)));
+                new ExplicitExclusionPolicy()));
     }
 
     private YouTubeVideoSearchResult result(String videoId) {

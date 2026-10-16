@@ -103,7 +103,7 @@ export default function PersonalizationWorkbench({ compact, reducedMotion }) {
                         <Ionicons name="add-circle-outline" size={14} color="#879289" />
                         <Text style={styles.additionalContextLabel}>추가로 참고하는 정보</Text>
                     </View>
-                    <Text style={styles.additionalContextText}>냉장고 재료 · 조리 시간 · 현재 요청</Text>
+                    <Text style={styles.additionalContextText}>빼고 싶은 재료 · 조리 시간 · 현재 요청</Text>
                 </View>
             </View>
 

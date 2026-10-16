@@ -172,7 +172,7 @@ public class RecipeEvidenceService {
             systemContext.append("\n=== 신뢰 가능한 내부 레시피 DB 자료 (최우선) ===\n");
             systemContext.append("답변 첫 문장은 인사나 자기소개 없이 요청한 요리명과 레시피 안내로 바로 시작하세요.\n");
             systemContext.append("아래 자료가 사용자의 요청 음식과 맞으면 이 재료와 조리 순서를 최우선으로 사용하세요.\n");
-            systemContext.append("DB 자료와 충돌하는 재료나 조리법을 새로 지어내지 말고, 냉장고 재료도 임의로 섞지 마세요.\n");
+            systemContext.append("DB 자료와 충돌하는 재료나 조리법을 새로 지어내지 마세요.\n");
             systemContext.append("건강 정보 때문에 바꿔야 하는 경우에만 이유를 짧게 설명하세요.\n");
             for (int i = 0; i < recipes.size(); i++) {
                 Recipe recipe = recipes.get(i);

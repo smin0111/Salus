@@ -80,7 +80,7 @@ class LongtailLiveDiscoveryEval {
         List<String> summary = new ArrayList<>();
         for (String dish : dishes) {
             long started = System.nanoTime();
-            RecipeResearchPlan plan = planner.plan(dish + " 레시피 알려줘", false, false);
+            RecipeResearchPlan plan = planner.plan(dish + " 레시피 알려줘", false);
             List<WebRecipeSearchResult> results = search.search(plan.searchQueries(), Math.max(plan.maxSources() * 2, 6));
             long searchedMs = (System.nanoTime() - started) / 1_000_000;
             List<RecipeSourceCandidate> candidates = pages.collect(plan, results);

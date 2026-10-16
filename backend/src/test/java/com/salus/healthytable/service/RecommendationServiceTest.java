@@ -1,25 +1,18 @@
 package com.salus.healthytable.service;
 
-import com.salus.healthytable.domain.FridgeItem;
-import com.salus.healthytable.domain.HealthProfile;
-import com.salus.healthytable.domain.Recipe;
 import com.salus.healthytable.domain.Recommendation;
 import com.salus.healthytable.dto.RecommendationDTO;
-import com.salus.healthytable.repository.FridgeItemRepository;
-import com.salus.healthytable.repository.HealthProfileRepository;
 import com.salus.healthytable.repository.RecipeRepository;
 import com.salus.healthytable.repository.RecommendationRepository;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
-import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -30,60 +23,27 @@ import static org.mockito.Mockito.when;
 class RecommendationServiceTest {
 
     private final RecipeRepository recipeRepository = mock(RecipeRepository.class);
-    private final FridgeItemRepository fridgeItemRepository = mock(FridgeItemRepository.class);
-    private final HealthProfileRepository healthProfileRepository = mock(HealthProfileRepository.class);
     private final RecommendationRepository recommendationRepository = mock(RecommendationRepository.class);
     private final RecommendationService service = new RecommendationService(
             recipeRepository,
-            fridgeItemRepository,
-            healthProfileRepository,
             recommendationRepository);
 
-    // 알레르기 재료가 들어간 레시피는 추천에서 빠지고, 빈 냉장고 값은 정리된 뒤 점수가 계산되어야 합니다.
+    // 냉장고 기능을 없애 추천 근거가 없으므로, 이전 추천은 지우고 아무 레시피도 추천하지 않아야 합니다.
     @Test
-    void generateRecommendationsExcludesAllergyRecipesAndNormalizesLegacyValues() {
-        Recipe watermelonRecipe = recipe(10L, "수박화채", Arrays.asList("수박", "얼음"));
-        Recipe tofuRecipe = recipe(20L, "두부 샐러드", Arrays.asList(" 두부 ", "채소"));
-        FridgeItem tofu = fridgeItem(" 두부 ");
-        FridgeItem blank = fridgeItem(" ");
-        HealthProfile profile = new HealthProfile();
-        profile.setAllergies(Arrays.asList(" ", "수박", null));
+    void generateRecommendationsClearsOldRecordsAndRecommendsNothingWithoutBasis() {
+        assertThat(service.generateRecommendations(1L)).isEmpty();
 
-        when(recipeRepository.findAll()).thenReturn(List.of(watermelonRecipe, tofuRecipe));
-        when(fridgeItemRepository.findByUserId(1L)).thenReturn(Arrays.asList(tofu, blank));
-        when(healthProfileRepository.findByUserId(1L)).thenReturn(Optional.of(profile));
-        when(recommendationRepository.save(any(Recommendation.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        List<Recommendation> recommendations = service.generateRecommendations(1L);
-
-        ArgumentCaptor<Recommendation> captor = ArgumentCaptor.forClass(Recommendation.class);
         verify(recommendationRepository).deleteByUserId(1L);
-        verify(recommendationRepository).save(captor.capture());
-
-        Recommendation saved = captor.getValue();
-        assertThat(recommendations).containsExactly(saved);
-        assertThat(saved.getUserId()).isEqualTo(1L);
-        assertThat(saved.getRecipeId()).isEqualTo(20L);
-        assertThat(saved.getScore()).isEqualTo(10.0);
-        assertThat(saved.getReason()).contains("두부");
+        verify(recommendationRepository, never()).save(any(Recommendation.class));
+        verifyNoInteractions(recipeRepository);
     }
 
-    // 같은 등록값 "굴"이 추천 경로에서도 보존되어 해당 재료가 있는 레시피를 제외해야 합니다.
+    // 저장된 추천이 없으면 빈 목록을 돌려줍니다.
     @Test
-    void storedOysterAllergyStillExcludesOysterRecipe() {
-        HealthProfile profile = new HealthProfile();
-        profile.setAllergies(List.of("굴"));
-        when(healthProfileRepository.findByUserId(1L)).thenReturn(Optional.of(profile));
-        when(recipeRepository.findAll()).thenReturn(List.of(
-                recipe(10L, "굴 두부 요리", List.of("굴", "두부")),
-                recipe(20L, "두부 요리", List.of("두부"))));
-        when(fridgeItemRepository.findByUserId(1L)).thenReturn(List.of(fridgeItem("두부")));
-        when(recommendationRepository.save(any(Recommendation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    void getRecommendationsReturnsEmptyWhenNothingStored() {
+        when(recommendationRepository.findByUserIdOrderByScoreDesc(1L)).thenReturn(List.of());
 
-        assertThat(service.generateRecommendations(1L)).extracting(Recommendation::getRecipeId).containsExactly(20L);
-        ArgumentCaptor<Recommendation> captor = ArgumentCaptor.forClass(Recommendation.class);
-        verify(recommendationRepository).save(captor.capture());
-        assertThat(captor.getValue().getRecipeId()).isEqualTo(20L);
+        assertThat(service.getRecommendations(1L)).isEmpty();
     }
 
     // 추천된 레시피가 삭제되어 없어도 "알 수 없는 레시피"로 안전하게 응답해야 합니다.
@@ -112,24 +72,6 @@ class RecommendationServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("사용자 정보가 필요합니다.");
 
-        verifyNoInteractions(
-                recipeRepository,
-                fridgeItemRepository,
-                healthProfileRepository,
-                recommendationRepository);
-    }
-
-    private Recipe recipe(Long id, String title, List<String> ingredients) {
-        Recipe recipe = new Recipe();
-        recipe.setId(id);
-        recipe.setTitle(title);
-        recipe.setIngredients(ingredients);
-        return recipe;
-    }
-
-    private FridgeItem fridgeItem(String name) {
-        FridgeItem item = new FridgeItem();
-        item.setName(name);
-        return item;
+        verifyNoInteractions(recipeRepository, recommendationRepository);
     }
 }

@@ -114,7 +114,7 @@ export default function HeroCopy({
 
             <View style={[styles.heroAside, !desktop && styles.heroAsideCompact]}>
                 <Text style={[styles.heroBody, mobile && styles.heroBodyMobile]}>
-                    냉장고에 있는 재료와 알레르기, 건강 상태, 식사 기준, 등록한 복용 정보를 함께 참고해 나에게 맞는 레시피를 추천합니다.
+                    알레르기, 건강 상태, 식사 기준, 등록한 복용 정보를 함께 참고해 출처가 있는 레시피를 나에게 맞게 찾아 드립니다.
                 </Text>
                 <View style={[styles.heroActions, mobile && styles.heroActionsMobile]}>
                     <LandingButton

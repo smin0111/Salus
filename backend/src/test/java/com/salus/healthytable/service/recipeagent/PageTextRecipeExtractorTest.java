@@ -130,7 +130,7 @@ class PageTextRecipeExtractorTest {
                         "마시멜로우", "150g", "버터", "30g", "피스타치오 스프레드", "120g", "카다이프면", "100g"),
                 steps("볶는다", "섞는다")).extract("두쫀쿠", page(BLOG)).orElseThrow();
         RecipeResearchPlan plan = new RecipeResearchPlan(
-                "두쫀쿠", "", RecipeRequestMode.CREATE, false, false, true, List.of("두쫀쿠 레시피"), 3, 5);
+                "두쫀쿠", "", RecipeRequestMode.CREATE, false, true, List.of("두쫀쿠 레시피"), 3, 5);
 
         RecipeSourceQualityScore score = assessor.assess(plan, text);
 
@@ -155,7 +155,7 @@ class PageTextRecipeExtractorTest {
                 fetcher, new SchemaOrgRecipeJsonLdExtractor(objectMapper), new RecipeSourceQualityAssessor(),
                 extractor(llm), 2);
         RecipeResearchPlan plan = new RecipeResearchPlan(
-                "두쫀쿠", "", RecipeRequestMode.CREATE, false, false, true, List.of("두쫀쿠 레시피"), 3, 5);
+                "두쫀쿠", "", RecipeRequestMode.CREATE, false, true, List.of("두쫀쿠 레시피"), 3, 5);
 
         List<RecipeSourceCandidate> candidates = adapter.collect(plan, List.of(
                 new WebRecipeSearchResult("두쫀쿠 만들기", "https://m.blog.naver.com/a/1", "재료", "m.blog.naver.com", 1)));
@@ -186,7 +186,7 @@ class PageTextRecipeExtractorTest {
                 fetcher, new SchemaOrgRecipeJsonLdExtractor(objectMapper), new RecipeSourceQualityAssessor(),
                 extractor(llm), 1);
         RecipeResearchPlan plan = new RecipeResearchPlan(
-                "두쫀쿠", "", RecipeRequestMode.CREATE, false, false, true, List.of("두쫀쿠 레시피"), 3, 5);
+                "두쫀쿠", "", RecipeRequestMode.CREATE, false, true, List.of("두쫀쿠 레시피"), 3, 5);
 
         List<RecipeSourceCandidate> candidates = adapter.collect(plan, List.of(
                 new WebRecipeSearchResult("디저트 만들기", "https://m.blog.naver.com/a/1", "재료", "m.blog.naver.com", 1),
@@ -217,7 +217,7 @@ class PageTextRecipeExtractorTest {
                 fetcher, new SchemaOrgRecipeJsonLdExtractor(objectMapper), new RecipeSourceQualityAssessor(),
                 extractor(llm), 2);
         RecipeResearchPlan plan = new RecipeResearchPlan(
-                "두쫀쿠", "", RecipeRequestMode.CREATE, false, false, true, List.of("두쫀쿠 레시피"), 3, 5)
+                "두쫀쿠", "", RecipeRequestMode.CREATE, false, true, List.of("두쫀쿠 레시피"), 3, 5)
                 .withAvoidIngredients(List.of("땅콩"));
 
         List<RecipeSourceCandidate> candidates = adapter.collect(plan, List.of(
@@ -240,7 +240,7 @@ class PageTextRecipeExtractorTest {
                 fetcher, new SchemaOrgRecipeJsonLdExtractor(objectMapper), new RecipeSourceQualityAssessor(),
                 extractor(llm), 2);
         RecipeResearchPlan plan = new RecipeResearchPlan(
-                "쿼르텔바즈 스튜", "", RecipeRequestMode.CREATE, false, false, true, List.of("쿼르텔바즈 스튜 레시피"), 3, 5);
+                "쿼르텔바즈 스튜", "", RecipeRequestMode.CREATE, false, true, List.of("쿼르텔바즈 스튜 레시피"), 3, 5);
 
         List<RecipeSourceCandidate> candidates = adapter.collect(plan, List.of(
                 new WebRecipeSearchResult("스튜 만들기", "https://m.blog.naver.com/a/1", "재료", "m.blog.naver.com", 1)));

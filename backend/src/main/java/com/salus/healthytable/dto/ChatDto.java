@@ -34,8 +34,6 @@ public class ChatDto {
         private String message;
         // 클라이언트가 보낸 이전 대화 기록 (문맥 파악용)
         private List<Message> history;
-        // true면 사용자의 냉장고 재료를 고려해 레시피를 추천합니다.
-        private boolean useFridge = true; // 기본값은 true
         // 요청에 함께 보낸 건강 정보(주로 게스트용). 로그인 사용자는 DB의 건강 프로필도 함께 확인합니다.
         private HealthProfileContext healthProfile;
     }

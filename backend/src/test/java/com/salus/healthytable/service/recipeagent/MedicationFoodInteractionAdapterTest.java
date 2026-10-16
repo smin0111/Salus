@@ -421,9 +421,9 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(result.notices()).anyMatch(notice -> notice.contains("서로 달라"));
     }
 
-    // 약물 정책이 알레르기 우선순위를 뒤집지 않고, 확인된 충돌 재료는 냉장고 활용 목록에서 빠져야 합니다.
+    // 약물 정책이 알레르기 우선순위를 뒤집지 않고, 알레르기와 약물 충돌이 함께 기록되어야 합니다.
     @Test
-    void medicationPolicyDoesNotOverrideAllergyPriorityAndConfirmedConflictBeatsFridgeUse() {
+    void medicationPolicyDoesNotOverrideAllergyPriority() {
         RecipePersonalizationPolicyEngine engine = engine(adapter(
                 new FakeMfdsPort().with("자몽주의정", mfdsFound("자몽주의정", List.of("성분"), "자몽주스와 함께 복용하지 마십시오.", "", "")),
                 new FakeOpenFdaPort(),
@@ -447,7 +447,6 @@ class MedicationFoodInteractionAdapterTest {
                 List.of(),
                 List.of("자몽주의정"),
                 List.of(),
-                List.of(new FridgeIngredientContext("자몽", 1.0, "개", LocalDate.of(2026, 7, 21))),
                 List.of());
 
         RecipePersonalizationDecision decision = engine.evaluate(recipe, context);
@@ -455,7 +454,6 @@ class MedicationFoodInteractionAdapterTest {
         assertThat(decision.decisionType()).isEqualTo(RecipeDecisionType.BLOCK);
         assertThat(decision.conflicts()).anyMatch(conflict -> conflict.type() == RecipeConflictType.ALLERGY);
         assertThat(decision.conflicts()).anyMatch(conflict -> conflict.type() == RecipeConflictType.MEDICATION_INTERACTION);
-        assertThat(decision.fridgeItemsUsed()).contains("자몽");
     }
 
     // 약물 충돌로 제거한 재료는 조리 단계에서도 지워져야 합니다.
@@ -477,7 +475,7 @@ class MedicationFoodInteractionAdapterTest {
                 List.of("플레인 요거트"),
                 List.of("자몽"),
                 List.of());
-        UserRecipeContext context = new UserRecipeContext(1L, List.of(), List.of(), List.of(), List.of("자몽주의정"), List.of(), List.of(), List.of());
+        UserRecipeContext context = new UserRecipeContext(1L, List.of(), List.of(), List.of(), List.of("자몽주의정"), List.of(), List.of());
 
         RecipePersonalizationDecision decision = engine(port).evaluate(recipe, context);
         RecipeCandidate personalized = new RecipeModificationService().apply(recipe, decision);
@@ -506,7 +504,7 @@ class MedicationFoodInteractionAdapterTest {
                 List.of("자몽"),
                 List.of("탄산수"),
                 List.of());
-        UserRecipeContext context = new UserRecipeContext(1L, List.of(), List.of(), List.of(), List.of("자몽주의정"), List.of(), List.of(), List.of());
+        UserRecipeContext context = new UserRecipeContext(1L, List.of(), List.of(), List.of(), List.of("자몽주의정"), List.of(), List.of());
         RecipePersonalizationDecision decision = engine(port).evaluate(recipe, context);
         PersonalizedRecipeResult result = new PersonalizedRecipeResult(recipe, new RecipeModificationService().apply(recipe, decision), decision, List.of());
 
@@ -599,8 +597,7 @@ class MedicationFoodInteractionAdapterTest {
                 new MedicationInteractionPolicy(port),
                 new ChronicConditionPolicy(),
                 new DietaryRestrictionPolicy(),
-                new ExplicitExclusionPolicy(),
-                new FridgeAdaptationPolicy(clock)));
+                new ExplicitExclusionPolicy()));
     }
 
     private NormalizedMedication normalized(String name) {

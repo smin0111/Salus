@@ -249,7 +249,7 @@ class RecipeValidationPipeline {
 
 /**
  * Recipe Agent 결과를 사용자에게 보여 줄 답변 텍스트와 레시피 카드로 조립합니다.
- * 원본 레시피 → 출처 → 개인화 판단 → (복용약) → 변경 재료 → 냉장고 활용 → 최종 판단 → 레시피 순으로 구성합니다.
+ * 원본 레시피 → 출처 → 개인화 판단 → (복용약) → 변경 재료 → 최종 판단 → 레시피 순으로 구성합니다.
  * 차단(BLOCK)이거나 검증에 실패하면 레시피 본문 대신 제공 제한 이유만 보여 줍니다.
  */
 @Component
@@ -298,7 +298,7 @@ class RecipeResponseComposer {
             reply.append("- ").append(notice).append("\n");
         }
         if (decision.userNotices().isEmpty()) {
-            reply.append("- 등록된 건강정보와 냉장고 재료를 확인했습니다.\n");
+            reply.append("- 등록된 건강정보를 확인했습니다.\n");
         }
         if (decision.conflicts().stream().anyMatch(conflict -> conflict.type() == RecipeConflictType.CHRONIC_CONDITION)) {
             reply.append("- 섭취 가능 여부와 적정량은 개인 상태에 따라 다를 수 있습니다.\n");
@@ -314,9 +314,6 @@ class RecipeResponseComposer {
                     .append(modification.replacement() == null ? "" : " -> " + modification.replacement())
                     .append(" (").append(modification.reason()).append(")\n"));
         }
-        reply.append("\n[냉장고 활용]\n");
-        reply.append("- 사용: ").append(decision.fridgeItemsUsed().isEmpty() ? "없음" : String.join(", ", decision.fridgeItemsUsed())).append("\n");
-        reply.append("- 추가 필요: ").append(decision.additionalPurchaseItems().isEmpty() ? "없음" : String.join(", ", decision.additionalPurchaseItems())).append("\n");
         reply.append("\n[최종 판단]\n");
         reply.append(toKoreanDecision(decision.decisionType())).append("\n\n");
 
@@ -367,7 +364,7 @@ class RecipeResponseComposer {
                     || conflict.type() == RecipeConflictType.CHRONIC_CONDITION
                     || conflict.type() == RecipeConflictType.DIETARY_RESTRICTION) {
                 // 차단 이유는 아니어도 건강 정보와 관련된 주의는 남깁니다. 다른 요리를 고를 때도 필요한 정보입니다.
-                // 레시피를 주지 않으므로 냉장고 재고·핵심 아닌 제외 재료 안내는 쓰지 않습니다.
+                // 레시피를 주지 않으므로 핵심 아닌 제외 재료 안내는 쓰지 않습니다.
                 cautions.add(conflict.reason());
             }
         }

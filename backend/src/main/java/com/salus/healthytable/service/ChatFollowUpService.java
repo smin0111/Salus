@@ -132,7 +132,7 @@ public class ChatFollowUpService {
         return !normalized.isBlank() && recipeResponseSanitizer.containsTextAny(
                 normalized,
                 "자세", "원래레시피", "원본레시피", "왜", "빼", "제외", "말고",
-                "대신", "대체", "바꿔", "변경", "맞게", "다시", "냉장고", "사용해",
+                "대신", "대체", "바꿔", "변경", "맞게", "다시", "사용해",
                 "재료", "인분", "조리", "레시피",
                 // "배 알러지 있다고": 직전 레시피에 알레르기 재료를 반영해 달라는 후속 요청입니다(2026-10-14 일반 대화로 가서 64초).
                 "알레르기", "알러지");
@@ -262,7 +262,6 @@ public class ChatFollowUpService {
                 List.of(),
                 lastRecommendation + "\n" + request.getMessage(),
                 "previous-recipe",
-                List.of(),
                 safetyContext,
                 lastRecommendation,
                 List.of(request.getMessage()),

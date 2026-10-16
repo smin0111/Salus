@@ -186,7 +186,7 @@ Markdown 리포트 구성: 1) 실행 환경 2) 평가 모델 3) 평가 데이터
 
 - `suite` — `recipe_generation` | `chat_reply`
 - `mode` — `CREATE` | `DETAIL` | `SUBSTITUTE` | `EXCLUDE`
-- `allergies`, `dietaryRestrictions`, `excludedIngredients`, `substitutions`, `fridgeItems`, `searchContext`
+- `allergies`, `dietaryRestrictions`, `excludedIngredients`, `substitutions`, `searchContext`
 - `replayOnly` — 일부러 깨뜨린 응답을 검사하는 케이스. live 실행에서 제외
 - `expect.expectedFailedDimensions` — **실패해야** 정상인 차원. 판정이 뒤집혀 실패해야 통과로 집계됩니다
 - `expect.expectedFailureCodes` — replay 회귀 고정값

@@ -137,7 +137,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/community/**").permitAll()
                         // 그 외 요청은 인증 필요
                         .requestMatchers("/api/community/**").authenticated()
-                        .requestMatchers("/api/fridge/**").authenticated()
                         .requestMatchers("/api/health-checkups/**").authenticated()
                         .requestMatchers("/api/users/**").authenticated()
                         .anyRequest().authenticated()

@@ -1,6 +1,6 @@
 # Salus — agent instructions
 
-Salus is a personal diet/health service: fridge ingredients, meal logs, health profile and allergies, and evidence-checked recipe generation with a local LLM. It is a portfolio/validation-stage project; never present output as medical advice.
+Salus is a personal diet/health service: meal logs, health profile and allergies, and evidence-checked recipe generation with a local LLM. It is a portfolio/validation-stage project; never present output as medical advice.
 
 Code is the source of truth. This file and `docs/ai/*` are maps verified against commit `7aaeefc` plus the 2026-09-17 working tree; items marked (WIP) were uncommitted at that time. If a doc and the code disagree, trust the code and fix the doc in the same change.
 

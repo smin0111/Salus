@@ -99,7 +99,7 @@ function ContextAnnotation({
                     <Text style={styles.annotationEnglish}>{item.code}</Text>
                 </View>
                 <Text
-                    numberOfLines={item.id === 'fridge' ? 2 : 1}
+                    numberOfLines={1}
                     style={[styles.annotationValue, active && styles.annotationValueActive]}
                 >
                     {item.value}
@@ -121,38 +121,6 @@ function ContextAnnotation({
                     active && { backgroundColor: palette.accent },
                 ]} />
             </View>
-        </Animated.View>
-    );
-}
-
-// "냉장고 재료" 조건을 선택했을 때 사진 위 재료 위치에 표시하는 라벨들
-function IngredientMarkers({ progress, mobile, markers, palette }) {
-    return (
-        <Animated.View
-            style={[
-                styles.ingredientMarkers,
-                {
-                    opacity: progress,
-                    transform: [{
-                        scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }),
-                    }],
-                },
-            ]}
-        >
-            {markers.map((marker, index) => (
-                <View
-                    key={marker.id}
-                    style={[
-                        styles.ingredientMarker,
-                        { left: marker.left, top: marker.top, borderColor: palette.accent },
-                    ]}
-                >
-                    <View style={[styles.ingredientMarkerPin, { backgroundColor: palette.accentText }]}>
-                        <Text style={styles.ingredientMarkerIndex}>{String(index + 1).padStart(2, '0')}</Text>
-                    </View>
-                    {!mobile ? <Text style={styles.ingredientMarkerText}>{marker.label}</Text> : null}
-                </View>
-            ))}
         </Animated.View>
     );
 }
@@ -306,7 +274,6 @@ export default function HeroRecipeCarousel({ desktop, mobile, reducedMotion }) {
     const contextEntrances = useRef(
         HERO_CONTEXT_META.map(() => new Animated.Value(reducedMotion ? 1 : 0)),
     ).current;
-    const markerIn = useRef(new Animated.Value(0)).current;
 
     const healthContexts = useMemo(() => createHealthContexts(carousel.scene), [carousel.scene]);
     const activeItem = healthContexts.find(item => item.id === carousel.activeContext);
@@ -349,16 +316,6 @@ export default function HeroRecipeCarousel({ desktop, mobile, reducedMotion }) {
         return () => animation.stop();
     }, [contextEntrances, foodIn, insightIn, reducedMotion]);
 
-    // "냉장고 재료" 조건이 선택되면 사진 위 재료 라벨을 보여 줍니다.
-    useEffect(() => {
-        const animation = Animated.timing(markerIn, {
-            toValue: carousel.activeContext === 'fridge' ? 1 : 0,
-            duration: reducedMotion ? 0 : 300,
-            useNativeDriver: USE_NATIVE_DRIVER,
-        });
-        animation.start();
-        return () => animation.stop();
-    }, [carousel.activeContext, markerIn, reducedMotion]);
 
     // 트랙패드 가로 스크롤로 장면 이동. 너무 자주 넘어가지 않게 720ms 간격을 둡니다.
     const handleWheel = useCallback((event) => {
@@ -493,12 +450,6 @@ export default function HeroRecipeCarousel({ desktop, mobile, reducedMotion }) {
                         style={styles.preloadImage}
                     />
                 ) : null}
-                <IngredientMarkers
-                    progress={markerIn}
-                    mobile={mobile}
-                    markers={carousel.scene.ingredients}
-                    palette={carousel.scene.palette}
-                />
             </Animated.View>
 
             <Animated.View
@@ -601,17 +552,14 @@ const styles = StyleSheet.create({
     annotation_health: { left: 476, top: 248, width: 158 },
     annotation_diet: { right: 18, top: 158, width: 174 },
     annotation_medication: { right: 10, top: 354, width: 178 },
-    annotation_fridge: { left: 494, top: 378, width: 294 },
     annotationCompact_allergy: { left: 12, top: 42, width: 146 },
     annotationCompact_health: { left: 16, top: 208, width: 154 },
     annotationCompact_diet: { right: 8, top: 82, width: 166 },
     annotationCompact_medication: { right: 8, top: 218, width: 172 },
-    annotationCompact_fridge: { left: 24, top: 408, width: 286 },
     annotationMobile_allergy: { left: 4, top: 22, width: 118 },
     annotationMobile_health: { left: 2, top: 166, width: 128 },
     annotationMobile_diet: { right: 2, top: 82, width: 138 },
     annotationMobile_medication: { right: 2, top: 208, width: 144 },
-    annotationMobile_fridge: { left: 6, right: 6, top: 350 },
     annotationPressable: {
         minHeight: 51,
         paddingHorizontal: 10,
@@ -666,21 +614,6 @@ const styles = StyleSheet.create({
     annotationConnectorDot: { position: 'absolute', right: -2, top: -2, width: 5, height: 5, borderRadius: 3, backgroundColor: landingColors.lineStrong },
     annotationConnectorDotLeft: { left: -2, right: 'auto' },
     annotationConnectorDotActive: { backgroundColor: landingColors.accent },
-    ingredientMarkers: { ...StyleSheet.absoluteFillObject, pointerEvents: 'none' },
-    ingredientMarker: {
-        position: 'absolute',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        paddingRight: 7,
-        borderRadius: 13,
-        backgroundColor: 'rgba(255,253,247,0.94)',
-        borderWidth: 1,
-        borderColor: landingColors.accent,
-    },
-    ingredientMarkerPin: { width: 23, height: 23, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: landingColors.accent },
-    ingredientMarkerIndex: { color: landingColors.paper, fontSize: 9, fontWeight: '900' },
-    ingredientMarkerText: { color: landingColors.ink, fontSize: 9, fontWeight: '900' },
     recipeInsight: {
         position: 'absolute',
         left: 430,

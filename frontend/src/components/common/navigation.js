@@ -6,7 +6,6 @@ import { color, radius, shadow, size, spacing, typography, zIndex } from '../../
 // 하단 탭(모바일)과 사이드바(웹)에 공통으로 보여 줄 주요 메뉴 목록
 export const PRIMARY_NAV_ITEMS = [
   { id: 'chat', label: 'AI 셰프', icon: 'sparkles-outline', activeIcon: 'sparkles' },
-  { id: 'fridge', label: '냉장고', icon: 'nutrition-outline', activeIcon: 'nutrition' },
   { id: 'calendar', label: '식단', icon: 'calendar-outline', activeIcon: 'calendar' },
   { id: 'community', label: '피드', icon: 'people-outline', activeIcon: 'people' },
   { id: 'my', label: 'MY', icon: 'person-circle-outline', activeIcon: 'person-circle' },

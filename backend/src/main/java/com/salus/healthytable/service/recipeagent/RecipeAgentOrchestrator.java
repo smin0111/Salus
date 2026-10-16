@@ -22,7 +22,7 @@ import java.util.Optional;
  * Recipe Agent 경로의 전체 흐름을 조율하는 진입 클래스입니다(ChatService가 기능 플래그가 켜졌을 때 호출).
  *
  * 처리 순서:
- * 1) 사용자 맥락(건강 정보, 냉장고) 로드 + 이전 Agent 세션 복원
+ * 1) 사용자 맥락(건강 정보) 로드 + 이전 Agent 세션 복원
  * 2) 요청 분석(검색 계획) → 출처 검색 → 후보 레시피 구성 (출처를 못 찾으면 레시피를 임의로 만들지 않음)
  * 3) 개인화 정책 평가(알레르기, 질환, 약물 등) → 재료 수정 → 최종 검증
  * 4) 사용자 맥락 로드 실패/부분 로드 또는 검증 실패면 BLOCK(제공 차단)
@@ -125,12 +125,10 @@ public class RecipeAgentOrchestrator {
                     merge(loadedContext.dietaryRestrictions(), safetyContext.dietaryRestrictions()),
                     merge(loadedContext.medications(), safetyContext.medications()),
                     merge(loadedContext.healthGoals(), safetyContext.goals()),
-                    loadedContext.fridgeIngredients(),
                     loadedContext.explicitlyExcludedIngredients());
         }
         RecipeResearchPlan plan = requestPlanner.plan(
                 request == null ? "" : request.getMessage(),
-                request != null && request.isUseFridge(),
                 loadedContext);
         List<String> currentExclusions = requestPlanner.extractExplicitExclusions(request == null ? "" : request.getMessage());
         UserRecipeContext context = loadedContext.withExplicitlyExcludedIngredients(currentExclusions);
@@ -175,7 +173,7 @@ public class RecipeAgentOrchestrator {
                 previous.sourceEvidence().stream().map(RecipeSourceDocument::url).filter(java.util.Objects::nonNull).forEach(excluded::add);
             }
             excluded.addAll(shownBefore.getOrDefault(dishKey(dish), List.of()));
-            RecipeResearchPlan anotherPlan = requestPlanner.plan(dish, request.isUseFridge(), loadedContext)
+            RecipeResearchPlan anotherPlan = requestPlanner.plan(dish, loadedContext)
                     .withExcludedSources(List.copyOf(excluded));
             DiscoveryResult another = discoverCandidate(anotherPlan, context);
             if (another.status() == RecipeResearchStatus.VERIFIED_SOURCE_FOUND) {
@@ -186,7 +184,7 @@ public class RecipeAgentOrchestrator {
                 infoNotices.add("다른 출처의 레시피를 찾지 못해 이전 레시피를 다시 보여 드려요.");
             } else if (!excluded.isEmpty()) {
                 // 직전 답이 다른 요리였으면 그 요리의 예전 레시피를 다시 찾아 보여 주고 그렇게 알립니다.
-                discovery = discoverCandidate(requestPlanner.plan(dish, request.isUseFridge(), loadedContext), context);
+                discovery = discoverCandidate(requestPlanner.plan(dish, loadedContext), context);
                 isFollowUp = false;
                 infoNotices.add("이미 보여 드린 출처 말고 다른 출처를 찾지 못해, 전에 보여 드린 레시피를 다시 보여 드려요.");
             } else {
@@ -339,8 +337,7 @@ public class RecipeAgentOrchestrator {
             List<String> notices = new java.util.ArrayList<>(decision.userNotices());
             notices.add(0, notice);
             return new Evaluation(new RecipePersonalizationDecision(
-                    decision.decisionType(), decision.conflicts(), decision.modifications(), AgentText.distinct(notices),
-                    decision.additionalPurchaseItems(), decision.fridgeItemsUsed()), personalized, validation);
+                    decision.decisionType(), decision.conflicts(), decision.modifications(), AgentText.distinct(notices)), personalized, validation);
         }
 
         // 사용자가 뺀 재료가 핵심 재료였는지입니다. 빼고 제공해도 요리의 중심이 빠진 레시피라 대안을 먼저 찾습니다.
@@ -362,7 +359,7 @@ public class RecipeAgentOrchestrator {
             SafetyContext safetyContext, UserRecipeContextLoadResult contextLoadResult) {
         RecipePersonalizationDecision decision = personalizationEnabled
                 ? policyEngine.evaluate(originalRecipe, context)
-                : new RecipePersonalizationDecision(RecipeDecisionType.ALLOW, List.of(), List.of(), List.of(), List.of(), List.of());
+                : new RecipePersonalizationDecision(RecipeDecisionType.ALLOW, List.of(), List.of(), List.of());
         // 건강 정보를 확인하지 못했다면 안전을 보장할 수 없으므로 개인화 레시피 제공을 차단합니다(fail closed).
         if ((safetyContext != null && !safetyContext.healthContextAvailable())
                 || contextLoadResult.status() == UserRecipeContextLoadStatus.LOAD_FAILED
@@ -370,15 +367,13 @@ public class RecipeAgentOrchestrator {
             List<String> notices = new java.util.ArrayList<>(decision.userNotices());
             notices.add((safetyContext != null && !safetyContext.healthContextAvailable())
                     || contextLoadResult.status() == UserRecipeContextLoadStatus.LOAD_FAILED
-                    ? "사용자 건강정보와 냉장고 정보를 불러오지 못해 개인화 레시피 제공을 제한합니다."
+                    ? "사용자 건강정보를 불러오지 못해 개인화 레시피 제공을 제한합니다."
                     : "사용자 컨텍스트가 일부만 로드되어 개인화 레시피 제공을 제한합니다.");
             decision = new RecipePersonalizationDecision(
                     RecipeDecisionType.BLOCK,
                     decision.conflicts(),
                     decision.modifications(),
-                    AgentText.distinct(notices),
-                    decision.additionalPurchaseItems(),
-                    decision.fridgeItemsUsed());
+                    AgentText.distinct(notices));
         }
         RecipeCandidate personalizedRecipe = modificationService.apply(originalRecipe, decision);
         RecipeValidationResult validation = validationPipeline.validate(personalizedRecipe, context);
@@ -388,9 +383,7 @@ public class RecipeAgentOrchestrator {
                     RecipeDecisionType.BLOCK,
                     decision.conflicts(),
                     decision.modifications(),
-                    decision.userNotices(),
-                    decision.additionalPurchaseItems(),
-                    decision.fridgeItemsUsed());
+                    decision.userNotices());
         }
         return new Evaluation(decision, personalizedRecipe, validation);
     }
@@ -489,23 +482,7 @@ public class RecipeAgentOrchestrator {
                 stringList(map.get("dietaryRestrictions")),
                 stringList(map.get("medications")),
                 stringList(map.get("healthGoals")),
-                fridgeContexts(map.get("fridgeIngredients")),
                 stringList(map.get("explicitlyExcludedIngredients")));
-    }
-
-    private List<FridgeIngredientContext> fridgeContexts(Object value) {
-        if (!(value instanceof List<?> list)) {
-            return List.of();
-        }
-        return list.stream()
-                .filter(Map.class::isInstance)
-                .map(Map.class::cast)
-                .map(item -> new FridgeIngredientContext(
-                        string(item.get("name")),
-                        number(item.get("quantity")),
-                        string(item.get("unit")),
-                        localDate(item.get("expirationDate"))))
-                .toList();
     }
 
     private List<RecipeSourceDocument> sourceDocuments(Object value) {
@@ -538,14 +515,13 @@ public class RecipeAgentOrchestrator {
 
     /**
      * 이번에 로드한 맥락과 이전 세션 스냅샷을 합칩니다.
-     * 프로필/냉장고 중 이번에 로드에 성공한 부분은 최신 값을, 실패한 부분은 이전 값을 사용하고, 제외 재료는 누적합니다.
+     * 건강 프로필을 이번에 불러왔으면 최신 값을, 실패했으면 이전 값을 사용하고, 제외 재료는 누적합니다.
      */
     private UserRecipeContext reconcileContexts(
             UserRecipeContext previous,
             UserRecipeContextLoadResult currentResult) {
         UserRecipeContext current = currentResult.context();
         boolean profileLoaded = currentResult.profileStatus() == ContextSectionLoadStatus.LOADED;
-        boolean fridgeLoaded = currentResult.fridgeStatus() == ContextSectionLoadStatus.LOADED;
         return new UserRecipeContext(
                 current.userId() == null ? previous.userId() : current.userId(),
                 profileLoaded ? current.allergies() : previous.allergies(),
@@ -553,7 +529,6 @@ public class RecipeAgentOrchestrator {
                 profileLoaded ? current.dietaryRestrictions() : previous.dietaryRestrictions(),
                 profileLoaded ? current.medications() : previous.medications(),
                 profileLoaded ? current.healthGoals() : previous.healthGoals(),
-                fridgeLoaded ? current.fridgeIngredients() : previous.fridgeIngredients(),
                 merge(previous.explicitlyExcludedIngredients(), current.explicitlyExcludedIngredients()));
     }
 
@@ -667,23 +642,8 @@ public class RecipeAgentOrchestrator {
                 && (n2.contains("두쫀쿠") || n2.contains("두바이쫀득쿠키"));
     }
 
-    private Double number(Object value) {
-        return value instanceof Number number ? number.doubleValue() : null;
-    }
-
     private double doubleNumber(Object value) {
         return value instanceof Number number ? number.doubleValue() : 0.0;
-    }
-
-    private java.time.LocalDate localDate(Object value) {
-        if (value == null || string(value).isBlank()) {
-            return null;
-        }
-        try {
-            return java.time.LocalDate.parse(string(value));
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     private RecipeCandidate candidateFromMap(Map<?, ?> map) {

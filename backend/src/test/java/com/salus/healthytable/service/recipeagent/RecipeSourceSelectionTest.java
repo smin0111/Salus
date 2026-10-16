@@ -106,7 +106,7 @@ class RecipeSourceSelectionTest {
     }
 
     private RecipeResearchPlan plan(String dish) {
-        return new RecipeResearchPlan(dish, "", RecipeRequestMode.CREATE, false, false, true, List.of(dish + " 레시피"), 3, 5);
+        return new RecipeResearchPlan(dish, "", RecipeRequestMode.CREATE, false, true, List.of(dish + " 레시피"), 3, 5);
     }
 
     private ExtractedRecipeEvidence evidence(String title, List<String> ingredients, List<String> steps) {

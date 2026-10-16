@@ -188,7 +188,7 @@ class RecipeWebSourceAdapterTest {
                 .extract(page("https://recipes.example.com/author", fixture("author-mismatch.html")))
                 .get(0);
         RecipeResearchPlan plan = new DefaultRecipeRequestPlanner(new RecipeNormalizer())
-                .plan("백종원 김치찌개 레시피 알려줘.", false, UserRecipeContext.empty(1L));
+                .plan("백종원 김치찌개 레시피 알려줘.", UserRecipeContext.empty(1L));
 
         assertThat(plan.creatorName()).isEmpty();
         assertThat(assessor.assess(plan, evidence).blockingReasons())
@@ -284,7 +284,7 @@ class RecipeWebSourceAdapterTest {
                 "https://recipes.example.com/kimbap", fixture("nested-section.html")))
                 .collect(plan("참치김밥", "", List.of("참치김밥 레시피")), List.of(searchResult("https://recipes.example.com/kimbap", 1)))
                 .get(0);
-        UserRecipeContext context = new UserRecipeContext(1L, List.of("깻잎"), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+        UserRecipeContext context = new UserRecipeContext(1L, List.of("깻잎"), List.of(), List.of(), List.of(), List.of(), List.of());
 
         RecipePersonalizationDecision decision = engine().evaluate(candidate.originalRecipe(), context);
         RecipeCandidate personalized = new RecipeModificationService().apply(candidate.originalRecipe(), decision);
@@ -306,7 +306,7 @@ class RecipeWebSourceAdapterTest {
         RecipeSourceCandidate candidate = structuredAdapter(Map.of("https://recipes.example.com/brulee", bananaBruleeHtml))
                 .collect(plan("바나나 브륄레", "", List.of("바나나 브륄레 레시피")), List.of(searchResult("https://recipes.example.com/brulee", 1)))
                 .get(0);
-        UserRecipeContext diabetes = new UserRecipeContext(1L, List.of(), List.of("당뇨"), List.of(), List.of(), List.of("당류 줄이기"), List.of(), List.of());
+        UserRecipeContext diabetes = new UserRecipeContext(1L, List.of(), List.of("당뇨"), List.of(), List.of(), List.of("당류 줄이기"), List.of());
 
         assertThat(candidate.qualityScore().blockingReasons()).isEmpty();
         assertThat(engine().evaluate(candidate.originalRecipe(), diabetes).decisionType()).isEqualTo(RecipeDecisionType.RECOMMEND_ALTERNATIVE);
@@ -425,8 +425,7 @@ class RecipeWebSourceAdapterTest {
                 new MedicationInteractionPolicy(new UnknownMedicationFoodInteractionAdapter()),
                 new ChronicConditionPolicy(),
                 new DietaryRestrictionPolicy(),
-                new ExplicitExclusionPolicy(),
-                new FridgeAdaptationPolicy(clock)));
+                new ExplicitExclusionPolicy()));
     }
 
     private StructuredRecipePageAdapter structuredAdapter(Map<String, String> pages) {
@@ -441,7 +440,6 @@ class RecipeWebSourceAdapterTest {
                 dishName,
                 creatorName,
                 creatorName == null || creatorName.isBlank() ? RecipeRequestMode.CREATE : RecipeRequestMode.CREATOR_SPECIFIC,
-                false,
                 false,
                 true,
                 queries,

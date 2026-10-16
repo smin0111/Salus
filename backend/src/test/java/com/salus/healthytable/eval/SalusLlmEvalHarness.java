@@ -434,7 +434,6 @@ class SalusLlmEvalHarness {
                 List.of(),
                 evalCase.searchContext(),
                 evalCase.searchSource(),
-                evalCase.fridgeItemsOrEmpty(),
                 new RecipeGenerationRequest.SafetyConditions(
                         evalCase.allergiesOrEmpty(),
                         evalCase.chronicConditionsOrEmpty(),

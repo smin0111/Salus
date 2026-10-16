@@ -22,7 +22,6 @@ public class UserAccountService {
     private final UserRepository userRepository;
     private final HealthProfileRepository healthProfileRepository;
     private final HealthCheckupRepository healthCheckupRepository;
-    private final FridgeItemRepository fridgeItemRepository;
     private final MealLogRepository mealLogRepository;
     private final RecommendationRepository recommendationRepository;
     private final ActivityLogRepository activityLogRepository;
@@ -45,7 +44,6 @@ public class UserAccountService {
         return UserDataSummaryDTO.builder()
                 .healthProfiles(healthProfileRepository.countByUserId(userId))
                 .healthCheckups(healthCheckupRepository.countByUserId(userId))
-                .fridgeItems(fridgeItemRepository.countByUserId(userId))
                 .mealLogs(mealLogRepository.countByUser(user))
                 .recommendations(recommendationRepository.countByUserId(userId))
                 .activityLogs(activityLogRepository.countByUser(user))
@@ -83,7 +81,6 @@ public class UserAccountService {
         communityPostRepository.deleteByUserId(userId);
         recipeShareRepository.deleteByUserId(userId);
         recommendationRepository.deleteByUserId(userId);
-        fridgeItemRepository.deleteByUserId(userId);
         healthCheckupRepository.deleteByUserId(userId);
         healthProfileRepository.deleteByUserId(userId);
         mealLogRepository.deleteByUser(user);

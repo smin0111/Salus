@@ -10,7 +10,6 @@ import ChatScreen from '../screens/ChatScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import HealthScreen from '../screens/HealthScreen';
 import HealthCheckupScreen from '../screens/HealthCheckupScreen';
-import FridgeScreen from '../screens/FridgeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import LandingPageScreen from '../screens/LandingPageScreen';
 import RecipeDetailScreen from '../screens/RecipeDetailScreen';
@@ -44,13 +43,12 @@ const WEB_SHELL_EXCLUDED_SCREENS = [
 
 // 보호 화면 목록은 화면 이동 직전에 한 번 더 확인합니다.
 // 라우팅만 숨기는 것으로는 부족하고, 사용자가 URL을 직접 입력하는 web 환경도 고려해야 합니다.
-const PROTECTED_SCREENS = ['community', 'fridge', 'calendar', 'health', 'health-checkup', 'account-settings', 'create-post'];
+const PROTECTED_SCREENS = ['community', 'calendar', 'health', 'health-checkup', 'account-settings', 'create-post'];
 
 // 웹 사이드바 메뉴 항목(화면 id, 이름, 설명, 아이콘, URL 경로)
 const WEB_NAV_ITEMS = [
   { id: 'chat', label: 'AI 셰프', caption: '맞춤 레시피 상담', icon: 'sparkles', path: '/chat' },
   { id: 'community', label: '레시피 허브', caption: '추천과 커뮤니티', icon: 'grid', path: '/community' },
-  { id: 'fridge', label: '냉장고', caption: '재료와 유통기한', icon: 'nutrition', path: '/fridge' },
   { id: 'calendar', label: '식단 캘린더', caption: '식사 기록', icon: 'calendar', path: '/calendar' },
   { id: 'health', label: '건강 프로필', caption: '알레르기와 식이조건', icon: 'heart', path: '/health' },
   { id: 'health-checkup', label: '검진 분석', caption: '수치 기반 추천', icon: 'document-text', path: '/health-checkup' },
@@ -59,9 +57,8 @@ const WEB_NAV_ITEMS = [
 // 웹 상단바에 표시할 화면별 [제목, 부제목]
 const WEB_SCREEN_TITLES = {
   about: ['서비스 소개', 'Salus 개인 맞춤형 AI 요리 서비스 플랫폼'],
-  chat: ['AI 셰프 스튜디오', '냉장고와 건강정보를 함께 보는 맞춤 요리 상담'],
+  chat: ['AI 셰프 스튜디오', '건강정보를 반영해 출처가 있는 레시피를 찾는 요리 상담'],
   community: ['레시피 허브', 'AI 추천, 인기 레시피, 사용자 피드를 한곳에서 둘러보세요'],
-  fridge: ['나의 냉장고', '재료 상태와 유통기한을 기준으로 식단 기회를 찾습니다'],
   calendar: ['식단 캘린더', 'AI가 추천한 식사와 직접 기록한 식단을 관리합니다'],
   health: ['건강 프로필', '알레르기, 질환, 식이 제한을 안전하게 반영합니다'],
   'health-checkup': ['건강검진 분석', '검진 수치를 식단 추천으로 연결합니다'],
@@ -77,7 +74,6 @@ const WEB_PATH_TO_SCREEN = {
   '/': 'chat',
   '/chat': 'chat',
   '/community': 'community',
-  '/fridge': 'fridge',
   '/calendar': 'calendar',
   '/health': 'health',
   '/health-checkup': 'health-checkup',
@@ -211,7 +207,7 @@ function WebAppShell({ children, currentScreen, onNavigate, isLoggedIn, user, on
 
 /**
  * 최상위 화면 컴포넌트입니다.
- * - 여러 화면이 함께 쓰는 상태(채팅 메시지, 건강 프로필, 식단, 냉장고 재료)를 여기서 보관하고 props로 내려 줍니다.
+ * - 여러 화면이 함께 쓰는 상태(채팅 메시지, 건강 프로필, 식단)를 여기서 보관하고 props로 내려 줍니다.
  * - desktopWebMode: 웹이면서 화면 너비가 768px 이상일 때 WebAppShell 레이아웃을 사용합니다.
  */
 export default function AppNavigator() {
@@ -235,7 +231,6 @@ export default function AppNavigator() {
     ...createEmptyHealthProfile(),
   });
   const [mealData, setMealData] = useState({});
-  const [fridgeItems, setFridgeItems] = useState([]);
 
   // 진짜 로딩 관리: 앱 최초 마운트 상태
   useEffect(() => {
@@ -376,8 +371,6 @@ export default function AppNavigator() {
         return <HealthCheckupScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
       case 'account-settings':
         return <AccountSettingsScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
-      case 'fridge':
-        return <FridgeScreen fridgeItems={fridgeItems} setFridgeItems={setFridgeItems} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
       case 'search':
         return <SearchScreen onBack={() => handleNavigate('community')} onNavigate={handleNavigate} user={user} webMode={desktopWebMode} />;
       case 'login':

@@ -165,8 +165,7 @@ public class ChatRequestParser {
                 || normalized.contains("구이")
                 || normalized.contains("덮밥")
                 || normalized.contains("파스타")
-                || normalized.contains("샐러드")
-                || normalized.contains("냉장고");
+                || normalized.contains("샐러드");
     }
 
     /**

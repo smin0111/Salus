@@ -2,7 +2,6 @@ package com.salus.healthytable.service.recipeagent;
 
 import com.salus.healthytable.domain.Recipe;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -20,7 +19,7 @@ import java.util.Set;
  */
 
 /**
- * 레시피 개인화에 필요한 사용자 정보 묶음입니다(알레르기, 질환, 식단 제한, 복용 약, 건강 목표, 냉장고 재료, 제외 요청 재료).
+ * 레시피 개인화에 필요한 사용자 정보 묶음입니다(알레르기, 질환, 식단 제한, 복용 약, 건강 목표, 제외 요청 재료).
  * compact 생성자에서 null/빈 값/중복을 정리해, 이후 코드가 항상 정리된 불변 목록을 받도록 합니다.
  */
 record UserRecipeContext(
@@ -30,7 +29,6 @@ record UserRecipeContext(
         List<String> dietaryRestrictions,
         List<String> medications,
         List<String> healthGoals,
-        List<FridgeIngredientContext> fridgeIngredients,
         List<String> explicitlyExcludedIngredients
 ) {
     UserRecipeContext {
@@ -39,19 +37,17 @@ record UserRecipeContext(
         dietaryRestrictions = clean(dietaryRestrictions);
         medications = clean(medications);
         healthGoals = clean(healthGoals);
-        fridgeIngredients = fridgeIngredients == null ? List.of() : List.copyOf(fridgeIngredients);
         explicitlyExcludedIngredients = clean(explicitlyExcludedIngredients);
     }
 
-    // 건강 정보와 냉장고 재료가 모두 비어 있는 맥락
+    // 건강 정보가 모두 비어 있는 맥락
     static UserRecipeContext empty(Long userId) {
-        return new UserRecipeContext(userId, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+        return new UserRecipeContext(userId, List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     // 제외 재료를 이번 요청에서 뺀 재료로만 바꿉니다(다른 요리 요청에 이전 대화의 제외 재료를 끌고 가지 않기 위해).
     UserRecipeContext withOnlyExplicitlyExcludedIngredients(List<String> exclusions) {
-        return new UserRecipeContext(userId, allergies, chronicConditions, dietaryRestrictions, medications, healthGoals,
-                fridgeIngredients, exclusions == null ? List.of() : List.copyOf(new LinkedHashSet<>(exclusions)));
+        return new UserRecipeContext(userId, allergies, chronicConditions, dietaryRestrictions, medications, healthGoals, exclusions == null ? List.of() : List.copyOf(new LinkedHashSet<>(exclusions)));
     }
 
     // 기존 제외 재료에 새 제외 재료를 합친 새 객체를 반환합니다(record는 불변이라 수정 대신 새로 만듭니다).
@@ -67,7 +63,6 @@ record UserRecipeContext(
                 dietaryRestrictions,
                 medications,
                 healthGoals,
-                fridgeIngredients,
                 List.copyOf(mergedExclusions));
     }
 
@@ -85,15 +80,6 @@ record UserRecipeContext(
     }
 }
 
-// 냉장고 재료 한 개(이름, 수량, 단위, 유통기한)
-record FridgeIngredientContext(
-        String name,
-        Double quantity,
-        String unit,
-        LocalDate expirationDate
-) {
-}
-
 // 개인화 결과 판정: 그대로 허용 / 안내와 함께 허용 / 재료 수정 후 제공 / 대체 레시피 추천 / 제공 차단
 enum RecipeDecisionType {
     ALLOW,
@@ -103,21 +89,17 @@ enum RecipeDecisionType {
     BLOCK
 }
 
-// 개인화 정책 평가의 최종 결과(판정, 충돌 목록, 수정 내역, 사용자 안내, 추가 구매 재료, 사용한 냉장고 재료)
+// 개인화 정책 평가의 최종 결과(판정, 충돌 목록, 수정 내역, 사용자 안내)
 record RecipePersonalizationDecision(
         RecipeDecisionType decisionType,
         List<RecipeConflict> conflicts,
         List<RecipeModification> modifications,
-        List<String> userNotices,
-        List<String> additionalPurchaseItems,
-        List<String> fridgeItemsUsed
+        List<String> userNotices
 ) {
     RecipePersonalizationDecision {
         conflicts = conflicts == null ? List.of() : List.copyOf(conflicts);
         modifications = modifications == null ? List.of() : List.copyOf(modifications);
         userNotices = userNotices == null ? List.of() : List.copyOf(userNotices);
-        additionalPurchaseItems = additionalPurchaseItems == null ? List.of() : List.copyOf(additionalPurchaseItems);
-        fridgeItemsUsed = fridgeItemsUsed == null ? List.of() : List.copyOf(fridgeItemsUsed);
     }
 }
 
@@ -169,20 +151,16 @@ interface RecipePersonalizationPolicy {
 record PolicyEvaluation(
         List<RecipeConflict> conflicts,
         List<RecipeModification> modifications,
-        List<String> userNotices,
-        List<String> additionalPurchaseItems,
-        List<String> fridgeItemsUsed
+        List<String> userNotices
 ) {
     PolicyEvaluation {
         conflicts = conflicts == null ? List.of() : List.copyOf(conflicts);
         modifications = modifications == null ? List.of() : List.copyOf(modifications);
         userNotices = userNotices == null ? List.of() : List.copyOf(userNotices);
-        additionalPurchaseItems = additionalPurchaseItems == null ? List.of() : List.copyOf(additionalPurchaseItems);
-        fridgeItemsUsed = fridgeItemsUsed == null ? List.of() : List.copyOf(fridgeItemsUsed);
     }
 
     static PolicyEvaluation empty() {
-        return new PolicyEvaluation(List.of(), List.of(), List.of(), List.of(), List.of());
+        return new PolicyEvaluation(List.of(), List.of(), List.of());
     }
 }
 
@@ -326,23 +304,12 @@ record RecipeCandidate(
     }
 }
 
-// 냉장고 재료와 레시피의 호환 점수(보유 재료, 부족 재료, 대체 후보, 유통기한 임박 재료)
-record FridgeCompatibilityScore(
-        double score,
-        List<String> availableIngredients,
-        List<String> missingIngredients,
-        List<String> substitutionCandidates,
-        List<String> expiringSoonIngredients
-) {
-}
-
 // 레시피 검색 계획: 요리 이름, 크리에이터 이름, 요청 모드, 최신 출처 요청 여부, 검색어 목록, 최대 검색 횟수/출처 수
 record RecipeResearchPlan(
         String dishName,
         String creatorName,
         RecipeRequestMode mode,
         boolean latestSourceRequested,
-        boolean useFridgeIngredients,
         boolean personalizationRequired,
         List<String> searchQueries,
         int maxSearchAttempts,
@@ -359,9 +326,9 @@ record RecipeResearchPlan(
 
     RecipeResearchPlan(
             String dishName, String creatorName, RecipeRequestMode mode, boolean latestSourceRequested,
-            boolean useFridgeIngredients, boolean personalizationRequired, List<String> searchQueries,
+            boolean personalizationRequired, List<String> searchQueries,
             int maxSearchAttempts, int maxSources) {
-        this(dishName, creatorName, mode, latestSourceRequested, useFridgeIngredients, personalizationRequired,
+        this(dishName, creatorName, mode, latestSourceRequested, personalizationRequired,
                 searchQueries, maxSearchAttempts, maxSources, List.of(), List.of());
     }
 
@@ -371,7 +338,7 @@ record RecipeResearchPlan(
      */
     RecipeResearchPlan withAvoidIngredients(List<String> avoid) {
         String without = String.join(" ", avoid);
-        return new RecipeResearchPlan(dishName, creatorName, mode, latestSourceRequested, useFridgeIngredients,
+        return new RecipeResearchPlan(dishName, creatorName, mode, latestSourceRequested,
                 personalizationRequired,
                 List.of(without + " 없는 " + dishName + " 레시피", without + " 없이 " + dishName + " 만드는 법"),
                 maxSearchAttempts, maxSources, avoid, excludedSourceUrls);
@@ -387,7 +354,7 @@ record RecipeResearchPlan(
             queries.add(dishName + " 황금레시피");
             queries.add(dishName + " 만들기");
         }
-        return new RecipeResearchPlan(dishName, creatorName, mode, latestSourceRequested, useFridgeIngredients,
+        return new RecipeResearchPlan(dishName, creatorName, mode, latestSourceRequested,
                 personalizationRequired, List.copyOf(queries), maxSearchAttempts, maxSources, avoidIngredients, urls);
     }
 }
@@ -492,22 +459,20 @@ enum UserRecipeContextLoadStatus {
     LOAD_FAILED
 }
 
-// 사용자 맥락과 로드 상태. 건강 프로필과 냉장고 재료의 로드 상태를 따로 기록합니다. null 상태는 실패로 봅니다(fail closed).
+// 사용자 맥락과 로드 상태. 건강 프로필의 로드 상태를 따로 기록합니다. null 상태는 실패로 봅니다(fail closed).
 record UserRecipeContextLoadResult(
         UserRecipeContext context,
         UserRecipeContextLoadStatus status,
-        ContextSectionLoadStatus profileStatus,
-        ContextSectionLoadStatus fridgeStatus
+        ContextSectionLoadStatus profileStatus
 ) {
     UserRecipeContextLoadResult(UserRecipeContext context, UserRecipeContextLoadStatus status) {
-        this(context, status, sectionStatus(status), sectionStatus(status));
+        this(context, status, sectionStatus(status));
     }
 
     UserRecipeContextLoadResult {
         context = context == null ? UserRecipeContext.empty(null) : context;
         status = status == null ? UserRecipeContextLoadStatus.LOAD_FAILED : status;
         profileStatus = profileStatus == null ? ContextSectionLoadStatus.LOAD_FAILED : profileStatus;
-        fridgeStatus = fridgeStatus == null ? ContextSectionLoadStatus.LOAD_FAILED : fridgeStatus;
     }
 
     private static ContextSectionLoadStatus sectionStatus(UserRecipeContextLoadStatus status) {
@@ -517,7 +482,7 @@ record UserRecipeContextLoadResult(
     }
 }
 
-// 맥락의 한 부분(프로필 또는 냉장고)의 로드 상태
+// 맥락의 한 부분(건강 프로필)의 로드 상태
 enum ContextSectionLoadStatus {
     LOADED,
     LOAD_FAILED
@@ -539,8 +504,7 @@ interface UserRecipeContextLoader {
                     && context.chronicConditions().isEmpty()
                     && context.dietaryRestrictions().isEmpty()
                     && context.medications().isEmpty()
-                    && context.healthGoals().isEmpty()
-                    && context.fridgeIngredients().isEmpty();
+                    && context.healthGoals().isEmpty();
             return new UserRecipeContextLoadResult(
                     context,
                     empty ? UserRecipeContextLoadStatus.NOT_REGISTERED : UserRecipeContextLoadStatus.LOADED);

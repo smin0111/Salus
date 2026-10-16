@@ -434,7 +434,7 @@ class WebRecipeSourceStoreTest {
                 internal, search, pages, new InMemoryRecipeSourceCache(), youtube, mockStore, summarizer);
         org.springframework.test.util.ReflectionTestUtils.setField(composite, "webSourceEnabled", true);
         RecipeResearchPlan plan = new RecipeResearchPlan(
-                "두쫀쿠", "", RecipeRequestMode.CREATE, false, false, true, List.of("두쫀쿠 레시피"), 3, 5);
+                "두쫀쿠", "", RecipeRequestMode.CREATE, false, true, List.of("두쫀쿠 레시피"), 3, 5);
 
         RecipeSourceDocument stored = new RecipeSourceDocument("web-store:1", RecipeSourceType.GENERAL_WEB,
                 "두쫀쿠 레시피", "", "https://cookpick.kr/dujjonku", "title: 두쫀쿠", NOW, 0.8);
@@ -446,7 +446,7 @@ class WebRecipeSourceStoreTest {
         verify(youtube, never()).search(any(), any());
 
         RecipeResearchPlan other = new RecipeResearchPlan(
-                "버터떡", "", RecipeRequestMode.CREATE, false, false, true, List.of("버터떡 레시피"), 3, 5);
+                "버터떡", "", RecipeRequestMode.CREATE, false, true, List.of("버터떡 레시피"), 3, 5);
         when(mockStore.findFreshWithSupporting(anyString())).thenReturn(List.of());
         RecipeSourceCandidate found = candidate(List.of("원문 1", "원문 2"));
         when(pages.collect(any(), any())).thenReturn(List.of(found, candidate(List.of("다른 원문 1", "다른 원문 2"))));
@@ -480,7 +480,7 @@ class WebRecipeSourceStoreTest {
         when(pages.collect(any(), any())).thenReturn(List.of(rejected));
         when(summarizer.summarizeOutcome(anyString(), eq(rejected))).thenReturn(SummaryOutcome.ofRejected());
         List<RecipeSourceDocument> documents = composite.search(new RecipeResearchPlan(
-                "잡채", "", RecipeRequestMode.CREATE, false, false, true, List.of("잡채 레시피"), 3, 5), UserRecipeContext.empty(1L));
+                "잡채", "", RecipeRequestMode.CREATE, false, true, List.of("잡채 레시피"), 3, 5), UserRecipeContext.empty(1L));
         assertThat(documents.get(0).content()).contains("원문 1").contains("원문 2");
         verify(mockStore).save(anyString(), eq(rejected), eq(List.of("원문 1", "원문 2")));
 
@@ -488,7 +488,7 @@ class WebRecipeSourceStoreTest {
         when(pages.collect(any(), any())).thenReturn(List.of(unavailable));
         when(summarizer.summarizeOutcome(anyString(), eq(unavailable))).thenReturn(SummaryOutcome.ofUnavailable());
         composite.search(new RecipeResearchPlan(
-                "버터떡", "", RecipeRequestMode.CREATE, false, false, true, List.of("버터떡 레시피"), 3, 5), UserRecipeContext.empty(1L));
+                "버터떡", "", RecipeRequestMode.CREATE, false, true, List.of("버터떡 레시피"), 3, 5), UserRecipeContext.empty(1L));
         verify(mockStore, never()).save(anyString(), eq(unavailable), anyList());
     }
 
@@ -515,7 +515,7 @@ class WebRecipeSourceStoreTest {
         when(pages.collect(any(), any())).thenReturn(List.of(primary, sameSite, otherSite, third));
         when(summarizer.summarizeOutcome(anyString(), eq(primary))).thenReturn(SummaryOutcome.ofSummary(List.of("요약 1", "요약 2")));
         RecipeResearchPlan plan = new RecipeResearchPlan(
-                "두쫀쿠", "", RecipeRequestMode.CREATE, false, false, true, List.of("두쫀쿠 레시피"), 3, 5);
+                "두쫀쿠", "", RecipeRequestMode.CREATE, false, true, List.of("두쫀쿠 레시피"), 3, 5);
 
         List<RecipeSourceDocument> documents = composite.search(plan, UserRecipeContext.empty(1L));
 

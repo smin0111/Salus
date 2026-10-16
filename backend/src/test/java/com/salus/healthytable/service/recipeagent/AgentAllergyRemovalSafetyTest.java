@@ -32,7 +32,7 @@ class AgentAllergyRemovalSafetyTest {
             null, null, null, List.of("마시멜로우", "카다이프면"), List.of(), List.of());
 
     private UserRecipeContext milkAllergy() {
-        return new UserRecipeContext(1L, List.of("우유"), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+        return new UserRecipeContext(1L, List.of("우유"), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     // 표기("우유")가 한 번 나와도 파생 재료(버터·탈지분유)가 함께 있으면 제거가 아니라 차단해야 합니다.
@@ -71,7 +71,7 @@ class AgentAllergyRemovalSafetyTest {
     // 진짜 밀 재료(밀가루)는 그대로 막고, 안내는 막히지 않은 알레르기에만 붙입니다.
     @Test
     void wheatAllergyGetsLabelCheckNoticeForSoySauceButStillBlocksFlour() {
-        UserRecipeContext wheat = new UserRecipeContext(1L, List.of("밀"), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+        UserRecipeContext wheat = new UserRecipeContext(1L, List.of("밀"), List.of(), List.of(), List.of(), List.of(), List.of());
         RecipeCandidate jorim = new RecipeCandidate("감자조림", "", List.of("감자 2개", "진간장 4큰술", "물엿 2큰술"),
                 List.of("감자를 썬다.", "간장과 물엿을 넣고 조린다."), null, null, null, List.of("감자"), List.of(), List.of());
 
@@ -89,7 +89,7 @@ class AgentAllergyRemovalSafetyTest {
         assertThat(blocked.userNotices()).noneMatch(notice -> notice.contains("성분 표시"));
 
         // 다른 알레르기에는 이 안내가 붙지 않습니다.
-        UserRecipeContext egg = new UserRecipeContext(1L, List.of("계란"), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+        UserRecipeContext egg = new UserRecipeContext(1L, List.of("계란"), List.of(), List.of(), List.of(), List.of(), List.of());
         assertThat(new AllergyPolicy(matcher).evaluate(jorim, egg).userNotices()).isEmpty();
     }
 }

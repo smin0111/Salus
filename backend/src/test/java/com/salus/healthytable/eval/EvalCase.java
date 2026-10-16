@@ -31,7 +31,6 @@ public record EvalCase(
         List<String> dietaryRestrictions,
         List<String> medications,
         List<String> goals,
-        List<String> fridgeItems,
         List<String> modifiers,
         List<String> excludedIngredients,
         List<Substitution> substitutions,
@@ -129,10 +128,6 @@ public record EvalCase(
 
     public List<String> goalsOrEmpty() {
         return orEmpty(goals);
-    }
-
-    public List<String> fridgeItemsOrEmpty() {
-        return orEmpty(fridgeItems);
     }
 
     public List<String> modifiersOrEmpty() {

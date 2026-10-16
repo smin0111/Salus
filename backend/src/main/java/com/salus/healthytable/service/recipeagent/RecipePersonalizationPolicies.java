@@ -6,16 +6,13 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
-import java.time.Clock;
-import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 
 /*
  * Recipe Agent의 개인화 정책들을 모아 둔 파일입니다.
  * 각 정책은 RecipePersonalizationPolicy를 구현하고, @Order 숫자가 작은 순서대로 실행됩니다.
- * (10 알레르기 → 20 약물 → 30 만성질환 → 40 식단 제한 → 50 사용자 제외 → 60 냉장고 활용)
+ * (10 알레르기 → 20 약물 → 30 만성질환 → 40 식단 제한 → 50 사용자 제외)
  */
 
 /**
@@ -32,34 +29,20 @@ class RecipePersonalizationPolicyEngine {
         List<RecipeConflict> conflicts = new ArrayList<>();
         List<RecipeModification> modifications = new ArrayList<>();
         List<String> notices = new ArrayList<>();
-        List<String> purchases = new ArrayList<>();
-        List<String> fridgeUsed = new ArrayList<>();
 
         for (RecipePersonalizationPolicy policy : policies) {
             PolicyEvaluation evaluation = policy.evaluate(recipe, context);
             conflicts.addAll(evaluation.conflicts());
             modifications.addAll(evaluation.modifications());
             notices.addAll(evaluation.userNotices());
-            purchases.addAll(evaluation.additionalPurchaseItems());
-            fridgeUsed.addAll(evaluation.fridgeItemsUsed());
         }
 
         RecipeDecisionType decisionType = decide(conflicts, modifications, notices);
-        // 차단(BLOCKING) 충돌이 난 재료는 "냉장고에서 사용한 재료" 목록에서도 제거합니다.
-        List<String> unsafeFridgeIngredients = conflicts.stream()
-                .filter(conflict -> conflict.severity() == ConflictSeverity.BLOCKING)
-                .map(RecipeConflict::ingredient)
-                .filter(ingredient -> ingredient != null && !ingredient.isBlank())
-                .toList();
-        fridgeUsed.removeIf(item -> unsafeFridgeIngredients.stream()
-                .anyMatch(unsafe -> RecipeCandidate.normalize(item).contains(RecipeCandidate.normalize(unsafe))));
         return new RecipePersonalizationDecision(
                 decisionType,
                 AgentText.distinctConflicts(conflicts),
                 AgentText.distinctModifications(modifications),
-                AgentText.distinct(notices),
-                AgentText.distinct(purchases),
-                AgentText.distinct(fridgeUsed));
+                AgentText.distinct(notices));
     }
 
     private RecipeDecisionType decide(List<RecipeConflict> conflicts, List<RecipeModification> modifications, List<String> notices) {
@@ -171,7 +154,7 @@ class AllergyPolicy implements RecipePersonalizationPolicy {
                         + "사용하는 제품의 성분 표시에서 " + allergy + " 함유 여부를 확인해 주세요.");
             }
         }
-        return new PolicyEvaluation(conflicts, modifications, notices, List.of(), List.of());
+        return new PolicyEvaluation(conflicts, modifications, notices);
     }
 }
 
@@ -193,10 +176,10 @@ class MedicationInteractionPolicy implements RecipePersonalizationPolicy {
         }
         MedicationInteractionResult result = interactionPort.check(userContext.medications(), recipe.ingredients());
         if (result.status() == InteractionStatus.CONFLICT || result.status() == InteractionStatus.CONFIRMED_CONFLICT) {
-            return new PolicyEvaluation(result.conflicts(), medicationModifications(result.conflicts()), result.notices(), List.of(), List.of());
+            return new PolicyEvaluation(result.conflicts(), medicationModifications(result.conflicts()), result.notices());
         }
         if (result.status() == InteractionStatus.CAUTION) {
-            return new PolicyEvaluation(result.conflicts(), List.of(), result.notices(), List.of(), List.of());
+            return new PolicyEvaluation(result.conflicts(), List.of(), result.notices());
         }
         if (result.status() == InteractionStatus.TIMING_CONDITION
                 || result.status() == InteractionStatus.FOOD_INTAKE_CONDITION
@@ -208,7 +191,7 @@ class MedicationInteractionPolicy implements RecipePersonalizationPolicy {
                 || result.status() == InteractionStatus.API_FAILED
                 || result.status() == InteractionStatus.EVIDENCE_CONFLICT
                 || result.status() == InteractionStatus.UNKNOWN) {
-            return new PolicyEvaluation(List.of(), List.of(), result.notices(), List.of(), List.of());
+            return new PolicyEvaluation(List.of(), List.of(), result.notices());
         }
         return PolicyEvaluation.empty();
     }
@@ -280,7 +263,7 @@ class ChronicConditionPolicy implements RecipePersonalizationPolicy {
                     "rule:potassium-attention"));
             notices.add("신장질환 정보가 있어 고칼륨 가능 재료는 섭취량을 개인 상태에 맞게 확인하도록 안내합니다.");
         }
-        return new PolicyEvaluation(conflicts, modifications, notices, List.of(), List.of());
+        return new PolicyEvaluation(conflicts, modifications, notices);
     }
 
     // 추가당 여부와, 설탕이 요리의 핵심(브륄레, 달고나 등)인지에 따라 심각도를 HIGH 또는 CAUTION으로 정합니다.
@@ -352,9 +335,7 @@ class DietaryRestrictionPolicy implements RecipePersonalizationPolicy {
                         "REPLACE_WITH_VERIFIED_ALTERNATIVE",
                         null,
                         "검증된 비건 대체 레시피가 확보되기 전에는 원본 레시피를 제공하지 않습니다.")),
-                List.of("식단 제한과 충돌하는 재료가 있어 대체 메뉴 또는 재료 변경이 필요합니다."),
-                List.of(),
-                List.of());
+                List.of("식단 제한과 충돌하는 재료가 있어 대체 메뉴 또는 재료 변경이 필요합니다."));
     }
 }
 
@@ -433,94 +414,7 @@ class ExplicitExclusionPolicy implements RecipePersonalizationPolicy {
                     "user-request"));
             foundForms.forEach(form -> modifications.add(new RecipeModification(form, "REMOVE", null, "사용자 제외 요청")));
         }
-        return new PolicyEvaluation(conflicts, modifications, List.of(), List.of(), List.of());
+        return new PolicyEvaluation(conflicts, modifications, List.of());
     }
 }
 
-/**
- * 냉장고 재료 활용 정책입니다.
- * 알레르기/제외 재료를 뺀 냉장고 재료로 레시피 재료와 겹치는 것, 부족한 핵심 재료, 유통기한 임박 재료를 계산합니다.
- */
-@Component
-@Order(60)
-@RequiredArgsConstructor
-class FridgeAdaptationPolicy implements RecipePersonalizationPolicy {
-
-    private final Clock clock;
-
-    @Override
-    public PolicyEvaluation evaluate(RecipeCandidate recipe, UserRecipeContext userContext) {
-        if (userContext == null || userContext.fridgeIngredients().isEmpty()) {
-            return PolicyEvaluation.empty();
-        }
-        List<FridgeIngredientContext> safeFridgeIngredients = userContext.fridgeIngredients().stream()
-                .filter(fridge -> userContext.allergies().stream()
-                        .noneMatch(allergy -> RecipeCandidate.normalize(fridge.name()).contains(RecipeCandidate.normalize(allergy))))
-                .filter(fridge -> userContext.explicitlyExcludedIngredients().stream()
-                        .noneMatch(excluded -> RecipeCandidate.normalize(fridge.name()).contains(RecipeCandidate.normalize(excluded))))
-                .toList();
-        FridgeCompatibilityScore score = score(recipe, safeFridgeIngredients);
-        List<String> notices = new ArrayList<>();
-        if (!score.expiringSoonIngredients().isEmpty()) {
-            notices.add("유통기한이 가까운 재료는 가능한 범위에서 우선 활용합니다: " + String.join(", ", score.expiringSoonIngredients()));
-        }
-        if (!score.availableIngredients().isEmpty()) {
-            notices.add("냉장고에 있는 재료를 안전 정책 범위에서 활용합니다: " + String.join(", ", score.availableIngredients()));
-        }
-        return new PolicyEvaluation(
-                score.missingIngredients().stream()
-                        .map(ingredient -> new RecipeConflict(
-                                RecipeConflictType.MISSING_CORE_INGREDIENT,
-                                ingredient,
-                                "냉장고 재고",
-                                "냉장고에 없는 핵심 재료라 추가 구매가 필요합니다.",
-                                ConflictSeverity.INFO,
-                                "fridge"))
-                        .toList(),
-                List.of(),
-                notices,
-                score.missingIngredients(),
-                score.availableIngredients());
-    }
-
-    // 레시피 재료마다 냉장고 재료와 이름을 비교합니다. 호환 점수 = 보유 재료 수 / 핵심 재료 수(최대 1.0)
-    FridgeCompatibilityScore score(RecipeCandidate recipe, List<FridgeIngredientContext> fridgeIngredients) {
-        LinkedHashSet<String> available = new LinkedHashSet<>();
-        LinkedHashSet<String> missing = new LinkedHashSet<>();
-        LinkedHashSet<String> expiringSoon = new LinkedHashSet<>();
-        LocalDate today = LocalDate.now(clock);
-
-        for (String ingredient : recipe.ingredients()) {
-            String normalizedIngredient = RecipeCandidate.normalize(ingredient);
-            boolean found = false;
-            for (FridgeIngredientContext fridge : fridgeIngredients) {
-                String normalizedFridge = RecipeCandidate.normalize(fridge.name());
-                if (!normalizedFridge.isBlank() && normalizedIngredient.contains(normalizedFridge)) {
-                    available.add(fridge.name());
-                    found = true;
-                    if (fridge.expirationDate() != null && !fridge.expirationDate().isAfter(today.plusDays(3))) {
-                        expiringSoon.add(fridge.name());
-                    }
-                    break;
-                }
-            }
-            if (!found && recipe.coreIngredients().stream()
-                    .anyMatch(core -> normalizedIngredient.contains(RecipeCandidate.normalize(core)))) {
-                missing.add(stripQuantity(ingredient));
-            }
-        }
-        int totalCore = Math.max(1, recipe.coreIngredients().size());
-        double compatibility = Math.min(1.0, (double) available.size() / totalCore);
-        return new FridgeCompatibilityScore(
-                compatibility,
-                List.copyOf(available),
-                List.copyOf(missing),
-                List.of(),
-                List.copyOf(expiringSoon));
-    }
-
-    // 재료 문자열에서 수량과 단위를 제거합니다.
-    private String stripQuantity(String ingredient) {
-        return ingredient == null ? "" : ingredient.replaceAll("\\d+(?:\\.\\d+)?\\s*[^\\s]*", "").trim();
-    }
-}

@@ -137,7 +137,6 @@ class OllamaRecipeGenerationClientTest {
                 List.of(),
                 "토마토 샐러드 재료: 토마토",
                 "test",
-                List.of(),
                 new RecipeGenerationRequest.SafetyConditions(List.of(), List.of(), List.of(), List.of(), List.of()),
                 "",
                 List.of(),

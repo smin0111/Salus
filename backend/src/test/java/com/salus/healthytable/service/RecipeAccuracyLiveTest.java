@@ -80,7 +80,6 @@ class RecipeAccuracyLiveTest {
                 List.of(),
                 accuracyCase.evidence(),
                 "고정 평가 근거",
-                List.of(),
                 new RecipeGenerationRequest.SafetyConditions(List.of(), List.of(), List.of(), List.of(), List.of()),
                 "",
                 List.of(),

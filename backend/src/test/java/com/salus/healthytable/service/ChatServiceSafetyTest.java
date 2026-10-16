@@ -1058,7 +1058,6 @@ class ChatServiceSafetyTest {
     void trustedDatabaseRecipeAlsoPassesStructuredAccuracyPipeline() {
         ChatDto.Request request = new ChatDto.Request();
         request.setMessage("김치찌개 레시피 알려줘");
-        request.setUseFridge(true);
 
         Recipe trusted = new Recipe();
         trusted.setId(91L);
@@ -1106,7 +1105,6 @@ class ChatServiceSafetyTest {
         assertThat(captor.getValue().searchContext())
                 .contains("근거 유형: 검증된 내부 레시피")
                 .contains("돼지고기 150g");
-        assertThat(captor.getValue().fridgeItems()).isEmpty();
         verify(searchEngine, never()).search(anyString());
     }
 

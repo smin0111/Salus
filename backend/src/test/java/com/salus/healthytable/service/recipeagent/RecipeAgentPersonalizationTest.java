@@ -1,11 +1,9 @@
 package com.salus.healthytable.service.recipeagent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.salus.healthytable.domain.FridgeItem;
 import com.salus.healthytable.domain.HealthProfile;
 import com.salus.healthytable.dto.ChatDto;
 import com.salus.healthytable.dto.RecipeWorkSessionDTO;
-import com.salus.healthytable.repository.FridgeItemRepository;
 import com.salus.healthytable.repository.HealthProfileRepository;
 import com.salus.healthytable.service.RecipeNormalizer;
 import com.salus.healthytable.service.RecipeWorkSessionService;
@@ -36,7 +34,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * Recipe Agent 개인화 흐름 테스트입니다.
- * 요청 분석, 사용자 맥락 로드 상태, 알레르기/당뇨/약물/냉장고/식단 제한 정책, 후속 요청, 세션 만료를 확인합니다.
+ * 요청 분석, 사용자 맥락 로드 상태, 알레르기/당뇨/약물/식단 제한 정책, 후속 요청, 세션 만료를 확인합니다.
  */
 class RecipeAgentPersonalizationTest {
     // 실제 알레르겐 사전으로 만든 Matcher를 테스트 전체에서 공유합니다.
@@ -64,8 +62,8 @@ class RecipeAgentPersonalizationTest {
     void spacedDishNameIsNotMisclassifiedAsCreatorSpecificRequest() {
         DefaultRecipeRequestPlanner planner = new DefaultRecipeRequestPlanner(new RecipeNormalizer());
 
-        RecipeResearchPlan dishPlan = planner.plan("바나나 브륄레 레시피 알려줘.", false, UserRecipeContext.empty(1L));
-        RecipeResearchPlan creatorPlan = planner.plan("fixture-creator 참치김밥 레시피 알려줘.", false, UserRecipeContext.empty(1L));
+        RecipeResearchPlan dishPlan = planner.plan("바나나 브륄레 레시피 알려줘.", UserRecipeContext.empty(1L));
+        RecipeResearchPlan creatorPlan = planner.plan("fixture-creator 참치김밥 레시피 알려줘.", UserRecipeContext.empty(1L));
 
         assertThat(dishPlan.dishName()).isEqualTo("바나나 브륄레");
         assertThat(dishPlan.creatorName()).isEmpty();
@@ -75,69 +73,60 @@ class RecipeAgentPersonalizationTest {
         assertThat(creatorPlan.mode()).isEqualTo(RecipeRequestMode.CREATOR_SPECIFIC);
     }
 
-    // 로그인 사용자는 항상 건강 프로필과 냉장고를 함께 로드해야 합니다.
+    // 로그인 사용자는 항상 건강 프로필을 로드해야 합니다.
     @Test
-    void loggedInContextAlwaysLoadsHealthProfileAndFridge() {
+    void loggedInContextAlwaysLoadsHealthProfile() {
         HealthProfileRepository healthProfiles = mock(HealthProfileRepository.class);
-        FridgeItemRepository fridgeItems = mock(FridgeItemRepository.class);
         HealthProfile profile = new HealthProfile();
         profile.setUserId(1L);
         profile.setAllergies(List.of("깻잎"));
         profile.setChronicConditions(List.of("당뇨"));
         profile.setMedications(List.of("와파린"));
         profile.setGoals(List.of("당류 줄이기"));
-        FridgeItem cucumber = fridge("오이", "1개", LocalDate.of(2026, 7, 18));
 
         when(healthProfiles.findByUserId(1L)).thenReturn(Optional.of(profile));
-        when(fridgeItems.findByUserIdOrderByExpiryDate(1L)).thenReturn(List.of(cucumber));
 
-        RepositoryUserRecipeContextLoader loader = new RepositoryUserRecipeContextLoader(healthProfiles, fridgeItems);
+        RepositoryUserRecipeContextLoader loader = new RepositoryUserRecipeContextLoader(healthProfiles);
         UserRecipeContext context = loader.load(1L);
 
         assertThat(context.allergies()).containsExactly("깻잎");
         assertThat(context.chronicConditions()).containsExactly("당뇨");
         assertThat(context.medications()).containsExactly("와파린");
         assertThat(context.healthGoals()).containsExactly("당류 줄이기");
-        assertThat(context.fridgeIngredients()).extracting(FridgeIngredientContext::name).containsExactly("오이");
         verify(healthProfiles).findByUserId(1L);
-        verify(fridgeItems).findByUserIdOrderByExpiryDate(1L);
     }
 
     // 게스트 맥락은 비어 있고 DB를 조회하지 않아야 합니다.
     @Test
     void guestContextIsEmptyAndDoesNotQueryRepositories() {
         HealthProfileRepository healthProfiles = mock(HealthProfileRepository.class);
-        FridgeItemRepository fridgeItems = mock(FridgeItemRepository.class);
 
-        RepositoryUserRecipeContextLoader loader = new RepositoryUserRecipeContextLoader(healthProfiles, fridgeItems);
+        RepositoryUserRecipeContextLoader loader = new RepositoryUserRecipeContextLoader(healthProfiles);
         UserRecipeContext context = loader.load(null);
 
         assertThat(context.userId()).isNull();
         assertThat(context.allergies()).isEmpty();
-        assertThat(context.fridgeIngredients()).isEmpty();
         verify(healthProfiles, never()).findByUserId(any());
-        verify(fridgeItems, never()).findByUserIdOrderByExpiryDate(any());
     }
 
-    // 로드 상태를 "등록 정보 없음/일부 로드/로드 실패"로 구분해야 합니다.
+    // 로드 상태를 "등록 정보 없음/로드됨/로드 실패"로 구분해야 합니다. 프로필을 못 읽으면 알레르기를 모르므로 실패입니다.
     @Test
-    void contextLoaderDistinguishesNotRegisteredPartialAndFailed() {
+    void contextLoaderDistinguishesNotRegisteredLoadedAndFailed() {
         HealthProfileRepository healthProfiles = mock(HealthProfileRepository.class);
-        FridgeItemRepository fridgeItems = mock(FridgeItemRepository.class);
-        RepositoryUserRecipeContextLoader loader = new RepositoryUserRecipeContextLoader(healthProfiles, fridgeItems);
+        RepositoryUserRecipeContextLoader loader = new RepositoryUserRecipeContextLoader(healthProfiles);
 
         when(healthProfiles.findByUserId(1L)).thenReturn(Optional.empty());
-        when(fridgeItems.findByUserIdOrderByExpiryDate(1L)).thenReturn(List.of());
         assertThat(loader.loadWithStatus(1L).status()).isEqualTo(UserRecipeContextLoadStatus.NOT_REGISTERED);
 
-        when(healthProfiles.findByUserId(2L)).thenThrow(new RuntimeException("profile unavailable"));
-        when(fridgeItems.findByUserIdOrderByExpiryDate(2L))
-                .thenReturn(List.of(fridge("두부", "1모", LocalDate.of(2026, 7, 18))));
-        assertThat(loader.loadWithStatus(2L).status()).isEqualTo(UserRecipeContextLoadStatus.PARTIALLY_LOADED);
+        HealthProfile profile = new HealthProfile();
+        profile.setAllergies(List.of("우유"));
+        when(healthProfiles.findByUserId(2L)).thenReturn(Optional.of(profile));
+        assertThat(loader.loadWithStatus(2L).status()).isEqualTo(UserRecipeContextLoadStatus.LOADED);
 
         when(healthProfiles.findByUserId(3L)).thenThrow(new RuntimeException("profile unavailable"));
-        when(fridgeItems.findByUserIdOrderByExpiryDate(3L)).thenThrow(new RuntimeException("fridge unavailable"));
-        assertThat(loader.loadWithStatus(3L).status()).isEqualTo(UserRecipeContextLoadStatus.LOAD_FAILED);
+        UserRecipeContextLoadResult failed = loader.loadWithStatus(3L);
+        assertThat(failed.status()).isEqualTo(UserRecipeContextLoadStatus.LOAD_FAILED);
+        assertThat(failed.profileStatus()).isEqualTo(ContextSectionLoadStatus.LOAD_FAILED);
     }
 
     // 들깨 알레르기면 참치김밥에서 들깨(핵심 재료 아님)를 제거하고 MODIFY로 판정해야 합니다.
@@ -190,7 +179,6 @@ class RecipeAgentPersonalizationTest {
                 List.of(),
                 List.of(),
                 List.of("당류 줄이기"),
-                List.of(),
                 List.of());
 
         RecipePersonalizationDecision brulee = engine(unknownMedication()).evaluate(bananaBrulee(), diabetes);
@@ -211,7 +199,6 @@ class RecipeAgentPersonalizationTest {
                 List.of(),
                 List.of(),
                 List.of("당류 줄이기"),
-                List.of(new FridgeIngredientContext("알룰로스", 1.0, "병", LocalDate.of(2026, 8, 1))),
                 List.of());
 
         RecipePersonalizationDecision decision = engine(unknownMedication()).evaluate(jeyukWithSugar(), diabetesWithAllulose);
@@ -226,8 +213,7 @@ class RecipeAgentPersonalizationTest {
     @Test
     void automaticallyInferredCoreListDoesNotMakeEveryAddedSugarRecipeAnAlternativeOnlyDish() {
         UserRecipeContext diabetesWithAllulose = new UserRecipeContext(
-                1L, List.of(), List.of("당뇨"), List.of(), List.of(), List.of("당류 줄이기"),
-                List.of(new FridgeIngredientContext("알룰로스", 1.0, "병", LocalDate.of(2026, 8, 1))), List.of());
+                1L, List.of(), List.of("당뇨"), List.of(), List.of(), List.of("당류 줄이기"), List.of());
         RecipeCandidate operationalShape = new RecipeCandidate(
                 "제육볶음",
                 "양념 볶음",
@@ -247,7 +233,7 @@ class RecipeAgentPersonalizationTest {
     // 약물 상호작용을 모르면 안내만 추가하고 가짜 충돌을 만들지 않아야 합니다.
     @Test
     void unknownMedicationInteractionCreatesNoticeButNoFakeConflict() {
-        UserRecipeContext context = new UserRecipeContext(1L, List.of(), List.of(), List.of(), List.of("혈압약"), List.of(), List.of(), List.of());
+        UserRecipeContext context = new UserRecipeContext(1L, List.of(), List.of(), List.of(), List.of("혈압약"), List.of(), List.of());
 
         RecipePersonalizationDecision decision = engine(unknownMedication()).evaluate(tunaKimbap(), context);
 
@@ -272,7 +258,7 @@ class RecipeAgentPersonalizationTest {
                         ConflictSeverity.BLOCKING,
                         "trusted-test-source")),
                 List.of("복용약과 자몽 상호작용이 확인되어 제공을 제한합니다."));
-        UserRecipeContext context = new UserRecipeContext(1L, List.of(), List.of(), List.of(), List.of("상호작용 확인 약"), List.of(), List.of(), List.of());
+        UserRecipeContext context = new UserRecipeContext(1L, List.of(), List.of(), List.of(), List.of("상호작용 확인 약"), List.of(), List.of());
 
         RecipePersonalizationDecision decision = engine(conflictPort).evaluate(grapefruitDrink(), context);
 
@@ -281,32 +267,9 @@ class RecipeAgentPersonalizationTest {
                 && conflict.severity() == ConflictSeverity.BLOCKING);
     }
 
-    // 냉장고 정책은 일치하는 재료를 활용하고, 부족한 핵심 재료만 추가 구매 목록에 넣어야 합니다.
+    // 깻잎 알레르기면 참치김밥 재료에서 깻잎을 빼고 MODIFY로 판정해야 합니다.
     @Test
-    void fridgePolicyUsesMatchingIngredientsAndAddsMissingCorePurchasesOnly() {
-        UserRecipeContext context = new UserRecipeContext(
-                1L,
-                List.of(),
-                List.of(),
-                List.of(),
-                List.of(),
-                List.of(),
-                List.of(
-                        new FridgeIngredientContext("오이", 1.0, "개", LocalDate.of(2026, 7, 17)),
-                        new FridgeIngredientContext("계란", 2.0, "개", LocalDate.of(2026, 7, 20)),
-                        new FridgeIngredientContext("초콜릿", 1.0, "개", LocalDate.of(2026, 7, 20))),
-                List.of());
-
-        RecipePersonalizationDecision decision = engine(unknownMedication()).evaluate(tunaKimbap(), context);
-
-        assertThat(decision.fridgeItemsUsed()).contains("오이", "계란").doesNotContain("초콜릿");
-        assertThat(decision.additionalPurchaseItems()).contains("참치", "김밥김", "밥");
-        assertThat(decision.userNotices()).anyMatch(notice -> notice.contains("유통기한"));
-    }
-
-    // 알레르기 정책이 냉장고 활용보다 우선해야 합니다.
-    @Test
-    void allergyPolicyHasPriorityOverFridgeAdaptation() {
+    void allergyPolicyRemovesPerillaFromTunaKimbapIngredients() {
         UserRecipeContext context = new UserRecipeContext(
                 1L,
                 List.of("깻잎"),
@@ -314,14 +277,12 @@ class RecipeAgentPersonalizationTest {
                 List.of(),
                 List.of(),
                 List.of(),
-                List.of(new FridgeIngredientContext("깻잎", 5.0, "장", LocalDate.of(2026, 7, 17))),
                 List.of());
 
         RecipePersonalizationDecision decision = engine(unknownMedication()).evaluate(tunaKimbap(), context);
         RecipeCandidate personalized = new RecipeModificationService().apply(tunaKimbap(), decision);
 
         assertThat(decision.decisionType()).isEqualTo(RecipeDecisionType.MODIFY);
-        assertThat(decision.fridgeItemsUsed()).doesNotContain("깻잎");
         assertThat(String.join(" ", personalized.ingredients())).doesNotContain("깻잎");
     }
 
@@ -329,7 +290,7 @@ class RecipeAgentPersonalizationTest {
     @Test
     void healthGoalWithoutRegisteredConditionStillAppliesLowSodiumPolicy() {
         UserRecipeContext context = new UserRecipeContext(
-                1L, List.of(), List.of(), List.of(), List.of(), List.of("저염"), List.of(), List.of());
+                1L, List.of(), List.of(), List.of(), List.of(), List.of("저염"), List.of());
         RecipeCandidate recipe = new RecipeCandidate(
                 "된장찌개",
                 "된장으로 맛을 낸 국물 요리",
@@ -345,35 +306,6 @@ class RecipeAgentPersonalizationTest {
         assertThat(decision.decisionType()).isEqualTo(RecipeDecisionType.MODIFY);
         assertThat(decision.conflicts()).anyMatch(conflict -> "염분 양념".equals(conflict.ingredient()));
         assertThat(decision.modifications()).anyMatch(modification -> "REDUCE".equals(modification.action()));
-    }
-
-    // 약물 충돌로 차단된 재료는 "냉장고에서 사용한 재료"로 보고하면 안 됩니다.
-    @Test
-    void blockingMedicationIngredientIsNotReportedAsFridgeItemUsed() {
-        MedicationFoodInteractionPort conflictPort = (medications, ingredients) -> new MedicationInteractionResult(
-                InteractionStatus.CONFIRMED_CONFLICT,
-                List.of(new RecipeConflict(
-                        RecipeConflictType.MEDICATION_INTERACTION,
-                        "자몽",
-                        "fixture medication",
-                        "공식 복약정보에서 자몽 회피 조건이 확인되었습니다.",
-                        ConflictSeverity.BLOCKING,
-                        "fixture:official-medication-evidence")),
-                List.of("자몽을 포함한 레시피 제공을 제한합니다."));
-        UserRecipeContext context = new UserRecipeContext(
-                1L,
-                List.of(),
-                List.of(),
-                List.of(),
-                List.of("fixture medication"),
-                List.of(),
-                List.of(new FridgeIngredientContext("자몽", 1.0, "개", LocalDate.of(2026, 7, 20))),
-                List.of());
-
-        RecipePersonalizationDecision decision = engine(conflictPort).evaluate(grapefruitDrink(), context);
-
-        assertThat(decision.decisionType()).isEqualTo(RecipeDecisionType.BLOCK);
-        assertThat(decision.fridgeItemsUsed()).doesNotContain("자몽");
     }
 
     // 조리 순서가 없는 레시피는 최종 검증에서 실패해야 합니다.
@@ -400,7 +332,7 @@ class RecipeAgentPersonalizationTest {
     @Test
     void dietaryRestrictionBlocksOriginalWhenNoVerifiedAlternativeExists() {
         UserRecipeContext vegan = new UserRecipeContext(
-                1L, List.of(), List.of(), List.of("비건"), List.of(), List.of(), List.of(), List.of());
+                1L, List.of(), List.of(), List.of("비건"), List.of(), List.of(), List.of());
 
         RecipePersonalizationDecision decision = engine(unknownMedication()).evaluate(tunaKimbap(), vegan);
 
@@ -743,9 +675,10 @@ class RecipeAgentPersonalizationTest {
         assertThat(response.getRecipe().getTitle()).contains("크룽지");
     }
 
-    // 현재 로드에 성공하면 이전 스냅샷의 삭제된 프로필/냉장고 값이 최신 값으로 대체되어야 합니다.
+    // 현재 로드에 성공하면 이전 스냅샷의 삭제된 프로필 값이 최신 값으로 대체되어야 합니다.
+    // 냉장고 기능을 없애기 전에 저장된 세션(fridgeIngredients 키가 남아 있음)도 그대로 읽혀야 합니다.
     @Test
-    void successfulCurrentContextLoadReplacesDeletedProfileAndFridgeValuesFromSnapshot() {
+    void successfulCurrentContextLoadReplacesDeletedProfileValuesFromSnapshot() {
         RecipeWorkSessionService workSessionService = mock(RecipeWorkSessionService.class);
         Map<String, Object> session = agentSessionMap(tunaKimbap());
         session.put("originalRecipe", session.get("personalizedRecipe"));
@@ -781,7 +714,6 @@ class RecipeAgentPersonalizationTest {
         RecipeAgentSession saved = (RecipeAgentSession) stateCaptor.getValue();
         assertThat(saved.contextSnapshot().allergies()).isEmpty();
         assertThat(saved.contextSnapshot().medications()).isEmpty();
-        assertThat(saved.contextSnapshot().fridgeIngredients()).isEmpty();
         assertThat(saved.contextSnapshot().explicitlyExcludedIngredients()).containsExactly("양파");
     }
 
@@ -810,7 +742,7 @@ class RecipeAgentPersonalizationTest {
 
         assertThat(response).isNotNull();
         assertThat(response.getRecipe()).isNull();
-        assertThat(response.getReply()).contains("사용자 건강정보와 냉장고 정보를 불러오지 못해");
+        assertThat(response.getReply()).contains("사용자 건강정보를 불러오지 못해");
     }
 
     // 세션 TTL이 지나면 오래된 건강 정보 스냅샷을 다음 요청에 쓰지 않아야 합니다.
@@ -846,7 +778,7 @@ class RecipeAgentPersonalizationTest {
         Map<?, ?> context = (Map<?, ?>) current.getAgentSession().get("contextSnapshot");
         assertThat((List<?>) context.get("allergies")).isEmpty();
         assertThat((List<?>) context.get("medications")).isEmpty();
-        assertThat((List<?>) context.get("fridgeIngredients")).isEmpty();
+        assertThat(context.containsKey("fridgeIngredients")).isFalse();
         assertThat((List<?>) context.get("explicitlyExcludedIngredients")).isEmpty();
     }
 
@@ -879,8 +811,7 @@ class RecipeAgentPersonalizationTest {
                 new MedicationInteractionPolicy(interactionPort),
                 new ChronicConditionPolicy(),
                 new DietaryRestrictionPolicy(),
-                new ExplicitExclusionPolicy(),
-                new FridgeAdaptationPolicy(clock)));
+                new ExplicitExclusionPolicy()));
     }
 
     private MedicationFoodInteractionPort unknownMedication() {
@@ -888,7 +819,7 @@ class RecipeAgentPersonalizationTest {
     }
 
     private UserRecipeContext contextWithAllergy(String allergy) {
-        return new UserRecipeContext(1L, List.of(allergy), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+        return new UserRecipeContext(1L, List.of(allergy), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     private RecipeSourceDocument sourceDocument() {
@@ -949,7 +880,7 @@ class RecipeAgentPersonalizationTest {
                 List.of(
                         new RecipeConflict(RecipeConflictType.USER_EXCLUSION, "오징어", "사용자 제외", "사용자 제외 요청", ConflictSeverity.HIGH, null),
                         new RecipeConflict(RecipeConflictType.ALLERGY, "밀", "밀 알레르기", "밀 알레르기와 충돌하는 부침가루가 들어 있습니다.", ConflictSeverity.BLOCKING, null)),
-                List.of(), List.of(), List.of(), List.of());
+                List.of(), List.of());
         PersonalizedRecipeResult result = new PersonalizedRecipeResult(recipe, recipe, decision, List.of());
 
         String reply = new RecipeResponseComposer().compose(result, new RecipeValidationResult(false,
@@ -964,9 +895,9 @@ class RecipeAgentPersonalizationTest {
         assertThat(AgentText.withSubjectParticle("오징어")).isEqualTo("오징어가");
     }
 
-    // 차단 답변에도 차단 이유가 아닌 건강 주의(만성질환 등)와 개인차 안내는 남기고, 냉장고 재고·핵심 아닌 제외 재료는 쓰지 않습니다.
+    // 차단 답변에도 차단 이유가 아닌 건강 주의(만성질환 등)와 개인차 안내는 남기고, 핵심 아닌 제외 재료는 쓰지 않습니다.
     @Test
-    void blockedReplyKeepsHealthCautionsButNotFridgeOrMinorExclusions() {
+    void blockedReplyKeepsHealthCautionsButNotMinorExclusions() {
         RecipeCandidate recipe = new RecipeCandidate("땅콩조림", "", List.of("땅콩 200g", "간장 3큰술", "대파 1대"),
                 List.of("땅콩을 삶는다.", "간장에 조린다."), null, 1, 30, List.of("땅콩"), List.of(), List.of());
         RecipePersonalizationDecision decision = new RecipePersonalizationDecision(
@@ -974,9 +905,8 @@ class RecipeAgentPersonalizationTest {
                 List.of(
                         new RecipeConflict(RecipeConflictType.ALLERGY, "땅콩", "땅콩 알레르기", "땅콩 알레르기와 충돌하는 핵심 재료입니다.", ConflictSeverity.BLOCKING, null),
                         new RecipeConflict(RecipeConflictType.CHRONIC_CONDITION, "염분 양념", "혈압/저염 목표", "염분이 높은 양념은 양 조절이 필요합니다.", ConflictSeverity.CAUTION, null),
-                        new RecipeConflict(RecipeConflictType.USER_EXCLUSION, "대파", "사용자 제외 요청", "사용자가 명시적으로 제외를 요청했습니다.", ConflictSeverity.CAUTION, null),
-                        new RecipeConflict(RecipeConflictType.MISSING_CORE_INGREDIENT, "간장", "냉장고 재고", "냉장고에 없는 핵심 재료라 추가 구매가 필요합니다.", ConflictSeverity.INFO, null)),
-                List.of(), List.of(), List.of(), List.of());
+                        new RecipeConflict(RecipeConflictType.USER_EXCLUSION, "대파", "사용자 제외 요청", "사용자가 명시적으로 제외를 요청했습니다.", ConflictSeverity.CAUTION, null)),
+                List.of(), List.of());
         PersonalizedRecipeResult result = new PersonalizedRecipeResult(recipe, recipe, decision, List.of());
 
         String reply = new RecipeResponseComposer().compose(result, new RecipeValidationResult(true, List.of()));
@@ -985,7 +915,7 @@ class RecipeAgentPersonalizationTest {
                 .contains("- 땅콩 알레르기와 충돌하는 핵심 재료입니다.")
                 .contains("- 참고: 염분이 높은 양념은 양 조절이 필요합니다.")
                 .contains("섭취 가능 여부와 적정량은 개인 상태에 따라 다를 수 있습니다.")
-                .doesNotContain("추가 구매").doesNotContain("명시적으로 제외");
+                .doesNotContain("명시적으로 제외");
     }
 
     // 대안 검색에서 출처 자체를 못 찾으면 그렇게 알립니다.
@@ -1077,7 +1007,7 @@ class RecipeAgentPersonalizationTest {
         RecipeValidationResult validation = new RecipeValidationPipeline().validate(
                 new RecipeCandidate("김치찌개", "", List.of("김치 400g", "목살 200g"), List.of("목살과 김치를 볶는다.", "물을 붓고 끓인다."),
                         null, 1, 20, List.of("김치"), List.of(), List.of()),
-                new UserRecipeContext(null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of("돼지고기")));
+                new UserRecipeContext(null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of("돼지고기")));
         assertThat(validation.valid()).isFalse();
         assertThat(validation.reasons()).contains("사용자 제외 재료가 최종 레시피에 남아 있습니다: 돼지고기");
     }
@@ -1093,7 +1023,7 @@ class RecipeAgentPersonalizationTest {
                         "소면을 삶아 찬물에 헹군다."),
                 null, 1, 15, List.of("소면"), List.of(), List.of());
         RecipePersonalizationDecision decision = new RecipePersonalizationDecision(RecipeDecisionType.MODIFY, List.of(),
-                List.of(new RecipeModification("오이", "REMOVE", null, "사용자 제외 요청")), List.of(), List.of(), List.of());
+                List.of(new RecipeModification("오이", "REMOVE", null, "사용자 제외 요청")), List.of());
 
         RecipeCandidate personalized = new RecipeModificationService().apply(noodles, decision);
 
@@ -1113,14 +1043,14 @@ class RecipeAgentPersonalizationTest {
                 null, 1, 30, List.of("다진 고기"), List.of(), List.of());
         RecipeCandidate noEgg = new RecipeModificationService().apply(steak, new RecipePersonalizationDecision(
                 RecipeDecisionType.MODIFY, List.of(), List.of(new RecipeModification("계란", "REMOVE", null, "알레르기")),
-                List.of(), List.of(), List.of()));
+                List.of()));
         // 분량 뒤 조사와 주격 조사도 함께 지웁니다(2026-10-14 제육덮밥 "양파는 빼줘").
         RecipeCandidate jeyuk = new RecipeCandidate("제육덮밥", "", List.of("앞다리살 300g", "양파 1/2개", "대파 1대"),
                 List.of("파기름 위에 양파 1/2개를 슬라이스하여 넣고 물을 붓는다.", "양파가 어느 정도 익으면 대파를 넣는다."),
                 null, 1, 20, List.of("앞다리살"), List.of(), List.of());
         RecipeCandidate noOnion = new RecipeModificationService().apply(jeyuk, new RecipePersonalizationDecision(
                 RecipeDecisionType.MODIFY, List.of(), List.of(new RecipeModification("양파", "REMOVE", null, "사용자 제외 요청")),
-                List.of(), List.of(), List.of()));
+                List.of()));
         // 그 재료만 다루던 절과 조건은 절째 지워, 무엇을 써는지 모르는 문장을 남기지 않습니다.
         assertThat(noOnion.steps()).containsExactly("물을 붓는다.", "대파를 넣는다.");
 
@@ -1130,7 +1060,7 @@ class RecipeAgentPersonalizationTest {
                 null, 1, 40, List.of("닭"), List.of(), List.of());
         RecipeCandidate noPotato = new RecipeModificationService().apply(stew, new RecipePersonalizationDecision(
                 RecipeDecisionType.MODIFY, List.of(), List.of(new RecipeModification("감자", "REMOVE", null, "사용자 제외 요청")),
-                List.of(), List.of(), List.of()));
+                List.of()));
         assertThat(noPotato.steps()).containsExactly("양파는 3등분으로 썰어 준비합니다.", "닭과 양념을 넣고 끓인다.");
 
         assertThat(noEgg.steps()).containsExactly(
@@ -1147,12 +1077,12 @@ class RecipeAgentPersonalizationTest {
                 List.of("다양한버섯 (느타리/표고/팽이/새송이)", "소불고기 200g", "대파 1대"),
                 List.of("버섯을 먹기 좋게 손질한다.", "육수에 버섯과 고기를 올려 끓인다."),
                 null, 1, 30, List.of("버섯"), List.of(), List.of());
-        UserRecipeContext context = new UserRecipeContext(null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+        UserRecipeContext context = new UserRecipeContext(null, List.of(), List.of(), List.of(), List.of(), List.of(),
                 List.of("팽이버섯"));
 
         PolicyEvaluation evaluation = new ExplicitExclusionPolicy().evaluate(hotpot, context);
         RecipeCandidate personalized = new RecipeModificationService().apply(hotpot, new RecipePersonalizationDecision(
-                RecipeDecisionType.MODIFY, evaluation.conflicts(), evaluation.modifications(), List.of(), List.of(), List.of()));
+                RecipeDecisionType.MODIFY, evaluation.conflicts(), evaluation.modifications(), List.of()));
 
         assertThat(evaluation.conflicts()).isNotEmpty();
         assertThat(personalized.ingredients()).contains("다양한버섯 (느타리/표고/새송이)");
@@ -1170,12 +1100,12 @@ class RecipeAgentPersonalizationTest {
                 List.of("소고기 우둔살 300g", "배 1/2개", "배즙 2큰술", "배추 2장", "달걀노른자 2개"),
                 List.of("배 1/2개를 가늘게 채 썰고, 배추는 깨끗이 씻는다.", "배를 먼저 두르고 육회를 담는다.", "배달 용기에 담지 않는다."),
                 null, 1, 20, List.of("소고기"), List.of(), List.of());
-        UserRecipeContext context = new UserRecipeContext(null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+        UserRecipeContext context = new UserRecipeContext(null, List.of(), List.of(), List.of(), List.of(), List.of(),
                 List.of("배"));
 
         PolicyEvaluation evaluation = new ExplicitExclusionPolicy().evaluate(yukhoe, context);
         RecipeCandidate personalized = new RecipeModificationService().apply(yukhoe, new RecipePersonalizationDecision(
-                RecipeDecisionType.MODIFY, evaluation.conflicts(), evaluation.modifications(), List.of(), List.of(), List.of()));
+                RecipeDecisionType.MODIFY, evaluation.conflicts(), evaluation.modifications(), List.of()));
 
         assertThat(evaluation.conflicts()).singleElement().satisfies(conflict ->
                 assertThat(conflict.severity()).isEqualTo(ConflictSeverity.CAUTION));
@@ -1387,7 +1317,7 @@ class RecipeAgentPersonalizationTest {
                 List.of("골뱅이를 자르고 오이 1개, 깻잎 한 묶음, 대파 반 대를 먹기 좋게 썬다.", "양념에 버무린다."),
                 null, null, null, List.of("골뱅이"), List.of("깻잎"), List.of());
         RecipePersonalizationDecision decision = new RecipePersonalizationDecision(RecipeDecisionType.MODIFY,
-                List.of(), List.of(new RecipeModification("깻잎", "REMOVE", null, "알레르기")), List.of(), List.of(), List.of());
+                List.of(), List.of(new RecipeModification("깻잎", "REMOVE", null, "알레르기")), List.of());
 
         RecipeCandidate modified = new RecipeModificationService().apply(golbaengi, decision);
 
@@ -1481,14 +1411,6 @@ class RecipeAgentPersonalizationTest {
                 new RecipeResponseComposer(),
                 workSessionService,
                 new ObjectMapper());
-    }
-
-    private FridgeItem fridge(String name, String quantity, LocalDate expirationDate) {
-        FridgeItem item = new FridgeItem();
-        item.setName(name);
-        item.setQuantity(quantity);
-        item.setExpiryDate(expirationDate);
-        return item;
     }
 
     private RecipeCandidate tunaKimbap() {
