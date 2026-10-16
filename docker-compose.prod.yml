@@ -133,6 +133,20 @@ services:
     ports:
       - "${ADMIN_PORT:-8081}:8080"
 
+  # 사용자용 웹 화면입니다. 같은 주소의 /api를 backend로 넘기므로 터널(Tailscale Funnel 등)은 이 포트 하나만 열면 됩니다.
+  # frontend/src/secrets.js(gitignored)가 배포 서버에 있어야 빌드됩니다.
+  web:
+    build:
+      context: ./frontend
+      args:
+        EXPO_PUBLIC_API_BASE_URL: /api
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${WEB_BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-8090}:8080"
+
 volumes:
   salus-mysql-data:
   salus-redis-data:

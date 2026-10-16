@@ -2,6 +2,10 @@ import React from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
+import { openExternalBrowserIfInApp } from './src/utils/inAppBrowser';
+
+// 웹: 카카오톡 인앱 브라우저로 열렸으면 기본 브라우저로 다시 엽니다(인앱에서는 소셜 로그인이 끝나지 않음).
+openExternalBrowserIfInApp();
 
 /**
  * 앱의 최상위 컴포넌트입니다.
