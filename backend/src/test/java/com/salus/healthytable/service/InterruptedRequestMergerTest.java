@@ -61,15 +61,79 @@ class InterruptedRequestMergerTest {
         assertThat(merged.getOriginalMessage()).isNull();
     }
 
-    // 앞 질문에서 뺀 재료는 새 메시지가 요리를 다시 정하지 않았다면 남아 있어야 합니다.
+    // 앞 질문에서 뺀 재료는 요리를 바꿔도 남아 있어야 합니다(2026-10-17 결정: 새 요리에도 이어 감).
     @Test
-    void earlierExclusionMustSurviveUnlessUserRedirected() {
+    void earlierExclusionSurvivesEvenWhenUserSwitchesDish() {
         List<String> earlier = List.of("새우 빼고 볶음밥 레시피 알려줘");
 
         assertThat(InterruptedRequestMerger.accept(earlier, "2인분으로", "2인분 볶음밥 레시피 알려줘")).isFalse();
         assertThat(InterruptedRequestMerger.accept(earlier, "2인분으로", "새우 빼고 2인분 볶음밥 레시피 알려줘")).isTrue();
-        // 사용자가 요리를 다시 정하면 앞 조건을 이어 갈지는 LLM 판단을 따릅니다.
-        assertThat(InterruptedRequestMerger.accept(earlier, "아니 김치찌개 레시피 알려줘", "김치찌개 레시피 알려줘")).isTrue();
+        assertThat(InterruptedRequestMerger.accept(earlier, "아니 김치찌개 레시피 알려줘", "김치찌개 레시피 알려줘")).isFalse();
+        assertThat(InterruptedRequestMerger.accept(earlier, "아니 김치찌개 레시피 알려줘", "새우 빼고 김치찌개 레시피 알려줘"))
+                .isTrue();
+        assertThat(InterruptedRequestMerger.fallback(earlier, "아니 김치찌개로")).isEqualTo("새우 빼고 김치찌개 레시피 알려줘");
+        // 새 메시지가 그 재료를 다시 말하면("새우는 넣어도 돼") 앞 빼기 조건을 강요하지 않습니다.
+        assertThat(InterruptedRequestMerger.accept(earlier, "새우는 넣어도 돼", "볶음밥 레시피 알려줘")).isTrue();
+    }
+
+    // LLM이 알레르기 문장을 빠뜨리거나 "빼줘"를 "넣은"으로 바꾼 문장은 받지 않고 원문을 이어 붙입니다(2026-10-17 리뷰).
+    @Test
+    void mergeMustKeepAllergyMentionsAndExclusionMeaning() {
+        List<String> allergy = List.of("우유 알레르기 있어. 파스타 레시피 알려줘");
+        assertThat(InterruptedRequestMerger.accept(allergy, "2인분으로", "2인분 파스타 레시피 알려줘")).isFalse();
+        assertThat(InterruptedRequestMerger.accept(allergy, "2인분으로", "우유 알레르기 있어. 2인분 파스타 레시피 알려줘"))
+                .isTrue();
+        // 요리를 바꿔도 알레르기는 이어집니다.
+        assertThat(InterruptedRequestMerger.accept(allergy, "아니 된장찌개로", "된장찌개 레시피 알려줘")).isFalse();
+        assertThat(InterruptedRequestMerger.accept(allergy, "아니 된장찌개로", "우유 알레르기, 된장찌개 레시피 알려줘"))
+                .isTrue();
+
+        List<String> friedRice = List.of("볶음밥 레시피 알려줘");
+        assertThat(InterruptedRequestMerger.accept(friedRice, "새우 빼줘", "새우 넣은 볶음밥 레시피 알려줘")).isFalse();
+        assertThat(InterruptedRequestMerger.accept(friedRice, "새우 빼줘", "새우 빼고 볶음밥 레시피 알려줘")).isTrue();
+    }
+
+    // 요리를 바꾼 말("아니 된장찌개로")에 앞 요리 이름을 섞은 문장은 받지 않습니다
+    // (2026-10-17 실제 Ollama: "우유 알레르기 있어. 된장찌개 파스타 레시피 알려줘").
+    @Test
+    void dishSwitchMustDropPreviousDishName() {
+        List<String> pasta = List.of("우유 알레르기 있어. 파스타 레시피 알려줘");
+        assertThat(InterruptedRequestMerger.accept(pasta, "아니 된장찌개로", "우유 알레르기 있어. 된장찌개 파스타 레시피 알려줘"))
+                .isFalse();
+        assertThat(InterruptedRequestMerger.accept(pasta, "아니 된장찌개로", "우유 알레르기 있어. 된장찌개 레시피 알려줘"))
+                .isTrue();
+        // 같은 요리를 다시 말하거나 조리 도구만 바꾼 경우는 앞 요리 이름이 남아야 맞습니다.
+        assertThat(InterruptedRequestMerger.accept(List.of("마늘빵 레시피"), "아니 에어프라이어로", "에어프라이어 마늘빵 레시피 알려줘"))
+                .isTrue();
+        assertThat(InterruptedRequestMerger.accept(List.of("김치찌개 레시피 알려줘"), "김치찌개 레시피 2인분으로",
+                "김치찌개 레시피 2인분으로 알려줘")).isTrue();
+    }
+
+    // LLM 결과를 쓸 수 없을 때 요리를 바꿨으면, 앞 질문의 알레르기·빼기 조건만 남기고 새 요리로 묻습니다.
+    @Test
+    void dishSwitchFallbackKeepsSafetyConditionsWithoutPreviousDish() {
+        assertThat(InterruptedRequestMerger.fallback(List.of("우유 알레르기 있어. 새우 빼고 파스타 레시피 알려줘"), "아니 된장찌개로"))
+                .isEqualTo("우유 알레르기 있어. 새우 빼고 된장찌개 레시피 알려줘");
+        assertThat(InterruptedRequestMerger.fallback(List.of("우유 알레르기 있어. 파스타 레시피 알려줘"), "김치찌개 레시피 알려줘"))
+                .isEqualTo("우유 알레르기 있어. 김치찌개 레시피 알려줘");
+        // 요리를 바꾸지 않았거나 조리 도구만 바꾼 말은 지금처럼 이어 붙입니다.
+        assertThat(InterruptedRequestMerger.fallback(List.of("마늘빵 레시피"), "아니 에어프라이어로"))
+                .isEqualTo("마늘빵 레시피 아니 에어프라이어로");
+        assertThat(InterruptedRequestMerger.fallback(List.of("제육볶음 레시피"), "2인분으로"))
+                .isEqualTo("제육볶음 레시피 2인분으로");
+
+        ChatDto.Request request = request("아니 된장찌개로", "우유 알레르기 있어. 파스타 레시피 알려줘");
+        ChatDto.Request merged = merger("{\"request\": \"우유 알레르기 있어. 된장찌개 파스타 레시피 알려줘\"}")
+                .merge(request).block();
+        assertThat(merged.getMessage()).isEqualTo("우유 알레르기 있어. 된장찌개 레시피 알려줘");
+    }
+
+    @Test
+    void allergyMentionsReadTheWordBeforeAllergy() {
+        assertThat(InterruptedRequestMerger.allergyMentions("나 우유 알레르기 있고 새우알러지도 있어"))
+                .containsExactly("우유", "새우");
+        assertThat(InterruptedRequestMerger.allergyMentions("땅콩에 알레르기가 있어")).containsExactly("땅콩");
+        assertThat(InterruptedRequestMerger.allergyMentions("파스타 레시피 알려줘")).isEmpty();
     }
 
     @Test

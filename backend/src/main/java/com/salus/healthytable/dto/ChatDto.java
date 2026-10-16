@@ -41,6 +41,10 @@ public class ChatDto {
         // 멈춘 질문과 합치기 전 사용자가 실제로 보낸 문장입니다. 대화 기록에는 이 문장을 저장합니다(서버 내부용).
         @com.fasterxml.jackson.annotation.JsonIgnore
         private String originalMessage;
+        // 서버가 문장을 고쳐 쓰기 전에 사용자가 이번 요청에서 보낸 문장들입니다(멈춘 질문 포함, 서버 내부용).
+        // 메뉴 번호 고르기·멈춘 질문 합치기로 message를 바꿔 써도 알레르기 같은 안전 조건은 이 원문에서 읽습니다.
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        private List<String> sentUserTexts;
     }
 
     /** 채팅 요청에 포함할 수 있는 건강 정보(알레르기, 만성질환, 식이 제한, 복용 약, 목표)입니다. */

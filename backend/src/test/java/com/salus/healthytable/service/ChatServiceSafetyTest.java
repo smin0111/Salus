@@ -556,6 +556,51 @@ class ChatServiceSafetyTest {
                 new ChatDto.Message("model", "[원본 레시피 기준]\n- 요리명: 계란말이\n1. 계란을 푼다")))).isNull();
     }
 
+    // 후보를 고른 말에 함께 쓴 빼기 조건은 레시피 요청 문장에 남깁니다(2026-10-17 리뷰: "1번 양파 빼고"의 양파가 사라짐).
+    @Test
+    void menuPickKeepsExclusionsFromTheSameMessage() {
+        List<ChatDto.Message> history = menuCandidates();
+
+        assertThat(ChatService.menuPickRequest("1번 양파 빼고", history)).isEqualTo("계란말이 레시피 알려줘, 양파 빼고");
+        assertThat(ChatService.menuPickRequest("2번으로 해줘", history)).isEqualTo("오트밀 빵 레시피 알려줘");
+        assertThat(ChatService.menuPickRequest("고마워", history)).isNull();
+    }
+
+    // 후보를 고르며 말한 알레르기는 message가 "계란말이 레시피 알려줘"로 바뀌어도 Agent에 전달되어야 합니다
+    // (2026-10-17 리뷰: 바뀐 문장만 읽어 우유 알레르기가 빠짐).
+    @Test
+    void menuPickKeepsAllergyMentionedInTheSameMessage() {
+        ReflectionTestUtils.setField(chatService, "recipeAgentEnabled", true);
+        ReflectionTestUtils.setField(chatService, "recipeAgentInitialRoutingEnabled", true);
+        RecipeNormalizer realNormalizer = new RecipeNormalizer();
+        when(recipeNormalizer.normalize(anyString()))
+                .thenAnswer(invocation -> realNormalizer.normalize(invocation.getArgument(0)));
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.RECIPE_REQUEST);
+        when(recipeAgentOrchestrator.handle(any(), any(), any(), any()))
+                .thenReturn(Mono.just(new ChatDto.Response("agent response")));
+
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("우유 알레르기 있어. 1번으로 해줘");
+        request.setHistory(menuCandidates());
+        chatService.processChat(Optional.empty(), request).block();
+
+        ArgumentCaptor<ChatSafetyContextService.SafetyContext> safety =
+                ArgumentCaptor.forClass(ChatSafetyContextService.SafetyContext.class);
+        verify(recipeAgentOrchestrator).handle(any(), any(), eq(request), safety.capture());
+        assertThat(request.getMessage()).isEqualTo("계란말이 레시피 알려줘");
+        assertThat(safety.getValue().allergies()).contains("우유");
+    }
+
+    private static List<ChatDto.Message> menuCandidates() {
+        return List.of(
+                new ChatDto.Message("user", "10분 안에 만드는 아침 메뉴 추천해줘"),
+                new ChatDto.Message("model", """
+                        아침 메뉴 3가지를 추천해드릴게요!
+                        1. **계란말이** – 단백질이 풍부해요.
+                        2. **오트밀 빵** – 포만감이 오래가요.
+                        3. **요거트+과일** - 간단해요."""));
+    }
+
     // 요리 이름이 있는 메뉴 추천("김치찌개 추천해줘")은 지금처럼 Agent가 출처를 찾습니다.
     @Test
     void menuRecommendationNamingDishStillRoutesToRecipeAgent() {

@@ -81,6 +81,24 @@ class ChatSafetyContextServiceTest {
                 .containsExactly("가".repeat(20) + "김", "건강정보", "우유", "대두", "복숭아", "키위");
     }
 
+    // 서버가 message를 고쳐 써도(메뉴 번호 고르기, 멈춘 질문 합치기) 사용자가 보낸 원문의 알레르기는 빠지면 안 됩니다
+    // (2026-10-17 리뷰: "우유 알레르기 있어. 1번으로 해줘"가 "계란말이 레시피 알려줘"로 바뀌며 우유가 사라짐).
+    @Test
+    void allergyMentionsAreReadFromSentTextsEvenWhenMessageWasRewritten() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), allergenRegistry());
+
+        ChatDto.Request menuPick = new ChatDto.Request();
+        menuPick.setMessage("계란말이 레시피 알려줘");
+        menuPick.setSentUserTexts(List.of("우유 알레르기 있어. 1번으로 해줘"));
+        assertThat(service.build(Optional.empty(), menuPick).allergies()).contains("우유");
+
+        ChatDto.Request merged = new ChatDto.Request();
+        merged.setMessage("2인분 파스타 레시피 알려줘");
+        merged.setInterruptedMessages(List.of("우유 알레르기 있어. 파스타 레시피 알려줘"));
+        merged.setOriginalMessage("2인분으로");
+        assertThat(service.build(Optional.empty(), merged).allergies()).contains("우유");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"굴", "밀", "게", "잣", "우유", "대두", "복숭아", "키위"})
     void explicitChatAllergyMentionsRetainKnownSingleCharactersAndExistingLongerTerms(String term) {

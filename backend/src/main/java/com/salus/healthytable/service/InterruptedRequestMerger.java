@@ -41,10 +41,8 @@ public class InterruptedRequestMerger {
     private static final Pattern SINGLE_SYLLABLE_EXCLUSION = Pattern.compile(
             "(?<![가-힣])([가-힣])(?:은|는|를|도)?\\s+(?:빼|제외|없이|말고|넣지\\s*마)");
     private static final Set<String> NOT_SINGLE_INGREDIENTS = Set.of(
-            "나", "저", "난", "전", "내", "제", "좀", "다", "더", "그", "이", "꼭", "또", "걍", "왜", "뭐", "것", "거", "건");
-    // "아니 된장찌개로", "된장찌개로 바꿔줘", "된장찌개 레시피 알려줘"처럼 새 질문이 요리를 다시 정한 경우
-    private static final Pattern NEW_DISH_REQUEST = Pattern.compile(
-            "레시피|만드는\\s*법|만드는\\s*방법|조리법|(?:으로|로)\\s*(?:바꿔|변경|해\\s*줘|할게|하자)|^\\s*아니");
+            "나", "저", "난", "전", "내", "제", "좀", "다", "더", "그", "이", "꼭", "또", "걍", "왜", "뭐", "것", "거", "건",
+            "번");
     private static final Set<String> NOT_INGREDIENTS = Set.of(
             "그거", "이거", "저거", "그건", "이건", "좀", "다", "전부", "그냥", "아니", "레시피", "요리", "재료");
 
@@ -71,8 +69,9 @@ public class InterruptedRequestMerger {
 
             규칙:
             - 새 메시지가 조건을 더하면(재료 빼기, 인분, 조리 도구, 맵기 등) 앞 질문에 그 조건을 더하세요.
-            - 새 메시지가 요리를 바꾸면 새 요리로 쓰세요. 이때 앞 질문의 '빼 달라는 재료'는 새 메시지가 취소하지 않는 한 유지하세요.
+            - 새 메시지가 요리를 바꾸면 새 요리로 쓰고 앞 요리 이름은 쓰지 마세요. 이때 앞 질문의 '빼 달라는 재료'는 새 메시지가 취소하지 않는 한 유지하세요.
             - 새 메시지가 앞 질문과 상관없는 새 질문이면 새 메시지만 쓰세요.
+            - 앞 질문이나 새 메시지에서 말한 알레르기("우유 알레르기 있어")는 요리가 바뀌어도 그대로 넣으세요.
             - 사용자가 말하지 않은 요리, 재료, 조건을 지어내지 마세요.
             - 레시피를 원하면 문장 끝을 "레시피 알려줘"로 쓰세요.
             - 출력은 JSON 하나만: {"request": "다시 쓴 요청"}
@@ -82,6 +81,8 @@ public class InterruptedRequestMerger {
             → {"request": "양파 빼고 김치찌개 레시피 알려줘"}
             앞 질문: 김치찌개 레시피 알려줘 / 새 메시지: 아니 된장찌개로
             → {"request": "된장찌개 레시피 알려줘"}
+            앞 질문: 우유 알레르기 있어. 파스타 레시피 알려줘 / 새 메시지: 아니 된장찌개로
+            → {"request": "우유 알레르기 있어. 된장찌개 레시피 알려줘"}
             앞 질문: 마늘빵 레시피 / 새 메시지: 에어프라이어로
             → {"request": "에어프라이어 마늘빵 레시피 알려줘"}
             앞 질문: 파스타 레시피 알려줘 / 새 메시지: 오늘 날씨 어때
@@ -119,11 +120,11 @@ public class InterruptedRequestMerger {
         }
         String latest = request.getMessage();
         request.setOriginalMessage(latest);
-        String fallback = concatenate(earlier, latest);
+        String fallback = fallback(earlier, latest);
         return ChatProgress.stage("앞에서 멈춘 질문과 함께 이해하고 있어요", askModel(earlier, latest))
                 .map(candidate -> accept(earlier, latest, candidate) ? candidate : fallback)
                 .onErrorResume(error -> {
-                    log.warn("[InterruptMerge] LLM merge failed; using concatenation. category={}",
+                    log.warn("[InterruptMerge] LLM merge failed; using rule fallback. category={}",
                             error.getClass().getSimpleName());
                     return Mono.just(fallback);
                 })
@@ -169,28 +170,71 @@ public class InterruptedRequestMerger {
 
     /**
      * LLM이 정리한 문장을 쓸지 정합니다.
-     * 새 메시지에서 뺀 재료는 항상 남아야 하고, 앞 질문에서 뺀 재료도 새 메시지가 요리를 다시 정하지 않았다면 남아야 합니다.
+     * 새 메시지에서 뺀 재료는 항상 남아야 하고, 앞 질문에서 뺀 재료도 요리를 바꿨더라도 남아야 합니다.
+     * 새 메시지가 그 재료를 다시 말한 경우("새우는 넣어도 돼")만 앞 조건을 새 메시지 판단에 맡깁니다.
      */
     static boolean accept(List<String> earlier, String latest, String candidate) {
         if (candidate == null || candidate.isBlank() || candidate.length() > MAX_MERGED_LENGTH
                 || candidate.contains("\n")) {
             return false;
         }
-        String compactCandidate = candidate.replaceAll("\\s+", "");
+        // 뺀 재료는 이름만 남는 것이 아니라 "빼는 말"로 남아야 합니다. "새우 빼줘"를 "새우 넣은 볶음밥"으로 바꾼 문장은
+        // 이름은 있지만 뜻이 반대라 받지 않습니다(2026-10-17 리뷰).
+        List<String> candidateExclusions = exclusions(candidate);
         for (String ingredient : exclusions(latest)) {
-            if (!compactCandidate.contains(ingredient)) {
+            if (!candidateExclusions.contains(ingredient)) {
                 return false;
             }
         }
-        boolean redirected = NEW_DISH_REQUEST.matcher(latest).find();
+        // 2026-10-17 결정: 요리를 바꿔도("아니 김치찌개로") 앞에서 뺀 재료는 새 요리에도 이어 갑니다.
+        String compactLatest = latest.replaceAll("\\s+", "");
         for (String question : earlier) {
             for (String ingredient : exclusions(question)) {
-                if (!compactCandidate.contains(ingredient) && !redirected) {
+                if (!candidateExclusions.contains(ingredient) && !compactLatest.contains(ingredient)) {
+                    return false;
+                }
+            }
+        }
+        // 요리를 바꿨는데 앞 요리 이름이 남은 문장("된장찌개 파스타 레시피")은 받지 않습니다(2026-10-17 실제 Ollama 확인).
+        if (switchesDish(latest)) {
+            String compactMerged = candidate.replaceAll("\\s+", "");
+            for (String question : earlier) {
+                String previousDish = requestedDish(question);
+                if (!previousDish.isEmpty() && !compactLatest.contains(previousDish) && compactMerged.contains(previousDish)) {
+                    return false;
+                }
+            }
+        }
+        // 알레르기 언급은 요리가 바뀌어도 빠지면 안 됩니다. 빠지면 fallback() 문장을 씁니다.
+        String compactCandidate = candidate.replaceAll("\\s+", "").replace("알러지", "알레르기");
+        List<String> spoken = new ArrayList<>(earlier);
+        spoken.add(latest);
+        for (String text : spoken) {
+            for (String allergen : allergyMentions(text)) {
+                if (!compactCandidate.contains("알레르기") || !compactCandidate.contains(allergen)) {
                     return false;
                 }
             }
         }
         return true;
+    }
+
+    // "우유 알레르기", "새우알러지", "땅콩에 알레르기"처럼 알레르기 바로 앞 낱말을 읽습니다.
+    private static final Pattern ALLERGY_MENTION = Pattern.compile("([가-힣a-zA-Z]{1,10})\\s*알레르기");
+
+    static List<String> allergyMentions(String text) {
+        if (text == null || text.isBlank()) {
+            return List.of();
+        }
+        LinkedHashSet<String> found = new LinkedHashSet<>();
+        Matcher matcher = ALLERGY_MENTION.matcher(text.replace("알러지", "알레르기"));
+        while (matcher.find()) {
+            String allergen = matcher.group(1).replaceFirst("(?:에|에대한|대한)$", "");
+            if (!allergen.isBlank()) {
+                found.add(allergen);
+            }
+        }
+        return List.copyOf(found);
     }
 
     static List<String> exclusions(String text) {
@@ -211,6 +255,75 @@ public class InterruptedRequestMerger {
             }
         }
         return List.copyOf(found);
+    }
+
+    // "파스타 레시피 알려줘"의 "파스타"처럼 레시피를 물은 요리 이름입니다(공백 없이). 없으면 빈 문자열입니다.
+    private static final Pattern REQUESTED_DISH = Pattern.compile(
+            "([가-힣a-zA-Z]{2,15})\\s*(?:레시피|만드는\\s*법|만드는\\s*방법|조리법)");
+
+    static String requestedDish(String text) {
+        if (text == null) {
+            return "";
+        }
+        String dish = "";
+        Matcher matcher = REQUESTED_DISH.matcher(text);
+        while (matcher.find()) {
+            dish = matcher.group(1);
+        }
+        return dish;
+    }
+
+    // "아니 된장찌개로", "된장찌개로 바꿔줘"에서 새 요리 이름을 읽습니다. 읽지 못하면 빈 문자열입니다.
+    private static final Pattern REDIRECT_HEAD = Pattern.compile("^\\s*(?:아니(?:야|요)?|아냐)[,\\s]*");
+    private static final Pattern REDIRECT_TAIL = Pattern.compile(
+            "(?:으로|로)\\s*(?:바꿔\\s*줘?|바꿔\\s*주세요|변경(?:해\\s*줘)?|해\\s*줘|해\\s*주세요|할게|하자)?\\s*[.!?~]*$");
+    private static final Pattern DISH_NAME = Pattern.compile("[가-힣a-zA-Z0-9 ]{2,20}");
+    // "아니 에어프라이어로"는 요리가 아니라 조리 도구를 바꾼 말입니다(ChatService.EQUIPMENT_SWITCH와 같은 도구들).
+    private static final Pattern EQUIPMENT = Pattern.compile(
+            "전자레인지|에어\\s*프라이어|에프|프라이팬|후라이팬|냄비|찜기|밥솥|토스터\\s*오븐|토스터기|오븐|그릴");
+
+    static String redirectedDish(String latest) {
+        if (latest == null) {
+            return "";
+        }
+        String dish = REDIRECT_TAIL.matcher(REDIRECT_HEAD.matcher(latest).replaceFirst("")).replaceFirst("").trim();
+        return DISH_NAME.matcher(dish).matches() && !dish.equals(latest.trim()) && !EQUIPMENT.matcher(dish).matches()
+                ? dish : "";
+    }
+
+    // 새 메시지가 요리를 분명히 다시 정했는지 봅니다: "된장찌개 레시피 알려줘"처럼 요리를 물었거나 "아니 된장찌개로"처럼 바꿨을 때.
+    static boolean switchesDish(String latest) {
+        return !requestedDish(latest).isEmpty()
+                || (latest != null && REDIRECT_HEAD.matcher(latest).find() && !redirectedDish(latest).isEmpty());
+    }
+
+    /**
+     * LLM 결과를 쓰지 못할 때의 문장입니다. 새 메시지가 요리를 바꿨으면 앞 질문의 알레르기·빼기 조건만 남기고
+     * 새 요리로 묻습니다(이어 붙이면 앞 요리 이름이 섞입니다). 그 밖에는 원문을 순서대로 이어 붙입니다.
+     */
+    static String fallback(List<String> earlier, String latest) {
+        if (!switchesDish(latest)) {
+            return concatenate(earlier, latest);
+        }
+        String request = requestedDish(latest).isEmpty() ? redirectedDish(latest) : "";
+        LinkedHashSet<String> allergens = new LinkedHashSet<>();
+        LinkedHashSet<String> excluded = new LinkedHashSet<>();
+        for (String question : earlier) {
+            allergens.addAll(allergyMentions(question));
+            excluded.addAll(exclusions(question));
+        }
+        StringBuilder merged = new StringBuilder();
+        if (!allergens.isEmpty()) {
+            merged.append(String.join(", ", allergens)).append(" 알레르기 있어. ");
+        }
+        String compactLatest = latest.replaceAll("\\s+", "");
+        excluded.removeIf(compactLatest::contains);
+        for (String ingredient : excluded) {
+            merged.append(ingredient).append(" 빼고 ");
+        }
+        merged.append(request.isEmpty() ? latest.trim() : request + " 레시피 알려줘");
+        String result = merged.toString();
+        return result.length() <= MAX_MERGED_LENGTH ? result : concatenate(earlier, latest);
     }
 
     // LLM을 쓰지 못할 때: 앞 질문들과 새 메시지를 순서대로 이어 붙입니다.

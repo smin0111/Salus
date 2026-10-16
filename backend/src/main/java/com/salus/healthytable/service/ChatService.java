@@ -16,6 +16,7 @@ import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
@@ -109,6 +110,8 @@ public class ChatService {
      */
     public Mono<ChatDto.Response> processChat(Optional<Long> authenticatedUserId, ChatDto.Request request) {
         StringBuilder systemContext = new StringBuilder();
+        // 아래 재작성(요리 바꾸기·메뉴 고르기)이 message를 바꾸기 전에 사용자가 보낸 원문을 남겨 안전 조건을 원문에서 읽게 합니다.
+        rememberSentUserTexts(request);
         rewriteDishSwitchRequest(request);
         rewriteEquipmentSwitchRequest(request);
         rewriteMenuPickRequest(request);
@@ -712,10 +715,47 @@ public class ChatService {
         if (request == null) {
             return;
         }
-        String pick = menuPickFromHistory(request.getMessage(), request.getHistory());
-        if (pick != null && !pick.isBlank()) {
-            request.setMessage(pick + " 레시피 알려줘");
+        String rewritten = menuPickRequest(request.getMessage(), request.getHistory());
+        if (rewritten != null) {
+            request.setMessage(rewritten);
         }
+    }
+
+    /**
+     * 후보를 고른 말을 레시피 요청 문장으로 바꿉니다. 같은 말에 있던 빼기 조건("양파 빼고 1번")은 요청 문장에 그대로 남깁니다.
+     * 알레르기 언급은 SafetyContext가 원문(sentUserTexts)에서 읽습니다. 후보를 고른 말이 아니면 null입니다.
+     */
+    static String menuPickRequest(String message, List<ChatDto.Message> history) {
+        String pick = menuPickFromHistory(message, history);
+        if (pick == null || pick.isBlank()) {
+            return null;
+        }
+        StringBuilder rewritten = new StringBuilder(pick).append(" 레시피 알려줘");
+        String compactPick = pick.replaceAll("\\s+", "");
+        for (String ingredient : InterruptedRequestMerger.exclusions(message)) {
+            if (!compactPick.contains(ingredient)) {
+                rewritten.append(", ").append(ingredient).append(" 빼고");
+            }
+        }
+        return rewritten.toString();
+    }
+
+    // 이번 요청에서 사용자가 보낸 원문(멈춘 질문 + 새 메시지)을 재작성 전에 한 번만 남깁니다.
+    private static void rememberSentUserTexts(ChatDto.Request request) {
+        if (request == null || request.getSentUserTexts() != null) {
+            return;
+        }
+        List<String> texts = new ArrayList<>();
+        if (request.getInterruptedMessages() != null) {
+            request.getInterruptedMessages().stream()
+                    .filter(text -> text != null && !text.isBlank())
+                    .forEach(texts::add);
+        }
+        String latest = request.getOriginalMessage() != null ? request.getOriginalMessage() : request.getMessage();
+        if (latest != null && !latest.isBlank()) {
+            texts.add(latest);
+        }
+        request.setSentUserTexts(List.copyOf(texts));
     }
 
     // 요리 이름만 있는 메시지인지 봅니다. 끝의 느낌표·물음표·웃음 표기는 무시하고, 세 단어·20자 이내만 이름으로 봅니다.

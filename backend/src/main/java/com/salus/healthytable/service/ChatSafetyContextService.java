@@ -62,6 +62,16 @@ public class ChatSafetyContextService {
                 request, allergies, chronicConditions, dietaryRestrictions, medications, goals);
         // 현재 메시지와 이전 "사용자" 메시지에서 알레르기 언급을 찾아 추가합니다(AI 답변은 제외).
         appendAllergyMentionsFromText(allergies, request == null ? null : request.getMessage());
+        // 서버가 고쳐 쓴 message에는 사용자가 말한 알레르기가 빠질 수 있으므로 원문도 읽습니다
+        // (2026-10-17: "우유 알레르기 있어. 1번으로 해줘"가 "계란말이 레시피 알려줘"로 바뀌며 우유가 빠짐).
+        if (request != null) {
+            for (List<String> texts : java.util.Arrays.asList(request.getSentUserTexts(), request.getInterruptedMessages())) {
+                if (texts != null) {
+                    texts.forEach(text -> appendAllergyMentionsFromText(allergies, text));
+                }
+            }
+            appendAllergyMentionsFromText(allergies, request.getOriginalMessage());
+        }
         if (request != null && request.getHistory() != null) {
             request.getHistory().stream()
                     .filter(message -> message != null && "user".equals(message.getRole()))
