@@ -286,6 +286,20 @@ const RecipePreparing = () => (
  * 메시지 말풍선 하나입니다. 처음 나타날 때 서서히 보이며 살짝 커지는 애니메이션을 줍니다.
  * AI 답변이면 레시피 카드/타자기 효과/일반 텍스트 중 하나로 보여 주고, 복사·음성 읽기·식단 추가 버튼을 붙입니다.
  */
+// 마지막 AI 답 뒤에 있는 멈춘 사용자 질문들의 문장입니다(오래된 순). 방금 멈춘 질문(justInterruptedId)은
+// 상태 반영 전이라 따로 받습니다.
+const pendingInterruptedTexts = (messages, justInterruptedId) => {
+    const pending = [];
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+        const message = messages[i];
+        if (message.sender !== 'user') break;
+        if (message.interrupted || message.id === justInterruptedId) {
+            pending.unshift(message.text);
+        }
+    }
+    return pending;
+};
+
 const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, openPlanModal, handleStreamingComplete, copiedMessageId, setCopiedMessageId }) => {
     const scaleAnim = useRef(new Animated.Value(0.95)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -369,6 +383,9 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
                     >
                         {item.text}
                     </Text>
+                )}
+                {item.sender === 'user' && item.interrupted && (
+                    <Text style={styles.interruptedLabel}>멈춤 · 다음 메시지와 함께 답해요</Text>
                 )}
 
                 {/* AI 답변에는 복사, 음성 읽기, 식단 추가처럼 후속 행동을 붙입니다. */}
@@ -467,6 +484,8 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     const flatListRef = useRef(null);
     const authEpochRef = useRef(0);
     const requestSeqRef = useRef(0);
+    // 진행 중인 답변 요청(멈춤용): 브라우저 요청을 끊는 AbortController와 서버에 알릴 요청 ID
+    const activeRequestRef = useRef(null);
 
     // 식단 추가 모달
     const [modalVisible, setModalVisible] = useState(false);
@@ -688,6 +707,11 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         const messageText = typeof text === 'string' ? text : inputText;
         if (!messageText.trim()) return;
 
+        // 답을 기다리는 중에 새 메시지를 보내면 지금 답을 멈추고 새 메시지와 합쳐 다시 묻습니다(Claude·ChatGPT처럼).
+        const interruptedNow = loading ? stopGeneration() : null;
+        // 마지막 AI 답 뒤에 멈춘 질문들은 이번 메시지와 함께 보내 하나의 요청으로 이해하게 합니다.
+        const interruptedMessages = pendingInterruptedTexts(messages, interruptedNow);
+
         const requestEpoch = authEpochRef.current;
         const requestSeq = requestSeqRef.current + 1;
         requestSeqRef.current = requestSeq;
@@ -702,6 +726,8 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         // 요청 ID를 직접 만들어 보내고, 같은 ID로 서버의 진행 단계를 1초마다 물어봅니다.
         const progressId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
         startProgressPolling(progressId);
+        const abortController = new AbortController();
+        activeRequestRef.current = { abortController, progressId, userMessageId: userMessage.id };
 
         // AI 사용 활동 기록
         if (isLoggedIn) {
@@ -715,7 +741,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         try {
             // AI 컨텍스트에는 최근 대화와 건강 프로필만 압축해서 보냅니다.
             // 전체 대화를 계속 보내면 prompt가 길어지고, 알레르기 같은 중요한 정보가 묻힐 수 있습니다.
-            const history = messages.slice(-10).map(msg => ({
+            const history = messages.filter(msg => !msg.interrupted).slice(-10).map(msg => ({
                 role: msg.sender === 'user' ? 'user' : 'model',
                 content: msg.text
             }));
@@ -733,12 +759,14 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                     message: messageText,
                     history: history,
                     healthProfile: healthProfilePayload,
+                    ...(interruptedMessages.length ? { interruptedMessages } : {}),
                 },
                 {
                     headers: {
                         ...(token ? { Authorization: `Bearer ${token}` } : {}),
                         'X-Request-Id': progressId,
                     },
+                    signal: abortController.signal,
                 }
             );
 
@@ -788,6 +816,10 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             }
 
         } catch (error) {
+            // 사용자가 멈춘 요청은 오류가 아닙니다. 화면 정리는 stopGeneration이 이미 했습니다.
+            if (axios.isCancel(error) || error?.code === 'ERR_CANCELED') {
+                return;
+            }
             console.error(error);
             if (requestEpoch === authEpochRef.current && requestSeq === requestSeqRef.current) {
                 const errorMessage = {
@@ -798,11 +830,35 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 setMessages(prev => [...prev, errorMessage]);
             }
         } finally {
-            stopProgressPolling();
+            if (activeRequestRef.current?.progressId === progressId) {
+                activeRequestRef.current = null;
+                stopProgressPolling();
+            }
             if (requestEpoch === authEpochRef.current && requestSeq === requestSeqRef.current) {
                 setLoading(false);
             }
         }
+    };
+
+    /**
+     * 답을 기다리는 중에 멈춥니다. 브라우저 요청을 끊고, 서버에도 알려 Ollama 생성을 멈추게 합니다
+     * (화면에서만 끊으면 서버는 버려진 답을 계속 만들고 다음 질문이 그 뒤에서 기다립니다).
+     * 멈춘 질문에는 "멈춤" 표시를 붙여 두고, 다음에 보내는 메시지와 함께 서버에 보냅니다.
+     * @returns 멈춘 사용자 메시지 ID(없으면 null)
+     */
+    const stopGeneration = () => {
+        const active = activeRequestRef.current;
+        if (!active) return null;
+        activeRequestRef.current = null;
+        active.abortController.abort();
+        axios.post(`${config.API_BASE_URL}/chat/cancel/${active.progressId}`, null, { timeout: 5000 })
+            .catch(() => {}); // 서버 알림이 실패해도 화면은 이미 멈췄습니다. 서버 처리는 시간 제한으로 끝납니다.
+        setMessages(prev => prev.map(message =>
+            message.id === active.userMessageId ? { ...message, interrupted: true } : message
+        ));
+        stopProgressPolling();
+        setLoading(false);
+        return active.userMessageId;
     };
 
     // 진행 단계 조회를 시작합니다. 경과 시간은 서버 응답과 상관없이 화면에서 1초씩 올립니다.
@@ -1238,15 +1294,28 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                         >
                             <Ionicons name="mic-outline" size={22} color={colors.textTertiary} />
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.sendButton, { backgroundColor: inputText.trim() ? colors.primary : colors.disabled }]}
-                            onPress={sendMessage}
-                            disabled={loading || !inputText.trim()}
-                            accessibilityRole="button"
-                            accessibilityLabel="메시지 보내기"
-                        >
-                            <Ionicons name="arrow-up" size={18} color="white" />
-                        </TouchableOpacity>
+                        {loading && !inputText.trim() ? (
+                            // 답을 기다리는 동안은 멈춤 버튼을 보여 줍니다. 글을 쓰면 다시 보내기 버튼이 되고,
+                            // 보내면 지금 답을 멈추고 새 메시지와 합쳐 다시 묻습니다.
+                            <TouchableOpacity
+                                style={[styles.sendButton, { backgroundColor: colors.text }]}
+                                onPress={stopGeneration}
+                                accessibilityRole="button"
+                                accessibilityLabel="답변 멈추기"
+                            >
+                                <Ionicons name="stop" size={14} color="white" />
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity
+                                style={[styles.sendButton, { backgroundColor: inputText.trim() ? colors.primary : colors.disabled }]}
+                                onPress={sendMessage}
+                                disabled={!inputText.trim()}
+                                accessibilityRole="button"
+                                accessibilityLabel="메시지 보내기"
+                            >
+                                <Ionicons name="arrow-up" size={18} color="white" />
+                            </TouchableOpacity>
+                        )}
                     </View>
                 </View>
             </KeyboardAvoidingView>
@@ -1778,6 +1847,11 @@ const styles = StyleSheet.create({
                 outlineWidth: 0,
             }
         })
+    },
+    interruptedLabel: {
+        marginTop: 4,
+        fontSize: 11,
+        color: colors.textTertiary,
     },
     sendButton: {
         borderRadius: 16,

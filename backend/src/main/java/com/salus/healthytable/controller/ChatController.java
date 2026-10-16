@@ -5,9 +5,11 @@ import com.salus.healthytable.dto.ChatDto;
 import com.salus.healthytable.repository.ChatMessageRepository;
 import com.salus.healthytable.repository.ChatSessionRepository;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
+import com.salus.healthytable.service.ChatCancellation;
 import com.salus.healthytable.service.ChatProgress;
 import com.salus.healthytable.service.ChatRateLimitService;
 import com.salus.healthytable.service.ChatService;
+import com.salus.healthytable.service.InterruptedRequestMerger;
 import com.salus.healthytable.service.RecipeWorkSessionService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -54,6 +57,7 @@ public class ChatController {
     private final RecipeWorkSessionService recipeWorkSessionService;
     private final ChatService chatService;
     private final ChatRateLimitService chatRateLimitService;
+    private final InterruptedRequestMerger interruptedRequestMerger;
 
     /**
      * 내 채팅방 목록을 최근 대화 순으로 조회합니다. 게스트는 저장된 채팅방이 없으므로 빈 목록을 반환합니다.
@@ -145,9 +149,41 @@ public class ChatController {
         // 요청 ID(X-Request-Id)를 진행 ID로 씁니다. 앱은 같은 ID로 /api/chat/progress/{id}를 물어 진행 단계를 보여 줍니다.
         String progressId = org.slf4j.MDC.get("requestId");
         ChatProgress.start(progressId, "답변을 준비하고 있어요");
-        return chatService.processChat(authenticatedUserId, request)
+        // 사용자가 "멈춤"을 누르면(POST /api/chat/cancel/{id}) 처리 구독을 끊어 Ollama 생성까지 멈춥니다.
+        Mono<Boolean> cancelled = ChatCancellation.register(progressId);
+        boolean hasInterrupted = request.getInterruptedMessages() != null
+                && request.getInterruptedMessages().stream().anyMatch(message -> message != null && !message.isBlank());
+        Mono<ChatDto.Response> answer = !hasInterrupted
+                ? chatService.processChat(authenticatedUserId, request)
+                // 멈춘 뒤 "아니야"처럼 취소만 보냈으면 LLM 없이 바로 답합니다.
+                : InterruptedRequestMerger.isCancelOnly(request.getMessage())
+                ? chatService.replyToCancellation(authenticatedUserId, request)
+                // 멈춘 질문이 있으면 새 메시지와 합쳐 이해한 뒤 처리합니다. 합치기는 LLM 응답 스레드에서 끝나므로
+                // DB를 읽는 채팅 처리는 블로킹 가능한 스레드로 옮깁니다.
+                : interruptedRequestMerger.merge(request)
+                        .publishOn(Schedulers.boundedElastic())
+                        .flatMap(merged -> chatService.processChat(authenticatedUserId, merged));
+        return answer
+                .takeUntilOther(cancelled)
+                .switchIfEmpty(Mono.fromSupplier(() -> new ChatDto.Response(
+                        request.getSessionId(), "답변을 멈췄어요.", false, false)))
                 .contextWrite(context -> progressId == null ? context : context.put(ChatProgress.CONTEXT_KEY, progressId))
-                .doFinally(signal -> ChatProgress.finish(progressId));
+                .doFinally(signal -> {
+                    ChatProgress.finish(progressId);
+                    ChatCancellation.clear(progressId);
+                });
+    }
+
+    /**
+     * 진행 중인 채팅 답변을 멈춥니다. 진행 ID는 클라이언트가 만든 요청 ID(추측하기 어려운 무작위 값)입니다.
+     * 이미 끝났거나 없는 요청이면 cancelled=false로 답합니다.
+     */
+    @PostMapping("/cancel/{progressId}")
+    public Map<String, Object> cancel(@PathVariable String progressId) {
+        if (progressId == null || progressId.length() > 64 || !progressId.matches("[A-Za-z0-9_-]+")) {
+            throw new IllegalArgumentException("잘못된 요청 ID입니다.");
+        }
+        return Map.of("cancelled", ChatCancellation.cancel(progressId));
     }
 
     /**
@@ -198,6 +234,16 @@ public class ChatController {
             throw new IllegalArgumentException("메시지는 4000자 이하로 입력해 주세요.");
         }
         request.setMessage(message);
+        if (request.getInterruptedMessages() != null) {
+            if (request.getInterruptedMessages().size() > 10) {
+                throw new IllegalArgumentException("멈춘 질문이 너무 많습니다.");
+            }
+            for (String interrupted : request.getInterruptedMessages()) {
+                if (interrupted != null && interrupted.length() > MAX_CHAT_MESSAGE_LENGTH) {
+                    throw new IllegalArgumentException("메시지는 4000자 이하로 입력해 주세요.");
+                }
+            }
+        }
         normalizeChatHistory(request);
         normalizeHealthProfile(request);
     }

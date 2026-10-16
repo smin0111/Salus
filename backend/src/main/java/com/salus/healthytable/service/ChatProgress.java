@@ -61,8 +61,16 @@ public final class ChatProgress {
     }
 
     // 현재 스레드에 묶인 진행 ID의 단계를 바꿉니다(Recipe Agent 내부 단계용).
+    // 사용자가 멈춘 요청이면 다음 단계로 넘어가지 않게 여기서 멈춥니다.
     public static void report(String stage) {
-        report(CURRENT.get(), stage);
+        String progressId = CURRENT.get();
+        ChatCancellation.throwIfCancelled(progressId);
+        report(progressId, stage);
+    }
+
+    // 현재 스레드에 묶인 진행 ID입니다(없으면 null).
+    public static String currentId() {
+        return CURRENT.get();
     }
 
     public static void finish(String progressId) {

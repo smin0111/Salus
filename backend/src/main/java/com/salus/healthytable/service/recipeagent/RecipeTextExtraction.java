@@ -78,6 +78,8 @@ class OllamaRecipeTextLlmAdapter implements RecipeTextLlmPort {
 
     @Override
     public JsonNode complete(String prompt, Map<String, Object> schema) {
+        // 사용자가 멈춘 요청이면 Ollama를 부르지 않습니다(버려질 답이 다음 질문을 기다리게 함).
+        com.salus.healthytable.service.ChatCancellation.throwIfCurrentCancelled();
         OllamaLlmService.OllamaRequest request = new OllamaLlmService.OllamaRequest(
                 model,
                 List.of(new OllamaLlmService.OllamaMessage("user", prompt)),
@@ -110,6 +112,8 @@ class OllamaRecipeTextLlmAdapter implements RecipeTextLlmPort {
         }
         try {
             return objectMapper.readTree(response.getMessage().getContent());
+        } catch (com.salus.healthytable.service.ChatCancellation.ChatCancelledException e) {
+            throw e; // 사용자가 멈춘 요청은 실패로 처리하지 않고 그대로 멈춥니다.
         } catch (Exception e) {
             throw new IllegalStateException("text extraction response is not JSON", e);
         }
@@ -187,6 +191,8 @@ class PageTextRecipeExtractor {
                 return Optional.empty();
             }
             return Optional.of(toEvidence(recipeDish, lines, steps, page, domain));
+        } catch (com.salus.healthytable.service.ChatCancellation.ChatCancelledException e) {
+            throw e; // 사용자가 멈춘 요청은 실패로 처리하지 않고 그대로 멈춥니다.
         } catch (Exception e) {
             // 호출 실패나 해석 실패는 근거 없음입니다. 추측으로 채우지 않습니다.
             log.warn("[RecipeTextExtraction] Extraction failed. domain={}, failureCategory={}", domain, e.getClass().getSimpleName());
@@ -382,6 +388,8 @@ class PageTextRecipeExtractor {
         try {
             String host = URI.create(url).getHost();
             return host == null ? "" : host.toLowerCase(Locale.ROOT);
+        } catch (com.salus.healthytable.service.ChatCancellation.ChatCancelledException e) {
+            throw e; // 사용자가 멈춘 요청은 실패로 처리하지 않고 그대로 멈춥니다.
         } catch (Exception e) {
             return "";
         }

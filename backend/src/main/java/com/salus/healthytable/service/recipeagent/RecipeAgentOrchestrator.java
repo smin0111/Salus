@@ -69,8 +69,21 @@ public class RecipeAgentOrchestrator {
         return Mono.deferContextual(context -> {
             String progressId = context.getOrDefault(com.salus.healthytable.service.ChatProgress.CONTEXT_KEY, null);
             return Mono.fromCallable(() -> com.salus.healthytable.service.ChatProgress.bind(
-                    progressId, () -> execute(userId, chatSessionId, request, false, safetyContext)));
+                    progressId, () -> stopQuietlyIfCancelled(progressId,
+                            () -> execute(userId, chatSessionId, request, false, safetyContext))));
         }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    // 사용자가 멈춘 요청은 단계 사이에서 ChatCancelledException으로 끝납니다. 이미 응답이 끝난 요청이라
+    // 오류로 남기지 않고 빈 결과로 마칩니다.
+    private static ChatDto.Response stopQuietlyIfCancelled(
+            String progressId, java.util.concurrent.Callable<ChatDto.Response> work) throws Exception {
+        try {
+            return work.call();
+        } catch (com.salus.healthytable.service.ChatCancellation.ChatCancelledException e) {
+            log.info("[ChatCancel] Recipe Agent stopped. id={}", progressId);
+            return null;
+        }
     }
 
     /**

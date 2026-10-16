@@ -72,6 +72,20 @@ public class ChatService {
 
     // 아래 세 메서드는 채팅방/메시지 저장을 ChatSessionService에 위임하는 얇은 래퍼입니다.
     @Transactional
+    /**
+     * 멈춘 질문 뒤에 "아니야", "취소"처럼 취소만 보냈을 때 LLM 없이 바로 답합니다.
+     * 로그인 사용자는 다른 대화처럼 기록에 남깁니다.
+     */
+    public Mono<ChatDto.Response> replyToCancellation(Optional<Long> authenticatedUserId, ChatDto.Request request) {
+        String reply = InterruptedRequestMerger.CANCEL_REPLY;
+        ChatSession chatSession = authenticatedUserId.map(userId -> resolveSession(userId, request)).orElse(null);
+        if (chatSession != null) {
+            saveChatMessage(chatSession, "user", request.getMessage());
+            saveChatMessage(chatSession, "model", reply);
+        }
+        return Mono.just(new ChatDto.Response(chatSession != null ? chatSession.getId() : null, reply, false, false));
+    }
+
     public ChatSession resolveSession(Long userId, ChatDto.Request request) {
         return chatSessionService.resolveSession(userId, request);
     }
@@ -137,7 +151,7 @@ public class ChatService {
         SafetyContext safetyContext = buildSafetyContext(authenticatedUserId, request);
         if (authenticatedUserId.isPresent() && !safetyContext.healthContextAvailable()) {
             String unavailableReply = "건강 정보를 안전하게 확인하지 못해 개인화 레시피를 제공하지 않았습니다. 잠시 후 다시 시도해 주세요.";
-            saveChatMessage(chatSession, "user", request.getMessage());
+            saveChatMessage(chatSession, "user", userText(request));
             saveChatMessage(chatSession, "model", unavailableReply);
             return Mono.just(new ChatDto.Response(
                     chatSession != null ? chatSession.getId() : null,
@@ -158,7 +172,7 @@ public class ChatService {
                     chatSession,
                     request.getMessage());
             if (approvedAdjustment.isPresent()) {
-                saveChatMessage(chatSession, "user", request.getMessage());
+                saveChatMessage(chatSession, "user", userText(request));
                 saveChatMessage(chatSession, "model", approvedAdjustment.get().getReply());
                 return Mono.just(approvedAdjustment.get());
             }
@@ -170,7 +184,7 @@ public class ChatService {
                     authenticatedUserIdValue, chatSession, request);
             if (recipeQuestion.isPresent()) {
                 if (chatSession != null) {
-                    saveChatMessage(chatSession, "user", request.getMessage());
+                    saveChatMessage(chatSession, "user", userText(request));
                     saveChatMessage(chatSession, "model", recipeQuestion.get().getReply());
                 }
                 return Mono.just(recipeQuestion.get());
@@ -180,7 +194,7 @@ public class ChatService {
         // 승인 레시피가 없을 때만 Recipe Agent로 넘깁니다(승인 레시피가 항상 우선).
         if ((structuredAgentFollowUp || recipeAgentInitialRequest) && approvedRecipe.isEmpty()) {
             if (chatSession != null) {
-                saveChatMessage(chatSession, "user", request.getMessage());
+                saveChatMessage(chatSession, "user", userText(request));
             }
             return recipeAgentOrchestrator.handle(authenticatedUserIdValue, sessionId, request, safetyContext)
                     .map(response -> {
@@ -212,7 +226,7 @@ public class ChatService {
                     request.getMessage());
             if (allergyBlockedReply.isPresent()) {
                 if (chatSession != null) {
-                    saveChatMessage(chatSession, "user", request.getMessage());
+                    saveChatMessage(chatSession, "user", userText(request));
                     saveChatMessage(chatSession, "model", allergyBlockedReply.get());
                 }
                 return Mono.just(new ChatDto.Response(
@@ -234,7 +248,7 @@ public class ChatService {
                         safetyContext,
                         rendered.recipe());
                 if (chatSession != null) {
-                    saveChatMessage(chatSession, "user", request.getMessage());
+                    saveChatMessage(chatSession, "user", userText(request));
                     chatFollowUpService.saveApprovedRecipeState(
                             authenticatedUserIdValue,
                             chatSession.getId(),
@@ -253,7 +267,7 @@ public class ChatService {
             // 렌더링할 수 없는 요청(지원하지 않는 조정 등)은 예외 메시지를 그대로 안내합니다.
             } catch (IllegalArgumentException | IllegalStateException error) {
                 if (chatSession != null) {
-                    saveChatMessage(chatSession, "user", request.getMessage());
+                    saveChatMessage(chatSession, "user", userText(request));
                     saveChatMessage(chatSession, "model", error.getMessage());
                 }
                 return Mono.just(new ChatDto.Response(sessionId, error.getMessage(), false, false));
@@ -272,7 +286,7 @@ public class ChatService {
             try {
                 Long userIdLong = authenticatedUserId.get();
 
-                saveChatMessage(chatSession, "user", request.getMessage());
+                saveChatMessage(chatSession, "user", userText(request));
 
                 if (isSaveToCalendarRequest(request.getMessage())) {
                     Optional<ChatDto.Response> savedResponse = saveCurrentRecommendation(userIdLong, chatSession, request.getMessage());
@@ -628,6 +642,14 @@ public class ChatService {
             }
         }
         return null;
+    }
+
+    // 대화 기록에 남길 사용자 문장입니다. 멈춘 질문과 합친 요청이면 사용자가 실제로 보낸 새 메시지를 남깁니다
+    // (멈춘 질문은 이미 따로 저장되어 있어 화면과 기록이 같게 됩니다).
+    private static String userText(ChatDto.Request request) {
+        return request.getOriginalMessage() != null && !request.getOriginalMessage().isBlank()
+                ? request.getOriginalMessage()
+                : request.getMessage();
     }
 
     // 메뉴 추천 요청에 구체적인 요리 이름이 있는지 봅니다. 요청 표현을 뗀 뒤 남은 말이 없거나 메뉴 종류만 가리키면 false입니다.

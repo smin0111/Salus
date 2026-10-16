@@ -178,6 +178,8 @@ class RecipeStepSummarizer {
                 return SummaryOutcome.ofRejected();
             }
             return SummaryOutcome.ofSummary(List.copyOf(summaries));
+        } catch (com.salus.healthytable.service.ChatCancellation.ChatCancelledException e) {
+            throw e; // 사용자가 멈춘 요청은 실패로 처리하지 않고 그대로 멈춥니다.
         } catch (Exception e) {
             log.warn("[RecipeStepSummary] Summary failed. failureCategory={}", e.getClass().getSimpleName());
             return SummaryOutcome.ofUnavailable();
@@ -592,6 +594,8 @@ class WebRecipeSourceStore {
                     .filter(row -> row.getStepSummaries() != null && !row.getStepSummaries().isEmpty())
                     .findFirst()
                     .map(this::toDocument);
+        } catch (com.salus.healthytable.service.ChatCancellation.ChatCancelledException e) {
+            throw e; // 사용자가 멈춘 요청은 실패로 처리하지 않고 그대로 멈춥니다.
         } catch (Exception e) {
             log.warn("[WebRecipeSourceStore] Lookup failed. failureCategory={}", e.getClass().getSimpleName());
             return Optional.empty();
@@ -618,6 +622,8 @@ class WebRecipeSourceStore {
                     .map(this::toDocument)
                     .map(document -> belowPrimary(document, primary.get().sourceReliability()))
                     .forEach(documents::add);
+        } catch (com.salus.healthytable.service.ChatCancellation.ChatCancelledException e) {
+            throw e; // 사용자가 멈춘 요청은 실패로 처리하지 않고 그대로 멈춥니다.
         } catch (Exception e) {
             log.warn("[WebRecipeSourceStore] Supporting lookup failed. failureCategory={}", e.getClass().getSimpleName());
         }
@@ -678,6 +684,8 @@ class WebRecipeSourceStore {
             row.setFetchedAt(provenance == null || provenance.fetchedAt() == null ? now : provenance.fetchedAt());
             row.setExpiresAt(now.plusDays(cacheDays));
             repository.save(row);
+        } catch (com.salus.healthytable.service.ChatCancellation.ChatCancelledException e) {
+            throw e; // 사용자가 멈춘 요청은 실패로 처리하지 않고 그대로 멈춥니다.
         } catch (Exception e) {
             log.warn("[WebRecipeSourceStore] Save failed. failureCategory={}", e.getClass().getSimpleName());
         }
@@ -721,6 +729,8 @@ class WebRecipeSourceStore {
         try {
             String host = java.net.URI.create(url).getHost();
             return host == null ? "" : host.toLowerCase(Locale.ROOT);
+        } catch (com.salus.healthytable.service.ChatCancellation.ChatCancelledException e) {
+            throw e; // 사용자가 멈춘 요청은 실패로 처리하지 않고 그대로 멈춥니다.
         } catch (Exception e) {
             return "";
         }

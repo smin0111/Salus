@@ -333,6 +333,8 @@ class StructuredRecipePageAdapter {
             if (result == null || result.url() == null || result.url().isBlank()) {
                 continue;
             }
+            // 아래 try가 예외를 삼키므로, 멈춘 요청인지는 페이지를 읽기 전에 try 밖에서 확인합니다.
+            com.salus.healthytable.service.ChatCancellation.throwIfCurrentCancelled();
             try {
                 WebPageFetchResult page = fetcher.fetch(result.url());
                 List<ExtractedRecipeEvidence> evidenceList = extractor.extract(page);
@@ -435,6 +437,7 @@ class StructuredRecipePageAdapter {
             return List.of();
         }
         for (WebPageFetchResult page : ordered.subList(0, Math.min(ordered.size(), maxTextExtractionPages))) {
+            com.salus.healthytable.service.ChatCancellation.throwIfCurrentCancelled();
             Optional<ExtractedRecipeEvidence> evidence = textExtractor.extract(plan.dishName(), page);
             if (evidence.isEmpty()) {
                 continue;

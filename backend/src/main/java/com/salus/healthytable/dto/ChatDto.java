@@ -36,6 +36,11 @@ public class ChatDto {
         private List<Message> history;
         // 요청에 함께 보낸 건강 정보(주로 게스트용). 로그인 사용자는 DB의 건강 프로필도 함께 확인합니다.
         private HealthProfileContext healthProfile;
+        // 답을 기다리다 사용자가 멈춘 이전 질문들(오래된 순). 이번 메시지와 함께 보고 하나의 요청으로 이해합니다.
+        private List<String> interruptedMessages;
+        // 멈춘 질문과 합치기 전 사용자가 실제로 보낸 문장입니다. 대화 기록에는 이 문장을 저장합니다(서버 내부용).
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        private String originalMessage;
     }
 
     /** 채팅 요청에 포함할 수 있는 건강 정보(알레르기, 만성질환, 식이 제한, 복용 약, 목표)입니다. */

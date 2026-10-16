@@ -8,6 +8,7 @@ import com.salus.healthytable.repository.ChatSessionRepository;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
 import com.salus.healthytable.service.ChatRateLimitService;
 import com.salus.healthytable.service.ChatService;
+import com.salus.healthytable.service.InterruptedRequestMerger;
 import com.salus.healthytable.service.RecipeWorkSessionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -42,13 +43,66 @@ class ChatControllerTest {
     private final RecipeWorkSessionService recipeWorkSessionService = mock(RecipeWorkSessionService.class);
     private final ChatService chatService = mock(ChatService.class);
     private final ChatRateLimitService chatRateLimitService = mock(ChatRateLimitService.class);
+    private final InterruptedRequestMerger interruptedRequestMerger = mock(InterruptedRequestMerger.class);
     private final ChatController controller = new ChatController(
             authenticatedUserProvider,
             chatSessionRepository,
             chatMessageRepository,
             recipeWorkSessionService,
             chatService,
-            chatRateLimitService);
+            chatRateLimitService,
+            interruptedRequestMerger);
+
+    // 멈춘 질문이 있으면 새 메시지와 합친 요청으로 처리하고, 없으면 합치기를 건너뜁니다.
+    @Test
+    void chatMergesInterruptedQuestionsBeforeProcessing() {
+        when(authenticatedUserProvider.getCurrentUserId()).thenReturn(Optional.empty());
+        ChatDto.Request merged = new ChatDto.Request();
+        merged.setMessage("양파 빼고 김치찌개 레시피 알려줘");
+        when(interruptedRequestMerger.merge(any(ChatDto.Request.class))).thenReturn(Mono.just(merged));
+        when(chatService.processChat(eq(Optional.empty()), same(merged)))
+                .thenReturn(Mono.just(new ChatDto.Response("merged answer")));
+
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("양파는 빼줘");
+        request.setInterruptedMessages(List.of("김치찌개 레시피 알려줘"));
+
+        assertThat(controller.chat(request, new MockHttpServletRequest()).block().getReply()).isEqualTo("merged answer");
+    }
+
+    @Test
+    void chatWithoutInterruptedQuestionsSkipsMerge() {
+        when(authenticatedUserProvider.getCurrentUserId()).thenReturn(Optional.empty());
+        when(chatService.processChat(eq(Optional.empty()), any(ChatDto.Request.class)))
+                .thenReturn(Mono.just(new ChatDto.Response("plain answer")));
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("김치찌개 레시피 알려줘");
+
+        assertThat(controller.chat(request, new MockHttpServletRequest()).block().getReply()).isEqualTo("plain answer");
+        verifyNoInteractions(interruptedRequestMerger);
+    }
+
+    // 멈춘 뒤 "아니야"만 보내면 합치기 LLM과 채팅 처리를 거치지 않고 바로 취소 답을 줍니다.
+    @Test
+    void cancelOnlyMessageAfterInterruptionRepliesWithoutMerging() {
+        when(authenticatedUserProvider.getCurrentUserId()).thenReturn(Optional.empty());
+        when(chatService.replyToCancellation(eq(Optional.empty()), any(ChatDto.Request.class)))
+                .thenReturn(Mono.just(new ChatDto.Response("cancelled")));
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("아니야");
+        request.setInterruptedMessages(List.of("참치마요덮밥 레시피 알려줘"));
+
+        assertThat(controller.chat(request, new MockHttpServletRequest()).block().getReply()).isEqualTo("cancelled");
+        verifyNoInteractions(interruptedRequestMerger);
+    }
+
+    // 잘못된 모양의 요청 ID로는 멈추기 요청을 받지 않습니다.
+    @Test
+    void cancelRejectsMalformedRequestId() {
+        assertThatThrownBy(() -> controller.cancel("../../etc"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(controller.cancel("chat-123-unknown")).containsEntry("cancelled", false);
+    }
 
     // 메시지가 없으면 서비스 호출 전에 거부해야 합니다.
     @Test
