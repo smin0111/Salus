@@ -53,8 +53,11 @@ public class ChatIntentClassifier {
         }
 
         // 2. 메뉴 추천 판별
+        // "간단한 10분 컷 아침 식사"처럼 끼니만 말한 요청도 메뉴 추천입니다(2026-10-15 베타: 첫 화면 버튼이 일반 대화로 가서 자기소개만 답함).
         if (cleanMsg.contains("추천") || cleanMsg.contains("뭐먹지")
-                || cleanMsg.contains("점심메뉴") || cleanMsg.contains("저녁메뉴") || cleanMsg.contains("식단")) {
+                || cleanMsg.contains("아침메뉴") || cleanMsg.contains("점심메뉴") || cleanMsg.contains("저녁메뉴")
+                || cleanMsg.contains("아침식사") || cleanMsg.contains("점심식사") || cleanMsg.contains("저녁식사")
+                || cleanMsg.contains("식단")) {
             return ChatIntent.MENU_RECOMMENDATION;
         }
 

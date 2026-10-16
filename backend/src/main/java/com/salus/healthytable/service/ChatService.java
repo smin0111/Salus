@@ -48,6 +48,8 @@ public class ChatService {
     private static final Pattern BARE_DISH_EXCLUSION = Pattern.compile(
             "^\\s*[가-힣a-zA-Z]{1,12}(?:이|가|은|는|을|를)?\\s*(?:안\\s*들어간|없는|뺀|빼고|제외한)\\s+");
     private static final Pattern BARE_DISH_NAME = Pattern.compile("[가-힣a-zA-Z0-9]{2,}(?: [가-힣a-zA-Z0-9]+){0,2}");
+    // 메뉴 추천에서 요리 이름이 아니라 메뉴 종류를 가리키는 말입니다("아침메뉴", "10분 컷 아침 식사", "간단한 요리").
+    private static final Pattern GENERIC_MENU_WORDS = Pattern.compile("메뉴|식사|요리|음식|먹을\\s*(?:거|것)|끼니|반찬|식단|뭐\\s*(?:해\\s*)?먹");
 
     private final LlmService llmService; // GeminiService 대신 인터페이스 다형성 주입 적용
     private final ChatSafetyContextService chatSafetyContextService;
@@ -95,6 +97,7 @@ public class ChatService {
         StringBuilder systemContext = new StringBuilder();
         rewriteDishSwitchRequest(request);
         rewriteEquipmentSwitchRequest(request);
+        rewriteMenuPickRequest(request);
 
         // 1. 의도(Intent) 식별
         ChatIntentClassifier.ChatIntent intent = chatIntentClassifier.classify(request.getMessage());
@@ -123,9 +126,12 @@ public class ChatService {
         boolean structuredAgentFollowUp = recipeAgentEnabled
                 && hasStructuredAgentSession(authenticatedUserIdValue, sessionId)
                 && isRecipeAgentFollowUpCandidate(request.getMessage());
+        // 메뉴 추천은 요리 이름이 있을 때만("김치찌개 추천해줘") 출처를 찾습니다. "아침메뉴 추천해줘"는 요리 이름이 없어
+        // Agent가 "아침메뉴"를 요리로 검색해 블로그 문장이 재료로 들어갔습니다(2026-10-15 베타). 이런 요청은 메뉴 후보만 답합니다.
         boolean recipeAgentInitialRequest = recipeAgentEnabled
                 && recipeAgentInitialRoutingEnabled
-                && (isRecipeRequestIntent || intent == ChatIntentClassifier.ChatIntent.MENU_RECOMMENDATION);
+                && (isRecipeRequestIntent
+                    || (intent == ChatIntentClassifier.ChatIntent.MENU_RECOMMENDATION && namesDish(request.getMessage())));
 
         // 건강 조건 수집. 로그인 사용자인데 DB 건강 정보를 못 읽었다면 알레르기를 모르는 상태이므로 레시피를 주지 않습니다.
         SafetyContext safetyContext = buildSafetyContext(authenticatedUserId, request);
@@ -622,6 +628,72 @@ public class ChatService {
             }
         }
         return null;
+    }
+
+    // 메뉴 추천 요청에 구체적인 요리 이름이 있는지 봅니다. 요청 표현을 뗀 뒤 남은 말이 없거나 메뉴 종류만 가리키면 false입니다.
+    private boolean namesDish(String message) {
+        String dish = recipeNormalizer.normalize(message);
+        return !dish.isBlank() && !GENERIC_MENU_WORDS.matcher(dish).find();
+    }
+
+    // 메뉴 추천 답의 후보 줄입니다: "1. **계란말이** – 단백질이…", "2. 오트밀 - …".
+    private static final Pattern MENU_CANDIDATE_LINE = Pattern.compile(
+            "(?m)^\\s*([1-9])[.)]\\s*\\**\\s*([가-힣a-zA-Z0-9][가-힣a-zA-Z0-9 +&]{1,19}?)\\s*\\**\\s*(?:[–—:-]|\\(|$)");
+    private static final Pattern MENU_PICK_ORDINAL = Pattern.compile("([1-9])\\s*번|(첫|두|세|네|다섯)\\s*번\\s*째");
+    private static final List<String> ORDINAL_WORDS = List.of("첫", "두", "세", "네", "다섯");
+
+    /**
+     * 메뉴 추천 바로 뒤에 후보 하나를 고른 말("계란말이로 할게", "2번 알려줘")을 "계란말이 레시피 알려줘"로 바꿔 출처에서 찾게 합니다.
+     * 일반 대화로 가면 "음식명과 함께 '레시피'라고 말해 주세요" 안내만 받았습니다(2026-10-15).
+     * 바로 앞 답이 후보 목록(2개 이상)일 때만, 짧은 메시지에만 적용합니다.
+     */
+    static String menuPickFromHistory(String message, List<ChatDto.Message> history) {
+        if (message == null || message.isBlank() || message.contains("레시피") || message.length() > 30 || history == null) {
+            return null;
+        }
+        String lastModelReply = null;
+        for (int i = history.size() - 1; i >= 0; i--) {
+            ChatDto.Message item = history.get(i);
+            if (item != null && "model".equals(item.getRole()) && item.getContent() != null) {
+                lastModelReply = item.getContent();
+                break;
+            }
+        }
+        if (lastModelReply == null || lastModelReply.contains("요리명:")) {
+            return null;
+        }
+        java.util.Map<Integer, String> candidates = new java.util.LinkedHashMap<>();
+        Matcher line = MENU_CANDIDATE_LINE.matcher(lastModelReply);
+        while (line.find()) {
+            candidates.putIfAbsent(Integer.parseInt(line.group(1)), line.group(2).trim());
+        }
+        if (candidates.size() < 2) {
+            return null;
+        }
+        String compact = message.replaceAll("\\s+", "");
+        for (String candidate : candidates.values()) {
+            if (compact.contains(candidate.replaceAll("\\s+", ""))) {
+                return candidate;
+            }
+        }
+        Matcher ordinal = MENU_PICK_ORDINAL.matcher(message);
+        if (ordinal.find()) {
+            int index = ordinal.group(1) != null
+                    ? Integer.parseInt(ordinal.group(1))
+                    : ORDINAL_WORDS.indexOf(ordinal.group(2)) + 1;
+            return candidates.get(index);
+        }
+        return null;
+    }
+
+    private void rewriteMenuPickRequest(ChatDto.Request request) {
+        if (request == null) {
+            return;
+        }
+        String pick = menuPickFromHistory(request.getMessage(), request.getHistory());
+        if (pick != null && !pick.isBlank()) {
+            request.setMessage(pick + " 레시피 알려줘");
+        }
     }
 
     // 요리 이름만 있는 메시지인지 봅니다. 끝의 느낌표·물음표·웃음 표기는 무시하고, 세 단어·20자 이내만 이름으로 봅니다.

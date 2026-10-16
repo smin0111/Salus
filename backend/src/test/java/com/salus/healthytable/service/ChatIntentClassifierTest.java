@@ -27,4 +27,12 @@ class ChatIntentClassifierTest {
         assertThat(classifier.classify("요리 대신 다른 얘기 하자 레시피는 됐어")).isEqualTo(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
         assertThat(classifier.classify("레시피 싫어")).isEqualTo(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
     }
+
+    // 끼니만 말한 요청도 메뉴 추천입니다(2026-10-15 베타: 첫 화면 버튼 "간단한 10분 컷 아침 식사"가 일반 대화로 감).
+    @Test
+    void mealTimeRequestIsMenuRecommendation() {
+        assertThat(classifier.classify("간단한 10분 컷 아침 식사")).isEqualTo(ChatIntentClassifier.ChatIntent.MENU_RECOMMENDATION);
+        assertThat(classifier.classify("아침메뉴 뭐가 좋을까")).isEqualTo(ChatIntentClassifier.ChatIntent.MENU_RECOMMENDATION);
+        assertThat(classifier.classify("점심 식사로 먹을 거")).isEqualTo(ChatIntentClassifier.ChatIntent.MENU_RECOMMENDATION);
+    }
 }

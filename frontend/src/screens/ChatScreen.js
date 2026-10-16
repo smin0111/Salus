@@ -1150,6 +1150,8 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                                     가진 재료, 피하고 싶은 성분, 원하는 조리시간을 자연스럽게 말해보세요.
                                 </Text>
                             )}
+                            {/* 예시 버튼은 실제로 잘 동작하는 요청으로 둡니다. "간단한 10분 컷 아침 식사"는 일반 대화로 가서
+                                자기소개만 답했습니다(2026-10-15 베타). */}
                             <View style={styles.suggestionChips}>
                                 <TouchableOpacity
                                     style={styles.suggestionChip}
@@ -1159,9 +1161,9 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={styles.suggestionChip}
-                                    onPress={() => { setInputText('간단한 10분 컷 아침 식사'); }}
+                                    onPress={() => { setInputText('10분 안에 만드는 아침 메뉴 추천해줘'); }}
                                 >
-                                    <Text style={styles.suggestionText}>간단한 10분 컷 아침 식사</Text>
+                                    <Text style={styles.suggestionText}>10분 컷 아침 메뉴 추천</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>

@@ -511,6 +511,70 @@ class ChatServiceSafetyTest {
         verify(recipeAgentOrchestrator, never()).handle(any(), any(), any(), any());
     }
 
+    // 요리 이름 없는 메뉴 추천("아침메뉴 추천해줘")은 Agent로 보내지 않고 일반 대화로 메뉴 후보를 답합니다.
+    // Agent는 "아침메뉴"를 요리 이름으로 검색해 블로그 문장을 재료로 옮겼습니다(2026-10-15 베타).
+    @Test
+    void menuRecommendationWithoutDishNameStaysOutOfRecipeAgent() {
+        ReflectionTestUtils.setField(chatService, "recipeAgentEnabled", true);
+        ReflectionTestUtils.setField(chatService, "recipeAgentInitialRoutingEnabled", true);
+        RecipeNormalizer realNormalizer = new RecipeNormalizer();
+        when(recipeNormalizer.normalize(anyString()))
+                .thenAnswer(invocation -> realNormalizer.normalize(invocation.getArgument(0)));
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.MENU_RECOMMENDATION);
+        when(llmService.getChatResponse(anyString(), any())).thenReturn(Mono.just("오트밀, 토스트는 어떠세요?"));
+
+        for (String message : List.of("아침메뉴 추천해줘", "10분 안에 만드는 아침 메뉴 추천해줘",
+                "냉장고 재료로 만들 수 있는 요리 추천해줘", "오늘 저녁 뭐 먹을지 추천해줘")) {
+            ChatDto.Request request = new ChatDto.Request();
+            request.setMessage(message);
+            assertThat(chatService.processChat(Optional.empty(), request).block().getReply())
+                    .startsWith("오트밀, 토스트는 어떠세요?");
+        }
+        verify(recipeAgentOrchestrator, never()).handle(any(), any(), any(), any());
+    }
+
+    // 메뉴 추천 뒤에 후보를 고른 말은 그 요리의 레시피 요청으로 바꿉니다(2026-10-15: "계란말이로 할게"에 안내문만 답함).
+    @Test
+    void menuPickAfterRecommendationBecomesRecipeRequest() {
+        List<ChatDto.Message> history = List.of(
+                new ChatDto.Message("user", "10분 안에 만드는 아침 메뉴 추천해줘"),
+                new ChatDto.Message("model", """
+                        아침 메뉴 3가지를 추천해드릴게요!
+                        1. **계란말이** – 단백질이 풍부해요.
+                        2. **오트밀 빵** – 포만감이 오래가요.
+                        3. **요거트+과일** - 간단해요.
+                        원하시면 자세히 알려드릴게요!"""));
+
+        assertThat(ChatService.menuPickFromHistory("계란말이로 할게", history)).isEqualTo("계란말이");
+        assertThat(ChatService.menuPickFromHistory("오트밀 빵 알려줘", history)).isEqualTo("오트밀 빵");
+        assertThat(ChatService.menuPickFromHistory("2번으로 해줘", history)).isEqualTo("오트밀 빵");
+        assertThat(ChatService.menuPickFromHistory("세 번째 거", history)).isEqualTo("요거트+과일");
+        // 후보와 상관없는 말, 레시피를 직접 말한 요청, 후보 목록이 아닌 답 뒤에는 바꾸지 않습니다.
+        assertThat(ChatService.menuPickFromHistory("고마워", history)).isNull();
+        assertThat(ChatService.menuPickFromHistory("김치찌개 레시피 알려줘", history)).isNull();
+        assertThat(ChatService.menuPickFromHistory("계란말이로 할게", List.of(
+                new ChatDto.Message("model", "[원본 레시피 기준]\n- 요리명: 계란말이\n1. 계란을 푼다")))).isNull();
+    }
+
+    // 요리 이름이 있는 메뉴 추천("김치찌개 추천해줘")은 지금처럼 Agent가 출처를 찾습니다.
+    @Test
+    void menuRecommendationNamingDishStillRoutesToRecipeAgent() {
+        ReflectionTestUtils.setField(chatService, "recipeAgentEnabled", true);
+        ReflectionTestUtils.setField(chatService, "recipeAgentInitialRoutingEnabled", true);
+        RecipeNormalizer realNormalizer = new RecipeNormalizer();
+        when(recipeNormalizer.normalize(anyString()))
+                .thenAnswer(invocation -> realNormalizer.normalize(invocation.getArgument(0)));
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.MENU_RECOMMENDATION);
+        when(recipeAgentOrchestrator.handle(any(), any(), any(), any()))
+                .thenReturn(Mono.just(new ChatDto.Response("agent response")));
+
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("김치찌개 추천해줘");
+
+        assertThat(chatService.processChat(Optional.empty(), request).block().getReply()).isEqualTo("agent response");
+        verify(recipeAgentOrchestrator).handle(any(), any(), eq(request), any());
+    }
+
     // 실패 로그에 사용자 메시지 원문이나 약 이름이 남으면 안 됩니다.
     @Test
     void privacySafeFailureLogDoesNotContainUserMessageOrMedicationName() {
