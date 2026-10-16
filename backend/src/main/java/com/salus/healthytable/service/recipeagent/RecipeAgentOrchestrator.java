@@ -68,9 +68,12 @@ public class RecipeAgentOrchestrator {
         // 작업 스레드로 옮겨도 진행 단계("웹 검색 중" 등)를 기록할 수 있게 진행 ID를 묶어 둡니다.
         return Mono.deferContextual(context -> {
             String progressId = context.getOrDefault(com.salus.healthytable.service.ChatProgress.CONTEXT_KEY, null);
+            String quotaSubject = request == null ? null : request.getQuotaSubject();
             return Mono.fromCallable(() -> com.salus.healthytable.service.ChatProgress.bind(
                     progressId, () -> stopQuietlyIfCancelled(progressId,
-                            () -> execute(userId, chatSessionId, request, false, safetyContext))));
+                            () -> NewDishSearchQuota.bind(quotaSubject,
+                                    () -> answerLimitReached(chatSessionId,
+                                            () -> execute(userId, chatSessionId, request, false, safetyContext))))));
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -83,6 +86,16 @@ public class RecipeAgentOrchestrator {
         } catch (com.salus.healthytable.service.ChatCancellation.ChatCancelledException e) {
             log.info("[ChatCancel] Recipe Agent stopped. id={}", progressId);
             return null;
+        }
+    }
+
+    // 처음 보는 요리 찾기 하루 횟수를 다 썼으면 오류 대신 안내 문구로 답합니다.
+    private static ChatDto.Response answerLimitReached(
+            Long chatSessionId, java.util.concurrent.Callable<ChatDto.Response> work) throws Exception {
+        try {
+            return work.call();
+        } catch (NewDishSearchQuota.LimitExceededException e) {
+            return new ChatDto.Response(chatSessionId, NewDishSearchQuota.limitReachedReply(e.limit()), false, false);
         }
     }
 
@@ -415,6 +428,10 @@ public class RecipeAgentOrchestrator {
                     ? RecipeResearchStatus.NO_RELIABLE_SOURCE
                     : RecipeResearchStatus.VERIFIED_SOURCE_FOUND;
             return new DiscoveryResult(candidateBuilder.build(plan, sources), sources, status);
+        } catch (NewDishSearchQuota.LimitExceededException e) {
+            throw e; // 하루 횟수를 다 쓴 것은 출처 실패가 아니라 안내로 답합니다(answerLimitReached).
+        } catch (com.salus.healthytable.service.ChatCancellation.ChatCancelledException e) {
+            throw e; // 사용자가 멈춘 요청은 출처 실패로 바꾸지 않고 그대로 멈춥니다(stopQuietlyIfCancelled).
         } catch (Exception e) {
             log.warn("[RecipeAgent] Source discovery failed. No free-form recipe fallback will be used. failureCategory={}", e.getClass().getSimpleName());
             return new DiscoveryResult(RecipeCandidate.empty(plan.dishName()), List.of(), RecipeResearchStatus.FETCH_FAILED);

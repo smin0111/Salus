@@ -409,6 +409,41 @@ class RecipeAgentPersonalizationTest {
         }
     }
 
+    // 처음 보는 요리 찾기 하루 횟수를 다 쓰면 출처 실패로 처리하지 않고 안내 문구로 답합니다.
+    @Test
+    void newDishSearchLimitAnswersWithNotice() {
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                UserRecipeContext::empty,
+                (plan, context) -> { throw new NewDishSearchQuota.LimitExceededException(5); },
+                mock(RecipeWorkSessionService.class));
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", true);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("두쫀쿠 레시피 알려줘");
+        request.setQuotaSubject("user:1");
+        SafetyContext safety = new SafetyContext(List.of(), List.of(), List.of(), List.of(), List.of(), true);
+
+        ChatDto.Response response = orchestrator.handle(1L, 10L, request, safety).block();
+
+        assertThat(response.getRecipe()).isNull();
+        assertThat(response.getReply()).isEqualTo(NewDishSearchQuota.limitReachedReply(5));
+    }
+
+    // 출처를 찾는 중에 사용자가 멈추면 "출처 실패"로 바꿔 다음 단계로 가지 않고 그대로 멈춥니다(빈 결과).
+    @Test
+    void cancellationDuringSourceDiscoveryStopsTheRequest() {
+        RecipeSourceDiscoveryPort cancelledSearch = (plan, context) -> {
+            throw new com.salus.healthytable.service.ChatCancellation.ChatCancelledException();
+        };
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                UserRecipeContext::empty, cancelledSearch, mock(RecipeWorkSessionService.class));
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", true);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("두쫀쿠 레시피 알려줘");
+        SafetyContext safety = new SafetyContext(List.of(), List.of(), List.of(), List.of(), List.of(), true);
+
+        assertThat(orchestrator.handle(1L, 10L, request, safety).blockOptional()).isEmpty();
+    }
+
     @Test
     void chatSafetyContextAllowsNoAllergyButBlocksUnavailableHealthContext() {
         RecipeAgentOrchestrator orchestrator = orchestrator(

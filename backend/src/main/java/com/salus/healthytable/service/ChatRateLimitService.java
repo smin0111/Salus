@@ -84,7 +84,7 @@ public class ChatRateLimitService {
     }
 
     // 로그인 사용자는 사용자 ID 기준, 게스트는 IP 기준으로 제한합니다.
-    private String resolveClientKey(Optional<Long> authenticatedUserId, HttpServletRequest request) {
+    public String resolveClientKey(Optional<Long> authenticatedUserId, HttpServletRequest request) {
         if (authenticatedUserId.isPresent()) {
             return "user:" + authenticatedUserId.get();
         }

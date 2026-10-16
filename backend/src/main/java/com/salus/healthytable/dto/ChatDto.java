@@ -45,6 +45,9 @@ public class ChatDto {
         // 메뉴 번호 고르기·멈춘 질문 합치기로 message를 바꿔 써도 알레르기 같은 안전 조건은 이 원문에서 읽습니다.
         @com.fasterxml.jackson.annotation.JsonIgnore
         private List<String> sentUserTexts;
+        // 처음 보는 요리 찾기 하루 횟수를 셀 요청자 키("user:1", "guest:IP"). 컨트롤러가 채우는 서버 내부용입니다.
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        private String quotaSubject;
     }
 
     /** 채팅 요청에 포함할 수 있는 건강 정보(알레르기, 만성질환, 식이 제한, 복용 약, 목표)입니다. */

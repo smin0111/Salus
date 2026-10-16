@@ -146,6 +146,8 @@ public class ChatController {
         validateChatRequest(request);
         Optional<Long> authenticatedUserId = authenticatedUserProvider.getCurrentUserId();
         chatRateLimitService.checkAllowed(authenticatedUserId, servletRequest);
+        // 처음 보는 요리 찾기 하루 횟수는 같은 기준(로그인 사용자 ID, 게스트 IP)으로 셉니다.
+        request.setQuotaSubject(chatRateLimitService.resolveClientKey(authenticatedUserId, servletRequest));
         // 요청 ID(X-Request-Id)를 진행 ID로 씁니다. 앱은 같은 ID로 /api/chat/progress/{id}를 물어 진행 단계를 보여 줍니다.
         String progressId = org.slf4j.MDC.get("requestId");
         ChatProgress.start(progressId, "답변을 준비하고 있어요");

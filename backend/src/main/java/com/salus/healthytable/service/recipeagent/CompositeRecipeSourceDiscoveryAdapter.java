@@ -63,6 +63,14 @@ class CompositeRecipeSourceDiscoveryAdapter implements RecipeSourceDiscoveryPort
                 youTubeRecipeSourceDiscoveryAdapter, null, null);
     }
 
+    // 처음 보는 요리를 웹에서 찾는 하루 횟수 제한. 없으면(테스트 등) 제한하지 않습니다.
+    private NewDishSearchQuota newDishSearchQuota;
+
+    @Autowired(required = false)
+    void setNewDishSearchQuota(NewDishSearchQuota newDishSearchQuota) {
+        this.newDishSearchQuota = newDishSearchQuota;
+    }
+
     // 웹 출처 검색 사용 여부(기본 false)
     @Value("${recipe.agent.web-source-enabled:false}")
     private boolean webSourceEnabled;
@@ -103,6 +111,10 @@ class CompositeRecipeSourceDiscoveryAdapter implements RecipeSourceDiscoveryPort
             }
         }
 
+        // 저장된 근거가 없어 새로 찾는 경우만 하루 횟수를 씁니다. 다 썼으면 여기서 멈춥니다(유튜브·웹 모두 부르지 않음).
+        if (newDishSearchQuota != null) {
+            newDishSearchQuota.consumeForCurrentRequest();
+        }
         documents.addAll(filtered(youtubeSources(plan, context), plan));
         com.salus.healthytable.service.ChatProgress.report("웹에서 레시피를 검색하고 있어요");
         List<WebRecipeSearchResult> searchResults = webRecipeSearchPort.search(plan.searchQueries(), Math.max(plan.maxSources() * 2, 6))
