@@ -74,6 +74,41 @@ class ChatRateLimitServiceTest {
         service.checkAllowed(Optional.of(1L), request);
     }
 
+    // 사용자가 X-Forwarded-For에 아무 IP나 적어도 게스트 제한을 피하지 못합니다(2026-10-17 리뷰: 헤더만 바꾼 3회 요청이 모두 통과).
+    @Test
+    void spoofedForwardedForDoesNotBypassGuestLimit() {
+        MutableClock clock = new MutableClock();
+        ChatRateLimitService service = new ChatRateLimitService(true, 1, 60, clock);
+
+        // 믿을 수 있는 프록시를 거치지 않은 요청: 헤더는 무시하고 접속 주소로 셉니다.
+        MockHttpServletRequest first = requestFrom("203.0.113.9");
+        first.addHeader("X-Forwarded-For", "1.1.1.1");
+        service.checkAllowed(Optional.empty(), first);
+        MockHttpServletRequest second = requestFrom("203.0.113.9");
+        second.addHeader("X-Forwarded-For", "2.2.2.2");
+        assertThatThrownBy(() -> service.checkAllowed(Optional.empty(), second))
+                .isInstanceOf(ResponseStatusException.class);
+        assertThat(service.resolveClientKey(Optional.empty(), second)).isEqualTo("guest:203.0.113.9");
+    }
+
+    // 믿을 수 있는 프록시(nginx)를 거친 요청은 프록시가 붙인 오른쪽 주소를 씁니다. 사용자가 앞에 적은 왼쪽 값은 무시합니다.
+    @Test
+    void trustedProxyUsesRightmostUntrustedAddress() {
+        ChatRateLimitService service = new ChatRateLimitService(true, 10, 60, "127.0.0.1/32,::1/128,172.16.0.0/12", new MutableClock());
+
+        MockHttpServletRequest viaNginx = requestFrom("172.18.0.5");
+        viaNginx.addHeader("X-Forwarded-For", "9.9.9.9, 198.51.100.7");
+        assertThat(service.resolveClientKey(Optional.empty(), viaNginx)).isEqualTo("guest:198.51.100.7");
+
+        MockHttpServletRequest twoProxies = requestFrom("127.0.0.1");
+        twoProxies.addHeader("X-Forwarded-For", "198.51.100.7, 172.18.0.1");
+        assertThat(service.resolveClientKey(Optional.empty(), twoProxies)).isEqualTo("guest:198.51.100.7");
+
+        MockHttpServletRequest garbage = requestFrom("172.18.0.5");
+        garbage.addHeader("X-Forwarded-For", "not-an-ip");
+        assertThat(service.resolveClientKey(Optional.empty(), garbage)).isEqualTo("guest:172.18.0.5");
+    }
+
     private MockHttpServletRequest requestFrom(String ip) {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setRemoteAddr(ip);

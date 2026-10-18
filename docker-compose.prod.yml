@@ -93,6 +93,8 @@ services:
       YOUTUBE_API_KEY: ""
       MFDS_MEDICATION_API_KEY: ${MFDS_MEDICATION_API_KEY:-}
       OPENFDA_API_KEY: ${OPENFDA_API_KEY:-}
+      # 게스트 IP는 이 범위의 프록시(맥북 자신, docker 내부망의 nginx)를 거친 경우에만 X-Forwarded-For에서 읽습니다.
+      APP_CLIENT_IP_TRUSTED_PROXIES: ${APP_CLIENT_IP_TRUSTED_PROXIES:-127.0.0.1/32,::1/128,172.16.0.0/12}
       IAMPORT_API_KEY: ${IAMPORT_API_KEY:?IAMPORT_API_KEY is required}
       IAMPORT_API_SECRET: ${IAMPORT_API_SECRET:?IAMPORT_API_SECRET is required}
       NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
@@ -103,8 +105,10 @@ services:
       KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
       KAKAO_WEB_AUTH_CALLBACK_URI: ${KAKAO_WEB_AUTH_CALLBACK_URI:-}
+    # 백엔드는 맥북 안에서만 열고, 외부 접속은 web(nginx)의 /api를 거치게 합니다.
+    # 0.0.0.0으로 열면 같은 네트워크에서 nginx를 건너뛰고 바로 들어와 X-Forwarded-For를 마음대로 적을 수 있습니다.
     ports:
-      - "${BACKEND_PORT:-8080}:8080"
+      - "${BACKEND_BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8080}:8080"
 
   # 레시피 출처 검색용 메타검색(외부 포트는 열지 않고 backend에서만 씁니다).
   # searxng/settings.yml은 비밀값(secret_key)이 있어 git에 없습니다. 배포 서버에 따로 만들어 두어야 합니다.
