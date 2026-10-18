@@ -257,6 +257,7 @@ class CompositeRecipeSourceDiscoveryAdapter implements RecipeSourceDiscoveryPort
                 creator: %s
                 sourceUrl: %s
                 canonicalUrl:
+                servings: %s
                 ingredients:
                 %s
                 steps:
@@ -269,6 +270,8 @@ class CompositeRecipeSourceDiscoveryAdapter implements RecipeSourceDiscoveryPort
                 recipe.description() == null ? "" : recipe.description(),
                 source.creatorName() == null ? "" : source.creatorName(),
                 source.url(),
+                candidate.evidence() == null || RecipeServingsScaler.validServings(candidate.evidence().servings()) == null
+                        ? "" : candidate.evidence().servings(),
                 String.join("\n", recipe.ingredients()),
                 String.join("\n", recipe.steps()),
                 String.join(", ", recipe.coreIngredients()),

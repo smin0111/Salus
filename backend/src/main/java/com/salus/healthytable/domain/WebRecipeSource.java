@@ -42,6 +42,9 @@ public class WebRecipeSource {
     @Convert(converter = JsonStringListConverter.class)
     @Column(name = "step_summaries", nullable = false)
     private List<String> stepSummaries;
+    // 원문의 인분 수(모르면 null). 인분을 바꿔 달라는 요청에서 재료 양을 비율대로 바꾸는 기준입니다.
+    @Column(name = "servings")
+    private Integer servings;
     @Column(name = "content_hash", length = 128)
     private String contentHash;
     @Column(name = "quality_score", nullable = false)

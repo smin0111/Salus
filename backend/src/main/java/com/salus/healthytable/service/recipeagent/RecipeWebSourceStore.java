@@ -690,6 +690,7 @@ class WebRecipeSourceStore {
             row.setSourceTitle(truncate(blank(candidate.source().title(), blank(candidate.originalRecipe().title(), "웹 레시피")), 300));
             row.setExtractionMethod(provenance == null ? "UNKNOWN" : truncate(provenance.extractionMethod(), 40));
             row.setIngredients(List.copyOf(candidate.originalRecipe().ingredients()));
+            row.setServings(candidate.evidence() == null ? null : RecipeServingsScaler.validServings(candidate.evidence().servings()));
             if (!stepSummaries.isEmpty() || row.getStepSummaries() == null || row.getStepSummaries().isEmpty()) {
                 row.setStepSummaries(List.copyOf(stepSummaries));
             }
@@ -713,6 +714,7 @@ class WebRecipeSourceStore {
                 creator:
                 sourceUrl: %s
                 canonicalUrl:
+                servings: %s
                 ingredients:
                 %s
                 steps:
@@ -720,6 +722,7 @@ class WebRecipeSourceStore {
                 """.formatted(
                 RecipeDisplayTitle.of(row.getSourceTitle(), dishFromKey(row.getCacheKey())),
                 row.getSourceUrl(),
+                row.getServings() == null ? "" : row.getServings(),
                 String.join("\n", row.getIngredients() == null ? List.of() : row.getIngredients()),
                 String.join("\n", row.getStepSummaries() == null ? List.<String>of()
                         : row.getStepSummaries().stream().map(RecipeStepSummarizer::withoutStepReference).toList()));

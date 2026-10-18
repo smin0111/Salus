@@ -123,6 +123,7 @@ public class ChatService {
         rememberSentUserTexts(request);
         rewriteDishSwitchRequest(request);
         rewriteEquipmentSwitchRequest(request);
+        rewriteServingsRequest(request);
         rewriteMenuPickRequest(request);
 
         // 1. 의도(Intent) 식별
@@ -636,6 +637,28 @@ public class ChatService {
         String equipment = matcher.group(1).replaceAll("\\s+", "");
         equipment = equipment.equals("에프") ? "에어프라이어" : equipment.equals("후라이팬") ? "프라이팬" : equipment;
         request.setMessage(equipment + " " + dish + " 레시피 알려줘");
+    }
+
+    // 인분을 바꿔 달라는 말("1인분으로", "두 인분", "3인용", "혼자 먹을")
+    private static final Pattern SERVINGS_CHANGE = Pattern.compile(
+            "(?:\\d{1,2}|한|두|세|네|다섯)\\s*(?:인분|인용)|혼자\\s*(?:먹|만들)");
+
+    /**
+     * 요리 이름 없이 인분만 바꿔 달라는 말("1인분으로 다시 알려줘")을 직전 요리의 레시피 요청으로 바꿔 출처에서 다시 찾게 합니다
+     * (출처 레시피는 원문 인분을 알면 분량을 비율대로 바꿈). 2026-10-17 로컬 확인: 게스트의 이 말이 일반 대화로 가서
+     * 54초 뒤 "조금만 더 말해 주세요" 안내만 나감.
+     */
+    private void rewriteServingsRequest(ChatDto.Request request) {
+        String message = request == null ? null : request.getMessage();
+        if (message == null || message.length() > 40 || message.contains("레시피")
+                || !SERVINGS_CHANGE.matcher(message).find()) {
+            return;
+        }
+        String dish = previousDishFromHistory(request.getHistory());
+        if (dish == null || dish.isBlank() || message.replaceAll("\\s+", "").contains(dish.replaceAll("\\s+", ""))) {
+            return;
+        }
+        request.setMessage(dish + " 레시피 " + message.trim());
     }
 
     // 대화 기록의 마지막 레시피 답에서 요리 이름을 찾습니다("- 요리명: 마늘빵"). 없으면 null입니다.

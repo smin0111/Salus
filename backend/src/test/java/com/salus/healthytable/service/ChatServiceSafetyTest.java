@@ -531,6 +531,33 @@ class ChatServiceSafetyTest {
         assertThat(chatService.processChat(Optional.empty(), change).block().getReply()).contains("출처 없이 지어서");
     }
 
+    // 요리 이름 없이 인분만 바꿔 달라는 말은 직전 요리의 레시피 요청으로 바꿔 Agent가 출처에서 다시 찾게 합니다
+    // (2026-10-17 로컬 확인: 게스트의 "1인분으로 다시 알려줘"가 일반 대화로 가서 안내만 받음).
+    @Test
+    void servingsOnlyFollowUpBecomesRecipeRequestForPreviousDish() {
+        ReflectionTestUtils.setField(chatService, "recipeAgentEnabled", true);
+        ReflectionTestUtils.setField(chatService, "recipeAgentInitialRoutingEnabled", true);
+        RecipeNormalizer realNormalizer = new RecipeNormalizer();
+        when(recipeNormalizer.normalize(anyString()))
+                .thenAnswer(invocation -> realNormalizer.normalize(invocation.getArgument(0)));
+        when(chatIntentClassifier.classify(anyString())).thenAnswer(invocation ->
+                String.valueOf(invocation.getArgument(0, String.class)).contains("레시피")
+                        ? ChatIntentClassifier.ChatIntent.RECIPE_REQUEST : ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        when(recipeAgentOrchestrator.handle(any(), any(), any(), any()))
+                .thenReturn(Mono.just(new ChatDto.Response("agent response")));
+
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("1인분으로 다시 알려줘");
+        request.setHistory(List.of(
+                new ChatDto.Message("user", "된장찌개 레시피 알려줘"),
+                new ChatDto.Message("model", "[원본 레시피 기준]\n- 요리명: 된장찌개\n- 일반 구성: 된장 3큰술")));
+
+        assertThat(chatService.processChat(Optional.empty(), request).block().getReply()).isEqualTo("agent response");
+        assertThat(request.getMessage()).isEqualTo("된장찌개 레시피 1인분으로 다시 알려줘");
+        // 원문 보존(안전 판단용)은 바꾸기 전 문장 그대로입니다.
+        assertThat(request.getSentUserTexts()).containsExactly("1인분으로 다시 알려줘");
+    }
+
     // 첫 답변을 멈춘 뒤 보낸 메시지는 멈춘 요청이 만든 대화방으로 이어 씁니다. 남의 대화방이면 이어 쓰지 않습니다
     // (2026-10-17 리뷰: 멈출 때마다 새 방이 생겨 한 대화가 여러 방으로 갈라짐).
     @Test

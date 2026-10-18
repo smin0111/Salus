@@ -295,11 +295,40 @@ public class RecipeAgentOrchestrator {
                 infoNotices.add("더 자세한 설명과 사진은 아래 '참고한 출처'의 원문에서 확인해 주세요.");
             }
         }
+        // "1인분으로 다시 알려줘": 원문 인분을 알면 재료·단계의 분량을 비율대로 바꾸고, 모르면 바꾸지 않고 그렇다고 알립니다.
+        // 아무 말 없이 같은 카드를 다시 보여 주면 요청이 반영된 줄 오해합니다(2026-10-17 베타: 식빵 6장 그대로).
+        java.util.Optional<Integer> requestedServings = RecipeServingsScaler.requestedServings(message);
+        java.util.Optional<Integer> baseServings = RecipeServingsScaler.sourceServings(discovery.sources());
+        Integer shownServings = baseServings.orElse(null);
+        double servingsRatio = 1.0;
+        // 레시피를 찾지 못한 답에는 붙이지 않습니다(2026-10-19 로컬 확인: "찾지 못했어요" 답에 인분 안내가 붙음).
+        if (requestedServings.isPresent() && discovery.status() == RecipeResearchStatus.VERIFIED_SOURCE_FOUND) {
+            if (baseServings.isEmpty()) {
+                infoNotices.add("이 레시피는 원문이 몇 인분 기준인지 알 수 없어 인분을 바꾸지 못했어요. 재료 양은 원문 그대로예요.");
+            } else if (!requestedServings.get().equals(baseServings.get())) {
+                servingsRatio = (double) requestedServings.get() / baseServings.get();
+                shownServings = requestedServings.get();
+                infoNotices.add("원문 " + baseServings.get() + "인분 기준을 " + requestedServings.get()
+                        + "인분으로 비율대로 바꿨어요. 계란처럼 나누기 어려운 재료는 가까운 양으로 맞췄으니 간은 맛을 보며 조절해 주세요.");
+            } else {
+                infoNotices.add("원문이 이미 " + baseServings.get() + "인분 기준이에요.");
+            }
+        }
         for (int i = infoNotices.size() - 1; i >= 0; i--) {
             evaluation = evaluation.withNotice(infoNotices.get(i));
         }
         RecipePersonalizationDecision decision = evaluation.decision();
         RecipeCandidate personalizedRecipe = evaluation.personalized();
+        if (servingsRatio != 1.0 && personalizedRecipe != null) {
+            // 분량 숫자만 바꿉니다. 재료 이름·순서는 그대로라 알레르기 판정과 검증 결과는 달라지지 않습니다.
+            personalizedRecipe = new RecipeCandidate(
+                    personalizedRecipe.title(), personalizedRecipe.description(),
+                    RecipeServingsScaler.scale(personalizedRecipe.ingredients(), servingsRatio),
+                    RecipeServingsScaler.scale(personalizedRecipe.steps(), servingsRatio),
+                    personalizedRecipe.calories(), personalizedRecipe.difficulty(), personalizedRecipe.cookingTime(),
+                    personalizedRecipe.coreIngredients(), personalizedRecipe.optionalIngredients(),
+                    personalizedRecipe.healthRiskTags());
+        }
         RecipeValidationResult validation = evaluation.validation();
 
         PersonalizedRecipeResult result = new PersonalizedRecipeResult(
@@ -336,6 +365,7 @@ public class RecipeAgentOrchestrator {
         ChatDto.Response response = new ChatDto.Response(chatSessionId, reply, userId != null, false);
         if (decision.decisionType() != RecipeDecisionType.BLOCK && validation.valid()) {
             ChatDto.RecipeCard card = responseComposer.toRecipeCard(personalizedRecipe, decision);
+            card.setServings(shownServings);
             card.setSafetyNotes(card.getSafetyNotes().stream().filter(note -> !infoNotices.contains(note)).toList());
             // 원문 재료 목록에는 없지만 조리 순서에 나오는 재료를 알려 줍니다(2026-10-14 배추찜: 레몬즙·홍고추·통깨).
             List<String> stepOnly = RecipeStepSummarizer.stepOnlyIngredients(

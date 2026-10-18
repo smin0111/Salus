@@ -609,6 +609,7 @@ class StructuredRecipePageAdapter {
                 creator: %s
                 sourceUrl: %s
                 canonicalUrl: %s
+                servings: %s
                 ingredients:
                 %s
                 steps:
@@ -622,6 +623,7 @@ class StructuredRecipePageAdapter {
                 blank(evidence.creatorName(), ""),
                 evidence.provenance().sourceUrl(),
                 blank(evidence.provenance().canonicalUrl(), ""),
+                RecipeServingsScaler.validServings(evidence.servings()) == null ? "" : evidence.servings(),
                 String.join("\n", recipe.ingredients()),
                 String.join("\n", recipe.steps()),
                 String.join(", ", recipe.coreIngredients()),

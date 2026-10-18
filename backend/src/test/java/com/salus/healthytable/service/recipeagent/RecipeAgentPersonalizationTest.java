@@ -444,6 +444,74 @@ class RecipeAgentPersonalizationTest {
         assertThat(orchestrator.handle(1L, 10L, request, safety).blockOptional()).isEmpty();
     }
 
+    // 웹 레시피에 인분을 바꿔 달라고 하면 같은 레시피를 보여 주되, 아직 인분 계산을 못 한다고 알립니다(2026-10-17 베타).
+    @Test
+    void servingsRequestOnWebRecipeIsAnsweredHonestly() {
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                UserRecipeContext::empty,
+                (plan, context) -> List.of(milkCookieSource()),
+                mock(RecipeWorkSessionService.class));
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", true);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("두쫀쿠 레시피 1인분용으로 알려줘");
+        SafetyContext safety = new SafetyContext(List.of(), List.of(), List.of(), List.of(), List.of(), true);
+
+        ChatDto.Response response = orchestrator.handle(null, null, request, safety).block();
+
+        assertThat(response.getRecipe()).isNotNull();
+        assertThat(response.getReply()).contains("몇 인분 기준인지 알 수 없어 인분을 바꾸지 못했어요");
+        assertThat(response.getRecipe().getIngredients()).contains("버터 20g");
+    }
+
+    // 레시피를 찾지 못한 답에는 인분 안내를 붙이지 않습니다(2026-10-19 로컬 확인).
+    @Test
+    void servingsNoticeIsNotAddedWhenNoRecipeWasFound() {
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                UserRecipeContext::empty,
+                (plan, context) -> List.of(),
+                mock(RecipeWorkSessionService.class));
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", true);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("들기름 메밀전병 2인분 레시피 알려줘");
+        SafetyContext safety = new SafetyContext(List.of(), List.of(), List.of(), List.of(), List.of(), true);
+
+        ChatDto.Response response = orchestrator.handle(null, null, request, safety).block();
+
+        assertThat(response.getRecipe()).isNull();
+        assertThat(response.getReply()).doesNotContain("인분");
+    }
+
+    // 원문 인분을 알면 재료와 조리 단계의 분량을 비율대로 바꾸고, 카드에 바꾼 인분을 표시합니다.
+    @Test
+    void servingsRequestScalesAmountsWhenSourceServingsAreKnown() {
+        RecipeSourceDocument fourServings = new RecipeSourceDocument(
+                "fixture:butter-cookie", RecipeSourceType.GENERAL_WEB, "두쫀쿠", "fixture",
+                "https://example.com/recipe4",
+                "title: 두쫀쿠\nservings: 4\ningredients:\n- 버터 200g\n- 설탕 2큰술\nsteps:\n- 버터 200g을 녹입니다.\n- 설탕 2큰술을 섞어 180도에서 15분 굽습니다.",
+                java.time.LocalDateTime.of(2026, 7, 1, 0, 0), 0.95);
+        RecipeAgentOrchestrator orchestrator = orchestrator(
+                UserRecipeContext::empty,
+                (plan, context) -> List.of(fourServings),
+                mock(RecipeWorkSessionService.class));
+        ReflectionTestUtils.setField(orchestrator, "sourceDiscoveryEnabled", true);
+        SafetyContext safety = new SafetyContext(List.of(), List.of(), List.of(), List.of(), List.of(), true);
+
+        ChatDto.Request scaled = new ChatDto.Request();
+        scaled.setMessage("두쫀쿠 레시피 1인분으로 알려줘");
+        ChatDto.Response response = orchestrator.handle(null, null, scaled, safety).block();
+
+        assertThat(response.getRecipe().getServings()).isEqualTo(1);
+        assertThat(response.getRecipe().getIngredients()).containsExactly("버터 50g", "설탕 1/2큰술");
+        assertThat(String.join(" ", response.getRecipe().getSteps())).contains("50g", "1/2큰술", "180도", "15분");
+        assertThat(response.getReply()).contains("원문 4인분 기준을 1인분으로 비율대로 바꿨어요");
+
+        ChatDto.Request plain = new ChatDto.Request();
+        plain.setMessage("두쫀쿠 레시피 알려줘");
+        ChatDto.Response unchanged = orchestrator.handle(null, null, plain, safety).block();
+        assertThat(unchanged.getRecipe().getServings()).isEqualTo(4);
+        assertThat(unchanged.getRecipe().getIngredients()).containsExactly("버터 200g", "설탕 2큰술");
+    }
+
     @Test
     void chatSafetyContextAllowsNoAllergyButBlocksUnavailableHealthContext() {
         RecipeAgentOrchestrator orchestrator = orchestrator(
