@@ -68,6 +68,25 @@ class ActivityLogControllerTest {
         verify(activityLogService).logActivity(user, true);
     }
 
+    // 같은 순간 두 요청이 오늘 기록을 새로 만들다 고유 제약에 걸리면 한 번 더 불러 기존 행을 갱신합니다(500 대신 200).
+    @Test
+    void logActivityRetriesOnceWhenConcurrentInsertHitsUniqueConstraint() {
+        User user = user(1L);
+        ActivityLog log = new ActivityLog();
+
+        when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(activityLogService.logActivity(user, false))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uk_activity_user_date"))
+                .thenReturn(log);
+
+        ResponseEntity<?> response = controller.logActivity(Map.of("isAi", false));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getBody()).isSameAs(log);
+        org.mockito.Mockito.verify(activityLogService, org.mockito.Mockito.times(2)).logActivity(user, false);
+    }
+
     // isAi 값이 없으면 false로 처리해야 합니다.
     @Test
     void logActivityDefaultsMissingAiFlagToFalse() {

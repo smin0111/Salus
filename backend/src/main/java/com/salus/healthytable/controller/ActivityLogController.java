@@ -34,7 +34,14 @@ public class ActivityLogController {
     public ResponseEntity<?> logActivity(@RequestBody Map<String, Boolean> body) {
         User user = getCurrentUser();
         boolean isAi = body != null && Boolean.TRUE.equals(body.get("isAi"));
-        return ResponseEntity.ok(activityLogService.logActivity(user, isAi));
+        try {
+            return ResponseEntity.ok(activityLogService.logActivity(user, isAi));
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // 앱 시작과 채팅이 같은 순간에 기록하면 둘 다 "오늘 기록 없음"을 보고 새 행을 만들다 하나가
+            // (user_id, activity_date) 고유 제약에 걸립니다(2026-10-17 로그인 때 500). 앞 시도는 통째로 되돌려졌으므로
+            // 한 번 더 부르면 방금 생긴 행을 찾아 갱신합니다.
+            return ResponseEntity.ok(activityLogService.logActivity(user, isAi));
+        }
     }
 
     /**
