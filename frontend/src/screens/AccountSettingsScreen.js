@@ -196,20 +196,20 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
                     {user?.grade !== 'PLUS' ? (
                         <View style={styles.upgradeSection}>
                             <Text style={styles.upgradeDesc}>
-                                PLUS 멤버십을 구독하시면 무제한 음성 인식 AI 셰프 제안 및 고급 읽어주기 기능을 이용할 수 있습니다.
+                                PLUS 이용권으로 처음 보는 요리 찾기를 하루 횟수 제한 없이 이용할 수 있어요. 자동으로 다시 결제되지 않아요.
                             </Text>
                             <TouchableOpacity 
                                 style={styles.upgradeButton} 
                                 onPress={() => onNavigate('upgrade')}
                             >
                                 <Ionicons name="sparkles-outline" size={16} color="white" style={{ marginRight: 6 }} />
-                                <Text style={styles.upgradeButtonText}>플러스 멤버십 업그레이드</Text>
+                                <Text style={styles.upgradeButtonText}>PLUS 이용권 보기</Text>
                             </TouchableOpacity>
                         </View>
                     ) : (
                         <View style={styles.upgradeSection}>
                             <Text style={styles.activePremiumText}>
-                                ✨ 현재 모든 프리미엄 기능(음성 인식 및 고급 TTS 등)을 무제한으로 사용하고 계십니다!
+                                ✨ PLUS 이용 중이에요{user?.plusExpiresAt ? ` (${String(user.plusExpiresAt).slice(0, 10)}까지)` : ''}. 처음 보는 요리 찾기를 제한 없이 이용할 수 있어요.
                             </Text>
                         </View>
                     )}

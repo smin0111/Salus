@@ -72,7 +72,8 @@ class AuthControllerTest {
             socialLoginService,
             refreshTokenService,
             authNonceService,
-            kakaoWebAuthService);
+            kakaoWebAuthService,
+            clock);
 
     // 검증된 소셜 계정으로 정해진 회원의 ID로 JWT를 발급하고 회원 정보를 함께 응답해야 합니다.
     @Test

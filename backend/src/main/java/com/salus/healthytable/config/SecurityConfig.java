@@ -125,6 +125,10 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health/**").permitAll()
                         // 게스트 채팅은 허용하되, 세션/음성 업로드처럼 사용자 데이터나 파일을 다루는 API는 인증 필요
                         .requestMatchers(HttpMethod.POST, "/api/chat/message").permitAll()
+                        // 포트원 웹훅은 포트원 서버가 인증 없이 부릅니다. 본문은 믿지 않고 포트원에 다시 조회해 처리합니다.
+                        .requestMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()
+                        // 결제 상품 정보(가격·기간)는 로그인 전 결제 화면에서도 보여 줍니다. 사용자 정보는 담지 않습니다.
+                        .requestMatchers(HttpMethod.GET, "/api/payments/product").permitAll()
                         // 채팅 진행 단계 조회. 게스트 채팅도 볼 수 있어야 하고, 단계 문구만 돌려줍니다.
                         .requestMatchers(HttpMethod.GET, "/api/chat/progress/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/chat/cancel/*").permitAll()

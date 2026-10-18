@@ -30,7 +30,7 @@ class NewDishSearchQuotaTest {
     private final ValueOperations<String, String> values = mock(ValueOperations.class);
     private final StringRedisTemplate redis = mock(StringRedisTemplate.class);
     private final UserRepository users = mock(UserRepository.class);
-    private final NewDishSearchQuota quota = new NewDishSearchQuota(redis, users, 5, 3);
+    private final NewDishSearchQuota quota = new NewDishSearchQuota(redis, users, null, 5, 3);
 
     NewDishSearchQuotaTest() {
         when(redis.opsForValue()).thenReturn(values);
@@ -57,6 +57,7 @@ class NewDishSearchQuotaTest {
     void plusMembersAndUnboundCallsAreNotCounted() throws Exception {
         User plus = new User();
         plus.setGrade(UserGrade.PLUS);
+        plus.setPlusExpiresAt(java.time.LocalDateTime.now().plusDays(10));
         when(users.findById(7L)).thenReturn(Optional.of(plus));
 
         NewDishSearchQuota.bind("user:7", () -> { quota.consumeForCurrentRequest(); return null; });
@@ -85,7 +86,7 @@ class NewDishSearchQuotaTest {
         when(values.increment(anyString())).thenThrow(new IllegalStateException("redis down"));
         NewDishSearchQuota.bind("user:1", () -> { quota.consumeForCurrentRequest(); return null; });
         NewDishSearchQuota.bind("user:1", () -> {
-            new NewDishSearchQuota((StringRedisTemplate) null, users, 5, 3).consumeForCurrentRequest();
+            new NewDishSearchQuota((StringRedisTemplate) null, users, null, 5, 3).consumeForCurrentRequest();
             return null;
         });
     }

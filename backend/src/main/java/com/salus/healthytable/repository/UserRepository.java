@@ -27,4 +27,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     // 기간 내 가입한 사용자 수 (활동 사용자 수가 아니라 createdAt 기준 가입자 수입니다)
     long countByCreatedAtBetween(java.time.LocalDateTime from, java.time.LocalDateTime to);
+
+    // 지금 PLUS 이용권이 유효한 회원 수(만료 시각이 지난 PLUS는 세지 않음)
+    long countByGradeAndPlusExpiresAtAfter(com.salus.healthytable.domain.UserGrade grade, java.time.LocalDateTime now);
 }

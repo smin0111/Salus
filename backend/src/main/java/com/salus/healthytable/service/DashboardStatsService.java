@@ -45,7 +45,8 @@ public class DashboardStatsService {
 
         // ─── 사용자 통계 ───
         long totalUsers = userRepository.count();
-        long plusUsers = userRepository.countByGrade(UserGrade.PLUS);
+        // 이용권 기간이 남은 PLUS만 셉니다(만료된 PLUS 등급은 BASIC으로 봄).
+        long plusUsers = userRepository.countByGradeAndPlusExpiresAtAfter(UserGrade.PLUS, LocalDateTime.now(clock));
         long newUsers = userRepository.countByCreatedAtAfter(todayStart);
 
         // DAU (오늘 활동자)

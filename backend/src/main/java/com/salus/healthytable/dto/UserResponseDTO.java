@@ -22,22 +22,27 @@ public class UserResponseDTO {
     private String email;
     private String name;
     private LocalDateTime createdAt;
+    // 현재 등급. PLUS 이용권이 끝났으면 BASIC입니다.
     private UserGrade grade;
+    // PLUS 이용권이 끝나는 시각(PLUS가 아니면 null)
+    private LocalDateTime plusExpiresAt;
     private UserRole role;
 
     /**
      * User 엔티티를 응답 DTO로 변환하는 정적 팩토리 메서드입니다.
      */
-    public static UserResponseDTO from(User user) {
+    public static UserResponseDTO from(User user, LocalDateTime now) {
         if (user == null) {
             return null;
         }
+        boolean plusActive = user.hasActivePlus(now);
         return UserResponseDTO.builder()
                 .id(user.getId())
                 .email(user.getEmail())
                 .name(user.getName())
                 .createdAt(user.getCreatedAt())
-                .grade(user.getGrade())
+                .grade(user.effectiveGrade(now))
+                .plusExpiresAt(plusActive ? user.getPlusExpiresAt() : null)
                 .role(user.getRole())
                 .build();
     }

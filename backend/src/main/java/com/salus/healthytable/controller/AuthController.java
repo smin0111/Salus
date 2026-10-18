@@ -56,6 +56,8 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
     private final AuthNonceService authNonceService;
     private final KakaoWebAuthService kakaoWebAuthService;
+    // PLUS 이용권 만료 판단 기준 시각(서버 시간대)
+    private final java.time.Clock clock;
 
     /**
      * Google 로그인: 클라이언트가 받은 액세스 토큰을 검증합니다.
@@ -176,7 +178,7 @@ public class AuthController {
         User user = userRepository.findById(userId).orElse(null);
         if (user == null)
             return apiError(HttpStatus.NOT_FOUND, "NOT_FOUND", "사용자를 찾을 수 없습니다.", "/api/users/me");
-        return ResponseEntity.ok(UserResponseDTO.from(user));
+        return ResponseEntity.ok(UserResponseDTO.from(user, java.time.LocalDateTime.now(clock)));
     }
 
     /**
@@ -226,7 +228,7 @@ public class AuthController {
         // 계정 연결을 마치는 재인증이면 그 재인증의 인정 여부를 따릅니다.
         body.put("token", jwtTokenProvider.createToken(String.valueOf(user.getId()), identity.identityConfirmedAt()));
         body.put("refreshToken", refreshTokenService.issue(user.getId(), identity.identityConfirmedAt()));
-        body.put("user", UserResponseDTO.from(user));
+        body.put("user", UserResponseDTO.from(user, java.time.LocalDateTime.now(clock)));
         if (loggedIn.linkedProvider() != null) {
             body.put("linkedProvider", loggedIn.linkedProvider());
         }

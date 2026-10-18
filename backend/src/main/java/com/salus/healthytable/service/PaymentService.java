@@ -1,42 +1,56 @@
 package com.salus.healthytable.service;
 
-import com.salus.healthytable.domain.Payment;
+import com.salus.healthytable.domain.PaymentOrder;
+import com.salus.healthytable.domain.PaymentOrderStatus;
 import com.salus.healthytable.domain.User;
-import com.salus.healthytable.domain.UserGrade;
-import com.salus.healthytable.repository.PaymentRepository;
+import com.salus.healthytable.dto.PaymentDto;
+import com.salus.healthytable.repository.PaymentOrderRepository;
 import com.salus.healthytable.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
- * 포트원(PortOne, 구 아임포트) 결제 검증 서비스입니다.
+ * 포트원(PortOne V1, 구 아임포트)으로 PLUS 이용권을 파는 결제 서비스입니다.
  *
- * 결제 흐름: 클라이언트 결제 완료 → 서버가 포트원 API로 실제 결제 내역 조회
- * → 상태/주문번호/금액 검증 → 결제 저장 + PLUS 등급 업그레이드(PaymentTxHelper)
+ * <p>흐름: 서버가 주문을 만든다(주문번호·금액·기간을 서버가 정하고 회원에 묶음) → 앱이 그 주문으로 결제창을 연다
+ * → 결제 확인 요청이 오면 그 주문이 요청한 회원의 것인지 보고, 포트원에 결제 내역을 다시 조회해 상태·주문번호·금액을
+ * 대조한 뒤 PLUS 기간을 더한다(PaymentTxHelper).
+ *
+ * <p>앱이 결제 직후 꺼져 확인 요청이 오지 않아도 놓치지 않도록, 포트원 웹훅과 재확인(reconcile)이 같은 완료 처리를 탑니다.
+ * 환불·취소되면 웹훅으로 PLUS 기간을 되돌립니다. 외부 호출은 트랜잭션 밖에서 하고 DB 쓰기만 PaymentTxHelper가 묶습니다.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PaymentService {
 
-    private final PaymentRepository paymentRepository;
+    private static final String PORTONE_API = "https://api.iamport.kr";
+    private static final int RECONCILE_LOOKBACK_DAYS = 2;
+    private static final int RECONCILE_MAX_ORDERS = 5;
+    private static final ParameterizedTypeReference<Map<String, Object>> IAMPORT_RESPONSE_TYPE =
+            new ParameterizedTypeReference<>() {
+            };
+
+    private final PaymentOrderRepository paymentOrderRepository;
     private final UserRepository userRepository;
     private final RestTemplate restTemplate;
     private final Clock clock;
@@ -49,54 +63,185 @@ public class PaymentService {
     @Value("${iamport.api.secret}")
     private String iamportApiSecret;
 
-    // PLUS 구독 결제 금액(원). 실제 결제 금액이 이 값과 다르면 위변조로 판단합니다.
-    private static final int SUBSCRIPTION_AMOUNT = 9900;
-    private static final ParameterizedTypeReference<Map<String, Object>> IAMPORT_RESPONSE_TYPE =
-            new ParameterizedTypeReference<>() {
-            };
+    // 결제를 받는 서버인지(베타 서버는 false). false면 주문·결제 확인을 막고 결제 화면은 안내만 보여 줍니다.
+    @Value("${payment.enabled:true}")
+    private boolean paymentEnabled;
+
+    @Value("${payment.plus.amount:9900}")
+    private int plusAmount;
+
+    @Value("${payment.plus.days:30}")
+    private int plusDays;
+
+    @Value("${payment.plus.product-name:Salus PLUS 30일 이용권}")
+    private String plusProductName;
+
+    // 포트원 결제창의 PG 설정값. 기본은 카카오페이 테스트(돈이 실제로 나가지 않음)입니다.
+    @Value("${payment.portone.pg:kakaopay.TC0ONETIME}")
+    private String portonePg;
+
+    /** 회원의 PLUS 이용 상태와 상품 정보입니다. */
+    public PaymentDto.PlusStatus status(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+        LocalDateTime now = LocalDateTime.now(clock);
+        boolean active = user.hasActivePlus(now);
+        return new PaymentDto.PlusStatus(paymentEnabled, active, active ? user.getPlusExpiresAt() : null,
+                plusProductName, plusAmount, plusDays);
+    }
+
+    /** 로그인하지 않아도 볼 수 있는 상품 정보입니다(이용 상태는 비어 있음). */
+    public PaymentDto.PlusStatus productInfo() {
+        return new PaymentDto.PlusStatus(paymentEnabled, false, null, plusProductName, plusAmount, plusDays);
+    }
+
+    /** 결제 전에 주문을 만듭니다. 이미 PLUS 이용 중이면 만들지 않습니다(409). */
+    public PaymentDto.Order createOrder(Long userId) {
+        requirePaymentEnabled();
+        PaymentOrder order = paymentTxHelper.createOrder(userId, "PLUS_" + plusDays + "D", plusAmount, plusDays);
+        return new PaymentDto.Order(order.getMerchantUid(), order.getAmount(), plusProductName, portonePg);
+    }
 
     /**
-     * 포트원 결제내역 단건조회 API를 호출하여 결제 금액의 위변조 여부를 검증하고, 유저 등급을 업그레이드합니다.
+     * 결제창에서 결제를 마친 뒤 호출합니다. 주문이 요청한 회원의 것이고 포트원 결제 내역이 주문과 맞을 때만 PLUS를 줍니다.
+     * 같은 결제를 다시 확인하면(네트워크 재시도) 그대로 성공으로 답합니다.
      */
-    public Payment verifyAndSavePayment(String impUid, String requestedMerchantUid, Long userId) {
+    public PaymentDto.PlusStatus verify(String impUid, String merchantUid, Long userId) {
+        requirePaymentEnabled();
         String normalizedImpUid = normalizePaymentIdentifier(impUid, "결제 고유번호");
-        String normalizedMerchantUid = normalizePaymentIdentifier(requestedMerchantUid, "주문번호");
+        String normalizedMerchantUid = normalizePaymentIdentifier(merchantUid, "주문번호");
 
-        // Portone 같은 외부 API 호출은 네트워크 지연이나 장애가 생길 수 있습니다.
-        // 이 메서드에는 @Transactional을 붙이지 않아 DB Transaction을 잡은 채로 외부 응답을 기다리지 않습니다.
+        // 남의 주문이거나 없는 주문은 같은 404로 답해 주문번호가 있는지조차 알려 주지 않습니다.
+        PaymentOrder order = paymentOrderRepository.findByMerchantUid(normalizedMerchantUid)
+                .filter(found -> found.getUser() != null && userId.equals(found.getUser().getId()))
+                .orElseThrow(() -> {
+                    logPaymentValidationFailure("order_not_found_for_user", userId);
+                    return new ResponseStatusException(HttpStatus.NOT_FOUND, "주문을 찾을 수 없습니다.");
+                });
+        if (order.getStatus() == PaymentOrderStatus.PAID) {
+            if (normalizedImpUid.equals(order.getImpUid())) {
+                return status(userId);
+            }
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 처리된 주문입니다.");
+        }
+        if (order.getStatus() == PaymentOrderStatus.CANCELLED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "취소된 주문입니다.");
+        }
+
+        // Portone 같은 외부 API 호출은 트랜잭션 밖에서 합니다(DB 연결을 잡은 채 외부 응답을 기다리지 않음).
+        Map<String, Object> paymentData = getPaymentData(normalizedImpUid, getIamportAccessToken());
+        int paidAmount = requirePaidForOrder(paymentData, order, userId);
+        paymentTxHelper.completeOrder(order.getId(), normalizedImpUid, paidAmount);
+        log.info("Payment verified. userId={}", userId);
+        return status(userId);
+    }
+
+    /**
+     * 결제는 됐는데 확인 요청이 빠진 주문(앱 종료·네트워크 끊김)을 포트원에 주문번호로 다시 조회해 마무리합니다.
+     * 결제 화면을 열 때마다 부릅니다. 최근 주문만 보고, 조회 실패는 건너뜁니다.
+     */
+    public PaymentDto.PlusStatus reconcile(Long userId) {
+        if (!paymentEnabled) {
+            return status(userId);
+        }
+        LocalDateTime now = LocalDateTime.now(clock);
+        List<PaymentOrder> pending = paymentOrderRepository
+                .findByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
+                        userId, PaymentOrderStatus.PENDING, now.minusDays(RECONCILE_LOOKBACK_DAYS))
+                .stream()
+                .limit(RECONCILE_MAX_ORDERS)
+                .toList();
+        if (pending.isEmpty()) {
+            return status(userId);
+        }
         String accessToken = getIamportAccessToken();
+        for (PaymentOrder order : pending) {
+            Optional<Map<String, Object>> found = findPaymentByMerchantUid(order.getMerchantUid(), accessToken);
+            if (found.isEmpty() || !"paid".equals(toStringOrNull(found.get().get("status")))) {
+                continue;
+            }
+            String impUid = toStringOrNull(found.get().get("imp_uid"));
+            Integer amount = toInteger(found.get().get("amount"));
+            if (impUid == null || !order.getAmount().equals(amount)) {
+                logPaymentValidationFailure("reconcile_mismatch", userId);
+                continue;
+            }
+            paymentTxHelper.completeOrder(order.getId(), impUid, amount);
+            log.info("Payment reconciled. userId={}", userId);
+        }
+        return status(userId);
+    }
 
-        // impUid로 결제 상세 정보를 조회한 뒤, 클라이언트가 보낸 주문번호/금액을 서버에서 다시 검증합니다.
-        // 결제 완료 화면의 값만 믿으면 사용자가 금액이나 merchantUid를 조작해도 알아차리기 어렵습니다.
-        Map<String, Object> paymentData = getPaymentData(normalizedImpUid, accessToken);
+    /**
+     * 포트원 웹훅입니다. 본문은 주문을 찾는 데만 쓰고, 결제 상태·금액은 포트원에 다시 조회한 값으로 판단합니다.
+     * 결제 완료면 PLUS를 주고(확인 요청이 빠진 경우), 전액 취소면 그 주문의 PLUS 기간을 되돌립니다.
+     * 우리 주문이 아니면 포트원을 부르지 않고 무시합니다.
+     */
+    public void handleWebhook(PaymentDto.Webhook webhook) {
+        if (!paymentEnabled || webhook == null) {
+            return;
+        }
+        String impUid;
+        String merchantUid;
+        try {
+            impUid = normalizePaymentIdentifier(webhook.impUid(), "결제 고유번호");
+            merchantUid = normalizePaymentIdentifier(webhook.merchantUid(), "주문번호");
+        } catch (IllegalArgumentException e) {
+            log.warn("Payment webhook ignored. reason=invalid_identifier");
+            return;
+        }
+        Optional<PaymentOrder> order = paymentOrderRepository.findByMerchantUid(merchantUid);
+        if (order.isEmpty()) {
+            log.warn("Payment webhook ignored. reason=unknown_order");
+            return;
+        }
+        Map<String, Object> paymentData = getPaymentData(impUid, getIamportAccessToken());
+        if (!merchantUid.equals(toStringOrNull(paymentData.get("merchant_uid")))) {
+            log.warn("Payment webhook ignored. reason=merchant_uid_mismatch");
+            return;
+        }
+        String status = toStringOrNull(paymentData.get("status"));
+        if ("paid".equals(status) && order.get().getStatus() == PaymentOrderStatus.PENDING) {
+            Integer amount = toInteger(paymentData.get("amount"));
+            if (!order.get().getAmount().equals(amount)) {
+                log.warn("Payment webhook ignored. reason=amount_mismatch");
+                return;
+            }
+            paymentTxHelper.completeOrder(order.get().getId(), impUid, amount);
+            log.info("Payment completed by webhook.");
+        } else if ("cancelled".equals(status)) {
+            if (paymentTxHelper.cancelOrder(order.get().getId(), impUid)) {
+                log.info("Payment cancelled by webhook. PLUS period reverted.");
+            }
+        }
+    }
 
+    private void requirePaymentEnabled() {
+        if (!paymentEnabled) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "지금은 결제를 받지 않고 있어요.");
+        }
+    }
+
+    // 포트원 결제 내역이 주문과 맞는지 봅니다. 맞으면 결제 금액을 돌려줍니다.
+    private int requirePaidForOrder(Map<String, Object> paymentData, PaymentOrder order, Long userId) {
         Integer amount = toInteger(paymentData.get("amount"));
         String status = toStringOrNull(paymentData.get("status"));
         String merchantUid = toStringOrNull(paymentData.get("merchant_uid"));
 
-        // DB에 쓰기 전에 결제 상태, 주문번호, 금액 위변조 여부를 모두 확인합니다.
-        // 검증 실패 거래를 저장하지 않으면 운영자가 이후 결제 이력을 해석하기 쉬워집니다.
         if (!"paid".equals(status)) {
             logPaymentValidationFailure("status_not_paid", userId);
             throw new IllegalArgumentException("결제가 완료되지 않은 거래입니다.");
         }
-
-        if (!normalizedMerchantUid.equals(merchantUid)) {
+        if (!order.getMerchantUid().equals(merchantUid)) {
             logPaymentValidationFailure("merchant_uid_mismatch", userId);
             throw new IllegalArgumentException("주문번호가 일치하지 않습니다.");
         }
-
-        if (!Integer.valueOf(SUBSCRIPTION_AMOUNT).equals(amount)) {
+        if (!order.getAmount().equals(amount)) {
             log.warn("Payment validation failed. reason=amount_mismatch, userId={}, expectedAmount={}, actualAmount={}",
-                    userId,
-                    SUBSCRIPTION_AMOUNT,
-                    amount);
+                    userId, order.getAmount(), amount);
             throw new IllegalArgumentException("결제 금액이 일치하지 않습니다. 의심되는 거래입니다.");
         }
-
-        // DB 중복 결제 확인, 유저 업그레이드, 결제 이력 저장만 짧은 Transaction으로 묶습니다.
-        // 같은 클래스 내부 메서드 호출은 Spring Transaction proxy를 거치지 않으므로 전담 Bean에 위임합니다.
-        return paymentTxHelper.savePaymentAndUpgradeUser(normalizedImpUid, normalizedMerchantUid, amount, status, userId);
+        return amount;
     }
 
     /**
@@ -119,7 +264,7 @@ public class PaymentService {
 
     // 포트원 API 호출에 필요한 액세스 토큰을 발급받습니다. 응답의 code가 0이어야 성공입니다.
     private String getIamportAccessToken() {
-        String url = "https://api.iamport.kr/users/getToken";
+        String url = PORTONE_API + "/users/getToken";
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -155,19 +300,8 @@ public class PaymentService {
 
     // impUid로 포트원에 결제 단건 정보를 조회합니다.
     private Map<String, Object> getPaymentData(String impUid, String accessToken) {
-        String url = "https://api.iamport.kr/payments/" + impUid;
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + accessToken);
-        HttpEntity<Void> entity = new HttpEntity<>(headers);
-
         try {
-            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    entity,
-                    IAMPORT_RESPONSE_TYPE);
-            Map<String, Object> body = response.getBody();
+            Map<String, Object> body = getFromPortone("/payments/" + impUid, accessToken);
             if (body != null && Integer.valueOf(0).equals(toInteger(body.get("code")))) {
                 return toStringKeyMap(body.get("response"));
             }
@@ -179,6 +313,33 @@ public class PaymentService {
             log.debug("Iamport payment detail request failure details", e);
             throw paymentGatewayException("결제내역 조회 오류", e);
         }
+    }
+
+    // 주문번호로 포트원 결제를 찾습니다. 결제 내역이 없거나(404) 조회에 실패하면 빈 값입니다(재확인은 다음에 다시 시도).
+    private Optional<Map<String, Object>> findPaymentByMerchantUid(String merchantUid, String accessToken) {
+        try {
+            Map<String, Object> body = getFromPortone("/payments/find/" + merchantUid, accessToken);
+            if (body != null && Integer.valueOf(0).equals(toInteger(body.get("code")))) {
+                return Optional.of(toStringKeyMap(body.get("response")));
+            }
+            return Optional.empty();
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        } catch (Exception e) {
+            log.warn("Iamport payment lookup by order failed. type={}", e.getClass().getName());
+            return Optional.empty();
+        }
+    }
+
+    private Map<String, Object> getFromPortone(String path, String accessToken) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + accessToken);
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                PORTONE_API + path,
+                HttpMethod.GET,
+                new HttpEntity<Void>(headers),
+                IAMPORT_RESPONSE_TYPE);
+        return response.getBody();
     }
 
     // 결제사 연동 실패를 502 Bad Gateway로 변환합니다. 사용자에게는 내부 원인을 노출하지 않습니다.

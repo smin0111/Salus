@@ -95,6 +95,8 @@ services:
       OPENFDA_API_KEY: ${OPENFDA_API_KEY:-}
       # 게스트 IP는 이 범위의 프록시(맥북 자신, docker 내부망의 nginx)를 거친 경우에만 X-Forwarded-For에서 읽습니다.
       APP_CLIENT_IP_TRUSTED_PROXIES: ${APP_CLIENT_IP_TRUSTED_PROXIES:-127.0.0.1/32,::1/128,172.16.0.0/12}
+      # 베타 서버는 결제를 받지 않습니다(결제 화면은 안내만). 실제 판매 때 PAYMENT_ENABLED=true와 포트원 키를 넣습니다.
+      PAYMENT_ENABLED: ${PAYMENT_ENABLED:-false}
       IAMPORT_API_KEY: ${IAMPORT_API_KEY:?IAMPORT_API_KEY is required}
       IAMPORT_API_SECRET: ${IAMPORT_API_SECRET:?IAMPORT_API_SECRET is required}
       NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}

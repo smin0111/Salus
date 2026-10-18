@@ -1,6 +1,5 @@
 package com.salus.healthytable.service.recipeagent;
 
-import com.salus.healthytable.domain.UserGrade;
 import com.salus.healthytable.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -9,8 +8,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.concurrent.Callable;
 
@@ -36,20 +37,24 @@ class NewDishSearchQuota {
 
     private final StringRedisTemplate redis;
     private final UserRepository userRepository;
+    private final Clock clock;
     private final int memberDailyLimit;
     private final int guestDailyLimit;
 
     @Autowired
     NewDishSearchQuota(ObjectProvider<StringRedisTemplate> redis,
                        UserRepository userRepository,
+                       Clock clock,
                        @Value("${recipe.agent.new-dish-search.member-daily-limit:5}") int memberDailyLimit,
                        @Value("${recipe.agent.new-dish-search.guest-daily-limit:3}") int guestDailyLimit) {
-        this(redis.getIfAvailable(), userRepository, memberDailyLimit, guestDailyLimit);
+        this(redis.getIfAvailable(), userRepository, clock, memberDailyLimit, guestDailyLimit);
     }
 
-    NewDishSearchQuota(StringRedisTemplate redis, UserRepository userRepository, int memberDailyLimit, int guestDailyLimit) {
+    NewDishSearchQuota(StringRedisTemplate redis, UserRepository userRepository, Clock clock,
+                       int memberDailyLimit, int guestDailyLimit) {
         this.redis = redis;
         this.userRepository = userRepository;
+        this.clock = clock == null ? Clock.system(QUOTA_ZONE) : clock;
         this.memberDailyLimit = Math.max(0, memberDailyLimit);
         this.guestDailyLimit = Math.max(0, guestDailyLimit);
     }
@@ -111,14 +116,14 @@ class NewDishSearchQuota {
         CONSUMED.set(Boolean.TRUE);
     }
 
-    // PLUS 회원은 세지 않습니다. 회원 정보를 읽지 못하면 무료 회원처럼 셉니다.
+    // PLUS 이용권 기간이 남은 회원은 세지 않습니다. 회원 정보를 읽지 못하면 무료 회원처럼 셉니다.
     private boolean isPlusMember(String subject) {
         if (!subject.startsWith("user:") || userRepository == null) {
             return false;
         }
         try {
             long userId = Long.parseLong(subject.substring("user:".length()));
-            return userRepository.findById(userId).map(user -> user.getGrade() == UserGrade.PLUS).orElse(false);
+            return userRepository.findById(userId).map(user -> user.hasActivePlus(LocalDateTime.now(clock))).orElse(false);
         } catch (RuntimeException e) {
             return false;
         }

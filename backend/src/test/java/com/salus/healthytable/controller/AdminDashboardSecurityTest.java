@@ -149,7 +149,7 @@ class AdminDashboardSecurityTest {
     @Test
     void adminCanReadAdminStats() throws Exception {
         when(userRepository.count()).thenReturn(10L);
-        when(userRepository.countByGrade(UserGrade.PLUS)).thenReturn(2L);
+        when(userRepository.countByGradeAndPlusExpiresAtAfter(org.mockito.ArgumentMatchers.eq(UserGrade.PLUS), org.mockito.ArgumentMatchers.any())).thenReturn(2L);
         when(userRepository.countByCreatedAtAfter(any(LocalDateTime.class))).thenReturn(1L);
         when(activityLogRepository.countByActivityDate(any(LocalDate.class))).thenReturn(5L);
         when(activityLogRepository.countByActivityDateAndHasAiInteraction(any(LocalDate.class), eq(true)))
