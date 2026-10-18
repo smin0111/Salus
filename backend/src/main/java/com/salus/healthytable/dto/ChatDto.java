@@ -48,6 +48,11 @@ public class ChatDto {
         // 처음 보는 요리 찾기 하루 횟수를 셀 요청자 키("user:1", "guest:IP"). 컨트롤러가 채우는 서버 내부용입니다.
         @com.fasterxml.jackson.annotation.JsonIgnore
         private String quotaSubject;
+        // 이번 요청의 진행 ID(X-Request-Id). 컨트롤러가 채우는 서버 내부용입니다.
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        private String progressId;
+        // 답을 멈춘 직전 요청의 진행 ID. 대화방 ID를 아직 모를 때(첫 답변을 멈춤) 그 요청이 만든 대화방으로 이어 씁니다.
+        private String resumeProgressId;
     }
 
     /** 채팅 요청에 포함할 수 있는 건강 정보(알레르기, 만성질환, 식이 제한, 복용 약, 목표)입니다. */

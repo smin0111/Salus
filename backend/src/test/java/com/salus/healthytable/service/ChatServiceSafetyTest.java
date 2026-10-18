@@ -494,6 +494,37 @@ class ChatServiceSafetyTest {
         verify(llmService, never()).getChatResponse(anyString(), any());
     }
 
+    // 첫 답변을 멈춘 뒤 보낸 메시지는 멈춘 요청이 만든 대화방으로 이어 씁니다. 남의 대화방이면 이어 쓰지 않습니다
+    // (2026-10-17 리뷰: 멈출 때마다 새 방이 생겨 한 대화가 여러 방으로 갈라짐).
+    @Test
+    void messageAfterStoppingFirstAnswerContinuesTheSameSession() {
+        ChatSession mine = new ChatSession();
+        mine.setId(77L);
+        mine.setUserId(1L);
+        when(chatSessionRepository.findByIdAndUserId(77L, 1L)).thenReturn(Optional.of(mine));
+        when(chatSessionRepository.findByIdAndUserId(77L, 2L)).thenReturn(Optional.empty());
+        when(chatSessionRepository.save(any(ChatSession.class))).thenAnswer(invocation -> {
+            ChatSession created = invocation.getArgument(0);
+            created.setId(88L);
+            return created;
+        });
+        ChatProgress.start("stopped-req", "답변을 준비하고 있어요");
+        ChatProgress.attachSession("stopped-req", 77L);
+        ChatProgress.start("next-req", "답변을 준비하고 있어요");
+
+        ChatDto.Request next = new ChatDto.Request();
+        next.setMessage("2인분으로");
+        next.setResumeProgressId("stopped-req");
+        next.setProgressId("next-req");
+        assertThat(chatService.resolveSession(1L, next).getId()).isEqualTo(77L);
+        assertThat(ChatProgress.sessionOf("next-req")).contains(77L);
+
+        ChatDto.Request other = new ChatDto.Request();
+        other.setMessage("2인분으로");
+        other.setResumeProgressId("stopped-req");
+        assertThat(chatService.resolveSession(2L, other).getId()).isEqualTo(88L);
+    }
+
     // 근거가 없는 짧은 말("안녕!")이나 문장은 요리 이름으로 보지 않고 일반 대화로 답합니다.
     @Test
     void unknownShortMessageStaysGeneralChat() {

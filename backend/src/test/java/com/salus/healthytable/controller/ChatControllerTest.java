@@ -101,7 +101,11 @@ class ChatControllerTest {
     void cancelRejectsMalformedRequestId() {
         assertThatThrownBy(() -> controller.cancel("../../etc"))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThat(controller.cancel("chat-123-unknown")).containsEntry("cancelled", false);
+        assertThat(controller.cancel("chat-123-unknown")).containsEntry("cancelled", false).doesNotContainKey("sessionId");
+        // 이 요청이 대화방을 만들었으면 멈출 때 그 대화방 ID를 함께 돌려줍니다(첫 답변을 멈춰도 같은 방으로 이어 쓰기).
+        com.salus.healthytable.service.ChatProgress.start("chat-with-session", "답변을 준비하고 있어요");
+        com.salus.healthytable.service.ChatProgress.attachSession("chat-with-session", 41L);
+        assertThat(controller.cancel("chat-with-session")).containsEntry("sessionId", 41L);
     }
 
     // 메시지가 없으면 서비스 호출 전에 거부해야 합니다.

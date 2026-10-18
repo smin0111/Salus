@@ -26,6 +26,9 @@ public final class ChatProgress {
     private static final int MAX_ENTRIES = 2000;
     private static final Map<String, Snapshot> PROGRESS = new ConcurrentHashMap<>();
     private static final ThreadLocal<String> CURRENT = new ThreadLocal<>();
+    // 진행 ID → 이 요청이 만든(또는 이어 쓴) 대화방 ID. 첫 답변을 멈춘 뒤 보내는 메시지가 같은 대화방으로 이어지게 합니다.
+    // 진행 단계 조회(GET /api/chat/progress)에는 내보내지 않고, 진행 기록과 함께 지웁니다.
+    private static final Map<String, Long> SESSIONS = new ConcurrentHashMap<>();
     private static Clock clock = Clock.systemUTC();
 
     private ChatProgress() {
@@ -92,6 +95,18 @@ public final class ChatProgress {
         });
     }
 
+    // 이 요청이 쓰는 대화방을 기록합니다. 시작하지 않은 진행 ID에는 기록하지 않습니다.
+    public static void attachSession(String progressId, Long sessionId) {
+        if (progressId == null || progressId.isBlank() || sessionId == null || !PROGRESS.containsKey(progressId)) {
+            return;
+        }
+        SESSIONS.put(progressId, sessionId);
+    }
+
+    public static Optional<Long> sessionOf(String progressId) {
+        return progressId == null ? Optional.empty() : Optional.ofNullable(SESSIONS.get(progressId));
+    }
+
     public static Optional<Snapshot> get(String progressId) {
         return progressId == null ? Optional.empty() : Optional.ofNullable(PROGRESS.get(progressId));
     }
@@ -117,6 +132,7 @@ public final class ChatProgress {
         if (PROGRESS.size() > MAX_ENTRIES) {
             PROGRESS.clear();
         }
+        SESSIONS.keySet().retainAll(PROGRESS.keySet());
     }
 
     // 테스트에서 시간을 고정할 때만 씁니다.

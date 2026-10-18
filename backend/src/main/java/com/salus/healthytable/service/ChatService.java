@@ -88,7 +88,16 @@ public class ChatService {
     }
 
     public ChatSession resolveSession(Long userId, ChatDto.Request request) {
-        return chatSessionService.resolveSession(userId, request);
+        // 첫 답변을 멈추면 앱은 아직 대화방 ID를 모릅니다. 멈춘 요청이 만든 대화방이 있으면 그 방으로 이어 씁니다
+        // (2026-10-17 리뷰: 멈출 때마다 새 방이 생겨 한 대화가 여러 방으로 갈라짐). 남의 방이면 아래에서 새 방을 만듭니다.
+        if (request.getSessionId() == null && request.getResumeProgressId() != null) {
+            ChatProgress.sessionOf(request.getResumeProgressId()).ifPresent(request::setSessionId);
+        }
+        ChatSession session = chatSessionService.resolveSession(userId, request);
+        if (session != null) {
+            ChatProgress.attachSession(request.getProgressId(), session.getId());
+        }
+        return session;
     }
 
     @Transactional

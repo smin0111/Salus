@@ -486,6 +486,10 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     const requestSeqRef = useRef(0);
     // 진행 중인 답변 요청(멈춤용): 브라우저 요청을 끊는 AbortController와 서버에 알릴 요청 ID
     const activeRequestRef = useRef(null);
+    // 답을 멈춘 직전 요청의 진행 ID. 대화방 ID를 아직 모를 때(첫 답변을 멈춤) 다음 메시지를 그 요청이 만든 방으로 잇습니다.
+    const resumeProgressIdRef = useRef(null);
+    // 보고 있는 대화가 바뀔 때마다(대화방 열기·새 대화) 올리는 번호. 늦게 온 멈춤 응답이 다른 대화의 방 ID를 바꾸지 않게 합니다.
+    const chatViewRef = useRef(0);
 
     // 식단 추가 모달
     const [modalVisible, setModalVisible] = useState(false);
@@ -537,6 +541,8 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     useEffect(() => {
         authEpochRef.current += 1;
         requestSeqRef.current += 1;
+        chatViewRef.current += 1;
+        resumeProgressIdRef.current = null;
         setLoading(false);
         setInputText('');
         setChatSessionId(null);
@@ -581,13 +587,37 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // 다른 대화로 옮기거나 새 대화를 시작하면 기다리던 답은 이 화면과 상관없으므로 버리고, 서버 작업도 멈춥니다.
+    // (멈춤 버튼과 달리 "멈춘 질문"으로 표시하지 않습니다. 그 질문은 원래 대화방에 저장되어 있습니다.)
+    const abandonActiveRequest = () => {
+        chatViewRef.current += 1;
+        resumeProgressIdRef.current = null;
+        const active = activeRequestRef.current;
+        if (!active) return;
+        activeRequestRef.current = null;
+        active.abortController.abort();
+        axios.post(`${config.API_BASE_URL}/chat/cancel/${active.progressId}`, null, { timeout: 5000 })
+            .catch(() => {});
+        stopProgressPolling();
+        setLoading(false);
+    };
+
     // 선택한 세션의 메시지를 불러와 화면 메시지 형식({ id, text, sender })으로 바꿉니다.
+    // A 대화의 답을 기다리다 B 대화를 열면 A의 답이 B 화면에 들어오고 대화방 ID도 A로 돌아갔습니다(2026-10-17 리뷰).
+    // 그래서 여는 순간 요청 번호를 올리고, 불러온 결과도 그사이 다른 대화를 고르지 않았을 때만 반영합니다.
     const loadChatSession = async (sessionId) => {
         if (!token) return;
+        abandonActiveRequest();
+        const loadSeq = requestSeqRef.current + 1;
+        requestSeqRef.current = loadSeq;
+        const loadEpoch = authEpochRef.current;
         try {
             const response = await axios.get(`${config.API_BASE_URL}/chat/sessions/${sessionId}/messages`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
+            if (loadSeq !== requestSeqRef.current || loadEpoch !== authEpochRef.current) {
+                return;
+            }
             const loadedMessages = (response.data || []).map((msg, index) => ({
                 id: `${sessionId}-${index}-${Date.now()}`,
                 text: msg.content,
@@ -598,6 +628,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             setMessages(loadedMessages);
         } catch (error) {
             if (isAuthError(error)) return;
+            if (loadSeq !== requestSeqRef.current) return;
             debugLog('Failed to load chat session:', error.message);
             Alert.alert('오류', '대화를 불러오지 못했습니다.');
         }
@@ -605,6 +636,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
     // 새 대화 시작. 진행 중인 요청의 응답이 새 대화에 끼어들지 않도록 요청 번호를 올립니다.
     const startNewChat = () => {
+        abandonActiveRequest();
         requestSeqRef.current += 1;
         setChatSessionId(null);
         setMessages([initialGreeting]);
@@ -760,6 +792,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                     history: history,
                     healthProfile: healthProfilePayload,
                     ...(interruptedMessages.length ? { interruptedMessages } : {}),
+                    ...(!chatSessionId && resumeProgressIdRef.current ? { resumeProgressId: resumeProgressIdRef.current } : {}),
                 },
                 {
                     headers: {
@@ -783,6 +816,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             const rawAiText = response.data.reply;
             const cleanedText = cleanAiResponse(rawAiText);
             if (response.data.sessionId) {
+                resumeProgressIdRef.current = null;
                 setChatSessionId(response.data.sessionId);
             }
 
@@ -851,7 +885,16 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         if (!active) return null;
         activeRequestRef.current = null;
         active.abortController.abort();
+        resumeProgressIdRef.current = active.progressId;
+        const viewAtStop = chatViewRef.current;
         axios.post(`${config.API_BASE_URL}/chat/cancel/${active.progressId}`, null, { timeout: 5000 })
+            .then(response => {
+                // 첫 답변을 멈춰도 서버가 만든 대화방 ID를 받아 둡니다(그사이 다른 대화로 옮겼으면 무시).
+                const sessionId = response?.data?.sessionId;
+                if (sessionId && viewAtStop === chatViewRef.current) {
+                    setChatSessionId(prev => prev ?? sessionId);
+                }
+            })
             .catch(() => {}); // 서버 알림이 실패해도 화면은 이미 멈췄습니다. 서버 처리는 시간 제한으로 끝납니다.
         setMessages(prev => prev.map(message =>
             message.id === active.userMessageId ? { ...message, interrupted: true } : message

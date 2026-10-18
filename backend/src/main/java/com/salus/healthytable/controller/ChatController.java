@@ -151,6 +151,7 @@ public class ChatController {
         // 요청 ID(X-Request-Id)를 진행 ID로 씁니다. 앱은 같은 ID로 /api/chat/progress/{id}를 물어 진행 단계를 보여 줍니다.
         String progressId = org.slf4j.MDC.get("requestId");
         ChatProgress.start(progressId, "답변을 준비하고 있어요");
+        request.setProgressId(progressId);
         // 사용자가 "멈춤"을 누르면(POST /api/chat/cancel/{id}) 처리 구독을 끊어 Ollama 생성까지 멈춥니다.
         Mono<Boolean> cancelled = ChatCancellation.register(progressId);
         boolean hasInterrupted = request.getInterruptedMessages() != null
@@ -185,7 +186,11 @@ public class ChatController {
         if (progressId == null || progressId.length() > 64 || !progressId.matches("[A-Za-z0-9_-]+")) {
             throw new IllegalArgumentException("잘못된 요청 ID입니다.");
         }
-        return Map.of("cancelled", ChatCancellation.cancel(progressId));
+        // 첫 답변을 멈춰도 앱이 대화방 ID를 알 수 있게, 이 요청이 만든 대화방 ID를 함께 돌려줍니다(있을 때만).
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("cancelled", ChatCancellation.cancel(progressId));
+        ChatProgress.sessionOf(progressId).ifPresent(sessionId -> body.put("sessionId", sessionId));
+        return body;
     }
 
     /**
@@ -245,6 +250,10 @@ public class ChatController {
                     throw new IllegalArgumentException("메시지는 4000자 이하로 입력해 주세요.");
                 }
             }
+        }
+        if (request.getResumeProgressId() != null
+                && (request.getResumeProgressId().length() > 64 || !request.getResumeProgressId().matches("[A-Za-z0-9_-]+"))) {
+            request.setResumeProgressId(null);
         }
         normalizeChatHistory(request);
         normalizeHealthProfile(request);
