@@ -145,6 +145,23 @@ class AllergenMatcherTest {
     }
 
     @Test
+    @DisplayName("우유 알레르기가 치즈 원어 이름과 유단백을 잡고, 비슷한 낱말은 잡지 않는다")
+    void milkAllergyCatchesForeignCheeseNamesWithoutFalsePositives() {
+        // 2026-10-17 로컬 확인: "우유 알레르기 있어. 파스타 레시피"에 승인 레시피의 파르미자노 레지아노가 그대로 나감.
+        for (String ingredient : List.of("파르미자노 레지아노 20g (곱게 갈기)", "파마산 가루 1큰술", "그라나 파다노 30g",
+                "페코리노 로마노 20g", "마스카포네 250g", "고르곤졸라 50g", "까망베르 1개", "유청 단백질 30g")) {
+            assertThat(matcher.conflicts("우유", ingredient))
+                    .withFailMessage("우유 알레르기가 '%s'를 잡지 못했습니다", ingredient)
+                    .isTrue();
+        }
+        for (String ingredient : List.of("소고기 브리스킷 500g", "코코넛밀크 200ml", "파 1대", "파스타면 200g")) {
+            assertThat(matcher.conflicts("우유", ingredient))
+                    .withFailMessage("우유 알레르기가 '%s'를 잘못 잡았습니다", ingredient)
+                    .isFalse();
+        }
+    }
+
+    @Test
     @DisplayName("대두 알레르기가 장류와 두부를 잡는다")
     void soyAllergyCatchesFermentedAndTofu() {
         for (String ingredient : List.of("두부 1모", "된장 1큰술", "간장 2큰술", "두유 200ml", "유부 5장")) {
