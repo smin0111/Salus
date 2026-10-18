@@ -707,12 +707,34 @@ public class RecipeResponseSanitizer {
         return value == null ? "" : value;
     }
 
-    // 답변에 kcal/레시피/재료 같은 단어가 있으면 레시피 형태의 답변으로 봅니다(일반 대화 경로에서 사용).
+    // 번호 매긴 줄("1. 팬을 달군다", "2) 김치를 넣는다")
+    private static final java.util.regex.Pattern NUMBERED_LINE =
+            java.util.regex.Pattern.compile("(?m)^\\s*\\d{1,2}\\s*[.)]\\s*\\S");
+    // 재료 목록 제목 줄("재료", "[재료]", "**재료:**", "필요한 재료")
+    private static final java.util.regex.Pattern INGREDIENT_HEADING = java.util.regex.Pattern.compile(
+            "(?m)^\\s*[#*\\[\\-]*\\s*(?:필요한\\s*)?(?:재료|준비물)\\s*[\\]*:：]*\\s*(?:\\(.*\\))?\\s*$");
+    // 분량이 적힌 재료 줄("돼지고기 200g", "간장 2큰술", "계란 3개")
+    private static final java.util.regex.Pattern AMOUNT = java.util.regex.Pattern.compile(
+            "\\d+(?:[./]\\d+)?\\s*(?:g|kg|ml|L|큰술|작은술|스푼|컵|개|모|줌|장|쪽|T|t)(?![a-zA-Z])");
+
+    /**
+     * 일반 대화 답이 레시피 모양인지 봅니다(근거 없이 쓴 레시피를 그대로 보여 주지 않기 위해 사용).
+     * Salus 레시피 형식 표시가 있거나, 번호 매긴 단계가 2줄 이상이면서 재료 목록 제목이나 분량 3개 이상이 함께 있을 때입니다.
+     * 예전에는 "재료"·"레시피"·"kcal" 낱말 하나로 판단해 "로메인은 샐러드 재료로 쓰는 상추예요" 같은 설명까지
+     * 막았습니다(2026-10-17 베타: "로메인이 뭐야?"에 거절 문구가 나감).
+     */
     boolean looksLikeRecipeResponse(String reply) {
-        if (reply == null) {
+        if (reply == null || reply.isBlank()) {
             return false;
         }
-        return reply.contains("kcal") || reply.contains("레시피") || reply.contains("재료");
+        if (reply.contains("요리명:") || reply.contains("[조리 순서]") || reply.contains("[재료]")) {
+            return true;
+        }
+        long numberedLines = NUMBERED_LINE.matcher(reply).results().count();
+        if (numberedLines < 2) {
+            return false;
+        }
+        return INGREDIENT_HEADING.matcher(reply).find() || AMOUNT.matcher(reply).results().count() >= 3;
     }
 
     // OllamaLlmService가 LLM 장애 시 돌려주는 안내 문구인지 확인합니다.

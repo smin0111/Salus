@@ -682,8 +682,43 @@ public class ChatService {
      * 바로 앞 답이 후보 목록(2개 이상)일 때만, 짧은 메시지에만 적용합니다.
      */
     static String menuPickFromHistory(String message, List<ChatDto.Message> history) {
-        if (message == null || message.isBlank() || message.contains("레시피") || message.length() > 30 || history == null) {
+        if (message == null || message.isBlank() || message.contains("레시피") || message.length() > 30) {
             return null;
+        }
+        java.util.Map<Integer, String> candidates = menuCandidates(history);
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        // 두 후보를 함께 말하면("2번 말고 1번", "샌드위치 말고 계란말이로") 마지막에 말한 후보를 고릅니다.
+        // 예전에는 목록 순서대로 처음 맞은 후보를 골라 "말고" 앞의 후보를 답했습니다(2026-10-17 리뷰).
+        String compact = message.replaceAll("\\s+", "");
+        String picked = null;
+        int pickedAt = -1;
+        for (String candidate : candidates.values()) {
+            int at = compact.lastIndexOf(candidate.replaceAll("\\s+", ""));
+            if (at > pickedAt) {
+                picked = candidate;
+                pickedAt = at;
+            }
+        }
+        Matcher ordinal = MENU_PICK_ORDINAL.matcher(message);
+        while (ordinal.find()) {
+            int index = ordinal.group(1) != null
+                    ? Integer.parseInt(ordinal.group(1))
+                    : ORDINAL_WORDS.indexOf(ordinal.group(2)) + 1;
+            int at = compact.indexOf(ordinal.group().replaceAll("\\s+", ""));
+            if (candidates.containsKey(index) && at >= pickedAt) {
+                picked = candidates.get(index);
+                pickedAt = at;
+            }
+        }
+        return picked;
+    }
+
+    // 바로 앞 답이 메뉴 후보 목록(2개 이상)이면 번호 → 후보 이름입니다. 아니면 비어 있습니다.
+    private static java.util.Map<Integer, String> menuCandidates(List<ChatDto.Message> history) {
+        if (history == null) {
+            return java.util.Map.of();
         }
         String lastModelReply = null;
         for (int i = history.size() - 1; i >= 0; i--) {
@@ -694,30 +729,14 @@ public class ChatService {
             }
         }
         if (lastModelReply == null || lastModelReply.contains("요리명:")) {
-            return null;
+            return java.util.Map.of();
         }
         java.util.Map<Integer, String> candidates = new java.util.LinkedHashMap<>();
         Matcher line = MENU_CANDIDATE_LINE.matcher(lastModelReply);
         while (line.find()) {
             candidates.putIfAbsent(Integer.parseInt(line.group(1)), line.group(2).trim());
         }
-        if (candidates.size() < 2) {
-            return null;
-        }
-        String compact = message.replaceAll("\\s+", "");
-        for (String candidate : candidates.values()) {
-            if (compact.contains(candidate.replaceAll("\\s+", ""))) {
-                return candidate;
-            }
-        }
-        Matcher ordinal = MENU_PICK_ORDINAL.matcher(message);
-        if (ordinal.find()) {
-            int index = ordinal.group(1) != null
-                    ? Integer.parseInt(ordinal.group(1))
-                    : ORDINAL_WORDS.indexOf(ordinal.group(2)) + 1;
-            return candidates.get(index);
-        }
-        return null;
+        return candidates.size() < 2 ? java.util.Map.of() : candidates;
     }
 
     private void rewriteMenuPickRequest(ChatDto.Request request) {
@@ -741,8 +760,12 @@ public class ChatService {
         }
         StringBuilder rewritten = new StringBuilder(pick).append(" 레시피 알려줘");
         String compactPick = pick.replaceAll("\\s+", "");
+        // "계란말이 말고 오트밀 빵으로"의 "계란말이"는 뺄 재료가 아니라 고르지 않은 후보입니다.
+        java.util.Set<String> candidateNames = menuCandidates(history).values().stream()
+                .map(name -> name.replaceAll("\\s+", ""))
+                .collect(java.util.stream.Collectors.toSet());
         for (String ingredient : InterruptedRequestMerger.exclusions(message)) {
-            if (!compactPick.contains(ingredient)) {
+            if (!compactPick.contains(ingredient) && candidateNames.stream().noneMatch(name -> name.contains(ingredient))) {
                 rewritten.append(", ").append(ingredient).append(" 빼고");
             }
         }
@@ -834,8 +857,14 @@ public class ChatService {
     // 레시피 요청이 아닌데 LLM이 레시피를 쓴 경우, 의도에 맞춰 대신 보여 줄 안내 문구를 고릅니다.
     // 직전 레시피가 있으면 그 요리로 다시 묻는 방법을 알려 줍니다(2026-10-14 마늘빵 "오븐 없는데 전자레인지로는 안돼?"에
     // 질문과 상관없는 "음식명과 함께 '레시피'라고 말해 주세요"가 나감).
+    // 직전 레시피의 조리 방법·재료를 바꾸려는 질문("오븐 없는데 전자레인지로는?", "버터 대신 뭐 넣어?")
+    private static final Pattern RECIPE_CHANGE_QUESTION = Pattern.compile(
+            "대신|바꿔|바꾸|없는데|없으면|없이|빼고|빼면|(?:으로|로)\\s*(?:는|도)?\\s*(?:해도|하면|안\\s*돼|돼|되|가능|만들|구워)");
+
     private String buildNonRecipeIntentReply(ChatIntentClassifier.ChatIntent intent, String message, String previousDish) {
-        if (previousDish != null && !previousDish.isBlank()) {
+        // "로메인이 뭐야?"처럼 바꾸려는 질문이 아니면 조리 방법 변경 안내를 붙이지 않습니다(2026-10-17 베타).
+        if (previousDish != null && !previousDish.isBlank()
+                && message != null && RECIPE_CHANGE_QUESTION.matcher(message).find()) {
             return "조리 방법이나 재료를 바꾸는 내용은 출처 없이 지어서 알려 드리지 않아요. '" + previousDish
                     + "'을(를) 다르게 만드는 방법이 궁금하면 '전자레인지 " + previousDish + " 레시피 알려줘'처럼 말씀해 주시면 출처에서 찾아 드릴게요.";
         }

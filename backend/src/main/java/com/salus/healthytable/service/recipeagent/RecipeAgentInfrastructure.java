@@ -53,6 +53,9 @@ class DefaultRecipeRequestPlanner {
      * 요리 이름에서 제외 구절을 떼어 냅니다. "김치찌개 레시피 알려줘, 돼지고기는 빼줘"의 요리 이름이
      * "김치찌개 , 돼지고기는 빼줘"로 잡혀 검색과 출처 확인이 모두 실패하던 문제를 막습니다(2026-10-09).
      */
+    // "2인분", "1인분용으로", "3인용"은 요리 이름이 아닙니다(2026-10-17 "2인분 파스타"를 요리 이름으로 검색·표시).
+    private static final java.util.regex.Pattern SERVINGS_WORDS = java.util.regex.Pattern.compile(
+            "(?:\\d+|한|두|세|네|다섯)\\s*(?:인분|인용)(?:\\s*용)?(?:\\s*(?:으로|로|짜리|만))?");
     private static final java.util.regex.Pattern ANOTHER_WORDS = java.util.regex.Pattern.compile(
             "(?:또\\s*)?다른|버전(?:으로|을|로)?|(?:이거|그거|저거|이걸|그걸|이건|그건)\\s*(?:말고|대신)");
     // 레시피로 자주 검색하는 방송·사이트 이름입니다(사람 이름 아님). 요리 이름이 아니라 검색어 앞에만 붙입니다
@@ -141,7 +144,8 @@ class DefaultRecipeRequestPlanner {
         }
         // "다른 두쫀쿠", "다른 버전으로"의 "다른·버전"도 요리 이름이 아닙니다. 지우고 남는 말이 없으면 빈 이름입니다
         // (직전 요리의 다른 레시피 요청).
-        String withoutAnother = ANOTHER_WORDS.matcher(dishName).replaceAll(" ").replaceAll("\\s+", " ").trim();
+        String withoutAnother = ANOTHER_WORDS.matcher(SERVINGS_WORDS.matcher(dishName).replaceAll(" "))
+                .replaceAll(" ").replaceAll("\\s+", " ").trim();
         withoutAnother = LONE_PARTICLE.matcher(REQUEST_TAIL.matcher(withoutAnother).replaceAll("")).replaceAll(" ")
                 .replaceAll("\\s+", " ").trim();
         if (withoutAnother.isBlank()) {

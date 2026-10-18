@@ -20,6 +20,14 @@ class RecipeRequestPlannerDishNameTest {
         assertThat(planner.plan("돼지고기 없는 김치찌개 레시피", false).dishName()).isEqualTo("김치찌개");
     }
 
+    // 인분 표현은 요리 이름에서 뺍니다(2026-10-17 "우유 알레르기 있어. 2인분 파스타 레시피 알려줘"가 "2인분 파스타"로 검색·표시).
+    @Test
+    void servingsWordsAreRemovedFromDishName() {
+        assertThat(planner.plan("2인분 파스타 레시피 알려줘", false).dishName()).isEqualTo("파스타");
+        assertThat(planner.plan("샌드위치 레시피 1인분용으로 알려줘", false).dishName()).isEqualTo("샌드위치");
+        assertThat(planner.plan("김치찌개 두 인분 레시피", false).dishName()).isEqualTo("김치찌개");
+    }
+
     @Test
     void dishNameWithoutExclusionIsUnchanged() {
         assertThat(planner.plan("두쫀쿠 레시피 알려줘", false).dishName()).isEqualTo("두쫀쿠");

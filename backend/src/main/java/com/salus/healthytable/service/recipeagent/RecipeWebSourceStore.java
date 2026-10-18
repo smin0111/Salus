@@ -177,6 +177,12 @@ class RecipeStepSummarizer {
                 log.info("[RecipeStepSummary] Rejected. reason=TOO_FEW_STEPS");
                 return SummaryOutcome.ofRejected();
             }
+            // 앞 문장에 기대는 말로 시작하는 단계는 원문 한 문장을 둘로 나누다 앞부분이 빠진 것입니다
+            // (2026-10-17 샌드위치: "동안 토마토를 슬라이스해주세요"). 이런 요약은 버리고 원문 단계를 씁니다.
+            if (summaries.stream().anyMatch(RecipeStepSummarizer::startsMidSentence)) {
+                log.info("[RecipeStepSummary] Rejected. reason=STEP_STARTS_MID_SENTENCE");
+                return SummaryOutcome.ofRejected();
+            }
             return SummaryOutcome.ofSummary(List.copyOf(summaries));
         } catch (com.salus.healthytable.service.ChatCancellation.ChatCancelledException e) {
             throw e; // 사용자가 멈춘 요청은 실패로 처리하지 않고 그대로 멈춥니다.
@@ -184,6 +190,14 @@ class RecipeStepSummarizer {
             log.warn("[RecipeStepSummary] Summary failed. failureCategory={}", e.getClass().getSimpleName());
             return SummaryOutcome.ofUnavailable();
         }
+    }
+
+    // "동안 …", "후에 …", "뒤 …", "사이에 …"처럼 앞 문장 없이는 뜻이 안 되는 말로 시작하는지 봅니다(번호·기호는 무시).
+    private static final java.util.regex.Pattern MID_SENTENCE_START = java.util.regex.Pattern.compile(
+            "^[\\s\\d.)\\-·*]*(?:동안|후에|후|뒤에|뒤|다음에|사이에|사이|만큼|중에|면서)(?:[\\s,]|$)");
+
+    static boolean startsMidSentence(String step) {
+        return step != null && MID_SENTENCE_START.matcher(step).find();
     }
 
     private List<String> request(RecipeTextLlmPort llm, String prompt, int maxSteps) {

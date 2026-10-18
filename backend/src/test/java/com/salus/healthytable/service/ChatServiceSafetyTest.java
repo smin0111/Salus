@@ -494,6 +494,43 @@ class ChatServiceSafetyTest {
         verify(llmService, never()).getChatResponse(anyString(), any());
     }
 
+    // 재료를 묻는 일반 질문의 답은 "재료"라는 낱말이 있어도 그대로 보여 줍니다. 레시피 모양의 답만 안내 문구로 바꾸고,
+    // 조리 방법 변경 안내는 바꾸려는 질문일 때만 씁니다(2026-10-17 베타: "로메인이 뭐야?"에 거절 문구).
+    @Test
+    void ingredientQuestionAnswerIsNotMistakenForUnsourcedRecipe() {
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        List<ChatDto.Message> history = List.of(
+                new ChatDto.Message("user", "샌드위치 레시피 알려줘"),
+                new ChatDto.Message("model", "[원본 레시피 기준]\n- 요리명: 샌드위치\n1. 식빵을 굽는다"));
+        String explanation = "로메인은 잎이 길쭉한 상추예요. 샐러드나 샌드위치 재료로 많이 써요.";
+        when(llmService.getChatResponse(anyString(), any())).thenReturn(Mono.just(explanation));
+
+        ChatDto.Request question = new ChatDto.Request();
+        question.setMessage("로메인이 뭐야?");
+        question.setHistory(history);
+        assertThat(chatService.processChat(Optional.empty(), question).block().getReply()).startsWith(explanation);
+
+        String unsourcedRecipe = """
+                재료
+                - 식빵 2장
+                - 로메인 3장
+                - 햄 2장
+                1. 식빵을 굽는다.
+                2. 재료를 올린다.""";
+        when(llmService.getChatResponse(anyString(), any())).thenReturn(Mono.just(unsourcedRecipe));
+        ChatDto.Request plainAsk = new ChatDto.Request();
+        plainAsk.setMessage("로메인 넣은 거 어때?");
+        plainAsk.setHistory(history);
+        assertThat(chatService.processChat(Optional.empty(), plainAsk).block().getReply())
+                .doesNotContain("식빵 2장")
+                .doesNotContain("출처 없이 지어서");
+
+        ChatDto.Request change = new ChatDto.Request();
+        change.setMessage("햄 대신 뭐 쓰면 돼?");
+        change.setHistory(history);
+        assertThat(chatService.processChat(Optional.empty(), change).block().getReply()).contains("출처 없이 지어서");
+    }
+
     // 첫 답변을 멈춘 뒤 보낸 메시지는 멈춘 요청이 만든 대화방으로 이어 씁니다. 남의 대화방이면 이어 쓰지 않습니다
     // (2026-10-17 리뷰: 멈출 때마다 새 방이 생겨 한 대화가 여러 방으로 갈라짐).
     @Test
@@ -595,6 +632,11 @@ class ChatServiceSafetyTest {
         assertThat(ChatService.menuPickRequest("1번 양파 빼고", history)).isEqualTo("계란말이 레시피 알려줘, 양파 빼고");
         assertThat(ChatService.menuPickRequest("2번으로 해줘", history)).isEqualTo("오트밀 빵 레시피 알려줘");
         assertThat(ChatService.menuPickRequest("고마워", history)).isNull();
+        // 두 후보를 함께 말하면 마지막에 말한 후보입니다.
+        assertThat(ChatService.menuPickFromHistory("2번 말고 1번", history)).isEqualTo("계란말이");
+        assertThat(ChatService.menuPickFromHistory("계란말이 말고 오트밀 빵으로", history)).isEqualTo("오트밀 빵");
+        assertThat(ChatService.menuPickFromHistory("세 번째 말고 첫 번째", history)).isEqualTo("계란말이");
+        assertThat(ChatService.menuPickRequest("계란말이 말고 오트밀 빵으로", history)).isEqualTo("오트밀 빵 레시피 알려줘");
     }
 
     // 후보를 고르며 말한 알레르기는 message가 "계란말이 레시피 알려줘"로 바뀌어도 Agent에 전달되어야 합니다

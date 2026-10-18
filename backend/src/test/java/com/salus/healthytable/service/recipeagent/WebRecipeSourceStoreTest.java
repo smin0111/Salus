@@ -222,6 +222,27 @@ class WebRecipeSourceStoreTest {
         assertThat(prompts).hasSize(1);
     }
 
+    // 원문 한 문장을 둘로 나누다 앞부분이 빠진 단계("동안 토마토를 …")가 있는 요약은 버리고 원문 단계를 씁니다
+    // (2026-10-17 샌드위치).
+    @Test
+    void summarizerRejectsStepsCutMidSentence() {
+        RecipeStepSummarizer summarizer = summarizer((prompt, schema) -> objectMapper.valueToTree(Map.of("steps", List.of(
+                Map.of("text", "식빵을 토스트한다"),
+                Map.of("text", "동안 토마토를 슬라이스한다"),
+                Map.of("text", "재료를 쌓아 샌드위치를 만든다")))));
+
+        SummaryOutcome outcome = summarizer.summarizeOutcome("샌드위치", candidate(List.of(
+                "식빵을 토스트하는 동안 토마토를 슬라이스해주세요.", "재료를 쌓아 샌드위치를 만들어 줍니다.")));
+        assertThat(outcome.summary()).isEmpty();
+        assertThat(outcome.rejected()).isTrue();
+
+        assertThat(RecipeStepSummarizer.startsMidSentence("동안 토마토를 썬다")).isTrue();
+        assertThat(RecipeStepSummarizer.startsMidSentence("2. 후에 소스를 바른다")).isTrue();
+        assertThat(RecipeStepSummarizer.startsMidSentence("식빵을 굽는 동안 토마토를 썬다")).isFalse();
+        assertThat(RecipeStepSummarizer.startsMidSentence("후추를 뿌린다")).isFalse();
+        assertThat(RecipeStepSummarizer.startsMidSentence("뒤집어서 굽는다")).isFalse();
+    }
+
     // 원문 표기를 지킨 요약은 그대로 쓰고, 사이트 단계 번호("STEP 1의")는 지웁니다.
     @Test
     void summarizerKeepsOriginalAmountsAndDropsStepReferences() {
