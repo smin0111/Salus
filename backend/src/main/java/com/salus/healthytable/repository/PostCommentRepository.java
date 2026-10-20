@@ -9,6 +9,9 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
+/**
+ * {@link PostComment} 엔티티의 DB 접근 인터페이스입니다.
+ */
 public interface PostCommentRepository extends JpaRepository<PostComment, Long> {
 
     // 댓글 목록처럼 실제 댓글 내용을 보여줄 때만 Entity 목록을 조회합니다.
@@ -24,6 +27,7 @@ public interface PostCommentRepository extends JpaRepository<PostComment, Long> 
 
     void deleteByUserId(Long userId);
 
+    // 여러 게시글을 한꺼번에 삭제할 때 그 게시글들에 달린 댓글도 함께 삭제합니다.
     void deleteByPostIdIn(List<Long> postIds);
 
     // 게시글 목록에서 댓글 수를 붙일 때 countByPostId를 반복하면 N+1 문제가 생깁니다.

@@ -13,8 +13,12 @@ import { landingColors, landingType, webPointer } from './landingTheme';
 import useHeroCarousel from './useHeroCarousel';
 import useHeroDrag from './useHeroDrag';
 
+// 랜딩 히어로의 레시피 이미지 캐러셀입니다. 요리 사진 주변에 예시 건강 조건 주석을 배치하고, 선택한 조건의 추천 이유를 보여 줍니다.
+
+// 네이티브 드라이버는 웹에서 지원되지 않아 앱에서만 사용합니다.
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 
+// 웹 키보드 접근성: Enter/Space 키로 버튼처럼 동작하게 합니다.
 function activateFromKeyboard(event, action) {
     if (Platform.OS !== 'web') return;
     const key = event?.nativeEvent?.key ?? event?.key;
@@ -23,6 +27,7 @@ function activateFromKeyboard(event, action) {
     action();
 }
 
+// 요리 사진 주변에 붙는 건강 조건 주석 하나(알레르기, 건강 상태 등). 화면 크기에 따라 위치 스타일이 달라집니다.
 function ContextAnnotation({
     item,
     active,
@@ -94,7 +99,7 @@ function ContextAnnotation({
                     <Text style={styles.annotationEnglish}>{item.code}</Text>
                 </View>
                 <Text
-                    numberOfLines={item.id === 'fridge' ? 2 : 1}
+                    numberOfLines={1}
                     style={[styles.annotationValue, active && styles.annotationValueActive]}
                 >
                     {item.value}
@@ -120,37 +125,7 @@ function ContextAnnotation({
     );
 }
 
-function IngredientMarkers({ progress, mobile, markers, palette }) {
-    return (
-        <Animated.View
-            style={[
-                styles.ingredientMarkers,
-                {
-                    opacity: progress,
-                    transform: [{
-                        scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }),
-                    }],
-                },
-            ]}
-        >
-            {markers.map((marker, index) => (
-                <View
-                    key={marker.id}
-                    style={[
-                        styles.ingredientMarker,
-                        { left: marker.left, top: marker.top, borderColor: palette.accent },
-                    ]}
-                >
-                    <View style={[styles.ingredientMarkerPin, { backgroundColor: palette.accentText }]}>
-                        <Text style={styles.ingredientMarkerIndex}>{String(index + 1).padStart(2, '0')}</Text>
-                    </View>
-                    {!mobile ? <Text style={styles.ingredientMarkerText}>{marker.label}</Text> : null}
-                </View>
-            ))}
-        </Animated.View>
-    );
-}
-
+// 사진 아래 레시피 정보 패널(제목, 선택한 조건의 추천 이유, 장면 이동 점)
 function RecipeInsight({
     activeItem,
     progress,
@@ -279,6 +254,11 @@ function RecipeInsight({
     );
 }
 
+/**
+ * 히어로 캐러셀 본체입니다.
+ * - 장면 상태/자동 넘김: useHeroCarousel, 스와이프: useHeroDrag
+ * - 웹에서는 가로 휠 스크롤과 좌우 방향키로도 장면을 넘길 수 있습니다.
+ */
 export default function HeroRecipeCarousel({ desktop, mobile, reducedMotion }) {
     const carousel = useHeroCarousel({ reducedMotion });
     const { dragX, panHandlers } = useHeroDrag({
@@ -286,6 +266,7 @@ export default function HeroRecipeCarousel({ desktop, mobile, reducedMotion }) {
         reducedMotion,
         setDragging: carousel.setDragging,
     });
+    // 다음 장면 이미지를 미리 불러와 전환 시 깜빡임을 줄이기 위한 상태
     const [canPreloadNext, setCanPreloadNext] = useState(false);
     const lastWheelAt = useRef(0);
     const foodIn = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
@@ -293,12 +274,12 @@ export default function HeroRecipeCarousel({ desktop, mobile, reducedMotion }) {
     const contextEntrances = useRef(
         HERO_CONTEXT_META.map(() => new Animated.Value(reducedMotion ? 1 : 0)),
     ).current;
-    const markerIn = useRef(new Animated.Value(0)).current;
 
     const healthContexts = useMemo(() => createHealthContexts(carousel.scene), [carousel.scene]);
     const activeItem = healthContexts.find(item => item.id === carousel.activeContext);
     const nextScene = HERO_RECIPES[(carousel.sceneIndex + 1) % carousel.sceneCount];
 
+    // 처음 표시될 때 사진 → 건강 조건 주석(차례로) → 정보 패널 순서로 등장 애니메이션을 실행합니다.
     useEffect(() => {
         if (reducedMotion) {
             [foodIn, insightIn, ...contextEntrances].forEach(value => value.setValue(1));
@@ -335,16 +316,8 @@ export default function HeroRecipeCarousel({ desktop, mobile, reducedMotion }) {
         return () => animation.stop();
     }, [contextEntrances, foodIn, insightIn, reducedMotion]);
 
-    useEffect(() => {
-        const animation = Animated.timing(markerIn, {
-            toValue: carousel.activeContext === 'fridge' ? 1 : 0,
-            duration: reducedMotion ? 0 : 300,
-            useNativeDriver: USE_NATIVE_DRIVER,
-        });
-        animation.start();
-        return () => animation.stop();
-    }, [carousel.activeContext, markerIn, reducedMotion]);
 
+    // 트랙패드 가로 스크롤로 장면 이동. 너무 자주 넘어가지 않게 720ms 간격을 둡니다.
     const handleWheel = useCallback((event) => {
         const deltaX = event?.nativeEvent?.deltaX ?? event?.deltaX ?? 0;
         const deltaY = event?.nativeEvent?.deltaY ?? event?.deltaY ?? 0;
@@ -354,6 +327,7 @@ export default function HeroRecipeCarousel({ desktop, mobile, reducedMotion }) {
         carousel.goToRelativeScene(deltaX > 0 ? 1 : -1);
     }, [carousel.goToRelativeScene]);
 
+    // 좌우 방향키로 장면 이동
     const handleKeyDown = useCallback((event) => {
         const key = event?.nativeEvent?.key ?? event?.key;
         if (key === 'ArrowLeft') carousel.goToRelativeScene(-1);
@@ -476,12 +450,6 @@ export default function HeroRecipeCarousel({ desktop, mobile, reducedMotion }) {
                         style={styles.preloadImage}
                     />
                 ) : null}
-                <IngredientMarkers
-                    progress={markerIn}
-                    mobile={mobile}
-                    markers={carousel.scene.ingredients}
-                    palette={carousel.scene.palette}
-                />
             </Animated.View>
 
             <Animated.View
@@ -584,17 +552,14 @@ const styles = StyleSheet.create({
     annotation_health: { left: 476, top: 248, width: 158 },
     annotation_diet: { right: 18, top: 158, width: 174 },
     annotation_medication: { right: 10, top: 354, width: 178 },
-    annotation_fridge: { left: 494, top: 378, width: 294 },
     annotationCompact_allergy: { left: 12, top: 42, width: 146 },
     annotationCompact_health: { left: 16, top: 208, width: 154 },
     annotationCompact_diet: { right: 8, top: 82, width: 166 },
     annotationCompact_medication: { right: 8, top: 218, width: 172 },
-    annotationCompact_fridge: { left: 24, top: 408, width: 286 },
     annotationMobile_allergy: { left: 4, top: 22, width: 118 },
     annotationMobile_health: { left: 2, top: 166, width: 128 },
     annotationMobile_diet: { right: 2, top: 82, width: 138 },
     annotationMobile_medication: { right: 2, top: 208, width: 144 },
-    annotationMobile_fridge: { left: 6, right: 6, top: 350 },
     annotationPressable: {
         minHeight: 51,
         paddingHorizontal: 10,
@@ -649,21 +614,6 @@ const styles = StyleSheet.create({
     annotationConnectorDot: { position: 'absolute', right: -2, top: -2, width: 5, height: 5, borderRadius: 3, backgroundColor: landingColors.lineStrong },
     annotationConnectorDotLeft: { left: -2, right: 'auto' },
     annotationConnectorDotActive: { backgroundColor: landingColors.accent },
-    ingredientMarkers: { ...StyleSheet.absoluteFillObject, pointerEvents: 'none' },
-    ingredientMarker: {
-        position: 'absolute',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        paddingRight: 7,
-        borderRadius: 13,
-        backgroundColor: 'rgba(255,253,247,0.94)',
-        borderWidth: 1,
-        borderColor: landingColors.accent,
-    },
-    ingredientMarkerPin: { width: 23, height: 23, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: landingColors.accent },
-    ingredientMarkerIndex: { color: landingColors.paper, fontSize: 9, fontWeight: '900' },
-    ingredientMarkerText: { color: landingColors.ink, fontSize: 9, fontWeight: '900' },
     recipeInsight: {
         position: 'absolute',
         left: 430,

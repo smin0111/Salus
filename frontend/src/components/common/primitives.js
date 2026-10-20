@@ -14,6 +14,15 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { color, opacity, radius, shadow, size, spacing, typography, zIndex } from '../../theme/tokens';
 
+/*
+ * 앱 전체에서 재사용하는 기본 UI 컴포넌트(프리미티브) 모음입니다.
+ * 색상/여백/글꼴은 theme/tokens.js 값을 사용하고, 접근성 속성(accessibilityRole 등)을 기본으로 넣어 둡니다.
+ */
+
+/**
+ * 화면 기본 틀입니다. 안전 영역(노치 등)을 피하고, scroll=true면 내용 전체를 스크롤할 수 있게 감쌉니다.
+ * bottomInset: 하단 탭에 내용이 가리지 않도록 아래 여백을 추가합니다.
+ */
 export function Screen({ children, scroll = false, contentStyle, style, bottomInset = false, ...props }) {
   const content = scroll ? (
     <ScrollView
@@ -34,6 +43,7 @@ export function Screen({ children, scroll = false, contentStyle, style, bottomIn
   return <SafeAreaView style={[styles.screen, style]}>{content}</SafeAreaView>;
 }
 
+// 화면 상단 헤더. onBack이 있으면 뒤로 가기 버튼을, 없으면 leftAction을 왼쪽에 표시합니다.
 export function AppHeader({ title, subtitle, onBack, leftAction, rightAction, transparent = false }) {
   return (
     <View style={[styles.header, transparent && styles.headerTransparent]}>
@@ -49,6 +59,10 @@ export function AppHeader({ title, subtitle, onBack, leftAction, rightAction, tr
   );
 }
 
+/**
+ * 공통 버튼입니다.
+ * variant: primary/secondary/soft 등 스타일 종류, size: 크기, loading=true면 스피너를 보여 주고 누를 수 없게 합니다.
+ */
 export function Button({ children, label, icon, variant = 'primary', size: buttonSize = 'md', loading = false, disabled = false, style, textStyle, ...props }) {
   const isDisabled = disabled || loading;
   return (
@@ -77,6 +91,7 @@ export function Button({ children, label, icon, variant = 'primary', size: butto
   );
 }
 
+// 아이콘만 있는 버튼. 글자가 없으므로 스크린 리더용 label을 반드시 넘겨야 합니다. badge로 숫자 표시가 가능합니다.
 export function IconButton({ icon, label, selected = false, badge, style, iconColor, ...props }) {
   return (
     <Pressable
@@ -93,6 +108,7 @@ export function IconButton({ icon, label, selected = false, badge, style, iconCo
   );
 }
 
+// 카드 컨테이너. interactive=true면 눌렀을 때 반응하는 버튼형 카드가 됩니다.
 export function Card({ children, style, interactive = false, ...props }) {
   if (interactive) {
     return <Pressable style={({ pressed, focused }) => [styles.card, pressed && styles.pressed, focused && styles.focused, style]} {...props}>{children}</Pressable>;
@@ -100,10 +116,12 @@ export function Card({ children, style, interactive = false, ...props }) {
   return <View style={[styles.card, style]} {...props}>{children}</View>;
 }
 
+// 반투명(유리 느낌) 배경의 카드
 export function GlassCard({ children, style, ...props }) {
   return <View style={[styles.glassCard, style]} {...props}>{children}</View>;
 }
 
+// 작은 태그형 칩. onPress가 있으면 선택 가능한 버튼, 없으면 단순 표시용입니다.
 export function Chip({ label, icon, selected = false, onPress, tone = 'neutral', style }) {
   const content = (
     <>
@@ -126,6 +144,7 @@ export function Chip({ label, icon, selected = false, onPress, tone = 'neutral',
   return <View style={[styles.chip, styles[`chip_${tone}`], selected && styles.chipSelected, style]}>{content}</View>;
 }
 
+// 안전 상태별 표시 문구와 아이콘. "근거 부족"을 "안전"처럼 보이지 않게 상태를 구분해서 표시합니다.
 const SAFETY_META = {
   clear: { label: '확인된 충돌 없음', icon: 'shield-checkmark-outline' },
   caution: { label: '충돌 가능성 있음', icon: 'warning-outline' },
@@ -134,6 +153,7 @@ const SAFETY_META = {
   review: { label: '전문가 확인 권장', icon: 'medkit-outline' },
 };
 
+// 안전 상태 배지. 알 수 없는 status 값은 "근거 부족(unknown)"으로 표시합니다.
 export function SafetyBadge({ status = 'unknown', label }) {
   const safeStatus = SAFETY_META[status] ? status : 'unknown';
   const meta = SAFETY_META[safeStatus];
@@ -145,6 +165,7 @@ export function SafetyBadge({ status = 'unknown', label }) {
   );
 }
 
+// 출처 확인 여부 배지
 export function SourceBadge({ status = 'unknown', label }) {
   const verified = status === 'verified';
   return (
@@ -155,6 +176,7 @@ export function SourceBadge({ status = 'unknown', label }) {
   );
 }
 
+// 라벨, 오류 문구, 도움말을 포함한 텍스트 입력창. 오류가 있으면 도움말 대신 오류를 보여 줍니다.
 export function Input({ label, error, help, style, inputStyle, ...props }) {
   return (
     <View style={[styles.inputGroup, style]}>
@@ -171,6 +193,7 @@ export function Input({ label, error, help, style, inputStyle, ...props }) {
   );
 }
 
+// 검색 입력창. 입력값이 있으면 지우기 버튼을 표시합니다.
 export function SearchInput({ value, onChangeText, onClear, style, ...props }) {
   return (
     <View style={[styles.search, style]}>
@@ -181,6 +204,7 @@ export function SearchInput({ value, onChangeText, onClear, style, ...props }) {
   );
 }
 
+// 탭 선택 컴포넌트. items 중 value와 id가 같은 항목이 선택 상태입니다.
 export function Tabs({ items, value, onChange, style }) {
   return (
     <View style={[styles.tabs, style]} accessibilityRole="tablist">
@@ -202,6 +226,7 @@ export function Tabs({ items, value, onChange, style }) {
   );
 }
 
+// 공통 모달. presentation='bottom'이면 화면 아래에서 올라오는 시트 형태로 표시합니다. 배경을 누르면 닫힙니다.
 export function AppModal({ visible, onClose, title, children, footer, presentation = 'center' }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -220,6 +245,7 @@ export function AppModal({ visible, onClose, title, children, footer, presentati
   );
 }
 
+// 섹션 제목 영역(작은 윗글, 제목, 설명, 오른쪽 액션)
 export function SectionHeader({ eyebrow, title, description, action, style }) {
   return (
     <View style={[styles.sectionHeader, style]}>

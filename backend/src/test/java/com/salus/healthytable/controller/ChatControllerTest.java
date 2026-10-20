@@ -8,6 +8,7 @@ import com.salus.healthytable.repository.ChatSessionRepository;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
 import com.salus.healthytable.service.ChatRateLimitService;
 import com.salus.healthytable.service.ChatService;
+import com.salus.healthytable.service.InterruptedRequestMerger;
 import com.salus.healthytable.service.RecipeWorkSessionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -31,6 +32,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link ChatController} 테스트입니다. 입력 검증과 채팅방 소유권 확인을 중심으로 확인합니다.
+ */
 class ChatControllerTest {
 
     private final AuthenticatedUserProvider authenticatedUserProvider = mock(AuthenticatedUserProvider.class);
@@ -39,14 +43,72 @@ class ChatControllerTest {
     private final RecipeWorkSessionService recipeWorkSessionService = mock(RecipeWorkSessionService.class);
     private final ChatService chatService = mock(ChatService.class);
     private final ChatRateLimitService chatRateLimitService = mock(ChatRateLimitService.class);
+    private final InterruptedRequestMerger interruptedRequestMerger = mock(InterruptedRequestMerger.class);
     private final ChatController controller = new ChatController(
             authenticatedUserProvider,
             chatSessionRepository,
             chatMessageRepository,
             recipeWorkSessionService,
             chatService,
-            chatRateLimitService);
+            chatRateLimitService,
+            interruptedRequestMerger);
 
+    // 멈춘 질문이 있으면 새 메시지와 합친 요청으로 처리하고, 없으면 합치기를 건너뜁니다.
+    @Test
+    void chatMergesInterruptedQuestionsBeforeProcessing() {
+        when(authenticatedUserProvider.getCurrentUserId()).thenReturn(Optional.empty());
+        ChatDto.Request merged = new ChatDto.Request();
+        merged.setMessage("양파 빼고 김치찌개 레시피 알려줘");
+        when(interruptedRequestMerger.merge(any(ChatDto.Request.class))).thenReturn(Mono.just(merged));
+        when(chatService.processChat(eq(Optional.empty()), same(merged)))
+                .thenReturn(Mono.just(new ChatDto.Response("merged answer")));
+
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("양파는 빼줘");
+        request.setInterruptedMessages(List.of("김치찌개 레시피 알려줘"));
+
+        assertThat(controller.chat(request, new MockHttpServletRequest()).block().getReply()).isEqualTo("merged answer");
+    }
+
+    @Test
+    void chatWithoutInterruptedQuestionsSkipsMerge() {
+        when(authenticatedUserProvider.getCurrentUserId()).thenReturn(Optional.empty());
+        when(chatService.processChat(eq(Optional.empty()), any(ChatDto.Request.class)))
+                .thenReturn(Mono.just(new ChatDto.Response("plain answer")));
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("김치찌개 레시피 알려줘");
+
+        assertThat(controller.chat(request, new MockHttpServletRequest()).block().getReply()).isEqualTo("plain answer");
+        verifyNoInteractions(interruptedRequestMerger);
+    }
+
+    // 멈춘 뒤 "아니야"만 보내면 합치기 LLM과 채팅 처리를 거치지 않고 바로 취소 답을 줍니다.
+    @Test
+    void cancelOnlyMessageAfterInterruptionRepliesWithoutMerging() {
+        when(authenticatedUserProvider.getCurrentUserId()).thenReturn(Optional.empty());
+        when(chatService.replyToCancellation(eq(Optional.empty()), any(ChatDto.Request.class)))
+                .thenReturn(Mono.just(new ChatDto.Response("cancelled")));
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("아니야");
+        request.setInterruptedMessages(List.of("참치마요덮밥 레시피 알려줘"));
+
+        assertThat(controller.chat(request, new MockHttpServletRequest()).block().getReply()).isEqualTo("cancelled");
+        verifyNoInteractions(interruptedRequestMerger);
+    }
+
+    // 잘못된 모양의 요청 ID로는 멈추기 요청을 받지 않습니다.
+    @Test
+    void cancelRejectsMalformedRequestId() {
+        assertThatThrownBy(() -> controller.cancel("../../etc"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(controller.cancel("chat-123-unknown")).containsEntry("cancelled", false).doesNotContainKey("sessionId");
+        // 이 요청이 대화방을 만들었으면 멈출 때 그 대화방 ID를 함께 돌려줍니다(첫 답변을 멈춰도 같은 방으로 이어 쓰기).
+        com.salus.healthytable.service.ChatProgress.start("chat-with-session", "답변을 준비하고 있어요");
+        com.salus.healthytable.service.ChatProgress.attachSession("chat-with-session", 41L);
+        assertThat(controller.cancel("chat-with-session")).containsEntry("sessionId", 41L);
+    }
+
+    // 메시지가 없으면 서비스 호출 전에 거부해야 합니다.
     @Test
     void chatWithoutMessageThrowsValidationExceptionBeforeCallingService() {
         ChatDto.Request request = new ChatDto.Request();
@@ -59,6 +121,7 @@ class ChatControllerTest {
         verifyNoInteractions(authenticatedUserProvider, chatService, chatRateLimitService);
     }
 
+    // 너무 긴 메시지는 서비스 호출 전에 거부해야 합니다.
     @Test
     void chatWithTooLongMessageThrowsValidationExceptionBeforeCallingService() {
         ChatDto.Request request = new ChatDto.Request();
@@ -71,6 +134,7 @@ class ChatControllerTest {
         verifyNoInteractions(authenticatedUserProvider, chatService, chatRateLimitService);
     }
 
+    // 대화 기록이 12개를 넘으면 거부해야 합니다.
     @Test
     void chatWithTooManyHistoryMessagesThrowsValidationExceptionBeforeCallingService() {
         ChatDto.Request request = new ChatDto.Request();
@@ -86,6 +150,7 @@ class ChatControllerTest {
         verifyNoInteractions(authenticatedUserProvider, chatService, chatRateLimitService);
     }
 
+    // 대화 기록의 role이 user/model이 아니면 거부해야 합니다.
     @Test
     void chatWithInvalidHistoryRoleThrowsValidationExceptionBeforeCallingService() {
         ChatDto.Request request = new ChatDto.Request();
@@ -99,6 +164,7 @@ class ChatControllerTest {
         verifyNoInteractions(authenticatedUserProvider, chatService, chatRateLimitService);
     }
 
+    // 건강 정보 항목이 너무 길면 거부해야 합니다.
     @Test
     void chatWithTooLongHealthProfileItemThrowsValidationExceptionBeforeCallingService() {
         ChatDto.Request request = new ChatDto.Request();
@@ -117,6 +183,7 @@ class ChatControllerTest {
         verifyNoInteractions(authenticatedUserProvider, chatService, chatRateLimitService);
     }
 
+    // 메시지/기록/건강 정보 공백을 정리하고 로그인 사용자 ID를 서비스에 넘겨야 합니다.
     @Test
     void chatTrimsMessageAndPassesAuthenticatedUserToService() {
         ChatDto.Request request = new ChatDto.Request();
@@ -145,6 +212,7 @@ class ChatControllerTest {
         verify(chatService).processChat(eq(Optional.of(1L)), same(request));
     }
 
+    // 빈 음성 파일은 거부해야 합니다.
     @Test
     void speechToTextRejectsEmptyAudioFile() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -157,6 +225,7 @@ class ChatControllerTest {
         verify(authenticatedUserProvider).requireUserId();
     }
 
+    // 10MB를 넘는 음성 파일은 거부해야 합니다.
     @Test
     void speechToTextRejectsTooLargeAudioFile() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -171,6 +240,7 @@ class ChatControllerTest {
         verify(authenticatedUserProvider).requireUserId();
     }
 
+    // 오디오가 아닌 파일은 거부해야 합니다.
     @Test
     void speechToTextRejectsNonAudioFile() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -183,6 +253,7 @@ class ChatControllerTest {
         verify(authenticatedUserProvider).requireUserId();
     }
 
+    // 음성 인식은 로그인이 필요해야 합니다.
     @Test
     void speechToTextRequiresAuthenticatedUser() {
         MockMultipartFile file = new MockMultipartFile("audio", "voice.m4a", "audio/mp4", new byte[] {1, 2, 3});
@@ -198,6 +269,7 @@ class ChatControllerTest {
         verify(authenticatedUserProvider).requireUserId();
     }
 
+    // 올바른 오디오 파일은 (현재 Mock) 응답을 반환해야 합니다.
     @Test
     void speechToTextAcceptsAudioFile() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -210,6 +282,7 @@ class ChatControllerTest {
         verify(authenticatedUserProvider).requireUserId();
     }
 
+    // 다른 사용자의 채팅방 메시지 조회는 404여야 합니다.
     @Test
     void getMessagesReturnsNotFoundWhenSessionDoesNotBelongToCurrentUser() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -225,6 +298,7 @@ class ChatControllerTest {
         verifyNoInteractions(chatMessageRepository);
     }
 
+    // 현재 사용자 채팅방의 메시지만 읽어야 합니다.
     @Test
     void getMessagesReadsOnlyMessagesFromCurrentUsersSession() {
         ChatSession session = chatSession(7L, 1L, "저녁 메뉴");
@@ -246,6 +320,7 @@ class ChatControllerTest {
         verify(chatSessionRepository).findByIdAndUserId(7L, 1L);
     }
 
+    // 빈 제목은 DB 조회 전에 거부해야 합니다.
     @Test
     void updateSessionTitleRejectsBlankTitleBeforeRepositoryLookup() {
         ChatDto.SessionUpdateRequest request = new ChatDto.SessionUpdateRequest("   ");
@@ -258,6 +333,7 @@ class ChatControllerTest {
         verifyNoInteractions(chatSessionRepository);
     }
 
+    // 제목 공백을 정리해 현재 사용자 채팅방에만 저장해야 합니다.
     @Test
     void updateSessionTitleNormalizesAndSavesOnlyCurrentUsersSession() {
         ChatSession session = chatSession(7L, 1L, "기존 제목");
@@ -276,6 +352,7 @@ class ChatControllerTest {
         verify(chatSessionRepository).save(session);
     }
 
+    // 다른 사용자의 채팅방 삭제는 404여야 합니다.
     @Test
     void deleteSessionReturnsNotFoundWhenSessionDoesNotBelongToCurrentUser() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -291,6 +368,7 @@ class ChatControllerTest {
         verifyNoInteractions(recipeWorkSessionService, chatMessageRepository);
     }
 
+    // 채팅방 삭제 시 작업 세션과 메시지도 함께 지워야 합니다.
     @Test
     void deleteSessionClearsWorkSessionAndMessagesForCurrentUsersSession() {
         ChatSession session = chatSession(7L, 1L, "삭제할 대화");

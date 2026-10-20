@@ -18,6 +18,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link CommunityService} 테스트입니다.
+ */
 class CommunityServiceTest {
 
     private final RecipeShareRepository recipeShareRepository = mock(RecipeShareRepository.class);
@@ -30,6 +33,7 @@ class CommunityServiceTest {
             userRepository,
             clock);
 
+    // 레시피 공유 시 입력값이 그대로 저장되고, 생성 시각은 주입한 Clock 기준이어야 합니다.
     @Test
     void shareRecipeUsesConfiguredClockForCreatedAt() {
         when(recipeShareRepository.save(any(RecipeShare.class))).thenAnswer(invocation -> invocation.getArgument(0));

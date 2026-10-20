@@ -15,6 +15,12 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 커뮤니티 API(/api/community)입니다.
+ * 레시피 공유 피드, 개인화 추천, 게시글 CRUD, 좋아요, 댓글 기능을 제공합니다.
+ *
+ * 조회(GET)는 대부분 로그인 없이 가능하지만, 로그인한 경우 "내가 좋아요를 눌렀는지" 같은 정보가 함께 채워집니다.
+ */
 @RestController
 @RequestMapping("/api/community")
 @RequiredArgsConstructor
@@ -33,12 +39,18 @@ public class CommunityController {
     private final RecommendationService recommendationService;
     private final AuthenticatedUserProvider authenticatedUserProvider;
 
-    // ========== 기존 레시피 공유 기능 ==========
+    // ========== 레시피 공유 기능 ==========
+    /**
+     * 공개(PUBLIC)로 공유된 레시피 피드를 조회합니다.
+     */
     @GetMapping("/feed")
     public List<CommunityFeedItemDTO> getPublicFeed() {
         return communityService.getPublicFeed();
     }
 
+    /**
+     * 레시피를 공유합니다. 공개 범위를 보내지 않으면 PUBLIC으로 저장합니다.
+     */
     @PostMapping("/share")
     public ResponseEntity<?> shareRecipe(@Valid @RequestBody RecipeShareRequestDTO request) {
         Long userId = authenticatedUserProvider.requireUserId();
@@ -54,6 +66,9 @@ public class CommunityController {
         return ResponseEntity.ok("레시피가 공유되었습니다.");
     }
 
+    /**
+     * 로그인 사용자에게 맞춘 추천 레시피 목록을 조회합니다.
+     */
     @GetMapping("/recommendations")
     public ResponseEntity<List<RecommendationDTO>> getRecommendations() {
         Long userId = authenticatedUserProvider.requireUserId();
@@ -78,6 +93,7 @@ public class CommunityController {
      */
     @GetMapping("/posts/popular")
     public ResponseEntity<List<CommunityPostDTO>> getPopularPosts(
+            // limit: 가져올 개수(1~50), timeframe: daily/weekly/monthly/all 중 하나(생략 시 전체 기간)
             @RequestParam(defaultValue = "10") int limit,
             @RequestParam(required = false) String timeframe) {
         Long currentUserId = authenticatedUserProvider.getCurrentUserId().orElse(null);
@@ -216,6 +232,7 @@ public class CommunityController {
         return ResponseEntity.ok("댓글이 삭제되었습니다.");
     }
 
+    // 앞뒤 공백을 제거한 뒤 비어 있거나 최대 길이를 넘으면 400 오류를 냅니다.
     private String normalizeRequired(String value, String message, int maxLength, String lengthMessage) {
         // Map이나 @RequestParam으로 받는 값은 DTO처럼 Bean Validation 대상이 아닙니다.
         // 그래서 댓글 수정, 검색어처럼 DTO가 없는 입력은 이 작은 수동 검증으로 같은 정책을 맞춥니다.
@@ -229,6 +246,7 @@ public class CommunityController {
         return normalized;
     }
 
+    // 선택 입력용: 비어 있으면 null을 반환하고, 최대 길이를 넘으면 400 오류를 냅니다.
     private String normalizeOptional(String value, int maxLength, String lengthMessage) {
         if (value == null || value.isBlank()) {
             return null;
@@ -240,6 +258,7 @@ public class CommunityController {
         return normalized;
     }
 
+    // 공개 범위를 대문자로 정규화하고 PUBLIC/PRIVATE만 허용합니다(비어 있으면 PUBLIC).
     private String normalizeVisibility(String visibility) {
         if (visibility == null || visibility.isBlank()) {
             return "PUBLIC";
@@ -251,6 +270,7 @@ public class CommunityController {
         return normalized;
     }
 
+    // 인기 게시글 조회 개수가 1~50 범위인지 확인합니다.
     private int normalizeLimit(int limit) {
         if (limit < 1 || limit > MAX_POPULAR_POST_LIMIT) {
             throw new IllegalArgumentException("조회 개수는 1부터 50 사이로 입력해 주세요.");
@@ -258,6 +278,7 @@ public class CommunityController {
         return limit;
     }
 
+    // 조회 기간을 소문자로 정규화합니다. "all"이나 빈 값은 기간 제한 없음(null)으로 처리합니다.
     private String normalizeTimeframe(String timeframe) {
         if (timeframe == null || timeframe.isBlank()) {
             return null;

@@ -7,6 +7,9 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import java.time.LocalDateTime;
 
+/**
+ * 사용자가 레시피를 공유한 기록 엔티티입니다(recipe_shares 테이블).
+ */
 @Entity
 @Table(name = "recipe_shares")
 @Data

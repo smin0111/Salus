@@ -17,8 +17,39 @@ import java.time.ZoneId;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+/**
+ * {@link RecipeWorkSessionService} 테스트입니다. Redis가 없는 상황(메모리 대체 저장소)을 중심으로 확인합니다.
+ */
 class RecipeWorkSessionServiceTest {
 
+    // 일반 추천으로 바뀌면 이전 승인 레시피의 ID/버전/인분/맵기 값이 지워져야 합니다.
+    @Test
+    void genericRecommendationClearsPreviousApprovedRecipeIdentity() {
+        RecipeWorkSessionService service = new RecipeWorkSessionService(
+                mock(StringRedisTemplate.class),
+                new ObjectMapper().findAndRegisterModules());
+
+        service.saveApprovedRecommendation(
+                1L,
+                9L,
+                "승인 레시피",
+                101L,
+                1,
+                2,
+                ApprovedRecipeService.SpiceLevel.NORMAL);
+        RecipeWorkSessionDTO approved = service.find(1L, 9L).orElseThrow();
+        assertThat(approved.getRecipeId()).isEqualTo(101L);
+
+        service.saveRecommendation(1L, 9L, "새 일반 추천");
+        RecipeWorkSessionDTO replaced = service.find(1L, 9L).orElseThrow();
+        assertThat(replaced.getLastRecommendation()).isEqualTo("새 일반 추천");
+        assertThat(replaced.getRecipeId()).isNull();
+        assertThat(replaced.getRecipeVersion()).isNull();
+        assertThat(replaced.getServings()).isNull();
+        assertThat(replaced.getSpiceLevel()).isNull();
+    }
+
+    // 메모리 저장소는 중첩된 Agent 세션 목록까지 깊은 복사해, 반환 객체를 수정해도 저장값이 바뀌지 않아야 합니다.
     @Test
     void fallbackStoreDeepCopiesNestedAgentSessionCollections() {
         RecipeWorkSessionService service = new RecipeWorkSessionService(
@@ -41,6 +72,7 @@ class RecipeWorkSessionServiceTest {
         assertThat(storedIngredients).containsExactly("두부 1모", "양파 1개");
     }
 
+    // 만료된 세션은 건강 정보 스냅샷을 포함해 조회되지 않아야 합니다.
     @Test
     void expiredFallbackSessionRemovesHealthSnapshotAndConversationOverlay() {
         MutableClock clock = new MutableClock(Instant.parse("2026-07-21T00:00:00Z"), ZoneId.of("Asia/Seoul"));

@@ -19,12 +19,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link MealLogService} 테스트입니다.
+ */
 class MealLogServiceTest {
 
     private final MealLogRepository mealLogRepository = mock(MealLogRepository.class);
     private final GeminiService geminiService = mock(GeminiService.class);
     private final MealLogService service = new MealLogService(mealLogRepository, geminiService);
 
+    // 새 식단 기록을 현재 사용자로 만들고 입력값을 정리해 저장해야 합니다.
     @Test
     void saveOrUpdateMealLogCreatesCurrentUsersMealLogWithNormalizedValues() {
         User user = user(1L);
@@ -52,6 +56,7 @@ class MealLogServiceTest {
         assertThat(saved.getDailyStats()).isEqualTo("{\"totalCalories\":320}");
     }
 
+    // 기존 기록의 상세 정보 JSON에 새 끼니 정보를 덮어쓰지 않고 합쳐야 합니다.
     @Test
     void saveOrUpdateMealLogMergesMealDetailsIntoExistingLog() {
         User user = user(1L);
@@ -76,6 +81,7 @@ class MealLogServiceTest {
         assertThat(saved.getDinner()).isEqualTo("채소 덮밥");
     }
 
+    // 기록 날짜는 필수여야 합니다.
     @Test
     void saveOrUpdateMealLogRequiresRecordDate() {
         MealLogDTO dto = new MealLogDTO();
@@ -88,6 +94,7 @@ class MealLogServiceTest {
         verifyNoInteractions(mealLogRepository);
     }
 
+    // 빈 메뉴 이름은 거부해야 합니다.
     @Test
     void saveOrUpdateMealLogRejectsBlankMealName() {
         MealLogDTO dto = new MealLogDTO();
@@ -101,6 +108,7 @@ class MealLogServiceTest {
         verifyNoInteractions(mealLogRepository);
     }
 
+    // 허용 범위를 벗어난 열량은 거부해야 합니다.
     @Test
     void saveOrUpdateMealLogRejectsInvalidCalories() {
         MealLogDTO dto = new MealLogDTO();
@@ -115,6 +123,7 @@ class MealLogServiceTest {
         verifyNoInteractions(mealLogRepository);
     }
 
+    // 잘못된 JSON 필드는 거부해야 합니다.
     @Test
     void saveOrUpdateMealLogRejectsInvalidJson() {
         MealLogDTO dto = new MealLogDTO();
@@ -129,6 +138,7 @@ class MealLogServiceTest {
         verifyNoInteractions(mealLogRepository);
     }
 
+    // 잘못된 월(13월)은 DB 조회 전에 거부해야 합니다.
     @Test
     void getMonthlyAnalysisRejectsInvalidMonthBeforeRepositoryLookup() {
         assertThatThrownBy(() -> service.getMonthlyAnalysis(user(1L), 2026, 13))
@@ -138,6 +148,7 @@ class MealLogServiceTest {
         verifyNoInteractions(mealLogRepository, geminiService);
     }
 
+    // 월간 분석은 현재 사용자와 해당 월의 1일~말일 범위로 조회해야 합니다.
     @Test
     void getMonthlyAnalysisUsesCurrentUserAndRequestedMonthRange() {
         User user = user(1L);

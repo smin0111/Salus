@@ -20,6 +20,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * 커뮤니티 댓글 조회/작성/수정/삭제 서비스입니다.
+ * 수정과 삭제는 작성자 본인만 할 수 있습니다.
+ */
 @Service
 @RequiredArgsConstructor
 public class PostCommentService {
@@ -39,7 +43,7 @@ public class PostCommentService {
             return Collections.emptyList();
         }
 
-        // 사용자 정보 일괄 조회
+        // 댓글 작성자 정보를 한 번의 쿼리로 모아 조회합니다(댓글마다 조회하는 N+1 문제 방지).
         List<Long> userIds = comments.stream()
                 .map(PostComment::getUserId)
                 .distinct()

@@ -21,6 +21,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link RecipeEvidenceService} 테스트입니다. negative cache(근거 없음 캐시) 저장 규칙을 확인합니다.
+ */
 class RecipeEvidenceServiceTest {
 
     private SearchCacheRepository searchCacheRepository;
@@ -48,6 +51,7 @@ class RecipeEvidenceServiceTest {
                 "official")));
     }
 
+    // 검색 결과가 비어 있으면 "근거 없음" 캐시를 저장해야 합니다.
     @Test
     void emptySearchWritesNegativeCache() {
         when(searchEngine.search("미등록요리")).thenReturn(Mono.just(response(
@@ -63,6 +67,7 @@ class RecipeEvidenceServiceTest {
         verify(searchCacheRepository).save(any(SearchCache.class));
     }
 
+    // 검색 호출이 실패한 경우는 일시 장애일 수 있으므로 FAILED로 유지하고 캐시를 남기지 않아야 합니다.
     @Test
     void failedSearchRemainsFailedAndDoesNotPoisonNegativeCache() {
         when(searchEngine.search("미등록요리")).thenReturn(Mono.just(response(

@@ -10,10 +10,14 @@ import org.springframework.security.authentication.BadCredentialsException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * {@link ApiSecurityErrorHandler} 테스트입니다. 인증/인가 실패가 표준 JSON 오류로 내려가는지 확인합니다.
+ */
 class ApiSecurityErrorHandlerTest {
 
     private final ApiSecurityErrorHandler handler = new ApiSecurityErrorHandler(new ObjectMapper());
 
+    // 인증 실패는 401 JSON 응답이어야 합니다.
     @Test
     void authenticationFailureReturnsJson401() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/users/me");
@@ -33,6 +37,7 @@ class ApiSecurityErrorHandlerTest {
                 .contains("\"path\":\"/api/users/me\"");
     }
 
+    // 권한 부족은 403 JSON 응답이며 requestId를 포함해야 합니다.
     @Test
     void accessDeniedReturnsJson403() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/admin/stats");

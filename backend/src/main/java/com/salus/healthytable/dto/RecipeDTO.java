@@ -7,6 +7,9 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * 레시피 조회 API의 응답 DTO입니다.
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -18,7 +21,10 @@ public class RecipeDTO {
     private String description;
     private List<String> ingredients;
     private List<String> steps;
+    private Integer servings;
+    /** @deprecated 호환용 필드. 새 클라이언트는 caloriesPerServing을 사용합니다. */
     private Integer calories;
+    private Integer caloriesPerServing;
     private Integer difficulty;
     private Integer cookingTime;
     private Double averageRating;

@@ -1,5 +1,11 @@
 import { Platform } from 'react-native';
 
+/**
+ * 디자인 토큰 모음입니다(주로 랜딩 페이지와 공통 컴포넌트에서 사용).
+ * - palette: 실제 색상 값(원재료)
+ * - color: 용도별 이름(brand, text, border 등)으로 palette 값을 연결한 것
+ * - typography/spacing/radius/size/motion/breakpoint 등: 글자, 여백, 크기, 애니메이션, 반응형 기준값
+ */
 export const palette = {
   forest950: '#17231D',
   forest900: '#203229',
@@ -30,6 +36,7 @@ export const palette = {
   blue100: '#E3EEF0',
 };
 
+// 용도별 색상. 화면 코드는 palette 대신 이 이름을 사용합니다.
 export const color = {
   canvas: palette.cream,
   canvasMuted: '#EEE8DC',
@@ -55,6 +62,7 @@ export const color = {
   info: palette.blue700,
   overlay: 'rgba(16, 37, 28, 0.46)',
   glass: 'rgba(255, 255, 255, 0.78)',
+  // 안전 판정 상태 표시용 색(안전/주의/알 수 없음/부분 확인/검토 필요)
   safety: {
     clear: palette.leaf600,
     clearBg: palette.leaf50,
@@ -82,6 +90,7 @@ export const typography = {
   caption: { fontSize: 12, lineHeight: 17, fontWeight: '600' },
 };
 
+// 여백 단계(px)
 export const spacing = {
   none: 0,
   xxs: 4,
@@ -98,6 +107,7 @@ export const spacing = {
 
 export const radius = { sm: 8, md: 12, lg: 16, xl: 20, xxl: 28, pill: 999 };
 export const border = { hairline: 1, strong: 2 };
+// 터치 영역(최소 44px), 헤더/사이드바/본문 최대 너비 등 고정 크기
 export const size = {
   touch: 44,
   iconButton: 44,
@@ -108,6 +118,7 @@ export const size = {
   content: 920,
   contentWide: 1180,
 };
+// 애니메이션 지속 시간(ms)과 가속 곡선
 export const motion = {
   duration: { instant: 80, fast: 120, base: 180, slow: 260, cinematic: 620 },
   easing: {
@@ -116,10 +127,12 @@ export const motion = {
     exit: 'cubic-bezier(0.4, 0, 1, 1)',
   },
 };
+// 반응형 기준 너비(px): 태블릿 768 이상, 데스크톱 1024 이상, 와이드 1440 이상
 export const breakpoint = { mobile: 0, tablet: 768, desktop: 1024, wide: 1440 };
 export const zIndex = { base: 0, header: 10, navigation: 20, modal: 100, toast: 120 };
 export const opacity = { disabled: 0.42, muted: 0.68, scrim: 0.46, glass: 0.78 };
 
+// 그림자. 웹은 CSS boxShadow, 앱은 React Native 그림자 속성으로 플랫폼별로 다르게 지정합니다.
 export const shadow = {
   soft: Platform.select({
     web: { boxShadow: '0 6px 24px rgba(24, 49, 36, 0.07)' },

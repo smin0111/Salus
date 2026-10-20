@@ -13,6 +13,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * 관리자 API(/api/admin/**)에 허용된 IP에서만 접근할 수 있게 하는 선택적 필터입니다.
+ *
+ * app.admin.ip-whitelist.enabled=true일 때만 동작합니다.
+ * 이 필터는 추가 방어선일 뿐이며, 실제 관리자 권한 검사는 SecurityConfig의 hasRole("ADMIN")이 담당합니다.
+ */
 @Component
 public class IpWhitelistFilter extends OncePerRequestFilter {
 

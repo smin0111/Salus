@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card, IconButton } from '../common';
 import { color, radius, size, spacing, typography } from '../../theme/tokens';
 
+// 섹션 톤별 글자색과 배경색(알레르기는 경고색 등)
 const TONES = {
   critical: { foreground: color.error, background: color.safety.reviewBg },
   caution: { foreground: color.warning, background: color.safety.cautionBg },
@@ -12,6 +13,11 @@ const TONES = {
   accent: { foreground: color.accent, background: color.accentSoft },
 };
 
+/**
+ * 건강 프로필 섹션 하나(예: 알레르기)를 보여 주는 카드입니다.
+ * editing=true면 항목 삭제 버튼과 새 항목 입력창을 표시합니다.
+ * onAdd(value)가 true를 반환하면(추가 성공) 입력창을 비웁니다.
+ */
 export default function HealthProfileCard({ section, items, editing, onAdd, onRemove }) {
   const [value, setValue] = useState('');
   const tone = TONES[section.tone] || TONES.positive;

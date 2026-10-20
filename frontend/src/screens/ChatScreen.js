@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Modal, Alert, Switch, Animated, Dimensions } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Modal, Alert, Switch, Animated, Dimensions, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import * as Speech from 'expo-speech'; // 음성 읽기 기능
@@ -9,8 +9,14 @@ import { useAuth } from '../context/AuthContext';
 import { debugLog } from '../utils/logger';
 import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
+/*
+ * AI 셰프 채팅 화면입니다.
+ * 사용자가 메시지를 보내면 백엔드(POST /api/chat/message)가 건강 프로필을 반영해 답변하고,
+ * 레시피가 포함되면 레시피 카드로 보여 줍니다. 로그인 사용자는 대화 세션 관리, 음성 읽기(TTS), 식단 저장을 쓸 수 있습니다.
+ */
 // 백엔드가 구조화된 recipe를 주지 못한 경우를 대비해 텍스트 레시피도 화면용으로 정리합니다.
 // AI 응답 원문을 그대로 보여주면 Markdown 기호가 말풍선에 섞여 가독성이 떨어질 수 있습니다.
+// 굵게(**), 제목(###), 목록(* ), 코드(`) 같은 Markdown 기호를 지우거나 "•"로 바꿉니다.
 const cleanAiResponse = (text) => {
     return text
         .replace(/\*\*/g, '')
@@ -23,21 +29,28 @@ const cleanAiResponse = (text) => {
 const parseRecipeFromText = (text) => {
     // 구조화된 RecipeCard가 없을 때만 fallback으로 텍스트를 파싱합니다.
     // 프론트 파서는 보조 수단이고, 안전 검증과 레시피 신뢰 판단은 백엔드에서 끝내는 것이 원칙입니다.
-    if (!text || !text.includes('[재료]') || !text.includes('[조리 순서]')) {
+    // "[재료]" 또는 "[재료 - 2인분]" 헤더와 "[조리 순서]" 헤더가 모두 있어야 레시피 텍스트로 봅니다.
+    const ingredientHeader = text?.match(/\[재료(?:\s*-\s*\d+인분)?\]/)?.[0];
+    if (!text || !ingredientHeader || !text.includes('[조리 순서]')) {
         return null;
     }
 
-    const title = (text.split('\n').find(line => line.trim()) || '')
+    // Recipe Agent 답변은 "[원본 레시피 기준]" 같은 구역 제목으로 시작하므로, 구역 제목 줄은 제목으로 쓰지 않고
+    // "- 요리명: ..." 줄을 우선합니다. 이 형식에는 설명 문단이 없어 "그대로 추천" 같은 판단 문구를 설명으로 쓰지 않습니다.
+    const isAgentReply = text.includes('[원본 레시피 기준]');
+    const dishNameLine = text.match(/^-\s*요리명:\s*(.+)$/m)?.[1];
+    const title = (dishNameLine || text.split('\n').find(line => line.trim() && !line.trim().startsWith('[')) || '')
+        .replace(/\s+\d+인분\s+레시피입니다\.$/, '')
         .replace(' 레시피입니다.', '')
         .trim();
-    const description = text
+    const description = isAgentReply ? null : text
         .split('\n')
         .map(line => line.trim())
         .filter(Boolean)
         .find(line => !line.includes('레시피입니다.') && !line.includes('조리 시간:') && !line.startsWith('[') && !line.startsWith('- ') && !/^\d+\./.test(line));
-    const summaryLine = text.split('\n').find(line => line.includes('조리 시간:') || line.includes('열량:') || line.includes('난이도:')) || '';
-    const ingredientsBlock = text.split('[재료]')[1]?.split('[조리 순서]')[0] || '';
-    const stepsBlock = text.split('[조리 순서]')[1]?.split('위 내용은')[0] || '';
+    const ingredientsBlock = text.split(ingredientHeader)[1]?.split('[조리 순서]')[0] || '';
+    // 조리 순서 다음 구역("[검증 출처]" 등)이나 안내 문구가 나오면 거기서 끊습니다. 출처 줄이 단계로 보이던 문제를 막습니다.
+    const stepsBlock = (text.split('[조리 순서]')[1]?.split('위 내용은')[0] || '').split(/\n\s*\[/)[0];
     const safetyBlock = text.includes('[건강 주의]')
         ? text.split('[건강 주의]')[1]?.split('[재료]')[0] || ''
         : '';
@@ -55,9 +68,12 @@ const parseRecipeFromText = (text) => {
         .map(line => line.replace(/^- /, '').trim())
         .filter(Boolean);
 
-    const calories = summaryLine.match(/열량:\s*(\d+)/)?.[1];
-    const cookingTime = summaryLine.match(/조리 시간:\s*(\d+)/)?.[1];
-    const difficulty = summaryLine.match(/난이도:\s*(\d+)/)?.[1];
+    // 본문에서 인분/열량/조리 시간/난이도 숫자를 정규식으로 찾습니다. 못 찾으면 null로 둡니다(추측하지 않음).
+    const servings = text.match(/(?:^|\s|\[재료\s*-\s*|인분:\s*)(\d+)인분/)?.[1];
+    const calories = text.match(/열량:\s*(?:1인분당\s*약\s*)?(\d+)/)?.[1];
+    const cookingTime = text.match(/조리 시간:\s*(?:약\s*)?(\d+)/)?.[1];
+    const difficulty = text.match(/난이도:\s*(\d+)/)?.[1];
+    const isPerServingCalories = /열량:\s*1인분당/.test(text);
 
     return {
         title,
@@ -65,12 +81,15 @@ const parseRecipeFromText = (text) => {
         ingredients,
         steps,
         safetyNotes,
+        servings: servings ? Number(servings) : null,
         calories: calories ? Number(calories) : null,
+        caloriesPerServing: calories && isPerServingCalories ? Number(calories) : null,
         cookingTime: cookingTime ? Number(cookingTime) : null,
         difficulty: difficulty ? Number(difficulty) : null,
     };
 };
 
+// 배열의 문자열 앞뒤 공백을 지우고 빈 값은 제거합니다. 배열이 아니면 빈 배열을 반환합니다.
 const compactStringList = (values) => {
     if (!Array.isArray(values)) return [];
     return values
@@ -78,6 +97,7 @@ const compactStringList = (values) => {
         .filter(Boolean);
 };
 
+// 서버로 보낼 건강 프로필(알레르기, 질환, 식단 제한, 복용약, 목표)을 정리합니다.
 const buildHealthProfilePayload = (profile = {}) => ({
     allergies: compactStringList(profile.allergies),
     chronicConditions: compactStringList(profile.chronicConditions),
@@ -86,12 +106,14 @@ const buildHealthProfilePayload = (profile = {}) => ({
     goals: compactStringList(profile.goals),
 });
 
+// 새 대화를 시작할 때 보여 주는 첫 인사 메시지
 const initialGreeting = {
     id: 1,
     text: '안녕하세요! 건강한 식탁을 위한 Salus입니다.\n알레르기나 건강 정보를 알려주시면 더 안전한 레시피를 추천해드려요.',
     sender: 'ai'
 };
 
+// AI 답변을 20ms마다 한 글자씩 보여 주는 타자기 효과. 다 보여 주면 onComplete를 호출합니다.
 const Typewriter = ({ text, onComplete }) => {
     const [displayedText, setDisplayedText] = useState('');
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -111,12 +133,18 @@ const Typewriter = ({ text, onComplete }) => {
     return <Text style={[styles.messageText, styles.aiText]} selectable={true}>{displayedText}</Text>;
 };
 
+// 레시피 답변을 카드 형태(제목, 요약 정보, 건강 주의, 재료, 조리 순서)로 보여 주는 컴포넌트
 const RecipeMessageCard = ({ recipe }) => {
     if (!recipe) return null;
 
+    // 열량은 "1인분 기준"이 확인된 값만 1인분 칼로리로 표시하고, 기준을 모르면 "기준 미확인"을 붙입니다.
+    const servings = recipe.servings || recipe.baseServings || null;
+    const caloriesPerServing = recipe.caloriesPerServing ?? null;
     const metaItems = [
         recipe.cookingTime ? `${recipe.cookingTime}분` : null,
-        recipe.calories ? `${recipe.calories}kcal` : null,
+        servings ? `${servings}인분` : null,
+        caloriesPerServing ? `1인분 약 ${caloriesPerServing}kcal` : null,
+        !caloriesPerServing && recipe.calories ? `열량 약 ${recipe.calories}kcal · 기준 미확인` : null,
         recipe.difficulty ? `난이도 ${recipe.difficulty}` : null,
     ].filter(Boolean);
 
@@ -136,6 +164,19 @@ const RecipeMessageCard = ({ recipe }) => {
                         <View key={item} style={styles.recipeMetaChip}>
                             <Text style={styles.recipeMetaText}>{item}</Text>
                         </View>
+                    ))}
+                </View>
+            )}
+
+            {/* 건강 주의가 아닌 안내("다른 출처를 찾지 못해 이전 레시피를 다시 보여 드려요" 등) */}
+            {recipe.notices?.length > 0 && (
+                <View style={styles.recipeNoticeBox}>
+                    <View style={styles.recipeSectionTitleRow}>
+                        <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
+                        <Text style={styles.recipeNoticeTitle}>안내</Text>
+                    </View>
+                    {recipe.notices.map((note, index) => (
+                        <Text key={`${note}-${index}`} style={styles.recipeSafetyText}>- {note}</Text>
                     ))}
                 </View>
             )}
@@ -166,24 +207,98 @@ const RecipeMessageCard = ({ recipe }) => {
             {recipe.steps?.length > 0 && (
                 <View style={styles.recipeSection}>
                     <Text style={styles.recipeSectionTitle}>조리 순서</Text>
-                    {recipe.steps.map((step, index) => (
-                        <View key={`${index}-${step}`} style={styles.recipeStepRow}>
-                            <Text style={styles.recipeStepNumber}>{index + 1}</Text>
-                            <Text style={styles.recipeStepText}>{step}</Text>
-                        </View>
+                    {recipe.steps.map((step, index) => {
+                        const { text, heat, time, doneness } = splitStepAnnotation(step);
+                        const tip = recipe.stepTips?.[index];
+                        return (
+                            <View key={`${index}-${step}`} style={styles.recipeStepRow}>
+                                <Text style={styles.recipeStepNumber}>{index + 1}</Text>
+                                <View style={styles.recipeStepBody}>
+                                    <Text style={styles.recipeStepText}>{text}</Text>
+                                    {(heat || time) && (
+                                        <Text style={styles.recipeStepMeta}>
+                                            {[heat && `불: ${heat}`, time && `시간: ${time}`].filter(Boolean).join(' · ')}
+                                        </Text>
+                                    )}
+                                    {!!doneness && <Text style={styles.recipeStepMeta}>완료 기준: {doneness}</Text>}
+                                    {!!tip && <Text style={styles.recipeStepTip}>초보 팁: {tip}</Text>}
+                                </View>
+                            </View>
+                        );
+                    })}
+                </View>
+            )}
+
+            {/* 이 레시피를 만들 때 참고한 출처. 누르면 원문이 열립니다. */}
+            {recipe.sources?.length > 0 && (
+                <View style={styles.recipeSection}>
+                    <Text style={styles.recipeSectionTitle}>참고한 출처</Text>
+                    {recipe.sources.map((source, index) => (
+                        <TouchableOpacity
+                            key={`${source.url || source.title}-${index}`}
+                            disabled={!source.url}
+                            onPress={() => source.url && Linking.openURL(source.url).catch(() => {})}
+                            style={styles.recipeSourceRow}
+                        >
+                            <Ionicons name={source.url ? 'link-outline' : 'document-text-outline'} size={14} color={colors.primary} />
+                            <View style={styles.recipeSourceTextGroup}>
+                                <Text style={[styles.recipeSourceTitle, source.url && styles.recipeSourceLink]} numberOfLines={2}>
+                                    {source.title || source.url}
+                                </Text>
+                                <Text style={styles.recipeSourceBadge}>
+                                    {[source.primary ? '이 레시피의 출처' : (recipe.sources.some(item => item.primary) ? '비교한 출처' : null),
+                                        source.reviewed ? '검토된 출처' : '웹 출처 · 검토 전'].filter(Boolean).join(' · ')}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
                     ))}
+                    {recipe.sources.some(source => !source.reviewed) && (
+                        <Text style={styles.recipeSourceNote}>
+                            웹 출처는 사람이 검토하지 않은 근거입니다. 자세한 내용과 사진은 원문에서 확인해 주세요.
+                        </Text>
+                    )}
                 </View>
             )}
         </View>
     );
 };
 
+// 승인 레시피 단계 끝의 "[불: 중불 / 시간: 18분 / 완료 기준: …]"을 본문과 나눠 따로 보여 줍니다.
+// 형식이 다르면 문장을 그대로 둡니다.
+const STEP_ANNOTATION = /^(.*?)\s*\[불:\s*([^/\]]*?)\s*\/\s*시간:\s*([^/\]]*?)\s*\/\s*완료 기준:\s*([^\]]*?)\s*\]\s*$/;
+const splitStepAnnotation = (step) => {
+    const match = typeof step === 'string' ? step.match(STEP_ANNOTATION) : null;
+    if (!match) {
+        return { text: step };
+    }
+    return { text: match[1], heat: match[2], time: match[3], doneness: match[4] };
+};
+
+// 레시피 카드를 보여 주기 직전에 잠깐 표시하는 "정리 중" 안내
 const RecipePreparing = () => (
     <View style={styles.recipePreparingBox}>
         <ActivityIndicator size="small" color={colors.primary} />
         <Text style={styles.recipePreparingText}>레시피를 보기 좋게 정리하고 있어요...</Text>
     </View>
 );
+
+/**
+ * 메시지 말풍선 하나입니다. 처음 나타날 때 서서히 보이며 살짝 커지는 애니메이션을 줍니다.
+ * AI 답변이면 레시피 카드/타자기 효과/일반 텍스트 중 하나로 보여 주고, 복사·음성 읽기·식단 추가 버튼을 붙입니다.
+ */
+// 마지막 AI 답 뒤에 있는 멈춘 사용자 질문들의 문장입니다(오래된 순). 방금 멈춘 질문(justInterruptedId)은
+// 상태 반영 전이라 따로 받습니다.
+const pendingInterruptedTexts = (messages, justInterruptedId) => {
+    const pending = [];
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+        const message = messages[i];
+        if (message.sender !== 'user') break;
+        if (message.interrupted || message.id === justInterruptedId) {
+            pending.unshift(message.text);
+        }
+    }
+    return pending;
+};
 
 const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, openPlanModal, handleStreamingComplete, copiedMessageId, setCopiedMessageId }) => {
     const scaleAnim = useRef(new Animated.Value(0.95)).current;
@@ -206,6 +321,7 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
         ]).start();
     }, []);
 
+    // 웹 마우스 hover 애니메이션. 현재는 들어올 때/나갈 때 모두 크기 1로 설정되어 있어 눈에 보이는 변화는 없습니다.
     const handleMouseEnter = () => {
         if (Platform.OS === 'web') {
             Animated.spring(isHovered, {
@@ -226,6 +342,7 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
         }
     };
 
+    // 서버가 준 구조화 레시피를 우선 사용하고, 없으면 텍스트에서 파싱을 시도합니다.
     const recipe = item.sender === 'ai' && !item.isPreparingRecipe ? (item.recipe || parseRecipeFromText(item.text)) : null;
     const isAiRecipeLayout = item.sender === 'ai' && (recipe || item.isPreparingRecipe);
 
@@ -266,6 +383,9 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
                     >
                         {item.text}
                     </Text>
+                )}
+                {item.sender === 'user' && item.interrupted && (
+                    <Text style={styles.interruptedLabel}>멈춤 · 다음 메시지와 함께 답해요</Text>
                 )}
 
                 {/* AI 답변에는 복사, 음성 읽기, 식단 추가처럼 후속 행동을 붙입니다. */}
@@ -333,6 +453,10 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
     );
 };
 
+/**
+ * 채팅 화면 본체입니다.
+ * messages/healthProfile은 부모(AppNavigator)가 가진 상태이며, 식단 저장 결과는 setMealData로 캘린더 상태에 반영합니다.
+ */
 export default function ChatScreen({ messages, setMessages, healthProfile, setMealData, isSidebarOpen, onToggleSidebar, onLoginPress, webMode = false }) {
     const { isLoggedIn, user, token } = useAuth();
     const [inputText, setInputText] = useState('');
@@ -345,15 +469,27 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     }, [inputText]);
 
     const [loading, setLoading] = useState(false);
-    const [useFridge, setUseFridge] = useState(true); // 기본값 ON
+    // 답변 진행 단계("웹에서 레시피를 검색하고 있어요" 등)와 경과 시간(초). 서버가 알려 주는 실제 단계를 보여 줍니다.
+    const [progressStage, setProgressStage] = useState(null);
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
+    const progressTimerRef = useRef(null);
     const [chatSessionId, setChatSessionId] = useState(null);
     const [chatSessions, setChatSessions] = useState([]);
     const [renameModalVisible, setRenameModalVisible] = useState(false);
     const [editingSession, setEditingSession] = useState(null);
     const [editingSessionTitle, setEditingSessionTitle] = useState('');
+    // authEpochRef: 로그인 사용자가 바뀔 때마다 증가하는 번호
+    // requestSeqRef: 메시지 전송/새 대화/세션 삭제 때마다 증가하는 번호
+    // 응답이 도착했을 때 두 번호가 요청 시점과 다르면 오래된 응답으로 보고 버립니다.
     const flatListRef = useRef(null);
     const authEpochRef = useRef(0);
     const requestSeqRef = useRef(0);
+    // 진행 중인 답변 요청(멈춤용): 브라우저 요청을 끊는 AbortController와 서버에 알릴 요청 ID
+    const activeRequestRef = useRef(null);
+    // 답을 멈춘 직전 요청의 진행 ID. 대화방 ID를 아직 모를 때(첫 답변을 멈춤) 다음 메시지를 그 요청이 만든 방으로 잇습니다.
+    const resumeProgressIdRef = useRef(null);
+    // 보고 있는 대화가 바뀔 때마다(대화방 열기·새 대화) 올리는 번호. 늦게 온 멈춤 응답이 다른 대화의 방 ID를 바꾸지 않게 합니다.
+    const chatViewRef = useRef(0);
 
     // 식단 추가 모달
     const [modalVisible, setModalVisible] = useState(false);
@@ -370,6 +506,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     // 복사 상태
     const [copiedMessageId, setCopiedMessageId] = useState(null);
 
+    // 기기에서 사용할 수 있는 음성 목록 중 가장 좋은 한국어 음성을 한 번 찾아 둡니다.
     useEffect(() => {
         const findBestVoice = async () => {
             try {
@@ -399,9 +536,13 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
     // 로그인 상태 변경 시 전체 초기화합니다.
     // 사용자 전환 직전에 도착한 AI 응답이 다른 사용자의 대화에 섞이지 않도록 epoch와 요청 번호를 올립니다.
+    // 토큰은 조건에 넣지 않습니다. 같은 사용자의 토큰 자동 갱신(30분)만으로 대화가 지워지고 기다리던 답이 버려졌습니다
+    // (2026-10-14 "삼겹살 배추찜 레시피" 대기 중 화면 초기화). 세션 목록은 아래 토큰 효과에서 다시 불러옵니다.
     useEffect(() => {
         authEpochRef.current += 1;
         requestSeqRef.current += 1;
+        chatViewRef.current += 1;
+        resumeProgressIdRef.current = null;
         setLoading(false);
         setInputText('');
         setChatSessionId(null);
@@ -424,7 +565,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             setChatSessions([]);
             setMessages([initialGreeting]);
         }
-    }, [isLoggedIn, user?.id, token]);
+    }, [isLoggedIn, user?.id]);
 
     // 컴포넌트 마운트 및 토큰 준비 시 세션 목록 복원
     useEffect(() => {
@@ -433,6 +574,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     }, [isLoggedIn, token]);
 
+    // 내 대화 세션 목록을 불러옵니다(실패해도 채팅은 계속 쓸 수 있으므로 로그만 남깁니다).
     const fetchChatSessions = async () => {
         if (!token) return;
         try {
@@ -445,12 +587,37 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // 다른 대화로 옮기거나 새 대화를 시작하면 기다리던 답은 이 화면과 상관없으므로 버리고, 서버 작업도 멈춥니다.
+    // (멈춤 버튼과 달리 "멈춘 질문"으로 표시하지 않습니다. 그 질문은 원래 대화방에 저장되어 있습니다.)
+    const abandonActiveRequest = () => {
+        chatViewRef.current += 1;
+        resumeProgressIdRef.current = null;
+        const active = activeRequestRef.current;
+        if (!active) return;
+        activeRequestRef.current = null;
+        active.abortController.abort();
+        axios.post(`${config.API_BASE_URL}/chat/cancel/${active.progressId}`, null, { timeout: 5000 })
+            .catch(() => {});
+        stopProgressPolling();
+        setLoading(false);
+    };
+
+    // 선택한 세션의 메시지를 불러와 화면 메시지 형식({ id, text, sender })으로 바꿉니다.
+    // A 대화의 답을 기다리다 B 대화를 열면 A의 답이 B 화면에 들어오고 대화방 ID도 A로 돌아갔습니다(2026-10-17 리뷰).
+    // 그래서 여는 순간 요청 번호를 올리고, 불러온 결과도 그사이 다른 대화를 고르지 않았을 때만 반영합니다.
     const loadChatSession = async (sessionId) => {
         if (!token) return;
+        abandonActiveRequest();
+        const loadSeq = requestSeqRef.current + 1;
+        requestSeqRef.current = loadSeq;
+        const loadEpoch = authEpochRef.current;
         try {
             const response = await axios.get(`${config.API_BASE_URL}/chat/sessions/${sessionId}/messages`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
+            if (loadSeq !== requestSeqRef.current || loadEpoch !== authEpochRef.current) {
+                return;
+            }
             const loadedMessages = (response.data || []).map((msg, index) => ({
                 id: `${sessionId}-${index}-${Date.now()}`,
                 text: msg.content,
@@ -461,12 +628,15 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             setMessages(loadedMessages);
         } catch (error) {
             if (isAuthError(error)) return;
+            if (loadSeq !== requestSeqRef.current) return;
             debugLog('Failed to load chat session:', error.message);
             Alert.alert('오류', '대화를 불러오지 못했습니다.');
         }
     };
 
+    // 새 대화 시작. 진행 중인 요청의 응답이 새 대화에 끼어들지 않도록 요청 번호를 올립니다.
     const startNewChat = () => {
+        abandonActiveRequest();
         requestSeqRef.current += 1;
         setChatSessionId(null);
         setMessages([initialGreeting]);
@@ -478,12 +648,14 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // 대화 제목 수정 모달을 엽니다.
     const openRenameSession = (session) => {
         setEditingSession(session);
         setEditingSessionTitle(session.title || '');
         setRenameModalVisible(true);
     };
 
+    // 제목을 서버에 저장하고 세션 목록에서 해당 항목만 교체합니다.
     const confirmRenameSession = async () => {
         const title = editingSessionTitle.trim();
         if (!editingSession || !title) {
@@ -510,6 +682,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // 대화 삭제 확인(웹은 브라우저 confirm, 앱은 Alert)
     const confirmDeleteSession = (session) => {
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
             const confirmed = window.confirm(`'${session.title || '대화'}' 대화를 삭제할까요?`);
@@ -533,6 +706,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         );
     };
 
+    // 대화를 삭제하고, 보고 있던 대화였다면 새 대화로 전환합니다.
     const deleteSession = async (session) => {
         try {
             await axios.delete(`${config.API_BASE_URL}/chat/sessions/${session.id}`, {
@@ -550,14 +724,25 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // 요리 모드 버튼은 아직 준비 중이라 안내만 띄웁니다.
     const showCookingModeUnavailable = () => {
         Alert.alert("준비 중", "요리 모드는 안정적인 음성 인식으로 교체한 뒤 제공할 예정입니다.");
     };
 
 
+    /**
+     * 메시지를 보내고 AI 답변을 받아 화면에 추가합니다.
+     * text를 넘기면 그 문장을, 아니면 입력창 내용을 보냅니다.
+     * 요청 시점의 authEpoch/requestSeq를 저장해 두었다가, 응답 도착 시 값이 바뀌었으면 그 응답을 버립니다.
+     */
     const sendMessage = async (text = null) => {
         const messageText = typeof text === 'string' ? text : inputText;
         if (!messageText.trim()) return;
+
+        // 답을 기다리는 중에 새 메시지를 보내면 지금 답을 멈추고 새 메시지와 합쳐 다시 묻습니다(Claude·ChatGPT처럼).
+        const interruptedNow = loading ? stopGeneration() : null;
+        // 마지막 AI 답 뒤에 멈춘 질문들은 이번 메시지와 함께 보내 하나의 요청으로 이해하게 합니다.
+        const interruptedMessages = pendingInterruptedTexts(messages, interruptedNow);
 
         const requestEpoch = authEpochRef.current;
         const requestSeq = requestSeqRef.current + 1;
@@ -569,6 +754,12 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         setMessages(prev => [...prev, userMessage]);
         setInputText('');
         setLoading(true);
+
+        // 요청 ID를 직접 만들어 보내고, 같은 ID로 서버의 진행 단계를 1초마다 물어봅니다.
+        const progressId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        startProgressPolling(progressId);
+        const abortController = new AbortController();
+        activeRequestRef.current = { abortController, progressId, userMessageId: userMessage.id };
 
         // AI 사용 활동 기록
         if (isLoggedIn) {
@@ -582,14 +773,13 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         try {
             // AI 컨텍스트에는 최근 대화와 건강 프로필만 압축해서 보냅니다.
             // 전체 대화를 계속 보내면 prompt가 길어지고, 알레르기 같은 중요한 정보가 묻힐 수 있습니다.
-            const history = messages.slice(-10).map(msg => ({
+            const history = messages.filter(msg => !msg.interrupted).slice(-10).map(msg => ({
                 role: msg.sender === 'user' ? 'user' : 'model',
                 content: msg.text
             }));
             const healthProfilePayload = buildHealthProfilePayload(healthProfile);
 
             debugLog('[DEBUG] Sending to AI:', {
-                useFridge,
                 messageLength: messageText.trim().length,
                 healthProfileIncluded: Object.values(healthProfilePayload).some(values => values.length > 0)
             });
@@ -600,10 +790,17 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                     sessionId: chatSessionId,
                     message: messageText,
                     history: history,
-                    useFridge: useFridge,
-                    healthProfile: healthProfilePayload
+                    healthProfile: healthProfilePayload,
+                    ...(interruptedMessages.length ? { interruptedMessages } : {}),
+                    ...(!chatSessionId && resumeProgressIdRef.current ? { resumeProgressId: resumeProgressIdRef.current } : {}),
                 },
-                { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+                {
+                    headers: {
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                        'X-Request-Id': progressId,
+                    },
+                    signal: abortController.signal,
+                }
             );
 
             debugLog('[DEBUG] AI Response received');
@@ -615,9 +812,11 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 return;
             }
 
+            // 서버 응답 예: { reply, sessionId, recipe(레시피일 때), mealSaved(대화 중 식단 저장이 처리됐을 때) }
             const rawAiText = response.data.reply;
             const cleanedText = cleanAiResponse(rawAiText);
             if (response.data.sessionId) {
+                resumeProgressIdRef.current = null;
                 setChatSessionId(response.data.sessionId);
             }
 
@@ -636,6 +835,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 return [...nextMessages, aiMessage];
             });
 
+            // 레시피 답변은 "정리 중" 표시를 650ms 보여 준 뒤 레시피 카드로 바꿉니다.
             if (response.data.recipe) {
                 setTimeout(() => {
                     setMessages(prev => prev.map(message =>
@@ -650,6 +850,10 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             }
 
         } catch (error) {
+            // 사용자가 멈춘 요청은 오류가 아닙니다. 화면 정리는 stopGeneration이 이미 했습니다.
+            if (axios.isCancel(error) || error?.code === 'ERR_CANCELED') {
+                return;
+            }
             console.error(error);
             if (requestEpoch === authEpochRef.current && requestSeq === requestSeqRef.current) {
                 const errorMessage = {
@@ -660,12 +864,81 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 setMessages(prev => [...prev, errorMessage]);
             }
         } finally {
+            if (activeRequestRef.current?.progressId === progressId) {
+                activeRequestRef.current = null;
+                stopProgressPolling();
+            }
             if (requestEpoch === authEpochRef.current && requestSeq === requestSeqRef.current) {
                 setLoading(false);
             }
         }
     };
 
+    /**
+     * 답을 기다리는 중에 멈춥니다. 브라우저 요청을 끊고, 서버에도 알려 Ollama 생성을 멈추게 합니다
+     * (화면에서만 끊으면 서버는 버려진 답을 계속 만들고 다음 질문이 그 뒤에서 기다립니다).
+     * 멈춘 질문에는 "멈춤" 표시를 붙여 두고, 다음에 보내는 메시지와 함께 서버에 보냅니다.
+     * @returns 멈춘 사용자 메시지 ID(없으면 null)
+     */
+    const stopGeneration = () => {
+        const active = activeRequestRef.current;
+        if (!active) return null;
+        activeRequestRef.current = null;
+        active.abortController.abort();
+        resumeProgressIdRef.current = active.progressId;
+        const viewAtStop = chatViewRef.current;
+        axios.post(`${config.API_BASE_URL}/chat/cancel/${active.progressId}`, null, { timeout: 5000 })
+            .then(response => {
+                // 첫 답변을 멈춰도 서버가 만든 대화방 ID를 받아 둡니다(그사이 다른 대화로 옮겼으면 무시).
+                const sessionId = response?.data?.sessionId;
+                if (sessionId && viewAtStop === chatViewRef.current) {
+                    setChatSessionId(prev => prev ?? sessionId);
+                }
+            })
+            .catch(() => {}); // 서버 알림이 실패해도 화면은 이미 멈췄습니다. 서버 처리는 시간 제한으로 끝납니다.
+        setMessages(prev => prev.map(message =>
+            message.id === active.userMessageId ? { ...message, interrupted: true } : message
+        ));
+        stopProgressPolling();
+        setLoading(false);
+        return active.userMessageId;
+    };
+
+    // 진행 단계 조회를 시작합니다. 경과 시간은 서버 응답과 상관없이 화면에서 1초씩 올립니다.
+    const startProgressPolling = (progressId) => {
+        stopProgressPolling();
+        const startedAt = Date.now();
+        setProgressStage(null);
+        setElapsedSeconds(0);
+        progressTimerRef.current = setInterval(() => {
+            setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+            axios.get(`${config.API_BASE_URL}/chat/progress/${progressId}`, { timeout: 3000 })
+                .then(response => {
+                    if (response.data?.stage) {
+                        setProgressStage(response.data.stage);
+                    }
+                })
+                .catch(() => {}); // 진행 표시는 보조 기능이라 실패해도 답변 대기는 계속합니다.
+        }, 1000);
+    };
+
+    const stopProgressPolling = () => {
+        if (progressTimerRef.current) {
+            clearInterval(progressTimerRef.current);
+            progressTimerRef.current = null;
+        }
+        setProgressStage(null);
+        setElapsedSeconds(0);
+    };
+
+    // 화면을 떠나면 진행 조회를 멈춥니다.
+    useEffect(() => () => {
+        if (progressTimerRef.current) {
+            clearInterval(progressTimerRef.current);
+        }
+    }, []);
+
+    // 웹: Enter는 전송, Shift+Enter는 줄바꿈
     const handleKeyPress = (e) => {
         if (Platform.OS === 'web') {
             // IME 조합 중이면 전송 방지 (중복 전송 버그 해결)
@@ -678,16 +951,19 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // 메시지가 추가되면 목록 맨 아래로 스크롤합니다.
     useEffect(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
     }, [messages]);
 
+    // 타자기 효과가 끝난 메시지는 isTyping을 false로 바꿔 버튼들이 보이게 합니다.
     const handleStreamingComplete = (messageId) => {
         setMessages(prev => prev.map(msg =>
             msg.id === messageId ? { ...msg, isTyping: false } : msg
         ));
     };
 
+    // 음성 읽기(TTS) 토글. 같은 메시지를 다시 누르면 멈추고, 다른 메시지를 누르면 이전 읽기를 멈춘 뒤 새로 읽습니다.
     const speak = (text, id) => {
         if (!isLoggedIn) {
             Alert.alert("멤버십 기능", "음성 듣기 기능은 로그인 후 이용 가능합니다.");
@@ -720,6 +996,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // 대화 중 식단 저장이 처리된 경우, 아직 저장 표시가 없는 가장 최근 AI 메시지에 "저장됨" 표시를 합니다.
     const markLatestAiRecipeSaved = (messageList) => {
         const latestRecipeIndex = [...messageList]
             .map((message, index) => ({ message, index }))
@@ -735,6 +1012,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         );
     };
 
+    // "식단에 추가" 모달을 엽니다. 메뉴 이름은 레시피 제목(없으면 첫 줄)을 30자 이내로 줄여 기본값으로 넣습니다.
     const openPlanModal = (message) => {
         const text = message.text;
         const recipe = message.recipe || parseRecipeFromText(text);
@@ -749,6 +1027,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         setModalVisible(true);
     };
 
+    // 선택한 날짜/끼니로 식단 기록을 저장하고, 캘린더 화면 상태(mealData)에도 바로 반영합니다.
     const confirmAddToPlan = async () => {
 
 
@@ -757,6 +1036,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             return;
         }
 
+        // "YYYY-MM-DD" 날짜 키. 참고: toISOString()은 UTC 기준이라 한국 시간 오전 9시 이전에는 전날 날짜가 될 수 있습니다.
         const dateKey = targetDate.toISOString().split('T')[0];
 
         // "120kcal", "120 kcal", "120 칼로리" 형식 탐색
@@ -819,6 +1099,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // FlatList가 메시지 한 개를 그릴 때 사용하는 함수
     const renderItem = ({ item }) => (
         <AnimatedMessageBubble
             item={item}
@@ -891,6 +1172,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 </View>
             </View>}
 
+            {/* 대화 세션 바: 새 대화 버튼 + 이전 대화 목록(열기, 이름 변경, 삭제) */}
             {isLoggedIn && (
                 <View style={[styles.sessionBar, webMode && styles.webSessionBar]}>
                     <TouchableOpacity
@@ -967,18 +1249,20 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                                     가진 재료, 피하고 싶은 성분, 원하는 조리시간을 자연스럽게 말해보세요.
                                 </Text>
                             )}
+                            {/* 예시 버튼은 실제로 잘 동작하는 요청으로 둡니다. "간단한 10분 컷 아침 식사"는 일반 대화로 가서
+                                자기소개만 답했습니다(2026-10-15 베타). */}
                             <View style={styles.suggestionChips}>
                                 <TouchableOpacity
                                     style={styles.suggestionChip}
-                                    onPress={() => { setInputText('냉장고 재료로 만들 수 있는 요리'); }}
+                                    onPress={() => { setInputText('양파 빼고 제육볶음 레시피 알려줘'); }}
                                 >
-                                    <Text style={styles.suggestionText}>냉장고 재료로 만들 수 있는 요리</Text>
+                                    <Text style={styles.suggestionText}>양파 빼고 제육볶음 레시피</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={styles.suggestionChip}
-                                    onPress={() => { setInputText('간단한 10분 컷 아침 식사'); }}
+                                    onPress={() => { setInputText('10분 안에 만드는 아침 메뉴 추천해줘'); }}
                                 >
-                                    <Text style={styles.suggestionText}>간단한 10분 컷 아침 식사</Text>
+                                    <Text style={styles.suggestionText}>10분 컷 아침 메뉴 추천</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -997,7 +1281,10 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                         {loading && (
                             <View style={styles.loadingContainer}>
                                 <ActivityIndicator size="small" color={colors.secondary} />
-                                <Text style={styles.loadingText}>답변을 생각하고 있어요...</Text>
+                                <Text style={styles.loadingText}>
+                                    {progressStage || '답변을 생각하고 있어요'}...
+                                    {elapsedSeconds > 0 ? ` (${elapsedSeconds}초)` : ''}
+                                </Text>
                             </View>
                         )}
                     </>
@@ -1010,24 +1297,9 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
                 style={styles.inputContainerWrapper}
             >
+                {/* 입력창, 음성 입력(준비 중), 전송 버튼 */}
                 <View style={styles.inputFloatingContainer}>
                     <View style={styles.inputWrapper}>
-                        {isLoggedIn && (
-                            <TouchableOpacity
-                                style={[styles.fridgeToggleBtn, useFridge && styles.fridgeToggleBtnActive]}
-                                onPress={() => setUseFridge(!useFridge)}
-                                activeOpacity={0.7}
-                                accessibilityRole="switch"
-                                accessibilityLabel="냉장고 재료 사용"
-                                accessibilityState={{ checked: useFridge }}
-                            >
-                                <Ionicons
-                                    name={useFridge ? "restaurant" : "restaurant-outline"}
-                                    size={20}
-                                    color={useFridge ? colors.primary : colors.textTertiary}
-                                />
-                            </TouchableOpacity>
-                        )}
                         <TextInput
                             style={[
                                 styles.input,
@@ -1049,6 +1321,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                             onKeyPress={handleKeyPress}
                             multiline={true}
                             numberOfLines={1}
+                            // 입력 내용 높이에 맞춰 입력창 높이를 늘립니다(최대 120).
                             onContentSizeChange={(e) => {
                                 const height = e.nativeEvent.contentSize.height;
                                 const baseHeight = Platform.OS === 'web' ? 26 : 36;
@@ -1064,19 +1337,33 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                         >
                             <Ionicons name="mic-outline" size={22} color={colors.textTertiary} />
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.sendButton, { backgroundColor: inputText.trim() ? colors.primary : colors.disabled }]}
-                            onPress={sendMessage}
-                            disabled={loading || !inputText.trim()}
-                            accessibilityRole="button"
-                            accessibilityLabel="메시지 보내기"
-                        >
-                            <Ionicons name="arrow-up" size={18} color="white" />
-                        </TouchableOpacity>
+                        {loading && !inputText.trim() ? (
+                            // 답을 기다리는 동안은 멈춤 버튼을 보여 줍니다. 글을 쓰면 다시 보내기 버튼이 되고,
+                            // 보내면 지금 답을 멈추고 새 메시지와 합쳐 다시 묻습니다.
+                            <TouchableOpacity
+                                style={[styles.sendButton, { backgroundColor: colors.text }]}
+                                onPress={stopGeneration}
+                                accessibilityRole="button"
+                                accessibilityLabel="답변 멈추기"
+                            >
+                                <Ionicons name="stop" size={14} color="white" />
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity
+                                style={[styles.sendButton, { backgroundColor: inputText.trim() ? colors.primary : colors.disabled }]}
+                                onPress={sendMessage}
+                                disabled={!inputText.trim()}
+                                accessibilityRole="button"
+                                accessibilityLabel="메시지 보내기"
+                            >
+                                <Ionicons name="arrow-up" size={18} color="white" />
+                            </TouchableOpacity>
+                        )}
                     </View>
                 </View>
             </KeyboardAvoidingView>
 
+            {/* 대화 제목 수정 모달 */}
             <Modal
                 animationType="slide"
                 transparent={true}
@@ -1115,6 +1402,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 </View>
             </Modal>
 
+            {/* 식단 기록 모달: 메뉴 이름, 날짜(오늘/내일), 끼니(아침/점심/저녁) 선택 */}
             <Modal
                 animationType="slide"
                 transparent={true}
@@ -1420,6 +1708,49 @@ const styles = StyleSheet.create({
     recipeSection: {
         marginTop: 16,
     },
+    recipeNoticeBox: {
+        marginTop: 14,
+        borderWidth: 1,
+        borderColor: colors.primary,
+        borderRadius: 8,
+        padding: 12,
+        gap: 6,
+    },
+    recipeNoticeTitle: {
+        color: colors.primary,
+        fontSize: 13,
+        fontWeight: '800',
+    },
+    recipeSourceRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+        paddingVertical: 6,
+    },
+    recipeSourceTextGroup: {
+        flex: 1,
+        minWidth: 0,
+    },
+    recipeSourceTitle: {
+        color: colors.text,
+        fontSize: 13,
+        lineHeight: 19,
+    },
+    recipeSourceLink: {
+        color: colors.primary,
+        textDecorationLine: 'underline',
+    },
+    recipeSourceBadge: {
+        color: colors.textSecondary,
+        fontSize: 11,
+        marginTop: 2,
+    },
+    recipeSourceNote: {
+        color: colors.textSecondary,
+        fontSize: 11,
+        lineHeight: 16,
+        marginTop: 4,
+    },
     recipeSectionTitle: {
         color: colors.text,
         fontSize: 14,
@@ -1467,6 +1798,22 @@ const styles = StyleSheet.create({
         color: colors.text,
         fontSize: 14,
         lineHeight: 22,
+    },
+    recipeStepBody: {
+        flex: 1,
+        minWidth: 0,
+        gap: 2,
+    },
+    recipeStepMeta: {
+        color: colors.textSecondary,
+        fontSize: 12,
+        lineHeight: 18,
+    },
+    recipeStepTip: {
+        color: colors.primary,
+        fontSize: 12,
+        lineHeight: 18,
+        marginTop: 2,
     },
     loadingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 20 },
     loadingText: { marginLeft: 10, color: colors.textSecondary, fontSize: 14 },
@@ -1523,17 +1870,6 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         minHeight: Platform.OS === 'web' ? 44 : 48,
     },
-    fridgeToggleBtn: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 2,
-    },
-    fridgeToggleBtnActive: {
-        backgroundColor: colors.secondaryLight,
-    },
     micButton: { padding: 6, marginLeft: 2 },
     input: {
         flex: 1,
@@ -1554,6 +1890,11 @@ const styles = StyleSheet.create({
                 outlineWidth: 0,
             }
         })
+    },
+    interruptedLabel: {
+        marginTop: 4,
+        fontSize: 11,
+        color: colors.textTertiary,
     },
     sendButton: {
         borderRadius: 16,
@@ -1650,46 +1991,6 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: colors.primary,
         position: 'relative',
-    },
-    fridgeChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: colors.surfaceAlt,
-        paddingVertical: 8,
-        paddingHorizontal: 14,
-        borderRadius: 20,
-        gap: 6,
-        borderWidth: 2,
-        borderColor: colors.border,
-        shadowColor: colors.text,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
-    },
-    fridgeChipActive: {
-        backgroundColor: colors.secondary,
-        borderColor: colors.secondary,
-        shadowColor: colors.secondary,
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
-        transform: [{ scale: 1.02 }]
-    },
-    fridgeChipText: {
-        fontSize: 13,
-        color: colors.textSecondary,
-        fontWeight: '700',
-        letterSpacing: -0.2
-    },
-    fridgeChipTextActive: {
-        color: 'white',
-    },
-    fridgeIndicator: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        marginRight: 4,
     },
     activeBadge: {
         backgroundColor: 'rgba(255, 255, 255, 0.2)',

@@ -3,6 +3,8 @@ package com.salus.healthytable.service;
 import com.salus.healthytable.domain.Recipe;
 import com.salus.healthytable.service.allergen.AllergenDictionary;
 import com.salus.healthytable.service.allergen.AllergenMatcher;
+import com.salus.healthytable.service.allergen.AllergenRegistry;
+import com.salus.healthytable.service.allergen.ProfileResolutionShadowObserver;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -17,14 +19,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AllergenGapTest {
 
     private final ChatSafetyContextService service =
-            new ChatSafetyContextService(null, null, null, matcher());
+            new ChatSafetyContextService(null, null, null, matcher(), org.mockito.Mockito.mock(AllergenRegistry.class),
+                    org.mockito.Mockito.mock(ProfileResolutionShadowObserver.class));
 
+    // 실제 알레르겐 사전으로 Matcher를 만듭니다.
     private static AllergenMatcher matcher() {
         AllergenDictionary dictionary = new AllergenDictionary();
         dictionary.load();
         return new AllergenMatcher(dictionary);
     }
 
+    // 지정한 알레르기만 가진 SafetyContext를 만듭니다.
     private ChatSafetyContextService.SafetyContext context(String... allergies) {
         return new ChatSafetyContextService.SafetyContext(
                 List.of(allergies), List.of(), List.of(), List.of(), List.of(), true);

@@ -17,10 +17,14 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * {@link OpenFdaDrugLabelAdapter} 테스트입니다. 로컬 가짜 HTTP 서버로 openFDA 검색 순서와 라벨 검증 규칙을 확인합니다.
+ */
 class OpenFdaDrugLabelAdapterTest {
 
     private TestOpenFdaServer server;
 
+    // 테스트마다 띄운 가짜 서버를 종료합니다.
     @AfterEach
     void stopServer() {
         if (server != null) {
@@ -28,6 +32,7 @@ class OpenFdaDrugLabelAdapterTest {
         }
     }
 
+    // 한국어 제품명은 openFDA에 직접 검색하지 않아야 합니다.
     @Test
     void koreanProductNameIsNotSearchedDirectlyInOpenFda() throws Exception {
         server = TestOpenFdaServer.start();
@@ -48,6 +53,7 @@ class OpenFdaDrugLabelAdapterTest {
         assertThat(server.searches()).isEmpty();
     }
 
+    // 검증된 성분명이나 RXCUI 없이 영문 상품명만으로는 검색하지 않아야 합니다.
     @Test
     void englishBrandWithoutVerifiedIngredientOrRxcuiIsNotSearched() throws Exception {
         server = TestOpenFdaServer.start();
@@ -68,6 +74,7 @@ class OpenFdaDrugLabelAdapterTest {
         assertThat(server.searches()).isEmpty();
     }
 
+    // RXCUI가 있으면 RXCUI 정확 검색을 가장 먼저 실행해야 합니다.
     @Test
     void rxcuiExactSearchRunsFirst() throws Exception {
         server = TestOpenFdaServer.start()
@@ -81,6 +88,7 @@ class OpenFdaDrugLabelAdapterTest {
         assertThat(server.searches()).first().isEqualTo("openfda.rxcui.exact:\"11289\"");
     }
 
+    // RXCUI로 못 찾으면 일반명/성분명 정확 검색으로 이어가야 합니다.
     @Test
     void genericAndSubstanceFallbackRunAfterRxcuiNotFound() throws Exception {
         server = TestOpenFdaServer.start()
@@ -99,6 +107,7 @@ class OpenFdaDrugLabelAdapterTest {
                 "openfda.substance_name.exact:\"warfarin\"");
     }
 
+    // 정확 검색이 성공하면 토큰(부분) 검색은 실행하지 않아야 합니다.
     @Test
     void exactSearchSuccessDoesNotRunTokenFallback() throws Exception {
         server = TestOpenFdaServer.start()
@@ -112,6 +121,7 @@ class OpenFdaDrugLabelAdapterTest {
         assertThat(server.searches()).noneMatch(search -> search.contains("openfda.generic_name:warfarin"));
     }
 
+    // 토큰 검색 결과는 성분 검증 없이 채택하지 않아야 합니다.
     @Test
     void tokenResultIsNotAcceptedWithoutIngredientVerification() throws Exception {
         server = TestOpenFdaServer.start()
@@ -128,6 +138,7 @@ class OpenFdaDrugLabelAdapterTest {
                         && attempt.failureCategory().equals("NO_VERIFIED_LABEL"));
     }
 
+    // 다른 성분의 라벨은 자동으로 선택하지 않아야 합니다.
     @Test
     void differentIngredientLabelIsNotAutoSelected() throws Exception {
         server = TestOpenFdaServer.start()
@@ -140,6 +151,7 @@ class OpenFdaDrugLabelAdapterTest {
         assertThat(result.labels()).isEmpty();
     }
 
+    // 복합제에서 일부 성분만 일치하는 라벨은 확정하지 않아야 합니다.
     @Test
     void compoundPartialIngredientMatchIsNotConfirmed() throws Exception {
         server = TestOpenFdaServer.start()
@@ -160,6 +172,7 @@ class OpenFdaDrugLabelAdapterTest {
         assertThat(result.status()).isEqualTo(MedicationDataStatus.NOT_FOUND);
     }
 
+    // 검증된 라벨이 여러 개면 사람이 검토해야 하므로 INCOMPLETE여야 합니다.
     @Test
     void multipleVerifiedLabelsRequireReview() throws Exception {
         server = TestOpenFdaServer.start()
@@ -174,6 +187,7 @@ class OpenFdaDrugLabelAdapterTest {
         assertThat(result.matchStatus()).isEqualTo(OpenFdaLabelMatchStatus.MULTIPLE_LABEL_MATCHES);
     }
 
+    // openFDA HTTP 상태(400 등)를 실패 유형으로 분류해야 합니다.
     @Test
     void openFdaHttpStatusIsClassified() throws Exception {
         server = TestOpenFdaServer.start()
@@ -186,6 +200,7 @@ class OpenFdaDrugLabelAdapterTest {
         assertThat(result.matchStatus()).isEqualTo(OpenFdaLabelMatchStatus.QUERY_REJECTED);
     }
 
+    // 가짜 서버 주소를 사용하는 어댑터를 만듭니다.
     private OpenFdaDrugLabelAdapter adapter() {
         return new OpenFdaDrugLabelAdapter(
                 WebClient.builder(),
@@ -206,6 +221,7 @@ class OpenFdaDrugLabelAdapterTest {
                 MedicationNormalizationStatus.NORMALIZED_MATCH, 0.9, List.of("warfarin"));
     }
 
+    // 테스트용 openFDA 라벨 JSON 문자열을 만듭니다.
     private String labelJson(String id, String rxcui, String brand, String generic, List<String> substances) {
         return labelsJson(labelNode(id, rxcui, brand, generic, substances));
     }
@@ -244,6 +260,7 @@ class OpenFdaDrugLabelAdapterTest {
         private final List<ResponseRule> rules = new ArrayList<>();
         private int defaultStatus = 404;
 
+        // JDK 내장 HttpServer로 검색어별 응답 규칙을 가진 가짜 openFDA 서버를 띄웁니다.
         static TestOpenFdaServer start() throws IOException {
             HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             TestOpenFdaServer wrapper = new TestOpenFdaServer(server);

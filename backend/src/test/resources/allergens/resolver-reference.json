@@ -1,0 +1,1341 @@
+{
+  "scope": "WEB_VERIFIED_STRICT_RESOLVER_REGRESSION",
+  "provenance": "기존 declaration/cross-contact/ingredient-reference의 독립 expected Evidence를 ID별로 대조하여 고정한 4단계 기대값. production Resolver 출력에서 생성하지 않음. 제품 의미의 신규 Gold가 아니라 기존 Evidence 조합 계약 검증. S020 원본 충돌 제외.",
+  "cases": [
+    {
+      "id": "S001",
+      "gtin": "8801115114154",
+      "excludedReason": null,
+      "expectedFacts": [
+        {
+          "allergen": "MILK",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 2
+        }
+      ]
+    },
+    {
+      "id": "S002",
+      "gtin": "8801115134237",
+      "excludedReason": null,
+      "expectedFacts": [
+        {
+          "allergen": "MILK",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 3
+        }
+      ]
+    },
+    {
+      "id": "S003",
+      "gtin": "8801121767122",
+      "excludedReason": null,
+      "expectedFacts": [
+        {
+          "allergen": "MILK",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 3
+        },
+        {
+          "allergen": "SOY",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "EGG",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PEACH",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "WHEAT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        }
+      ]
+    },
+    {
+      "id": "S004",
+      "gtin": "8801007037783",
+      "excludedReason": null,
+      "expectedFacts": []
+    },
+    {
+      "id": "S005",
+      "gtin": "8801007512259",
+      "excludedReason": null,
+      "expectedFacts": [
+        {
+          "allergen": "PORK",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 2
+        },
+        {
+          "allergen": "EGG_GROUP",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "SOY",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "WHEAT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "MILK",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "CHICKEN",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "BEEF",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        }
+      ]
+    },
+    {
+      "id": "S006",
+      "gtin": "8801114120958",
+      "excludedReason": null,
+      "expectedFacts": [
+        {
+          "allergen": "SOY",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 2
+        }
+      ]
+    },
+    {
+      "id": "S007",
+      "gtin": "8801043035989",
+      "excludedReason": null,
+      "expectedFacts": [
+        {
+          "allergen": "WHEAT",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 3
+        },
+        {
+          "allergen": "SHRIMP",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 7
+        },
+        {
+          "allergen": "SOY",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "MILK",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "BEEF",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PORK",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "TOMATO",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "CRAB",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "CHICKEN",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "SQUID",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PEANUT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "EGG",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "SHELLFISH",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [
+            "OYSTER",
+            "ABALONE",
+            "MUSSEL"
+          ],
+          "evidenceCount": 1
+        }
+      ]
+    },
+    {
+      "id": "S008",
+      "gtin": "8801117534912",
+      "excludedReason": null,
+      "expectedFacts": [
+        {
+          "allergen": "EGG",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 2
+        },
+        {
+          "allergen": "WHEAT",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 3
+        },
+        {
+          "allergen": "MILK",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 3
+        },
+        {
+          "allergen": "SOY",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "BEEF",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PORK",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 2
+        },
+        {
+          "allergen": "SULFITE",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "INGREDIENT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "CRAB",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "SHELLFISH",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PEANUT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PEACH",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        }
+      ]
+    },
+    {
+      "id": "S009",
+      "gtin": "8801062870455",
+      "excludedReason": null,
+      "expectedFacts": [
+        {
+          "allergen": "WHEAT",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 3
+        },
+        {
+          "allergen": "SOY",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "MILK",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 3
+        },
+        {
+          "allergen": "SULFITE",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 2
+        }
+      ]
+    },
+    {
+      "id": "S010",
+      "gtin": "8808244201045",
+      "excludedReason": null,
+      "expectedFacts": []
+    },
+    {
+      "id": "S011",
+      "gtin": "8801037088168",
+      "excludedReason": null,
+      "expectedFacts": [
+        {
+          "allergen": "WHEAT",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 3
+        },
+        {
+          "allergen": "SOY",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "MILK",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 2
+        },
+        {
+          "allergen": "SULFITE",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "INGREDIENT",
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "INGREDIENT",
+          "explicitChildren": [],
+          "evidenceCount": 2
+        },
+        {
+          "allergen": "EGG",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "BUCKWHEAT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PEANUT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "MACKEREL",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "CRAB",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "SHRIMP",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PORK",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PEACH",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "TOMATO",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "WALNUT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "CHICKEN",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "BEEF",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "SQUID",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "SHELLFISH",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [
+            "OYSTER",
+            "ABALONE",
+            "MUSSEL"
+          ],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PINE_NUT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        }
+      ]
+    },
+    {
+      "id": "S012",
+      "gtin": "8801045100210",
+      "excludedReason": null,
+      "expectedFacts": [
+        {
+          "allergen": "TOMATO",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 2
+        },
+        {
+          "allergen": "SULFITE",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "INGREDIENT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "SOY",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "WHEAT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "MILK",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "EGG",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "BEEF",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "SHELLFISH",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [
+            "OYSTER"
+          ],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "CHICKEN",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        }
+      ]
+    },
+    {
+      "id": "S013",
+      "gtin": "8801039202395",
+      "excludedReason": null,
+      "expectedFacts": [
+        {
+          "allergen": "SOY",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 2
+        }
+      ]
+    },
+    {
+      "id": "S014",
+      "gtin": "8801111922722",
+      "excludedReason": null,
+      "expectedFacts": [
+        {
+          "allergen": "PORK",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "SOY",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        }
+      ]
+    },
+    {
+      "id": "S015",
+      "gtin": "8801007100838",
+      "excludedReason": null,
+      "expectedFacts": []
+    },
+    {
+      "id": "S016",
+      "gtin": "8801094012403",
+      "excludedReason": null,
+      "expectedFacts": [
+        {
+          "allergen": "BUCKWHEAT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PEANUT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "SOY",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "WHEAT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PEACH",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "TOMATO",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        }
+      ]
+    },
+    {
+      "id": "S017",
+      "gtin": "8801045290300",
+      "excludedReason": null,
+      "expectedFacts": [
+        {
+          "allergen": "MILK",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 2
+        },
+        {
+          "allergen": "SOY",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "WHEAT",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "TOMATO",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 2
+        },
+        {
+          "allergen": "BEEF",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 3
+        },
+        {
+          "allergen": "EGG",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "SHRIMP",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PORK",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "CHICKEN",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "SQUID",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "SHELLFISH",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [
+            "OYSTER",
+            "ABALONE",
+            "MUSSEL"
+          ],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "QUAIL_EGG",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        }
+      ]
+    },
+    {
+      "id": "S018",
+      "gtin": "8801037075649",
+      "excludedReason": null,
+      "expectedFacts": [
+        {
+          "allergen": "SOY",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "WHEAT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "WALNUT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "MILK",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PORK",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "BUCKWHEAT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "EGG",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PEANUT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PINE_NUT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "CHICKEN",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "BEEF",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "TOMATO",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PEACH",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        }
+      ]
+    },
+    {
+      "id": "S019",
+      "gtin": "8801047123729",
+      "excludedReason": null,
+      "expectedFacts": [
+        {
+          "allergen": "TOMATO",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION",
+            "INGREDIENT"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 2
+        },
+        {
+          "allergen": "SOY",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "WHEAT",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "CRAB",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "SHELLFISH",
+          "status": "CONFIRMED_PRESENT",
+          "sources": [
+            "DECLARATION"
+          ],
+          "strongestPresenceSource": "DECLARATION",
+          "explicitChildren": [
+            "OYSTER"
+          ],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "BEEF",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "CHICKEN",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "PORK",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "MILK",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "WALNUT",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        },
+        {
+          "allergen": "SHRIMP",
+          "status": "CROSS_CONTACT_ONLY",
+          "sources": [
+            "CROSS_CONTACT"
+          ],
+          "strongestPresenceSource": "CROSS_CONTACT",
+          "explicitChildren": [],
+          "evidenceCount": 1
+        }
+      ]
+    },
+    {
+      "id": "S020",
+      "gtin": "8801047224617",
+      "excludedReason": "REFERENCE_VERSION_CONFLICT",
+      "expectedFacts": []
+    }
+  ]
+}

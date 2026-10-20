@@ -6,6 +6,9 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
+/**
+ * {@link CommunityPost} 엔티티의 DB 접근 인터페이스입니다.
+ */
 @Repository
 public interface CommunityPostRepository extends JpaRepository<CommunityPost, Long> {
 

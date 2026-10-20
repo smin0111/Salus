@@ -7,10 +7,11 @@ import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
 import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
+// "저장된 내 데이터" 목록: [서버 응답 필드 이름, 화면에 표시할 이름]
+// 서버 응답 예: { healthProfiles: 1, mealLogs: 12, ... } (GET /api/users/me/data-summary)
 const SUMMARY_LABELS = [
     ['healthProfiles', '건강정보'],
     ['healthCheckups', '건강검진'],
-    ['fridgeItems', '냉장고 재료'],
     ['mealLogs', '식단 기록'],
     ['recommendations', '추천 기록'],
     ['activityLogs', '활동 기록'],
@@ -23,8 +24,14 @@ const SUMMARY_LABELS = [
     ['chatMessages', '대화 메시지'],
 ];
 
+/**
+ * 계정과 개인정보 화면입니다.
+ * 멤버십 등급 안내, 저장된 개인 데이터 개수 요약, 개인정보 처리 원칙/고지 문구, 계정 삭제 기능을 제공합니다.
+ */
 export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, webMode = false }) {
-    const { user, token, logout } = useAuth();
+    const { user, token, logout, getLoginMethods, addLoginMethod, reauthenticate, hasRecentIdentityConfirmation } = useAuth();
+    const [loginMethods, setLoginMethods] = useState([]);
+    const [linkingProvider, setLinkingProvider] = useState(null);
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(false);
     const [deleting, setDeleting] = useState(false);
@@ -35,6 +42,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
         }
     }, [token]);
 
+    // 내 데이터 종류별 개수를 불러옵니다. 로그인 만료 오류는 AuthContext가 처리하므로 조용히 넘어갑니다.
     const fetchSummary = async () => {
         if (!token) return;
         setLoading(true);
@@ -51,10 +59,63 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
         }
     };
 
+    // 되돌릴 수 없는 작업이므로 확인 창을 먼저 띄웁니다.
+    const loadLoginMethods = async () => {
+        try {
+            setLoginMethods(await getLoginMethods());
+        } catch (error) {
+            if (!isAuthError(error)) {
+                console.error('Failed to load login methods:', error);
+            }
+        }
+    };
+
+    useEffect(() => {
+        if (token) {
+            loadLoginMethods();
+        }
+    }, [token]);
+
+    // 로그인 수단 추가: 보안을 위해 최근 10분 안에 실제로 로그인했어야 합니다. 필요하면 먼저 재인증을 받습니다.
+    const connectLoginMethod = async (provider) => {
+        if (linkingProvider) return;
+        if (!hasRecentIdentityConfirmation()) {
+            const reauthProviders = loginMethods
+                .map((method) => method.provider)
+                .filter((linked) => REAUTH_CAPABLE_PROVIDERS.includes(linked));
+            if (reauthProviders.length === 0) {
+                showMessage('로그인 수단 추가',
+                    '보안을 위해 기존 로그인 수단으로 다시 확인해야 합니다. 현재 연결된 로그인 수단으로는 이 기기에서 재확인을 아직 지원하지 않아 추가할 수 없습니다.');
+                return;
+            }
+            const reauthProvider = reauthProviders[0];
+            const confirmed = await askConfirm('다시 로그인',
+                `보안을 위해 먼저 ${PROVIDER_NAMES[reauthProvider]}로 다시 로그인해 주세요.`,
+                `${PROVIDER_NAMES[reauthProvider]}로 다시 로그인`);
+            if (!confirmed) return;
+            setLinkingProvider(provider);
+            const reauthenticated = await reauthenticate(reauthProvider.toLowerCase());
+            if (!reauthenticated) {
+                setLinkingProvider(null);
+                return;
+            }
+        }
+
+        setLinkingProvider(provider);
+        const result = await addLoginMethod(provider.toLowerCase());
+        setLinkingProvider(null);
+        if (result.ok) {
+            setLoginMethods(result.methods);
+            showMessage('로그인 수단 추가', `${PROVIDER_NAMES[provider]} 로그인이 연결되었습니다.`);
+        } else if (result.reauthRequired) {
+            showMessage('로그인 수단 추가', '보안을 위해 다시 로그인한 뒤 시도해 주세요.');
+        }
+    };
+
     const confirmDeleteAccount = () => {
         Alert.alert(
             '계정 삭제',
-            '계정과 건강정보, 검진 결과, 냉장고, 식단 기록, 대화 기록 등 개인 데이터가 삭제됩니다. 계속할까요?',
+            '계정과 건강정보, 검진 결과, 식단 기록, 대화 기록 등 개인 데이터가 삭제됩니다. 계속할까요?',
             [
                 { text: '취소', style: 'cancel' },
                 { text: '삭제', style: 'destructive', onPress: deleteAccount },
@@ -62,6 +123,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
         );
     };
 
+    // 서버에서 계정과 개인 데이터를 삭제한 뒤, 앱의 로그인 정보도 지우고 채팅 화면으로 이동합니다.
     const deleteAccount = async () => {
         if (!token) return;
         setDeleting(true);
@@ -96,7 +158,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
                     </TouchableOpacity>
                     <View>
                         <Text style={styles.headerTitle}>계정과 개인정보</Text>
-                        <Text style={styles.headerSubtitle}>{user?.email || '개인 데이터 관리'}</Text>
+                        <Text style={styles.headerSubtitle}>{user?.email || user?.name || '개인 데이터 관리'}</Text>
                     </View>
                 </View>
             </View>}
@@ -134,20 +196,20 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
                     {user?.grade !== 'PLUS' ? (
                         <View style={styles.upgradeSection}>
                             <Text style={styles.upgradeDesc}>
-                                PLUS 멤버십을 구독하시면 무제한 음성 인식 AI 셰프 제안 및 고급 읽어주기 기능을 이용할 수 있습니다.
+                                PLUS 이용권으로 처음 보는 요리 찾기를 하루 횟수 제한 없이 이용할 수 있어요. 자동으로 다시 결제되지 않아요.
                             </Text>
                             <TouchableOpacity 
                                 style={styles.upgradeButton} 
                                 onPress={() => onNavigate('upgrade')}
                             >
                                 <Ionicons name="sparkles-outline" size={16} color="white" style={{ marginRight: 6 }} />
-                                <Text style={styles.upgradeButtonText}>플러스 멤버십 업그레이드</Text>
+                                <Text style={styles.upgradeButtonText}>PLUS 이용권 보기</Text>
                             </TouchableOpacity>
                         </View>
                     ) : (
                         <View style={styles.upgradeSection}>
                             <Text style={styles.activePremiumText}>
-                                ✨ 현재 모든 프리미엄 기능(음성 인식 및 고급 TTS 등)을 무제한으로 사용하고 계십니다!
+                                ✨ PLUS 이용 중이에요{user?.plusExpiresAt ? ` (${String(user.plusExpiresAt).slice(0, 10)}까지)` : ''}. 처음 보는 요리 찾기를 제한 없이 이용할 수 있어요.
                             </Text>
                         </View>
                     )}
@@ -163,6 +225,36 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
                             Salus는 입력한 건강정보와 검진 수치를 식단 추천 참고 정보로 사용합니다. 의료 진단이나 치료를 대체하지 않습니다.
                         </Text>
                     </View>
+                </View>
+
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>로그인 수단</Text>
+                    {AVAILABLE_PROVIDERS.map((provider) => {
+                        const linked = loginMethods.some((method) => method.provider === provider);
+                        return (
+                            <View key={provider} style={styles.loginMethodRow}>
+                                <Text style={styles.loginMethodName}>{PROVIDER_NAMES[provider]}</Text>
+                                {linked ? (
+                                    <Text style={styles.loginMethodLinked}>연결됨</Text>
+                                ) : (
+                                    <TouchableOpacity
+                                        style={[styles.loginMethodButton, linkingProvider && styles.disabledButton]}
+                                        onPress={() => connectLoginMethod(provider)}
+                                        disabled={Boolean(linkingProvider)}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={`${PROVIDER_NAMES[provider]} 로그인 연결`}
+                                    >
+                                        <Text style={styles.loginMethodButtonText}>
+                                            {linkingProvider === provider ? '연결 중...' : '연결하기'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        );
+                    })}
+                    <Text style={styles.loginMethodHint}>
+                        연결한 로그인 수단 중 어느 것으로 로그인해도 같은 계정과 알레르기·식단 기록을 사용합니다.
+                    </Text>
                 </View>
 
                 <View style={styles.section}>
@@ -213,6 +305,39 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
     );
 }
 
+// 계정 설정의 로그인 수단 목록. Apple은 기능 스위치가 켜진 iOS에서만 보여 줍니다.
+const PROVIDER_NAMES = { GOOGLE: '구글', KAKAO: '카카오', NAVER: '네이버', APPLE: 'Apple' };
+const AVAILABLE_PROVIDERS = ['KAKAO', 'NAVER', 'GOOGLE', ...(config.APPLE_LOGIN_ENABLED && Platform.OS === 'ios' ? ['APPLE'] : [])];
+// 서버가 이번 요청에서 계정을 확인할 수 있는 수단(재인증에 쓸 수 있음).
+// 구글은 앱에서만 서버 nonce가 담긴 ID token을 받을 수 있고, 카카오는 서버 콜백 후 앱 주소로 돌아와야 해서 둘 다 웹에서는 제외합니다.
+const REAUTH_CAPABLE_PROVIDERS = [
+    'NAVER',
+    ...(Platform.OS !== 'web' ? ['GOOGLE', 'KAKAO'] : []),
+    ...(config.APPLE_LOGIN_ENABLED ? ['APPLE'] : []),
+];
+
+// 웹(react-native-web)의 Alert는 버튼을 지원하지 않아 브라우저 대화상자를 씁니다.
+function showMessage(title, message) {
+    if (Platform.OS === 'web') {
+        window.alert(`${title}\n\n${message}`);
+    } else {
+        Alert.alert(title, message);
+    }
+}
+
+function askConfirm(title, message, confirmText) {
+    if (Platform.OS === 'web') {
+        return Promise.resolve(window.confirm(`${title}\n\n${message}`));
+    }
+    return new Promise((resolve) => {
+        Alert.alert(title, message, [
+            { text: '취소', style: 'cancel', onPress: () => resolve(false) },
+            { text: confirmText, onPress: () => resolve(true) },
+        ], { cancelable: true, onDismiss: () => resolve(false) });
+    });
+}
+
+// 개인정보 처리 원칙 한 줄(아이콘 + 설명)
 function PolicyRow({ icon, text }) {
     return (
         <View style={styles.policyRow}>
@@ -299,6 +424,25 @@ const styles = StyleSheet.create({
         borderColor: colors.error,
     },
     disabledButton: { opacity: 0.7 },
+    loginMethodRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+    },
+    loginMethodName: { fontSize: 15, fontWeight: '700', color: colors.text },
+    loginMethodLinked: { fontSize: 14, fontWeight: '700', color: colors.primary },
+    loginMethodButton: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: colors.primary,
+    },
+    loginMethodButtonText: { fontSize: 14, fontWeight: '700', color: colors.primary },
+    loginMethodHint: { marginTop: 10, fontSize: 13, lineHeight: 19, color: colors.textSecondary },
     deleteButtonText: { color: colors.error, fontSize: 15, fontWeight: '800' },
     membershipCard: {
         backgroundColor: colors.surface,

@@ -21,6 +21,10 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * 커뮤니티 게시글 서비스입니다.
+ * 게시글 CRUD, 인기글 조회, 검색, 좋아요 토글을 처리하고 목록 응답에 좋아요/댓글 수를 붙입니다.
+ */
 @Service
 @RequiredArgsConstructor
 public class CommunityPostService {
@@ -46,6 +50,7 @@ public class CommunityPostService {
         List<CommunityPost> posts;
         LocalDateTime since;
 
+        // 기간 필터: daily=최근 1일, weekly=최근 1주, monthly=최근 1개월
         if ("daily".equalsIgnoreCase(timeframe)) {
             since = LocalDateTime.now(clock).minusDays(1);
         } else if ("weekly".equalsIgnoreCase(timeframe)) {
@@ -64,6 +69,7 @@ public class CommunityPostService {
         // 여기서 게시글마다 Repository를 다시 호출하면 기간 필터를 적용해도 N+1 문제가 되살아납니다.
         List<CommunityPostDTO> dtos = convertToDTO(posts, currentUserId);
         return dtos.stream()
+                // 좋아요 수 내림차순 정렬 (b와 a 순서를 바꿔 비교하면 큰 값이 앞에 옵니다)
                 .sorted((a, b) -> Long.compare(b.getLikeCount(), a.getLikeCount()))
                 .limit(limit)
                 .collect(Collectors.toList());
@@ -89,6 +95,7 @@ public class CommunityPostService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다."));
 
         List<CommunityPostDTO> dtos = convertToDTO(Collections.singletonList(post), currentUserId);
+        // 목록 변환 메서드를 재사용하기 위해 게시글 1개를 리스트로 감싸서 변환합니다.
         return dtos.isEmpty() ? null : dtos.get(0);
     }
 
@@ -174,6 +181,7 @@ public class CommunityPostService {
             isLiked = true;
         }
 
+        // 토글 후의 최신 좋아요 수를 함께 돌려주어 화면이 바로 갱신될 수 있게 합니다.
         long likeCount = likeRepository.countByPostId(postId);
 
         Map<String, Object> result = new HashMap<>();
@@ -207,6 +215,7 @@ public class CommunityPostService {
         // 이렇게 하면 게시글 수가 늘어도 좋아요 집계 쿼리는 1번으로 고정됩니다.
         Map<Long, Long> likeCountMap = likeRepository.countLikesByPostIds(postIds).stream()
                 .collect(Collectors.toMap(
+                        // row[0] = postId, row[1] = 개수
                         row -> (Long) row[0],
                         row -> (Long) row[1]
                 ));

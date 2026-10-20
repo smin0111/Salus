@@ -14,25 +14,38 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * Tavily 검색 API를 사용하는 웹 검색 엔진입니다.
+ * {@code @ConditionalOnProperty}: search.provider=tavily로 설정했을 때만 Bean으로 등록됩니다(기본은 DuckDuckGo).
+ */
 @Slf4j
 @Service
 @ConditionalOnProperty(prefix = "search", name = "provider", havingValue = "tavily")
 public class TavilySearchEngine implements SearchEngine {
 
-    private static final int MAX_RESULTS = 3;
-    private static final int MAX_RAW_CONTENT_LENGTH = 4_000;
+    // 결과 하나에서 근거로 쓸 최대 글자 수
+    private static final int MAX_EVIDENCE_LENGTH = 1_200;
 
     private final WebClient webClient;
     private final String apiKey;
+    // 가져올 최대 결과 수. 레시피를 2~3곳에서 비교하려면 후보 페이지가 더 필요해 3에서 8로 늘렸습니다(2026-10-12).
+    // Tavily는 요청 단위로 과금되어 결과 수를 늘려도 요청 비용은 같고, 기존 생성 경로는 상위 3개만 씁니다.
+    private final int maxResults;
 
     public TavilySearchEngine(WebClient.Builder webClientBuilder,
-                              @Value("${tavily.api-key:}") String apiKey) {
+                              @Value("${tavily.api-key:}") String apiKey,
+                              @Value("${tavily.max-results:8}") int maxResults) {
         this.webClient = webClientBuilder
                 .baseUrl("https://api.tavily.com")
                 .build();
         this.apiKey = apiKey;
+        this.maxResults = Math.max(1, Math.min(maxResults, 20));
     }
 
+    /**
+     * 요리 이름에 "레시피 재료 분량 조리 순서"를 붙여 검색합니다.
+     * API 키가 없거나 호출이 실패하면 FAILED, 결과가 없으면 EMPTY를 반환합니다.
+     */
     @Override
     public Mono<SearchResponse> search(String query) {
         if (query == null || query.isBlank()) {
@@ -48,10 +61,10 @@ public class TavilySearchEngine implements SearchEngine {
                 "search_depth", "advanced",
                 "topic", "general",
                 "country", "south korea",
-                "max_results", MAX_RESULTS,
+                "max_results", maxResults,
                 "chunks_per_source", 3,
                 "include_answer", false,
-                "include_raw_content", "text",
+                "include_raw_content", false,
                 "include_usage", true
         );
 
@@ -74,6 +87,7 @@ public class TavilySearchEngine implements SearchEngine {
         return "tavily";
     }
 
+    // Tavily 응답을 공통 SearchResponse로 바꿉니다. 제목이나 본문이 비어 있는 결과는 버립니다.
     private SearchResponse toSearchResponse(TavilyResponse response) {
         if (response == null || response.results() == null || response.results().isEmpty()) {
             log.info("[TavilySearch] Search completed with empty results.");
@@ -88,7 +102,7 @@ public class TavilySearchEngine implements SearchEngine {
                         bestAvailableContent(result)
                 ))
                 .filter(result -> !result.title().isBlank() && !result.snippet().isBlank())
-                .limit(MAX_RESULTS)
+                .limit(maxResults)
                 .toList();
 
         if (results.isEmpty()) {
@@ -104,16 +118,20 @@ public class TavilySearchEngine implements SearchEngine {
         return value == null ? "" : value;
     }
 
+    // 근거로 쓸 본문을 고르고 최대 길이로 자릅니다.
     private String bestAvailableContent(TavilyResult result) {
-        String rawContent = nullToBlank(result.rawContent()).replaceAll("\\s+", " ").trim();
         String content = nullToBlank(result.content()).replaceAll("\\s+", " ").trim();
-        String selected = rawContent.isBlank() ? content : rawContent;
-        if (selected.length() <= MAX_RAW_CONTENT_LENGTH) {
+        String rawContent = nullToBlank(result.rawContent()).replaceAll("\\s+", " ").trim();
+        // Tavily content는 검색 질의와 관련된 chunk만 모은 값이다. 페이지 원문 전체보다 먼저 사용해
+        // 메뉴/광고/댓글이 프롬프트를 채우는 일을 막고, 원문은 content가 없을 때만 보조로 쓴다.
+        String selected = content.isBlank() ? rawContent : content;
+        if (selected.length() <= MAX_EVIDENCE_LENGTH) {
             return selected;
         }
-        return selected.substring(0, MAX_RAW_CONTENT_LENGTH);
+        return selected.substring(0, MAX_EVIDENCE_LENGTH);
     }
 
+    // Tavily 응답 JSON 중 필요한 필드만 읽기 위한 record입니다. 모르는 필드는 무시합니다.
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record TavilyResponse(List<TavilyResult> results) {
     }

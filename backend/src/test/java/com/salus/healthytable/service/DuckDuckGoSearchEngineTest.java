@@ -7,8 +7,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * {@link DuckDuckGoSearchEngine} 테스트입니다.
+ */
 class DuckDuckGoSearchEngineTest {
 
+    // 페이지에 schema.org JSON-LD 레시피가 있으면 본문 텍스트보다 구조화 레시피를 근거로 사용해야 합니다.
     @Test
     void schemaOrgRecipeEvidenceIsPreferredWhenPageProvidesIt() {
         Document document = Jsoup.parse("""

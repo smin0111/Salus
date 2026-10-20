@@ -11,8 +11,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * {@link MfdsRecipeSearchClient} 테스트입니다. 실제 네트워크 대신 가짜 응답을 사용합니다.
+ */
 class MfdsRecipeSearchClientTest {
 
+    // 식약처 공식 레시피 응답이 재료/조리 단계가 담긴 검색 근거로 변환되어야 합니다.
     @Test
     void officialRecipeResponseBecomesStructuredSearchEvidence() {
         ExchangeFunction exchange = request -> Mono.just(ClientResponse.create(HttpStatus.OK)
@@ -55,6 +59,7 @@ class MfdsRecipeSearchClientTest {
         });
     }
 
+    // API 키가 없으면 네트워크 호출 없이 EMPTY를 반환해야 합니다.
     @Test
     void missingApiKeySkipsNetworkCall() {
         AtomicInteger calls = new AtomicInteger();

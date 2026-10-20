@@ -1,4 +1,4 @@
-// Modern browsers decode WebP natively; Metro selects this module for web builds.
+// 최신 브라우저는 WebP를 기본 지원하므로 웹 빌드에서는 WebP 이미지를 사용합니다. Metro가 웹 빌드에서 이 파일을 선택합니다.
 export default {
     bibimbap: require('../../../assets/landing/salus-bibimbap-hero.webp'),
     salmon: require('../../../assets/landing/salus-salmon-hero.webp'),

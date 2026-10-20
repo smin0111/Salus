@@ -17,16 +17,27 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * DuckDuckGo HTML 검색 페이지를 파싱(jsoup)하는 기본 웹 검색 엔진입니다.
+ *
+ * search.provider 설정이 없거나 duckduckgo일 때 등록됩니다(matchIfMissing = true).
+ * 검색 결과 상위 3개는 실제 페이지를 한 번 더 열어, 구조화 레시피(JSON-LD)나 본문 일부를 근거로 보강합니다.
+ * 공식 API가 아니라 HTML 구조에 의존하므로, 페이지 구조가 바뀌면 FAILED로 처리됩니다.
+ */
 @Slf4j
 @Service
 @ConditionalOnProperty(prefix = "search", name = "provider", havingValue = "duckduckgo", matchIfMissing = true)
 public class DuckDuckGoSearchEngine implements SearchEngine {
 
+    // 일반 브라우저처럼 보이게 하는 User-Agent와 요청 타임아웃, 페이지 본문 최대 길이
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
     private static final int TIMEOUT_MS = 6000;
     private static final int PAGE_FETCH_TIMEOUT_MS = 4500;
     private static final int MAX_PAGE_TEXT_LENGTH = 4000;
 
+    /**
+     * 검색을 실행합니다. jsoup은 블로킹 I/O라서 boundedElastic 스케줄러(블로킹 작업용 스레드 풀)에서 실행합니다.
+     */
     @Override
     public Mono<SearchResponse> search(String query) {
         if (query == null || query.isBlank()) {
@@ -46,6 +57,7 @@ public class DuckDuckGoSearchEngine implements SearchEngine {
                         .get();
 
                 Elements results = doc.select(".result__body");
+                // 결과 요소가 없는데 "결과 없음" 페이지도 아니면 HTML 구조가 바뀐 것으로 보고 실패로 처리합니다.
                 if (results.isEmpty() && !isNoResultPage(doc)) {
                     log.warn("[DuckDuckGoSearch] Result selectors were not found. Treating as parser failure.");
                     return new SearchResponse(SearchStatus.FAILED, List.of());
@@ -87,6 +99,11 @@ public class DuckDuckGoSearchEngine implements SearchEngine {
         .subscribeOn(Schedulers.boundedElastic());
     }
 
+    /**
+     * 검색 결과 페이지를 직접 열어 근거를 보강합니다.
+     * JSON-LD 구조화 레시피가 있으면 그것을, 없으면 메뉴/광고 등을 제거한 본문 텍스트를 붙입니다.
+     * 페이지를 열지 못해도 원래 검색 결과는 그대로 사용합니다.
+     */
     private SearchResult enrichResultWithPageText(SearchResult result) {
         if (result.url() == null || result.url().isBlank() || isBlockedFetchTarget(result.url())) {
             return result;
@@ -118,6 +135,7 @@ public class DuckDuckGoSearchEngine implements SearchEngine {
         }
     }
 
+    // DuckDuckGo 결과 링크는 리다이렉트 URL이므로 uddg 파라미터에 인코딩된 실제 URL을 꺼냅니다.
     private String normalizeDuckDuckGoUrl(String rawUrl) {
         if (rawUrl == null || rawUrl.isBlank()) {
             return "";
@@ -138,6 +156,7 @@ public class DuckDuckGoSearchEngine implements SearchEngine {
         return rawUrl;
     }
 
+    // 동영상/SNS/쇼핑 사이트는 레시피 본문을 얻기 어려워 페이지를 열지 않습니다.
     private boolean isBlockedFetchTarget(String url) {
         String normalized = url.toLowerCase(Locale.ROOT);
         return normalized.contains("youtube.com")
@@ -150,6 +169,7 @@ public class DuckDuckGoSearchEngine implements SearchEngine {
                 || normalized.contains("gmarket.co.kr");
     }
 
+    // 공백을 정리하고 저작권/로그인/댓글/광고 같은 잡음 단어를 제거합니다.
     private String normalizePageText(String text) {
         if (text == null) {
             return "";
@@ -160,6 +180,7 @@ public class DuckDuckGoSearchEngine implements SearchEngine {
                 .trim();
     }
 
+    // <script type="application/ld+json">에서 schema.org Recipe 데이터(재료, 조리 순서 포함)를 찾아 반환합니다.
     private String extractStructuredRecipe(Document page) {
         if (page == null) {
             return "";
@@ -186,6 +207,7 @@ public class DuckDuckGoSearchEngine implements SearchEngine {
         return text.substring(0, maxLength) + "...";
     }
 
+    // 검색 결과가 없다는 안내 문구가 있는 페이지인지 확인합니다.
     private boolean isNoResultPage(Document doc) {
         String bodyText = doc.body() == null ? "" : doc.body().text().toLowerCase(Locale.ROOT);
         return bodyText.contains("no results")
@@ -194,6 +216,7 @@ public class DuckDuckGoSearchEngine implements SearchEngine {
                 || bodyText.contains("결과가 없습니다");
     }
 
+    // 레시피 전문 사이트, 레시피 키워드에 가산점을 주고 쇼핑/뉴스/백과사전에는 감점해 결과 순위를 매깁니다.
     private int scoreResult(SearchResult result) {
         int score = 0;
         String url = result.url().toLowerCase();

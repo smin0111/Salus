@@ -1,0 +1,271 @@
+{
+  "scope": "SYNTHETIC_LEXICAL_REGRESSION",
+  "provenance": "실제 제품 Reference가 아닌 2.5단계 어휘 정책 검증용 합성 사례. 전체 토큰 조회만 검증하며 Ingredient Evidence 또는 Safety Decision을 생성하지 않는다.",
+  "cases": [
+    {
+      "id": "SYN-001",
+      "input": "메밀",
+      "expected": [
+        {
+          "allergen": "BUCKWHEAT",
+          "relation": "DIRECT_NAME",
+          "confidence": "CERTAIN"
+        }
+      ],
+      "forbiddenAllergens": [
+        "WHEAT"
+      ]
+    },
+    {
+      "id": "SYN-002",
+      "input": "땅콩",
+      "expected": [
+        {
+          "allergen": "PEANUT",
+          "relation": "DIRECT_NAME",
+          "confidence": "CERTAIN"
+        }
+      ],
+      "forbiddenAllergens": [
+        "SOY"
+      ]
+    },
+    {
+      "id": "SYN-003",
+      "input": "밀크초콜릿",
+      "expected": [],
+      "forbiddenAllergens": [
+        "WHEAT",
+        "MILK"
+      ]
+    },
+    {
+      "id": "SYN-004",
+      "input": "굴비",
+      "expected": [],
+      "forbiddenAllergens": [
+        "OYSTER",
+        "SHELLFISH"
+      ]
+    },
+    {
+      "id": "SYN-005",
+      "input": "완두콩",
+      "expected": [],
+      "forbiddenAllergens": [
+        "SOY"
+      ]
+    },
+    {
+      "id": "SYN-006",
+      "input": "강낭콩",
+      "expected": [],
+      "forbiddenAllergens": [
+        "SOY"
+      ]
+    },
+    {
+      "id": "SYN-007",
+      "input": "땅콩호박",
+      "expected": [],
+      "forbiddenAllergens": [
+        "PEANUT",
+        "SOY"
+      ]
+    },
+    {
+      "id": "SYN-008",
+      "input": "우유향",
+      "expected": [
+        {
+          "allergen": "MILK",
+          "relation": "LEXICAL_HINT",
+          "confidence": "POSSIBLE"
+        }
+      ],
+      "forbiddenAllergens": []
+    },
+    {
+      "id": "SYN-009",
+      "input": "탈지분유",
+      "expected": [
+        {
+          "allergen": "MILK",
+          "relation": "DERIVED_FROM",
+          "confidence": "CERTAIN"
+        }
+      ],
+      "forbiddenAllergens": []
+    },
+    {
+      "id": "SYN-010",
+      "input": "메추리알",
+      "expected": [
+        {
+          "allergen": "QUAIL_EGG",
+          "relation": "DIRECT_NAME",
+          "confidence": "CERTAIN"
+        }
+      ],
+      "forbiddenAllergens": [
+        "EGG"
+      ]
+    },
+    {
+      "id": "SYN-011",
+      "input": "알류",
+      "expected": [
+        {
+          "allergen": "EGG_GROUP",
+          "relation": "DIRECT_NAME",
+          "confidence": "CERTAIN"
+        }
+      ],
+      "forbiddenAllergens": [
+        "EGG",
+        "QUAIL_EGG"
+      ]
+    },
+    {
+      "id": "SYN-012",
+      "input": "난류",
+      "expected": [
+        {
+          "allergen": "EGG_GROUP",
+          "relation": "DIRECT_NAME",
+          "confidence": "CERTAIN"
+        }
+      ],
+      "forbiddenAllergens": [
+        "EGG",
+        "QUAIL_EGG"
+      ]
+    },
+    {
+      "id": "SYN-013",
+      "input": "우유",
+      "expected": [
+        {
+          "allergen": "MILK",
+          "relation": "DIRECT_NAME",
+          "confidence": "CERTAIN"
+        }
+      ],
+      "forbiddenAllergens": []
+    },
+    {
+      "id": "SYN-014",
+      "input": "밀",
+      "expected": [
+        {
+          "allergen": "WHEAT",
+          "relation": "DIRECT_NAME",
+          "confidence": "CERTAIN"
+        }
+      ],
+      "forbiddenAllergens": []
+    },
+    {
+      "id": "SYN-015",
+      "input": "대두",
+      "expected": [
+        {
+          "allergen": "SOY",
+          "relation": "DIRECT_NAME",
+          "confidence": "CERTAIN"
+        }
+      ],
+      "forbiddenAllergens": []
+    },
+    {
+      "id": "SYN-016",
+      "input": "콩",
+      "expected": [
+        {
+          "allergen": "SOY",
+          "relation": "LEXICAL_HINT",
+          "confidence": "POSSIBLE"
+        }
+      ],
+      "forbiddenAllergens": []
+    },
+    {
+      "id": "SYN-017",
+      "input": "콩기름",
+      "expected": [
+        {
+          "allergen": "SOY",
+          "relation": "DERIVED_FROM",
+          "confidence": "CERTAIN"
+        }
+      ],
+      "forbiddenAllergens": []
+    },
+    {
+      "id": "SYN-018",
+      "input": "대두유",
+      "expected": [
+        {
+          "allergen": "SOY",
+          "relation": "DERIVED_FROM",
+          "confidence": "CERTAIN"
+        }
+      ],
+      "forbiddenAllergens": []
+    },
+    {
+      "id": "SYN-019",
+      "input": "분리대두단백",
+      "expected": [
+        {
+          "allergen": "SOY",
+          "relation": "DERIVED_FROM",
+          "confidence": "CERTAIN"
+        }
+      ],
+      "forbiddenAllergens": []
+    },
+    {
+      "id": "SYN-020",
+      "input": "대두레시틴",
+      "expected": [
+        {
+          "allergen": "SOY",
+          "relation": "DERIVED_FROM",
+          "confidence": "CERTAIN"
+        }
+      ],
+      "forbiddenAllergens": []
+    },
+    {
+      "id": "SYN-021",
+      "input": "유화제",
+      "expected": [],
+      "forbiddenAllergens": []
+    },
+    {
+      "id": "SYN-022",
+      "input": "향료",
+      "expected": [],
+      "forbiddenAllergens": []
+    },
+    {
+      "id": "SYN-023",
+      "input": "기타가공품",
+      "expected": [],
+      "forbiddenAllergens": []
+    },
+    {
+      "id": "SYN-024",
+      "input": "혼합제제",
+      "expected": [],
+      "forbiddenAllergens": []
+    },
+    {
+      "id": "SYN-025",
+      "input": "미확인원료",
+      "expected": [],
+      "forbiddenAllergens": []
+    }
+  ]
+}

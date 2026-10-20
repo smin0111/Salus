@@ -8,14 +8,15 @@ import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/api
 import { colors } from '../theme/colors';
 
 /**
- * 카카오페이 결제 완료 후 m_redirect_url로 리다이렉트되는 결제 결과 화면
- * URL 쿼리 파라미터: imp_uid, merchant_uid, imp_success
+ * 카카오페이 결제 완료 후 m_redirect_url로 돌아오는 결제 결과 화면입니다(주로 모바일 웹 결제 흐름).
+ * URL 쿼리 파라미터: imp_uid(포트원 결제 번호), merchant_uid(주문 번호), imp_success(성공 여부)
  */
 export default function PaymentResultScreen({ onNavigate }) {
-    const [status, setStatus] = useState('loading'); // loading | success | fail
+    const [status, setStatus] = useState('loading'); // 결제 확인 상태: loading(확인 중) | success(성공) | fail(실패)
     const [message, setMessage] = useState('');
     const { token, refreshUser, loading: authLoading } = useAuth();
 
+    // 로그인 상태 복원이 끝난 뒤 URL 파라미터를 읽어 결제 검증을 시작합니다(웹 전용).
     useEffect(() => {
         if (Platform.OS !== 'web') return;
         if (authLoading) return;
@@ -40,6 +41,7 @@ export default function PaymentResultScreen({ onNavigate }) {
         verifyPayment(impUid, merchantUid);
     }, [authLoading, token]);
 
+    // 백엔드에 결제 검증을 요청하고, 성공하면 사용자 정보(등급)를 새로 불러옵니다.
     const verifyPayment = async (impUid, merchantUid) => {
         try {
             const response = await axios.post(`${config.API_BASE_URL}/payments/verify`, {
@@ -123,6 +125,7 @@ export default function PaymentResultScreen({ onNavigate }) {
     );
 }
 
+// 결제 완료 후 보여 주는 혜택 한 줄
 const BenefitRow = ({ icon, text }) => (
     <View style={styles.benefitRow}>
         <Ionicons name={icon} size={18} color={colors.primary} style={{ marginRight: 10 }} />

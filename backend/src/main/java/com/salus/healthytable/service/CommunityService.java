@@ -16,6 +16,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * 레시피 공유(RecipeShare) 피드 서비스입니다.
+ */
 @Service
 @RequiredArgsConstructor
 public class CommunityService {
@@ -25,6 +28,9 @@ public class CommunityService {
         private final UserRepository userRepository;
         private final Clock clock;
 
+        /**
+         * 공개 공유 피드를 조회합니다. 레시피나 작성자가 삭제된 경우에도 피드가 깨지지 않게 대체 값을 넣습니다.
+         */
         public List<CommunityFeedItemDTO> getPublicFeed() {
                 // 공개 상태로 공유된 레시피 목록을 최신순으로 가져옵니다.
                 List<RecipeShare> shares = recipeShareRepository.findByVisibilityOrderByCreatedAtDesc("PUBLIC");
@@ -62,6 +68,7 @@ public class CommunityService {
                                 .collect(Collectors.toList());
         }
 
+        // 레시피 공유 기록을 저장합니다. 입력 검증과 정규화는 컨트롤러에서 끝난 상태입니다.
         public RecipeShare shareRecipe(Long userId, Long recipeId, String message, String visibility) {
                 RecipeShare share = new RecipeShare();
                 share.setUserId(userId);

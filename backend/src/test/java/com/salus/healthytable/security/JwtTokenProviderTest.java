@@ -6,8 +6,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * {@link JwtTokenProvider} 테스트입니다. 토큰 발급/검증과 약한 시크릿 차단을 확인합니다.
+ */
 class JwtTokenProviderTest {
 
+    // 충분히 긴 시크릿으로 발급한 토큰은 검증을 통과하고 사용자 ID를 꺼낼 수 있어야 합니다.
     @Test
     void createsAndValidatesTokenWithStrongSecret() {
         JwtTokenProvider provider = new JwtTokenProvider();
@@ -21,6 +25,7 @@ class JwtTokenProviderTest {
         assertThat(provider.getUserId(token)).isEqualTo("42");
     }
 
+    // 32바이트 미만 시크릿은 서버 시작 시 거부해야 합니다.
     @Test
     void rejectsShortSecretOnStartup() {
         JwtTokenProvider provider = new JwtTokenProvider();
@@ -33,6 +38,7 @@ class JwtTokenProviderTest {
                 .hasMessageContaining("최소 32바이트");
     }
 
+    // 예시 문구가 들어간 시크릿은 길이가 충분해도 거부해야 합니다.
     @Test
     void rejectsExampleSecretOnStartup() {
         JwtTokenProvider provider = new JwtTokenProvider();
@@ -43,5 +49,33 @@ class JwtTokenProviderTest {
         assertThatThrownBy(provider::validateSecretOnStartup)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("예시값");
+    }
+
+    // 서명이 맞고 만료된 토큰만 만료로 판정해야 합니다. 유효한 토큰이나 위조 토큰은 만료가 아닙니다.
+    @Test
+    void detectsExpiredTokenOnlyWhenSignatureIsValid() {
+        JwtTokenProvider provider = new JwtTokenProvider();
+        ReflectionTestUtils.setField(provider, "secretKey", "local-test-secret-must-be-longer-than-32-bytes");
+
+        String validToken = provider.createToken("1");
+        ReflectionTestUtils.setField(provider, "accessTokenValiditySeconds", -60L);
+        String expiredToken = provider.createToken("1");
+
+        assertThat(provider.validateToken(expiredToken)).isFalse();
+        assertThat(provider.isExpired(expiredToken)).isTrue();
+        assertThat(provider.isExpired(validToken)).isFalse();
+        assertThat(provider.isExpired(expiredToken + "tampered")).isFalse();
+    }
+
+    // identity_confirmed_at은 넣었을 때만 토큰에 담기고, 그대로 꺼낼 수 있어야 합니다.
+    @Test
+    void identityConfirmedAtClaimRoundTrips() {
+        JwtTokenProvider provider = new JwtTokenProvider();
+        ReflectionTestUtils.setField(provider, "secretKey", "local-test-secret-must-be-longer-than-32-bytes");
+        java.time.Instant loginAt = java.time.Instant.parse("2026-10-05T03:00:00Z");
+
+        assertThat(provider.getIdentityConfirmedAt(provider.createToken("1", loginAt))).contains(loginAt);
+        assertThat(provider.getIdentityConfirmedAt(provider.createToken("1"))).isEmpty();
+        assertThat(provider.getIdentityConfirmedAt("not-a-token")).isEmpty();
     }
 }

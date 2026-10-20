@@ -21,12 +21,14 @@ import { useAuth } from '../context/AuthContext';
 import { debugLog } from '../utils/logger';
 import { getApiErrorMessage, isAuthError } from '../utils/apiError';
 
+// 게시글/댓글 API 오류를 사용자용 문구로 바꿉니다(HTTP 상태 코드 포함).
 const getPostErrorMessage = (error, fallback) => getApiErrorMessage(error, fallback, {
     includeStatus: true,
     networkMessage: '서버에 연결할 수 없습니다.',
     prefixRequestError: true,
 });
 
+// 오류 알림. 웹에서는 React Native Alert가 제대로 보이지 않을 수 있어 브라우저 alert를 사용합니다.
 const showError = (message) => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.alert(message);
@@ -35,6 +37,12 @@ const showError = (message) => {
     Alert.alert('오류', message);
 };
 
+/**
+ * 커뮤니티 게시글 상세 화면입니다.
+ * 게시글 본문(재료/조리 순서 포함), 좋아요, 댓글/답글 목록과 작성/삭제 기능을 제공합니다.
+ * 작성자 본인에게만 게시글 삭제 버튼이 보입니다(실제 권한 확인은 백엔드가 합니다).
+ * user prop(propUser)은 전달만 받고, 실제로는 AuthContext의 user를 사용합니다.
+ */
 export default function PostDetailScreen({ post, user: propUser, onNavigate, onBack, webMode = false }) {
     const { user, token } = useAuth();
     const insets = useSafeAreaInsets();
@@ -45,11 +53,13 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
     const [submittingComment, setSubmittingComment] = useState(false);
     const [replyingTo, setReplyingTo] = useState(null); // { id: 식별값, userName: 사용자명 }
 
+    // 목록에서 받은 post는 요약 정보일 수 있어, 화면이 열리면 상세 정보와 댓글을 서버에서 다시 불러옵니다.
     useEffect(() => {
         loadPostDetails();
         loadComments();
     }, [post.id]);
 
+    // 로그인했으면 인증 헤더를 반환하고, 아니면 안내 후 null을 반환합니다.
     const requireAuthHeaders = () => {
         if (!user || !token) {
             Alert.alert('알림', '로그인이 필요합니다.');
@@ -59,6 +69,7 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
         return { Authorization: `Bearer ${token}` };
     };
 
+    // 게시글 상세 조회. 로그인 상태면 토큰을 보내 "내가 좋아요 눌렀는지" 정보도 함께 받습니다.
     const loadPostDetails = async () => {
         try {
             const response = await axios.get(
@@ -72,6 +83,7 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
         }
     };
 
+    // 댓글 목록 조회(답글도 같은 목록에 parentId와 함께 들어 있습니다).
     const loadComments = async () => {
         try {
             const response = await axios.get(
@@ -85,6 +97,7 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
         }
     };
 
+    // 좋아요 토글. 서버가 돌려준 최신 좋아요 여부/개수로 화면을 갱신합니다.
     const handleLike = async () => {
         const headers = requireAuthHeaders();
         if (!headers) return;
@@ -106,6 +119,7 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
         }
     };
 
+    // 댓글 작성. replyingTo가 있으면 그 댓글의 답글(parentId)로 등록하고, 댓글 수 반영을 위해 게시글도 다시 불러옵니다.
     const handleAddComment = async () => {
         const headers = requireAuthHeaders();
         if (!headers) return;
@@ -154,6 +168,7 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
         }
     };
 
+    // 댓글 삭제. 확인 창을 띄운 뒤 삭제하고 목록을 새로 고칩니다.
     const handleDeleteComment = async (commentId) => {
         const headers = requireAuthHeaders();
         if (!headers) return;
@@ -161,7 +176,7 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
         debugLog('Delete button clicked for comment:', commentId);
         debugLog('User info:', { userId: user?.id });
 
-        // 웹 호환 확인창
+        // 웹에서는 브라우저 confirm, 앱에서는 Alert 버튼 결과를 Promise로 기다립니다.
         const confirmDelete = Platform.OS === 'web'
             ? window.confirm('댓글을 삭제하시겠습니까?')
             : await new Promise((resolve) => {
@@ -210,6 +225,8 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
         }
     };
 
+    // 확인 창을 띄운 뒤 게시글을 삭제합니다.
+    // 참고: 현재 화면의 삭제 버튼은 이 함수를 쓰지 않고 확인 창 없이 바로 삭제 요청을 보냅니다(이 함수는 호출되는 곳이 없음).
     const handleDeletePost = async () => {
         const headers = requireAuthHeaders();
         if (!headers) return;
@@ -260,6 +277,7 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
         debugLog('Alert.alert 호출 완료 (다이얼로그 표시되어야 함)');
     };
 
+    // 작성 시각을 "방금", "5분 전", "3시간 전", "2일 전"처럼 표시합니다(7일 이상은 날짜).
     const getTimeAgo = (dateString) => {
         const now = new Date();
         const past = new Date(dateString);
@@ -275,6 +293,7 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
         return past.toLocaleDateString('ko-KR');
     };
 
+    // 로그인 사용자가 게시글 작성자인지 여부(삭제 버튼 표시에 사용)
     const isAuthor = user && postData && user.id === postData.userId;
 
     // 디버깅 로그
@@ -423,6 +442,7 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
                 <View style={styles.commentsSection}>
                     <Text style={styles.commentsTitle}>댓글 {comments.length}</Text>
 
+                    {/* parentId가 없는 댓글이 최상위 댓글이고, 각 댓글 아래에 그 댓글의 답글을 붙여 보여 줍니다. */}
                     {comments.filter(c => !c.parentId).map((comment) => (
                         <View key={comment.id}>
                             {/* 메인 댓글 */}

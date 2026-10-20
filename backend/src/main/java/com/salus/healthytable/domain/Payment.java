@@ -7,6 +7,10 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
+/**
+ * 결제 내역 엔티티입니다(payments 테이블).
+ * 포트원(PortOne, 구 아임포트) 결제 결과를 서버에서 검증한 뒤 저장합니다.
+ */
 @Entity
 @Table(name = "payments")
 @Data
@@ -31,5 +35,6 @@ public class Payment {
     @JoinColumn(name = "user_id")
     private User user;
 
+    // 결제 완료 시각
     private LocalDateTime paidAt;
 }

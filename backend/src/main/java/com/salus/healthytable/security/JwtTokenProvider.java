@@ -10,13 +10,21 @@ import java.security.Key;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
+/**
+ * JWT(JSON Web Token)를 발급하고 검증하는 클래스입니다.
+ *
+ * JWT는 "누가 로그인했는지"를 서버 세션 없이 담아 두는 서명된 문자열입니다.
+ * 비밀 키(jwt.secret)로 HS256 서명을 하므로, 키를 모르는 사람은 토큰 내용을 위조할 수 없습니다.
+ */
 @Component
 public class JwtTokenProvider {
 
     @Value("${jwt.secret}")
     private String secretKey;
 
-    private final long VALIDITY_IN_MS = 3600000; // 1h
+    // access token은 모든 요청에 실려 다니므로 짧게 둡니다. 로그인 유지는 refresh token이 맡습니다.
+    @Value("${jwt.access-token-validity-seconds:1800}")
+    private long accessTokenValiditySeconds = 1800;
     private static final int MIN_SECRET_BYTES = 32;
 
     @PostConstruct
@@ -52,18 +60,50 @@ public class JwtTokenProvider {
         }
     }
 
+    /**
+     * 사용자 ID를 subject로 담은 access token을 발급합니다. 유효기간은 jwt.access-token-validity-seconds(기본 30분)입니다.
+     */
     public String createToken(String userId) {
-        Date now = new Date();
-        Date validity = new Date(now.getTime() + VALIDITY_IN_MS);
-
-        return Jwts.builder()
-                .setSubject(userId)
-                .setIssuedAt(now)
-                .setExpiration(validity)
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
-                .compact();
+        return createToken(userId, null);
     }
 
+    /**
+     * identityConfirmedAt은 서버가 이번 요청에서 소셜 계정을 확인한 시각입니다. 제공자가 보증하는 실제 인증 시각(OIDC auth_time)이나
+     * 토큰 발급 시각과 다릅니다.
+     * 모르거나 인정할 수 없으면 null이고, 그때는 identity_confirmed_at 클레임을 넣지 않습니다.
+     */
+    public String createToken(String userId, java.time.Instant identityConfirmedAt) {
+        Date now = new Date();
+        Date validity = new Date(now.getTime() + accessTokenValiditySeconds * 1000);
+
+        io.jsonwebtoken.JwtBuilder builder = Jwts.builder()
+                .setSubject(userId)
+                .setIssuedAt(now)
+                .setExpiration(validity);
+        if (identityConfirmedAt != null) {
+            builder.claim("identity_confirmed_at", identityConfirmedAt.getEpochSecond());
+        }
+        return builder.signWith(getSigningKey(), SignatureAlgorithm.HS256).compact();
+    }
+
+    /**
+     * 검증된 토큰의 identity_confirmed_at을 꺼냅니다. 없거나 토큰이 유효하지 않으면 빈 값입니다.
+     */
+    public java.util.Optional<java.time.Instant> getIdentityConfirmedAt(String token) {
+        try {
+            Object value = Jwts.parserBuilder().setSigningKey(getSigningKey()).build()
+                    .parseClaimsJws(token).getBody().get("identity_confirmed_at");
+            return value instanceof Number seconds
+                    ? java.util.Optional.of(java.time.Instant.ofEpochSecond(seconds.longValue()))
+                    : java.util.Optional.empty();
+        } catch (JwtException | IllegalArgumentException e) {
+            return java.util.Optional.empty();
+        }
+    }
+
+    /**
+     * 토큰의 서명과 만료 시간을 검사해 유효하면 true를 반환합니다.
+     */
     public boolean validateToken(String token) {
         try {
             Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token);
@@ -75,11 +115,30 @@ public class JwtTokenProvider {
         }
     }
 
+    /**
+     * 서명은 맞지만 만료된 토큰인지 확인합니다. 클라이언트에 "갱신하면 되는 401"을 알려 줄 때 씁니다.
+     * jjwt는 서명을 먼저 확인한 뒤 만료를 검사하므로, 위조 토큰은 만료로 판정되지 않습니다.
+     */
+    public boolean isExpired(String token) {
+        try {
+            Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token);
+            return false;
+        } catch (ExpiredJwtException e) {
+            return true;
+        } catch (JwtException | IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    /**
+     * 검증된 토큰에서 사용자 ID(subject)를 꺼냅니다. 호출 전에 validateToken으로 검증해야 합니다.
+     */
     public String getUserId(String token) {
         return Jwts.parserBuilder().setSigningKey(getSigningKey()).build()
                 .parseClaimsJws(token).getBody().getSubject();
     }
 
+    // Authorization 헤더에서 "Bearer " 뒤의 토큰 문자열만 추출합니다. 없으면 null입니다.
     public String resolveToken(jakarta.servlet.http.HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {

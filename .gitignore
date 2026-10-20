@@ -58,9 +58,14 @@ logs/
 *.temp
 
 # Personal review/working notes
+CLAUDE.local.md
 BEGINNER_CODE_REVIEW_NOTES.md
 GITHUB_MANAGEMENT_GUIDE.md
 SERVICE_READINESS_REVIEW.md
+
+# Local tool settings and files holding secrets
+.claude/settings.local.json*
+searxng/settings.yml
 
 # Private or legacy repository-root artifacts
 /ERD.md

@@ -18,6 +18,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link HealthProfileController} 테스트입니다.
+ */
 class HealthProfileControllerTest {
 
     private final AuthenticatedUserProvider authenticatedUserProvider = mock(AuthenticatedUserProvider.class);
@@ -26,6 +29,7 @@ class HealthProfileControllerTest {
             authenticatedUserProvider,
             healthProfileRepository);
 
+    // 저장된 프로필이 없으면 모든 항목이 빈 목록인 응답을 반환해야 합니다.
     @Test
     void returnsEmptyProfileWhenUserHasNoSavedProfile() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -40,6 +44,7 @@ class HealthProfileControllerTest {
         assertThat(response.getGoals()).isEmpty();
     }
 
+    // 새 프로필을 현재 사용자로 만들고, 공백/빈 값/중복을 정리해 저장해야 합니다.
     @Test
     void createsProfileForCurrentUserAndCleansValues() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -69,6 +74,7 @@ class HealthProfileControllerTest {
         assertThat(response.getAllergies()).containsExactly("수박", "복숭아");
     }
 
+    // 기존 프로필이 있으면 그 행을 수정해야 합니다.
     @Test
     void updatesExistingProfileForCurrentUser() {
         HealthProfile existing = new HealthProfile();
@@ -90,6 +96,7 @@ class HealthProfileControllerTest {
         assertThat(response.getAllergies()).containsExactly("수박");
     }
 
+    // 너무 긴 항목은 저장 전에 거부해야 합니다.
     @Test
     void rejectsTooLongProfileItemBeforeSaving() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
@@ -109,6 +116,7 @@ class HealthProfileControllerTest {
         verify(healthProfileRepository, never()).save(any(HealthProfile.class));
     }
 
+    // 항목 개수가 너무 많으면 저장 전에 거부해야 합니다.
     @Test
     void rejectsTooManyProfileItemsBeforeSaving() {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);

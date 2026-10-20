@@ -27,6 +27,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link CommunityPostService} 테스트입니다.
+ */
 class CommunityPostServiceTest {
 
     private final CommunityPostRepository postRepository = mock(CommunityPostRepository.class);
@@ -41,6 +44,7 @@ class CommunityPostServiceTest {
             userRepository,
             clock);
 
+    // 인기글 기간(daily/weekly/monthly) 기준 시각은 주입한 Clock으로 계산해야 합니다.
     @Test
     void popularPostsUsesConfiguredClockForTimeframes() {
         when(postRepository.findByCreatedAtAfterOrderByCreatedAtDesc(any(LocalDateTime.class)))
@@ -60,6 +64,7 @@ class CommunityPostServiceTest {
                 LocalDateTime.of(2026, 6, 6, 0, 30));
     }
 
+    // 없는 게시글 상세 조회는 404여야 합니다.
     @Test
     void missingPostDetailThrowsNotFound() {
         when(postRepository.findById(99L)).thenReturn(Optional.empty());
@@ -71,6 +76,7 @@ class CommunityPostServiceTest {
                 });
     }
 
+    // 다른 사용자의 게시글 수정은 403이어야 합니다.
     @Test
     void updatingAnotherUsersPostThrowsForbidden() {
         CommunityPost post = new CommunityPost();
@@ -90,6 +96,7 @@ class CommunityPostServiceTest {
                 });
     }
 
+    // 없는 게시글에 좋아요를 누르면 404여야 합니다.
     @Test
     void likingMissingPostThrowsNotFound() {
         when(postRepository.existsById(99L)).thenReturn(false);
@@ -101,6 +108,7 @@ class CommunityPostServiceTest {
                 });
     }
 
+    // 다른 사용자의 게시글 삭제는 403이어야 합니다.
     @Test
     void deletingAnotherUsersPostThrowsForbidden() {
         CommunityPost post = new CommunityPost();
@@ -115,6 +123,7 @@ class CommunityPostServiceTest {
                 });
     }
 
+    // 본인 게시글은 삭제되어야 합니다.
     @Test
     void deletingOwnPostDeletesFoundPost() {
         CommunityPost post = new CommunityPost();

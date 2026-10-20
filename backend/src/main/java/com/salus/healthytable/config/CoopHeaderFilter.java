@@ -21,6 +21,7 @@ public class CoopHeaderFilter extends OncePerRequestFilter {
 
     private static final String AUTH_API_PREFIX = "/api/auth/";
 
+    // OncePerRequestFilter는 한 요청당 딱 한 번만 실행되도록 보장해 주는 스프링 필터 기본 클래스입니다.
     @Override
     protected void doFilterInternal(HttpServletRequest request,
             HttpServletResponse response,
@@ -35,6 +36,10 @@ public class CoopHeaderFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    /**
+     * 요청 경로가 인증 API(/api/auth/**)인지 확인합니다.
+     * 서버가 /app 같은 context path 아래에서 실행될 수도 있으므로, 앞부분 context path를 떼고 비교합니다.
+     */
     private boolean isAuthApiRequest(HttpServletRequest request) {
         String requestUri = request.getRequestURI();
         String contextPath = request.getContextPath();

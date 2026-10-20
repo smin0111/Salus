@@ -25,7 +25,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+/**
+ * Recipe Agent 웹 출처 수집 경로 테스트입니다.
+ * JSON-LD 추출, 출처 품질 평가, 중복 제거, 개인화 정책 연계, 캐시, SSRF 방어를 확인합니다.
+ */
 class RecipeWebSourceAdapterTest {
+    // 실제 알레르겐 사전으로 만든 Matcher를 테스트 전체에서 공유합니다.
     private static com.salus.healthytable.service.allergen.AllergenMatcher sharedAllergenMatcher() {
         com.salus.healthytable.service.allergen.AllergenDictionary dictionary =
                 new com.salus.healthytable.service.allergen.AllergenDictionary();
@@ -37,6 +42,7 @@ class RecipeWebSourceAdapterTest {
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-19T00:00:00Z"), ZoneId.of("Asia/Seoul"));
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    // 단일 Recipe JSON-LD를 추출하고 재료 원문을 그대로 보존해야 합니다.
     @Test
     void jsonLdExtractorSupportsSingleRecipeAndPreservesIngredientText() {
         SchemaOrgRecipeJsonLdExtractor extractor = new SchemaOrgRecipeJsonLdExtractor(objectMapper);
@@ -59,6 +65,7 @@ class RecipeWebSourceAdapterTest {
         assertThat(recipe.provenance().canonicalUrl()).isEqualTo("https://recipes.example.com/kimchi-jjigae");
     }
 
+    // @graph, 배열, 문자열, 중첩된 HowToSection 형태의 조리 단계도 추출해야 합니다.
     @Test
     void jsonLdExtractorSupportsGraphArrayStringAndNestedHowToSection() {
         SchemaOrgRecipeJsonLdExtractor extractor = new SchemaOrgRecipeJsonLdExtractor(objectMapper);
@@ -83,6 +90,7 @@ class RecipeWebSourceAdapterTest {
                         .containsExactly("밥에 간을 합니다.", "참치의 기름을 뺍니다.", "김 위에 밥, 참치, 깻잎, 오이를 올립니다.", "단단히 말아 썹니다."));
     }
 
+    // JSON-LD가 없거나 깨져 있으면 근거 없음으로 처리해야 합니다.
     @Test
     void extractorTreatsMissingOrInvalidJsonLdAsNoEvidence() {
         SchemaOrgRecipeJsonLdExtractor extractor = new SchemaOrgRecipeJsonLdExtractor(objectMapper);
@@ -91,6 +99,7 @@ class RecipeWebSourceAdapterTest {
         assertThat(extractor.extract(page("https://recipes.example.com/invalid", fixture("invalid-jsonld.html")))).isEmpty();
     }
 
+    // 파싱할 수 없는 재료 줄에 양/단위를 지어내지 않아야 합니다.
     @Test
     void ingredientParserDoesNotInventAmountsForUnparsedLines() {
         SchemaOrgRecipeJsonLdExtractor extractor = new SchemaOrgRecipeJsonLdExtractor(objectMapper);
@@ -105,6 +114,7 @@ class RecipeWebSourceAdapterTest {
         assertThat(recipe.ingredients().get(2).parseStatus()).isEqualTo(IngredientParseStatus.FULL);
     }
 
+    // 다른 요리이거나 요청한 크리에이터와 작성자가 다르면 품질 평가에서 차단해야 합니다.
     @Test
     void qualityAssessmentBlocksWrongDishAndCreatorMismatch() {
         SchemaOrgRecipeJsonLdExtractor extractor = new SchemaOrgRecipeJsonLdExtractor(objectMapper);
@@ -119,6 +129,58 @@ class RecipeWebSourceAdapterTest {
         assertThat(assessor.assess(creatorPlan, authorMismatch).blockingReasons()).contains("작성자 지정 요청과 출처 author가 일치하지 않습니다.");
     }
 
+    // 쇠고기/소고기는 같은 요리로 봐야 합니다. 다른 요리는 여전히 막아야 합니다.
+    @Test
+    void dishMatchTreatsBeefSpellingVariantsAsSameDish() {
+        RecipeSourceQualityAssessor assessor = new RecipeSourceQualityAssessor();
+
+        assertThat(assessor.dishMatches("쇠고기무국", "얼큰소고기무국 만드는 법")).isTrue();
+        assertThat(assessor.dishMatches("소고기무국", "쇠고기무국")).isTrue();
+        assertThat(assessor.dishMatches("쇠고기무국", "된장찌개 끓이는 법")).isFalse();
+        // 요리 이름 뒤에 양념장·소스 등이 붙으면 그 요리가 아니라 부속 레시피입니다(2026-10-14 부대찌개 → 양념장).
+        assertThat(assessor.dishMatches("부대찌개", "부대찌개 양념장 황금레시피")).isFalse();
+        assertThat(assessor.dishMatches("떡볶이", "떡볶이소스 만들기")).isFalse();
+        assertThat(assessor.dishMatches("떡볶이", "떡볶이소스로 만든 국물 떡볶이")).isTrue();
+        assertThat(assessor.dishMatches("떡볶이소스", "떡볶이소스 만들기")).isTrue();
+        assertThat(assessor.dishMatches("닭갈비", "닭갈비 양념 황금레시피")).isTrue();
+        assertThat(assessor.dishMatches("부대찌개", "부대찌개 끓이는 법")).isTrue();
+    }
+
+    // 네이버 블로그 PC 주소는 본문 없는 iframe만 오므로 같은 경로의 모바일 주소로 받습니다.
+    @Test
+    void safeFetcherRequestsMobileNaverBlogKeepingPathAndQuery() {
+        DefaultSafeWebPageFetcher fetcher = new DefaultSafeWebPageFetcher(1, 4096, java.time.Duration.ofMillis(100), java.time.Duration.ofMillis(100));
+
+        assertThat(fetcher.preferFetchableHost(URI.create("https://blog.naver.com/cook/224123?viewType=pc")))
+                .hasToString("https://m.blog.naver.com/cook/224123?viewType=pc");
+        assertThat(fetcher.preferFetchableHost(URI.create("https://blog.naver.com/PostView.naver?blogId=a&logNo=1")))
+                .hasToString("https://m.blog.naver.com/PostView.naver?blogId=a&logNo=1");
+        assertThat(fetcher.preferFetchableHost(URI.create("https://www.10000recipe.com/recipe/1")))
+                .hasToString("https://www.10000recipe.com/recipe/1");
+    }
+
+    // 위키·SNS 결과는 레시피 후보 자리를 차지하지 않아야 합니다.
+    @Test
+    void webSearchSkipsNonRecipeDomainsBeforeCountingCandidates() {
+        com.salus.healthytable.service.SearchEngine engine = mock(com.salus.healthytable.service.SearchEngine.class);
+        when(engine.search("로제떡볶이 레시피")).thenReturn(reactor.core.publisher.Mono.just(
+                new com.salus.healthytable.service.SearchEngine.SearchResponse(
+                        com.salus.healthytable.service.SearchEngine.SearchStatus.SUCCESS,
+                        List.of(
+                                new com.salus.healthytable.service.SearchEngine.SearchResult("로제", "https://namu.wiki/w/rose", "가수"),
+                                new com.salus.healthytable.service.SearchEngine.SearchResult("로제", "https://ko.wikipedia.org/wiki/rose", "가수"),
+                                new com.salus.healthytable.service.SearchEngine.SearchResult("릴스", "https://www.instagram.com/reel/1", "영상"),
+                                new com.salus.healthytable.service.SearchEngine.SearchResult("로제떡볶이 레시피", "https://m.blog.naver.com/a/1", "재료"),
+                                new com.salus.healthytable.service.SearchEngine.SearchResult("로제떡볶이 만들기", "https://www.10000recipe.com/recipe/2", "재료")))));
+        SearchEngineWebRecipeSearchAdapter adapter = new SearchEngineWebRecipeSearchAdapter(engine);
+
+        List<WebRecipeSearchResult> results = adapter.search(List.of("로제떡볶이 레시피"), 2);
+
+        assertThat(results).extracting(WebRecipeSearchResult::url)
+                .containsExactly("https://m.blog.naver.com/a/1", "https://www.10000recipe.com/recipe/2");
+    }
+
+    // "백종원김치찌개"처럼 붙여 쓴 크리에이터 접두어도 구조화 데이터의 작성자와 일치해야 합니다.
     @Test
     void implicitKoreanCreatorPrefixStillRequiresMatchingStructuredAuthor() {
         RecipeSourceQualityAssessor assessor = new RecipeSourceQualityAssessor();
@@ -126,13 +188,14 @@ class RecipeWebSourceAdapterTest {
                 .extract(page("https://recipes.example.com/author", fixture("author-mismatch.html")))
                 .get(0);
         RecipeResearchPlan plan = new DefaultRecipeRequestPlanner(new RecipeNormalizer())
-                .plan("백종원 김치찌개 레시피 알려줘.", false, UserRecipeContext.empty(1L));
+                .plan("백종원 김치찌개 레시피 알려줘.", UserRecipeContext.empty(1L));
 
         assertThat(plan.creatorName()).isEmpty();
         assertThat(assessor.assess(plan, evidence).blockingReasons())
                 .contains("요청의 제작자 접두어와 출처 author가 일치하지 않습니다.");
     }
 
+    // 같은 출처는 중복 제거하되, 작성자가 다른 비슷한 레시피는 따로 유지해야 합니다.
     @Test
     void structuredAdapterDeduplicatesAndKeepsDifferentCreatorsSeparate() {
         StructuredRecipePageAdapter adapter = structuredAdapter(Map.of(
@@ -151,6 +214,33 @@ class RecipeWebSourceAdapterTest {
                 .contains("Salus Kitchen", "다른 작성자");
     }
 
+    // 뺀 재료 없이 만드는 레시피를 찾는 중이면 그 재료가 든 출처는 후보로 세지 않고 다음 출처를 봅니다.
+    // 2026-10-12 "오징어 안 들어간 김치전": 대안 검색의 첫 글도 오징어김치전이라 결과 없음으로 끝남.
+    @Test
+    void alternativeSearchSkipsSourcesContainingAvoidedIngredient() {
+        StructuredRecipePageAdapter adapter = structuredAdapter(Map.of(
+                "https://recipes.example.com/squid", recipeHtml("김치전", "A", List.of("오징어 1마리", "김치 1컵", "부침가루 1컵"),
+                        List.of("반죽을 만든다.", "팬에 부친다.")),
+                "https://recipes.example.com/plain", recipeHtml("김치전", "B", List.of("김치 1컵", "부침가루 1컵", "물 100ml"),
+                        List.of("반죽을 만든다.", "팬에 부친다.")),
+                // 재료 목록에는 없고 조리 순서에만 오징어가 나오는 글도 거릅니다.
+                "https://recipes.example.com/squid-in-steps", recipeHtml("김치전", "C", List.of("김치 1컵", "부침가루 1컵", "물 100ml"),
+                        List.of("반죽을 만든다.", "손질한 오징어를 넣고 섞는다.", "팬에 부친다."))));
+        RecipeResearchPlan plan = plan("김치전", "", List.of("오징어 없는 김치전 레시피")).withAvoidIngredients(List.of("오징어"));
+
+        List<RecipeSourceCandidate> candidates = adapter.collect(plan, List.of(
+                searchResult("https://recipes.example.com/squid", 1),
+                searchResult("https://recipes.example.com/plain", 2),
+                searchResult("https://recipes.example.com/squid-in-steps", 3)));
+
+        assertThat(candidates).isNotEmpty();
+        assertThat(candidates).allSatisfy(candidate -> {
+            assertThat(String.join(" ", candidate.originalRecipe().ingredients())).doesNotContain("오징어");
+            assertThat(String.join(" ", candidate.originalRecipe().steps())).doesNotContain("오징어");
+        });
+    }
+
+    // 작성자가 다른 출처를 요청한 크리에이터의 레시피로 사용하지 않아야 합니다.
     @Test
     void creatorMismatchSourceIsNotUsedAsRequestedCreatorRecipe() {
         StructuredRecipePageAdapter adapter = structuredAdapter(Map.of(
@@ -163,6 +253,7 @@ class RecipeWebSourceAdapterTest {
         assertThat(candidates).isEmpty();
     }
 
+    // 재료만 있는 구조화 출처는 근거로 남기되 사용자에게 레시피로 노출하지 않아야 합니다.
     @Test
     void ingredientsOnlyStructuredSourceIsRetainedAsNonExposableEvidence() {
         String ingredientsOnly = recipeHtml(
@@ -186,13 +277,14 @@ class RecipeWebSourceAdapterTest {
         });
     }
 
+    // 알레르기 개인화 시 원본 레시피와 개인화 레시피를 분리해 유지해야 합니다.
     @Test
     void webCandidateKeepsOriginalAndPersonalizedRecipesSeparateForAllergy() {
         RecipeSourceCandidate candidate = structuredAdapter(Map.of(
                 "https://recipes.example.com/kimbap", fixture("nested-section.html")))
                 .collect(plan("참치김밥", "", List.of("참치김밥 레시피")), List.of(searchResult("https://recipes.example.com/kimbap", 1)))
                 .get(0);
-        UserRecipeContext context = new UserRecipeContext(1L, List.of("깻잎"), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+        UserRecipeContext context = new UserRecipeContext(1L, List.of("깻잎"), List.of(), List.of(), List.of(), List.of(), List.of());
 
         RecipePersonalizationDecision decision = engine().evaluate(candidate.originalRecipe(), context);
         RecipeCandidate personalized = new RecipeModificationService().apply(candidate.originalRecipe(), decision);
@@ -203,6 +295,7 @@ class RecipeWebSourceAdapterTest {
         assertThat(decision.modifications()).extracting(RecipeModification::ingredient).contains("깻잎");
     }
 
+    // 만성질환 판단은 웹 어댑터가 아니라 정책 엔진에서 적용해야 합니다.
     @Test
     void chronicConditionDecisionIsAppliedByPolicyEngineNotWebAdapter() {
         String bananaBruleeHtml = recipeHtml(
@@ -213,12 +306,13 @@ class RecipeWebSourceAdapterTest {
         RecipeSourceCandidate candidate = structuredAdapter(Map.of("https://recipes.example.com/brulee", bananaBruleeHtml))
                 .collect(plan("바나나 브륄레", "", List.of("바나나 브륄레 레시피")), List.of(searchResult("https://recipes.example.com/brulee", 1)))
                 .get(0);
-        UserRecipeContext diabetes = new UserRecipeContext(1L, List.of(), List.of("당뇨"), List.of(), List.of(), List.of("당류 줄이기"), List.of(), List.of());
+        UserRecipeContext diabetes = new UserRecipeContext(1L, List.of(), List.of("당뇨"), List.of(), List.of(), List.of("당류 줄이기"), List.of());
 
         assertThat(candidate.qualityScore().blockingReasons()).isEmpty();
         assertThat(engine().evaluate(candidate.originalRecipe(), diabetes).decisionType()).isEqualTo(RecipeDecisionType.RECOMMEND_ALTERNATIVE);
     }
 
+    // 검증된 출처 후보가 있으면 LLM 자유 생성 없이 결과를 반환할 수 있어야 합니다.
     @Test
     void verifiedCandidateCanBeReturnedWithoutLlmFallback() {
         RecipeSourceDocument source = new RecipeSourceDocument(
@@ -252,6 +346,7 @@ class RecipeWebSourceAdapterTest {
         assertThat(response.getRecipe()).isNotNull();
     }
 
+    // 신뢰할 출처가 없으면 LLM이 임의로 만든 레시피로 대신하지 않아야 합니다.
     @Test
     void noReliableSourceDoesNotFallbackToFreeGeneratedRecipe() {
         RecipeAgentOrchestrator orchestrator = orchestrator((plan, context) -> List.of());
@@ -262,10 +357,12 @@ class RecipeWebSourceAdapterTest {
         ChatDto.Response response = orchestrator.handle(1L, 10L, request).block();
 
         assertThat(response).isNotNull();
-        assertThat(response.getReply()).contains("검증된 레시피 출처를 확보하지 못해 전체 레시피를 임의 생성하지 않았습니다.");
+        assertThat(response.getReply()).contains("믿을 만한 출처에서 찾지 못했어요").contains("지어내지 않기 위해")
+                .doesNotContain("[원본 레시피 기준]");
         assertThat(response.getRecipe()).isNull();
     }
 
+    // 공용 캐시에는 원본 근거만 저장하고 사용자 건강 정보는 저장하지 않아야 합니다.
     @Test
     void commonCacheStoresOnlyOriginalEvidenceNotUserHealthContext() throws Exception {
         RecipeSourceCandidate candidate = structuredAdapter(Map.of(
@@ -281,6 +378,7 @@ class RecipeWebSourceAdapterTest {
         assertThat(json).doesNotContain("userId").doesNotContain("allergies").doesNotContain("contextSnapshot");
     }
 
+    // 안전한 페이지 가져오기는 내부망 주소(SSRF 대상)와 HTML이 아닌/너무 큰 응답을 차단해야 합니다.
     @Test
     void safeFetcherBlocksSsrfTargetsAndUnsafeResponses() {
         DefaultSafeWebPageFetcher fetcher = new DefaultSafeWebPageFetcher(1, 4, java.time.Duration.ofMillis(100), java.time.Duration.ofMillis(100));
@@ -303,6 +401,7 @@ class RecipeWebSourceAdapterTest {
                 .isInstanceOf(SafeWebPageFetchException.class);
     }
 
+    // 아래 private 메서드들은 테스트용 객체(오케스트레이터, 정책 엔진, 가짜 페이지, 검색 계획 등)를 만드는 도우미입니다.
     private RecipeAgentOrchestrator orchestrator(RecipeSourceDiscoveryPort sourcePort) {
         RecipeWorkSessionService workSessionService = mock(RecipeWorkSessionService.class);
         when(workSessionService.find(1L, 10L)).thenReturn(java.util.Optional.empty());
@@ -326,8 +425,7 @@ class RecipeWebSourceAdapterTest {
                 new MedicationInteractionPolicy(new UnknownMedicationFoodInteractionAdapter()),
                 new ChronicConditionPolicy(),
                 new DietaryRestrictionPolicy(),
-                new ExplicitExclusionPolicy(),
-                new FridgeAdaptationPolicy(clock)));
+                new ExplicitExclusionPolicy()));
     }
 
     private StructuredRecipePageAdapter structuredAdapter(Map<String, String> pages) {
@@ -343,7 +441,6 @@ class RecipeWebSourceAdapterTest {
                 creatorName,
                 creatorName == null || creatorName.isBlank() ? RecipeRequestMode.CREATE : RecipeRequestMode.CREATOR_SPECIFIC,
                 false,
-                false,
                 true,
                 queries,
                 3,
@@ -358,6 +455,7 @@ class RecipeWebSourceAdapterTest {
         return new WebPageFetchResult(url, 200, "text/html; charset=utf-8", body, LocalDateTime.of(2026, 7, 19, 12, 0), "hash-" + url.hashCode());
     }
 
+    // 테스트 리소스(recipe-agent-fixtures)의 HTML/JSON 파일을 읽습니다.
     private String fixture(String name) {
         try (InputStream inputStream = getClass().getResourceAsStream("/recipe-agent-fixtures/" + name)) {
             if (inputStream == null) {

@@ -19,6 +19,7 @@ import {
 import useResponsive from '../hooks/useResponsive';
 import { color, radius, spacing, typography } from '../theme/tokens';
 
+// 요일 이름, 보기 방식(오늘/주간/월간), 끼니 칸 정의
 const WEEK_DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const VIEW_ITEMS = [{ id: 'today', label: '오늘' }, { id: 'week', label: '주간' }, { id: 'month', label: '월간' }];
 const MEAL_SLOTS = [
@@ -28,17 +29,24 @@ const MEAL_SLOTS = [
   { id: 'snacks', label: '간식', icon: 'cafe-outline', tone: color.accent },
 ];
 
+// 날짜 도우미 함수들: "YYYY-MM-DD" 문자열, "8월 13일 수요일" 라벨, 같은 날짜 비교, 날짜 더하기, 주의 시작(일요일)
 const formatDate = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const dateLabel = date => `${date.getMonth() + 1}월 ${date.getDate()}일 ${WEEK_DAYS[date.getDay()]}요일`;
 const sameDate = (left, right) => formatDate(left) === formatDate(right);
 const addDays = (date, days) => { const next = new Date(date); next.setDate(next.getDate() + days); return next; };
 const startOfWeek = date => addDays(date, -date.getDay());
 
+// JSON 문자열로 저장된 상세 정보를 객체로 바꿉니다. 형식이 깨졌으면 빈 객체를 반환합니다.
 const parseDetails = value => {
   if (!value) return {};
   try { return typeof value === 'string' ? JSON.parse(value) : value; } catch { return {}; }
 };
 
+/**
+ * 식단 기록(캘린더) 화면입니다.
+ * 오늘/주간/월간 보기로 끼니별 기록과 칼로리, AI 추천 여부, 저장된 레시피 상세를 보여 주고,
+ * 월간 AI 식단 총평을 함께 표시합니다. 식사 추가 버튼은 AI 채팅으로 이동해 추천을 요청합니다.
+ */
 export default function CalendarScreen({ mealData, setMealData, onToggleSidebar, onNavigate, webMode = false }) {
   const { isLoggedIn, token } = useAuth();
   const { isDesktop } = useResponsive();
@@ -51,6 +59,7 @@ export default function CalendarScreen({ mealData, setMealData, onToggleSidebar,
   const [errors, setErrors] = useState([]);
   const [expandedMeal, setExpandedMeal] = useState(null);
 
+  // 식단 기록, 활동 기록, 월간 분석을 동시에 불러와 화면에서 쓰기 쉬운 "날짜 → 기록" 형태로 변환합니다.
   const loadData = async () => {
     if (!token) return;
     setLoading(true);
@@ -94,6 +103,7 @@ export default function CalendarScreen({ mealData, setMealData, onToggleSidebar,
     setLoading(false);
   };
 
+  // 로그인 상태나 표시 중인 연/월이 바뀌면 다시 불러옵니다.
   useEffect(() => {
     if (isLoggedIn && token) loadData();
     else setLoading(false);
@@ -103,6 +113,7 @@ export default function CalendarScreen({ mealData, setMealData, onToggleSidebar,
   const selectedMeal = mealData[selectedKey] || {};
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(startOfWeek(selectedDate), index)), [selectedKey]);
 
+  // 월간 달력 칸: 1일 앞의 빈칸(요일 맞춤) + 그 달의 날짜들
   const monthCells = useMemo(() => {
     const year = displayMonth.getFullYear();
     const month = displayMonth.getMonth();
@@ -111,6 +122,7 @@ export default function CalendarScreen({ mealData, setMealData, onToggleSidebar,
     return [...Array(first.getDay()).fill(null), ...Array.from({ length: days }, (_, index) => new Date(year, month, index + 1))];
   }, [displayMonth]);
 
+  // 선택한 날짜의 총 칼로리와 기록된 끼니 수
   const calorieTotal = ['breakfastCalories', 'lunchCalories', 'dinnerCalories'].reduce((sum, key) => sum + (Number(selectedMeal[key]) || 0), 0);
   const recordedSlots = ['breakfast', 'lunch', 'dinner'].filter(key => selectedMeal[key]).length + (Array.isArray(selectedMeal.snacks) && selectedMeal.snacks.length ? 1 : 0);
 
@@ -121,8 +133,10 @@ export default function CalendarScreen({ mealData, setMealData, onToggleSidebar,
 
   const navigateMonth = delta => setDisplayMonth(previous => new Date(previous.getFullYear(), previous.getMonth() + delta, 1));
 
+  // AI 채팅 화면으로 이동하면서 입력창에 미리 채울 메시지를 넘깁니다.
   const askAi = message => onNavigate?.('chat', { prompt: message });
 
+  // 끼니 카드 하나를 그립니다(메뉴, 칼로리, AI 추천 표시, 레시피 펼치기/식사 추가 버튼).
   const renderMealSlot = slot => {
     const content = slot.id === 'snacks'
       ? (Array.isArray(selectedMeal.snacks) ? selectedMeal.snacks.map(value => typeof value === 'string' ? value : value.name).filter(Boolean).join(', ') : '')
@@ -148,6 +162,7 @@ export default function CalendarScreen({ mealData, setMealData, onToggleSidebar,
     );
   };
 
+  // 선택한 날짜의 요약(칼로리)과 끼니 목록 패널
   const TodayPanel = () => (
     <View style={styles.todayPanel}>
       <View style={styles.dateHeading}><View><Text style={styles.dateEyebrow}>{sameDate(selectedDate, new Date()) ? 'TODAY' : 'SELECTED DAY'}</Text><Text style={styles.dateTitle}>{dateLabel(selectedDate)}</Text></View><Button variant="secondary" icon="sparkles-outline" label="AI 추천" onPress={() => askAi(`${dateLabel(selectedDate)} 식단을 내 조건에 맞게 추천해줘`)} /></View>

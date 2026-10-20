@@ -15,6 +15,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * YouTube Data API v3(search, videos)를 호출하는 어댑터입니다.
+ * API 키가 없거나 호출이 실패하면 예외 대신 빈 목록을 반환해, YouTube 출처 없이도 전체 흐름이 계속되게 합니다.
+ */
 @Slf4j
 @Component
 class YouTubeApiClientAdapter implements YouTubeSearchPort, YouTubeVideoMetadataPort {
@@ -23,24 +27,41 @@ class YouTubeApiClientAdapter implements YouTubeSearchPort, YouTubeVideoMetadata
 
     private final WebClient webClient;
     private final String apiKey;
+    // 하루 무료 할당량을 넘지 않게 호출 전에 단위를 예약합니다.
+    private final YouTubeQuotaGuard quotaGuard;
 
+    // 스프링용 생성자(실제 YouTube API 주소 사용)와, 테스트에서 가짜 서버 주소를 넣는 생성자입니다.
     @Autowired
     YouTubeApiClientAdapter(
             WebClient.Builder webClientBuilder,
-            @Value("${recipe.agent.youtube-api-key:}") String apiKey) {
-        this(webClientBuilder, apiKey, "https://www.googleapis.com/youtube/v3");
+            @Value("${recipe.agent.youtube-api-key:}") String apiKey,
+            YouTubeQuotaGuard quotaGuard) {
+        this(webClientBuilder, apiKey, "https://www.googleapis.com/youtube/v3", quotaGuard);
     }
 
-    YouTubeApiClientAdapter(WebClient.Builder webClientBuilder, String apiKey, String baseUrl) {
+    YouTubeApiClientAdapter(WebClient.Builder webClientBuilder, String apiKey, String baseUrl, YouTubeQuotaGuard quotaGuard) {
         this.webClient = webClientBuilder
                 .baseUrl(baseUrl)
                 .build();
         this.apiKey = apiKey == null ? "" : apiKey.trim();
+        this.quotaGuard = quotaGuard;
     }
 
+    // 구글이 할당량 초과(403)를 알려 오면 그날은 더 부르지 않습니다.
+    private void noteFailure(Throwable error) {
+        if (error instanceof org.springframework.web.reactive.function.client.WebClientResponseException response
+                && response.getStatusCode().value() == 403 && quotaGuard != null) {
+            quotaGuard.markExhausted();
+        }
+    }
+
+    // 검색어로 영상을 검색합니다. 자막 선호 시 자막이 있는 영상만 요청합니다.
     @Override
     public List<YouTubeVideoSearchResult> search(YouTubeRecipeSearchQuery query) {
         if (apiKey.isBlank() || query == null || query.query() == null || query.query().isBlank()) {
+            return List.of();
+        }
+        if (quotaGuard == null || !quotaGuard.tryReserve(YouTubeQuotaGuard.SEARCH_UNITS)) {
             return List.of();
         }
         try {
@@ -64,6 +85,7 @@ class YouTubeApiClientAdapter implements YouTubeSearchPort, YouTubeVideoMetadata
                     .bodyToMono(YouTubeSearchResponse.class)
                     .timeout(API_TIMEOUT)
                     .onErrorResume(e -> {
+                        noteFailure(e);
                         log.warn("[RecipeAgentYouTube] Search API failed. category={}", e.getClass().getSimpleName());
                         return Mono.empty();
                     })
@@ -87,6 +109,7 @@ class YouTubeApiClientAdapter implements YouTubeSearchPort, YouTubeVideoMetadata
         }
     }
 
+    // 영상 ID 목록(중복 제거, 최대 50개)으로 설명, 길이, 통계 등 상세 정보를 한 번에 조회합니다.
     @Override
     public List<YouTubeVideoMetadata> findByVideoIds(List<String> videoIds) {
         List<String> distinctIds = videoIds == null ? List.<String>of() : videoIds.stream()
@@ -96,6 +119,9 @@ class YouTubeApiClientAdapter implements YouTubeSearchPort, YouTubeVideoMetadata
                 .limit(50)
                 .toList();
         if (apiKey.isBlank() || distinctIds.isEmpty()) {
+            return List.of();
+        }
+        if (quotaGuard == null || !quotaGuard.tryReserve(YouTubeQuotaGuard.VIDEOS_UNITS)) {
             return List.of();
         }
         try {
@@ -109,6 +135,7 @@ class YouTubeApiClientAdapter implements YouTubeSearchPort, YouTubeVideoMetadata
                     .bodyToMono(YouTubeVideosResponse.class)
                     .timeout(API_TIMEOUT)
                     .onErrorResume(e -> {
+                        noteFailure(e);
                         log.warn("[RecipeAgentYouTube] Videos API failed. category={}", e.getClass().getSimpleName());
                         return Mono.empty();
                     })
@@ -126,6 +153,7 @@ class YouTubeApiClientAdapter implements YouTubeSearchPort, YouTubeVideoMetadata
         }
     }
 
+    // API 응답 항목을 내부 메타데이터 record로 변환합니다. 숫자 통계는 문자열로 오므로 Long으로 바꿉니다.
     private YouTubeVideoMetadata toMetadata(YouTubeVideoItem item) {
         YouTubeSnippet snippet = item.snippet();
         YouTubeContentDetails contentDetails = item.contentDetails();
@@ -187,6 +215,7 @@ class YouTubeApiClientAdapter implements YouTubeSearchPort, YouTubeVideoMetadata
         return value == null || value.isBlank() ? fallback : value.trim();
     }
 
+    // 아래 record들은 YouTube API 응답 JSON 구조 중 필요한 필드만 매핑합니다.
     @JsonIgnoreProperties(ignoreUnknown = true)
     record YouTubeSearchResponse(List<YouTubeSearchItem> items) {
     }

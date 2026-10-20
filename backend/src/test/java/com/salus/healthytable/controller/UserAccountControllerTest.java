@@ -37,6 +37,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * 내 계정 API(데이터 요약, 회원 탈퇴) 보안/응답 테스트입니다.
+ */
 @WebMvcTest(UserAccountController.class)
 @Import({
         SecurityConfig.class,
@@ -65,6 +68,7 @@ class UserAccountControllerTest {
     @MockBean
     private UserRepository userRepository;
 
+    // 로그인하지 않으면 데이터 요약을 볼 수 없어야 합니다.
     @Test
     void unauthenticatedUserCannotReadDataSummary() throws Exception {
         mockMvc.perform(get("/api/users/me/data-summary"))
@@ -78,6 +82,7 @@ class UserAccountControllerTest {
         verifyNoInteractions(userAccountService);
     }
 
+    // 로그인하지 않으면 회원 탈퇴를 할 수 없어야 합니다.
     @Test
     void unauthenticatedUserCannotDeleteAccount() throws Exception {
         mockMvc.perform(delete("/api/users/me"))
@@ -91,12 +96,12 @@ class UserAccountControllerTest {
         verifyNoInteractions(userAccountService);
     }
 
+    // 로그인 사용자는 자신의 데이터 요약을 볼 수 있어야 합니다.
     @Test
     void authenticatedUserCanReadOwnDataSummary() throws Exception {
         when(userAccountService.summarizeUserData(1L)).thenReturn(UserDataSummaryDTO.builder()
                 .healthProfiles(1)
                 .healthCheckups(2)
-                .fridgeItems(3)
                 .mealLogs(4)
                 .recommendations(5)
                 .activityLogs(6)
@@ -113,7 +118,6 @@ class UserAccountControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.healthProfiles").value(1))
                 .andExpect(jsonPath("$.healthCheckups").value(2))
-                .andExpect(jsonPath("$.fridgeItems").value(3))
                 .andExpect(jsonPath("$.mealLogs").value(4))
                 .andExpect(jsonPath("$.recommendations").value(5))
                 .andExpect(jsonPath("$.activityLogs").value(6))
@@ -128,6 +132,7 @@ class UserAccountControllerTest {
         verify(userAccountService).summarizeUserData(1L);
     }
 
+    // 로그인 사용자는 자신의 계정을 삭제할 수 있어야 합니다.
     @Test
     void authenticatedUserCanDeleteOwnAccount() throws Exception {
         mockMvc.perform(delete("/api/users/me").with(authentication(userAuthentication())))
@@ -137,6 +142,7 @@ class UserAccountControllerTest {
         verify(userAccountService).deleteAccount(1L);
     }
 
+    // 삭제할 사용자가 없으면 404 JSON 오류여야 합니다.
     @Test
     void deleteAccountMissingUserReturnsJsonNotFound() throws Exception {
         doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."))
@@ -151,6 +157,7 @@ class UserAccountControllerTest {
                 .andExpect(jsonPath("$.path").value("/api/users/me"));
     }
 
+    // 테스트용 로그인 사용자 인증 정보를 만듭니다.
     private UsernamePasswordAuthenticationToken userAuthentication() {
         return new UsernamePasswordAuthenticationToken(
                 "1",

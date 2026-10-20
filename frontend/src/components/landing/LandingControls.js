@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import SalusLogo from '../SalusLogo';
 import { landingColors, landingLayout, webPointer } from './landingTheme';
 
+// 랜딩 페이지 버튼. 웹에서는 마우스 올림(hover)/키보드 포커스 시 강조 스타일을 적용합니다.
 export function LandingButton({ label, icon, variant = 'primary', onPress, compact = false }) {
     const primary = variant === 'primary';
 
@@ -30,6 +31,7 @@ export function LandingButton({ label, icon, variant = 'primary', onPress, compa
     );
 }
 
+// 랜딩 페이지 상단 헤더(로고 + 로그인/AI 셰프 열기 버튼)
 export function LandingHeader({ compact, isLoggedIn, onStart }) {
     return (
         <View style={[styles.header, compact && styles.headerCompact]}>

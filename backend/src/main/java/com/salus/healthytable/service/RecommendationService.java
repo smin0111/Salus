@@ -8,112 +8,36 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.salus.healthytable.dto.RecommendationDTO;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * 커뮤니티 "나를 위한 추천" 레시피를 조회하는 서비스입니다.
+ *
+ * 추천은 냉장고 재료와 겹치는 레시피로 계산했지만, 냉장고 기능을 없애면서(2026-10-15) 추천 근거가 없어졌습니다.
+ * 근거 없이 아무 레시피나 추천하지 않도록 지금은 추천을 만들지 않고 빈 목록을 돌려줍니다. 새 기준이 정해지면 여기서 계산합니다.
+ */
 @Service
 @RequiredArgsConstructor
 public class RecommendationService {
 
     private final RecipeRepository recipeRepository;
-    private final FridgeItemRepository fridgeItemRepository;
-    private final HealthProfileRepository healthProfileRepository;
     private final RecommendationRepository recommendationRepository;
 
     /**
-     * 사용자의 냉장고와 건강 정보를 기반으로 추천 생성
+     * 추천을 다시 계산합니다. 이전 추천 기록은 지우고, 현재는 추천 근거가 없어 새로 만들지 않습니다.
      */
     @Transactional
     public List<Recommendation> generateRecommendations(Long userId) {
         validateUserId(userId);
-
-        // 1. 데이터 준비
-        List<Recipe> allRecipes = recipeRepository.findAll();
-        List<FridgeItem> fridgeItems = fridgeItemRepository.findByUserId(userId);
-        HealthProfile healthProfile = healthProfileRepository.findByUserId(userId).orElse(null);
-
-        List<String> fridgeItemNames = fridgeItems.stream()
-                .map(FridgeItem::getName)
-                .collect(Collectors.collectingAndThen(Collectors.toList(), this::normalizeValues));
-
-        List<String> allergies = (healthProfile != null && healthProfile.getAllergies() != null)
-                ? normalizeValues(healthProfile.getAllergies())
-                : new ArrayList<>();
-
-        // 기존 추천 삭제
         recommendationRepository.deleteByUserId(userId);
-
-        List<Recommendation> recommendations = new ArrayList<>();
-
-        for (Recipe recipe : allRecipes) {
-            double score = calculateScore(recipe, fridgeItemNames, allergies);
-
-            if (score > 0) {
-                Recommendation recommendation = new Recommendation();
-                recommendation.setUserId(userId);
-                recommendation.setRecipeId(recipe.getId());
-                recommendation.setScore(score);
-                recommendation.setReason(generateReason(recipe, fridgeItemNames));
-                recommendations.add(recommendationRepository.save(recommendation));
-            }
-        }
-
-        return recommendations;
+        return List.of();
     }
 
-    private double calculateScore(Recipe recipe, List<String> userIngredients, List<String> allergies) {
-        double score = 0;
-        List<String> recipeIngredients = normalizeValues(recipe.getIngredients());
-
-        if (recipeIngredients.isEmpty())
-            return 0;
-
-        // 알러지 필터링
-        for (String allergy : allergies) {
-            for (String ri : recipeIngredients) {
-                if (containsIgnoreCase(ri, allergy)) {
-                    return -100; // 알러지 유발 음식은 배제
-                }
-            }
-        }
-
-        // 재료 매칭 점수 (개당 10점)
-        for (String recipeIng : recipeIngredients) {
-            for (String userIng : userIngredients) {
-                if (containsIgnoreCase(recipeIng, userIng) || containsIgnoreCase(userIng, recipeIng)) {
-                    score += 10;
-                }
-            }
-        }
-
-        return score;
-    }
-
-    private String generateReason(Recipe recipe, List<String> userIngredients) {
-        Set<String> matched = new LinkedHashSet<>();
-        List<String> recipeIngredients = normalizeValues(recipe.getIngredients());
-
-        for (String recipeIng : recipeIngredients) {
-            for (String userIng : userIngredients) {
-                if (containsIgnoreCase(recipeIng, userIng) || containsIgnoreCase(userIng, recipeIng)) {
-                    matched.add(userIng);
-                    break;
-                }
-            }
-        }
-
-        if (matched.isEmpty()) {
-            return "건강 정보를 고려한 추천입니다.";
-        }
-
-        return "냉장고 속 " + String.join(", ", matched.stream().limit(2).collect(Collectors.toList())) + "을(를) 활용한 레시피예요!";
-    }
-
+    /**
+     * 저장된 추천을 점수순으로 조회합니다. 아직 추천이 없으면 먼저 계산해서 저장한 뒤 조회합니다.
+     */
     public List<RecommendationDTO> getRecommendations(Long userId) {
         validateUserId(userId);
 
@@ -147,26 +71,5 @@ public class RecommendationService {
         if (userId == null) {
             throw new IllegalArgumentException("사용자 정보가 필요합니다.");
         }
-    }
-
-    private List<String> normalizeValues(List<String> values) {
-        if (values == null || values.isEmpty()) {
-            return List.of();
-        }
-
-        return values.stream()
-                .filter(Objects::nonNull)
-                .map(value -> value.replaceAll("\\s+", " ").trim())
-                .filter(value -> !value.isBlank())
-                .collect(Collectors.collectingAndThen(
-                        Collectors.toCollection(LinkedHashSet::new),
-                        List::copyOf));
-    }
-
-    private boolean containsIgnoreCase(String source, String keyword) {
-        if (source == null || keyword == null || source.isBlank() || keyword.isBlank()) {
-            return false;
-        }
-        return source.toLowerCase(Locale.ROOT).contains(keyword.toLowerCase(Locale.ROOT));
     }
 }

@@ -22,9 +22,14 @@ import { getApiErrorMessage, isAuthError } from '../utils/apiError';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+// 제목/내용 최대 길이(백엔드 검증 기준과 맞춘 값)
 const MAX_POST_TITLE_LENGTH = 200;
 const MAX_POST_CONTENT_LENGTH = 10000;
 
+/**
+ * 커뮤니티 레시피 게시글 작성 화면입니다.
+ * 제목/내용(필수), 재료/조리 순서(한 줄에 하나씩), 사진, 태그를 입력해 게시글을 등록합니다.
+ */
 export default function CreatePostScreen({ onNavigate, user, webMode = false }) {
     const insets = useSafeAreaInsets();
     const { token } = useAuth();
@@ -36,8 +41,13 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
     const [selectedTags, setSelectedTags] = useState([]);
     const [submitting, setSubmitting] = useState(false);
 
+    // 선택할 수 있는 태그 목록
     const PREDEFINED_TAGS = ['한식', '중식', '일식', '양식', '비건', '다이어트', '디저트', '안주', '자취요리', '간편식'];
 
+    /**
+     * 카메라 촬영 또는 갤러리에서 사진을 고릅니다. 먼저 권한을 요청하고, 거부되면 안내 후 종료합니다.
+     * 선택한 사진은 기기 안의 파일 주소(uri)로 저장됩니다.
+     */
     const pickImage = async (useCamera = false) => {
         let result;
         const options = {
@@ -73,6 +83,7 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
         }
     };
 
+    // 태그를 누를 때마다 선택/해제를 전환합니다.
     const toggleTag = (tag) => {
         if (selectedTags.includes(tag)) {
             setSelectedTags(selectedTags.filter(t => t !== tag));
@@ -81,6 +92,7 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
         }
     };
 
+    // 로그인과 입력값(공백 정리 후 필수값, 최대 길이)을 확인한 뒤 게시글을 등록합니다.
     const handleSubmit = async () => {
         if (!token) {
             Alert.alert('로그인 필요', '게시글 작성은 로그인 후 사용할 수 있습니다.');
@@ -119,6 +131,7 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
                 .map(item => item.trim())
                 .filter(item => item.length > 0);
 
+            // 개인 작성 내용 대신 길이/개수만 로그로 남깁니다.
             debugLog('게시글 작성 요청:', {
                 titleLength: normalizedTitle.length,
                 contentLength: normalizedContent.length,

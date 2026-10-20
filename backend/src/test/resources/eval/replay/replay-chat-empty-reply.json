@@ -1,0 +1,9 @@
+{
+  "note": "thinking이 num_predict를 모두 소진해 content가 빈 채로 돌아온 응답. 프로덕션에서 실제로 났던 증상이다.",
+  "response": {
+    "model": "qwen3:8b",
+    "done": true,
+    "done_reason": "length",
+    "message": {"role": "assistant", "content": "", "thinking": "사용자가 김치찌개를 물어봤다. 재료를 정리해 보자..."}
+  }
+}

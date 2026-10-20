@@ -1,115 +1,255 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ScrollView, Alert, Platform } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ScrollView, Alert, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import axios from 'axios';
 import config from '../config';
 import { useAuth } from '../context/AuthContext';
 import { debugLog } from '../utils/logger';
-import { PORTONE_IMP_CODE, SUBSCRIPTION_AMOUNT, SUBSCRIPTION_PRICE_LABEL } from '../constants/subscription';
+import { PORTONE_IMP_CODE } from '../constants/subscription';
 import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
+// "2026-11-16T01:48:35" → "2026-11-16"
+const formatDate = (value) => (typeof value === 'string' ? value.slice(0, 10) : '');
+const formatWon = (amount) => `${Number(amount || 0).toLocaleString('ko-KR')}원`;
+
+/**
+ * PLUS 이용권 결제 화면입니다.
+ *
+ * 순서: 화면을 열면 서버에 재확인(reconcile)을 요청해, 지난번 결제 후 확인이 빠진 주문이 있으면 마무리합니다
+ * → 결제할 수 있는 상태면 서버가 주문(주문번호·금액·상품명)을 미리 만들어 둡니다 → 결제 버튼을 누르면 그 값으로 바로
+ * 포트원 결제창을 열고 → 결제가 끝나면 서버가 주문 주인과 포트원 결제 내역을 확인해 PLUS 기간을 더합니다.
+ * 주문을 버튼을 누른 뒤에 만들면(서버 응답을 기다린 뒤 결제창을 열면) 브라우저가 카카오페이 팝업을 막습니다.
+ * 웹에서는 Alert.alert가 아무것도 띄우지 않으므로 안내·오류는 화면의 알림 상자(notice)로 보여 줍니다.
+ * 앱(iOS/Android) 결제는 아직 지원하지 않습니다(스토어 인앱결제 필요).
+ */
 export default function UpgradeScreen({ onBack, onSuccess }) {
     const { user, token, isLoggedIn, refreshUser } = useAuth();
+    const [status, setStatus] = useState(null);
+    const [statusError, setStatusError] = useState('');
     const [loading, setLoading] = useState(false);
-    const [sdkReady, setSdkReady] = useState(false);
+    const [sdkReady, setSdkReady] = useState(Platform.OS !== 'web');
+    // 결제는 됐는데 서버 확인이 실패한 경우 "다시 확인" 버튼을 보여 줍니다.
+    const [needsRecheck, setNeedsRecheck] = useState(false);
+    // 미리 만들어 둔 결제 주문(버튼을 누르면 바로 결제창을 열기 위함)
+    const [order, setOrder] = useState(null);
+    // 화면에 보여 줄 안내·오류 { tone: 'error' | 'info' | 'success', text }
+    const [notice, setNotice] = useState(null);
 
-    // 웹 환경인 경우 PortOne 결제 SDK를 동적으로 주입
-    useEffect(() => {
-        if (Platform.OS === 'web') {
-            if (window.IMP) {
-                setSdkReady(true);
-                return;
-            }
-
-            const script = document.createElement('script');
-            script.src = 'https://cdn.iamport.kr/v1/iamport.js';
-            script.type = 'text/javascript';
-            script.async = true;
-            script.onload = () => {
-                setSdkReady(true);
-                debugLog('PortOne SDK loaded successfully.');
-            };
-            script.onerror = () => {
-                console.error('Failed to load PortOne SDK.');
-                Alert.alert('오류', '결제 모듈을 불러오지 못했습니다. 네트워크를 확인해 주세요.');
-            };
-            document.head.appendChild(script);
-        } else {
-            setSdkReady(true);
+    // 웹은 화면 알림 상자로, 앱은 Alert로 알립니다.
+    const notify = (tone, title, text) => {
+        setNotice({ tone, text: `${title} · ${text}` });
+        if (Platform.OS !== 'web') {
+            Alert.alert(title, text);
         }
+    };
+
+    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
+    // 서버의 PLUS 상태를 다시 읽습니다. 확인이 빠진 결제가 있으면 서버가 이때 마무리합니다.
+    const reconcile = useCallback(async () => {
+        if (!isLoggedIn || !token) {
+            // 로그인 전에도 가격·기간은 보여 줍니다(이용 상태는 없음).
+            try {
+                const response = await axios.get(`${config.API_BASE_URL}/payments/product`);
+                setStatus(response.data);
+            } catch (error) {
+                setStatusError(getErrorMessage(error, '결제 정보를 불러오지 못했습니다.'));
+            }
+            return null;
+        }
+        try {
+            const response = await axios.post(`${config.API_BASE_URL}/payments/reconcile`, null, { headers: authHeaders });
+            setStatus(response.data);
+            setStatusError('');
+            if (response.data?.plusActive && user?.grade !== 'PLUS') {
+                await refreshUser();
+            }
+            return response.data;
+        } catch (error) {
+            if (isAuthError(error)) return null;
+            setStatusError(getErrorMessage(error, '결제 정보를 불러오지 못했습니다.'));
+            return null;
+        }
+    }, [isLoggedIn, token, user?.grade]);
+
+    useEffect(() => {
+        reconcile();
+    }, [reconcile]);
+
+    // 웹 환경이면 포트원 결제 SDK를 불러옵니다.
+    useEffect(() => {
+        if (Platform.OS !== 'web') return;
+        if (window.IMP) {
+            setSdkReady(true);
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://cdn.iamport.kr/v1/iamport.js';
+        script.type = 'text/javascript';
+        script.async = true;
+        script.onload = () => {
+            setSdkReady(true);
+            debugLog('PortOne SDK loaded successfully.');
+        };
+        script.onerror = () => {
+            console.error('Failed to load PortOne SDK.');
+            notify('error', '오류', '결제 모듈을 불러오지 못했습니다. 네트워크를 확인해 주세요.');
+        };
+        document.head.appendChild(script);
     }, []);
 
+    // 결제 확인이 실패했을 때: 서버가 주문번호로 포트원에 다시 조회해 마무리합니다.
+    const recheckPayment = async () => {
+        setLoading(true);
+        const latest = await reconcile();
+        setLoading(false);
+        if (latest?.plusActive) {
+            setNeedsRecheck(false);
+            notify('success', '결제 확인 완료', `PLUS가 적용되었어요(${formatDate(latest.plusExpiresAt)}까지).`);
+            if (onSuccess) onSuccess();
+        } else {
+            notify('info', '확인 중', '아직 결제가 확인되지 않았어요. 잠시 후 다시 시도해 주세요.');
+        }
+    };
+
+    const verifyPayment = async (impUid, merchantUid) => {
+        setLoading(true);
+        try {
+            const response = await axios.post(`${config.API_BASE_URL}/payments/verify`,
+                { impUid, merchantUid }, { headers: authHeaders });
+            if (response.data?.success) {
+                setStatus(response.data.plus);
+                setNeedsRecheck(false);
+                await refreshUser();
+                notify('success', '결제 완료', `PLUS가 적용되었어요(${formatDate(response.data.plus?.plusExpiresAt)}까지).`);
+                if (onSuccess) onSuccess();
+            } else {
+                setNeedsRecheck(true);
+                notify('error', '결제 확인 실패', response.data?.message || '결제를 확인하지 못했습니다.');
+            }
+        } catch (error) {
+            if (isAuthError(error)) return;
+            console.error('Payment validation failed:', error);
+            // 결제는 됐을 수 있으므로 "다시 확인"으로 서버가 포트원에 재조회하게 합니다.
+            setNeedsRecheck(true);
+            notify('error', '결제 확인 실패', getErrorMessage(error,
+                '결제는 됐지만 확인이 끝나지 않았을 수 있어요. 아래 "결제 다시 확인"을 눌러 주세요.'));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const canPay = Platform.OS === 'web' && isLoggedIn && !!token
+        && !!status?.paymentEnabled && !status?.plusActive;
+
+    // 결제할 수 있는 상태가 되면 주문을 미리 만들어 둡니다. 결제를 마치거나 취소하면 새 주문을 다시 만듭니다.
+    const prepareOrder = useCallback(async () => {
+        try {
+            const response = await axios.post(`${config.API_BASE_URL}/payments/orders`, null, { headers: authHeaders });
+            setOrder(response.data);
+        } catch (error) {
+            if (isAuthError(error)) return;
+            setOrder(null);
+            notify('error', '주문 준비 실패', getErrorMessage(error, '결제 주문을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.'));
+        }
+    }, [token]);
+
+    useEffect(() => {
+        if (canPay && !order) {
+            prepareOrder();
+        }
+    }, [canPay, order, prepareOrder]);
+
+    // 결제 버튼: 미리 만든 주문으로 바로 결제창을 엽니다(서버를 기다리지 않아야 팝업이 막히지 않음).
     const handlePayment = () => {
-        if (!isLoggedIn || !token) {
-            Alert.alert("로그인 필요", "멤버십 업그레이드는 로그인 후 가능합니다.");
-            return;
-        }
-
-        if (Platform.OS !== 'web') {
-            Alert.alert("알림", "현재 결제 기능은 웹 환경에서만 테스트 가능합니다.");
-            return;
-        }
-
+        setNotice(null);
         const { IMP } = window;
         if (!IMP) {
-            Alert.alert("알림", "결제 모듈이 아직 로드 중입니다. 잠시 후 다시 시도해 주세요.");
+            notify('error', '결제 모듈 준비 중', '결제 모듈을 불러오는 중이에요. 잠시 후 다시 눌러 주세요.');
+            return;
+        }
+        if (!order) {
+            notify('info', '주문 준비 중', '결제 주문을 준비하고 있어요. 잠시 후 다시 눌러 주세요.');
+            prepareOrder();
             return;
         }
 
+        const current = order;
         IMP.init(PORTONE_IMP_CODE);
-
-        const merchantUid = `mid_${new Date().getTime()}`;
-
         IMP.request_pay({
-            pg: 'kakaopay.TC0ONETIME', // 카카오페이 테스트
+            pg: current.pg,
             pay_method: 'card',
-            merchant_uid: merchantUid,
-            name: '내 셰프 AI 플러스 멤버십',
-            amount: SUBSCRIPTION_AMOUNT,
-            buyer_email: user?.email || 'test@example.com',
-            buyer_name: user?.name || '테스트유저',
-        }, async (rsp) => {
+            merchant_uid: current.merchantUid,
+            name: current.productName,
+            amount: current.amount,
+            buyer_name: user?.name || '',
+            ...(user?.email ? { buyer_email: user.email } : {}),
+        }, (rsp) => {
+            // 성공·실패와 상관없이 이 주문은 썼으므로 다음 결제는 새 주문으로 합니다.
+            setOrder(null);
             if (rsp.success) {
-                // 결제 성공 시 서버 검증 요청
-                try {
-                    setLoading(true);
-                    const response = await axios.post(`${config.API_BASE_URL}/payments/verify`, {
-                        impUid: rsp.imp_uid,
-                        merchantUid: rsp.merchant_uid
-                    }, {
-                        headers: {
-                            Authorization: `Bearer ${token}`
-                        }
-                    });
-
-                    if (response.data && response.data.success) {
-                        await refreshUser(); // 유저 등급 상태 갱신
-                        Alert.alert("성공", "플러스 멤버십으로 업그레이드되었습니다.");
-                        if (onSuccess) onSuccess();
-                    } else {
-                        Alert.alert("결제 실패", response.data.message || "결제 검증에 실패했습니다.");
-                    }
-                } catch (error) {
-                    if (isAuthError(error)) return;
-                    console.error("Payment validation failed:", error);
-                    Alert.alert("오류", getErrorMessage(error, "결제 검증에 실패했습니다. 고객센터에 문의해주세요."));
-                } finally {
-                    setLoading(false);
-                }
+                verifyPayment(rsp.imp_uid, rsp.merchant_uid);
             } else {
-                Alert.alert("결제 실패", rsp.error_msg);
+                notify('error', '결제가 끝나지 않았어요', rsp.error_msg || '결제를 취소했거나 완료되지 않았어요.');
             }
         });
     };
 
+    const renderAction = () => {
+        if (!isLoggedIn) {
+            return <Text style={styles.footerNote}>로그인 후 결제할 수 있어요.</Text>;
+        }
+        if (!status) {
+            return statusError
+                ? <Text style={styles.footerNote}>{statusError}</Text>
+                : <ActivityIndicator color={colors.primary} />;
+        }
+        if (status.plusActive) {
+            return (
+                <View style={styles.activeBox}>
+                    <Ionicons name="sparkles" size={18} color={colors.primary} />
+                    <Text style={styles.activeText}>PLUS 이용 중 · {formatDate(status.plusExpiresAt)}까지</Text>
+                </View>
+            );
+        }
+        if (!status.paymentEnabled) {
+            return <Text style={styles.footerNote}>지금은 결제를 받지 않고 있어요(베타 기간).</Text>;
+        }
+        if (Platform.OS !== 'web') {
+            return <Text style={styles.footerNote}>지금은 웹에서만 결제할 수 있어요.</Text>;
+        }
+        return (
+            <>
+                <TouchableOpacity
+                    style={[styles.payButton, (loading || !sdkReady || !order) && { opacity: 0.7 }]}
+                    onPress={handlePayment}
+                    disabled={loading || !sdkReady}
+                    accessibilityRole="button"
+                >
+                    <Text style={styles.payButtonText}>
+                        {loading ? '처리 중...' : !sdkReady ? '결제 모듈 준비 중...' : !order ? '주문 준비 중...' : 'PLUS 시작하기'}
+                    </Text>
+                </TouchableOpacity>
+                {needsRecheck && (
+                    <TouchableOpacity style={styles.recheckButton} onPress={recheckPayment} disabled={loading}
+                        accessibilityRole="button">
+                        <Text style={styles.recheckButtonText}>결제 다시 확인</Text>
+                    </TouchableOpacity>
+                )}
+            </>
+        );
+    };
+
+    const plusDays = status?.plusDays || 30;
+
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                <TouchableOpacity onPress={onBack} style={styles.backButton} accessibilityLabel="뒤로 가기">
                     <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>멤버십 업그레이드</Text>
+                <Text style={styles.headerTitle}>Salus PLUS</Text>
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
@@ -119,57 +259,50 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
                     </View>
                 </View>
 
-                <Text style={styles.title}>내 셰프 AI 플러스를{"\n"}경험해 보세요</Text>
-                <Text style={styles.subtitle}>더 스마트하고 강력한 요리 비서가 되어드립니다.</Text>
+                <Text style={styles.title}>처음 보는 요리도{"\n"}횟수 걱정 없이 찾아보세요</Text>
+                <Text style={styles.subtitle}>{plusDays}일 이용권 · 자동으로 다시 결제되지 않아요</Text>
 
                 <View style={styles.benefitList}>
                     <View style={styles.benefitItem}>
-                        <View style={[styles.iconBox, { backgroundColor: colors.infoLight }]}>
-                            <Ionicons name="mic" size={24} color={colors.info} />
-                        </View>
-                        <View style={styles.benefitText}>
-                            <Text style={styles.benefitTitle}>무제한 STT 음성 인식</Text>
-                            <Text style={styles.benefitDesc}>타이핑 없이 목소리만으로 레시피를 물어보세요.</Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.benefitItem}>
                         <View style={[styles.iconBox, { backgroundColor: colors.primaryLight }]}>
-                            <Ionicons name="volume-high" size={24} color={colors.primary} />
+                            <Ionicons name="search" size={24} color={colors.primary} />
                         </View>
                         <View style={styles.benefitText}>
-                            <Text style={styles.benefitTitle}>고급 TTS 음성 출력</Text>
-                            <Text style={styles.benefitDesc}>더 자연스러운 목소리로 레시피를 읽어줍니다.</Text>
+                            <Text style={styles.benefitTitle}>처음 보는 요리 찾기 제한 없음</Text>
+                            <Text style={styles.benefitDesc}>
+                                DB에 없는 요리를 웹에서 찾아 정리하는 기능은 무료 회원에게 하루 횟수가 정해져 있어요. PLUS는 제한이 없어요.
+                            </Text>
                         </View>
                     </View>
 
                     <View style={styles.benefitItem}>
                         <View style={[styles.iconBox, { backgroundColor: colors.successLight }]}>
-                            <Ionicons name="flash" size={24} color={colors.success} />
+                            <Ionicons name="shield-checkmark" size={24} color={colors.success} />
                         </View>
                         <View style={styles.benefitText}>
-                            <Text style={styles.benefitTitle}>우선순위 응답</Text>
-                            <Text style={styles.benefitDesc}>대기 시간 없이 가장 빠르게 답변을 받습니다.</Text>
+                            <Text style={styles.benefitTitle}>안전 확인은 모두에게 똑같이</Text>
+                            <Text style={styles.benefitDesc}>
+                                알레르기 확인과 안전 안내는 무료 회원도 똑같이 받을 수 있어요.
+                            </Text>
                         </View>
                     </View>
                 </View>
 
                 <View style={styles.priceCard}>
-                    <Text style={styles.priceLabel}>월 구독료</Text>
+                    <Text style={styles.priceLabel}>{status?.productName || 'Salus PLUS 이용권'}</Text>
                     <View style={styles.priceRow}>
-                        <Text style={styles.priceValue}>{SUBSCRIPTION_PRICE_LABEL}</Text>
-                        <Text style={styles.priceUnit}> / 월</Text>
+                        <Text style={styles.priceValue}>{status ? formatWon(status.amount) : '-'}</Text>
+                        <Text style={styles.priceUnit}> / {plusDays}일</Text>
                     </View>
-                    <TouchableOpacity
-                        style={[styles.payButton, loading && { opacity: 0.7 }]}
-                        onPress={handlePayment}
-                        disabled={loading || !sdkReady}
-                    >
-                        <Text style={styles.payButtonText}>
-                            {loading ? "처리 중..." : !sdkReady ? "결제 모듈 준비 중..." : "플러스로 시작하기"}
-                        </Text>
-                    </TouchableOpacity>
-                    <Text style={styles.footerNote}>언제든지 해지할 수 있습니다.</Text>
+                    {notice && (
+                        <View style={[styles.notice, styles[`notice_${notice.tone}`]]}>
+                            <Text style={styles.noticeText}>{notice.text}</Text>
+                        </View>
+                    )}
+                    {renderAction()}
+                    <Text style={styles.footerNote}>
+                        기간이 끝나면 무료 회원으로 돌아가요. 이용 중에는 다시 결제할 수 없어요.
+                    </Text>
                 </View>
             </ScrollView>
         </SafeAreaView>
@@ -200,5 +333,14 @@ const styles = StyleSheet.create({
     priceUnit: { fontSize: 16, color: colors.textSecondary },
     payButton: { backgroundColor: colors.primary, paddingVertical: 16, borderRadius: 16, alignItems: 'center' },
     payButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+    recheckButton: { marginTop: 12, paddingVertical: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: colors.primary },
+    recheckButtonText: { color: colors.primary, fontSize: 15, fontWeight: '600' },
+    notice: { borderRadius: 10, padding: 12, marginBottom: 12 },
+    notice_error: { backgroundColor: colors.errorLight || '#FDECEC' },
+    notice_info: { backgroundColor: colors.infoLight || '#EAF2FD' },
+    notice_success: { backgroundColor: colors.successLight || '#E8F6EE' },
+    noticeText: { fontSize: 14, color: colors.text, lineHeight: 20 },
+    activeBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12 },
+    activeText: { marginLeft: 8, fontSize: 16, fontWeight: '600', color: colors.text },
     footerNote: { fontSize: 12, color: colors.textTertiary, textAlign: 'center', marginTop: 12 }
 });

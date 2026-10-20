@@ -7,9 +7,18 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 최근 건강검진 수치를 단순 기준값과 비교해 식단 추천 방향을 만드는 서비스입니다.
+ *
+ * LLM을 사용하지 않는 규칙 기반 분석이며, 결과는 식단 참고 정보일 뿐 의학적 진단이 아닙니다.
+ */
 @Service
 public class HealthCheckupAnalysisService {
 
+    /**
+     * 검진 결과를 분석합니다. 기준을 넘은 항목마다 위험 요인, 추천 정책, 식품 가이드를 한 줄씩 추가합니다.
+     * 값이 입력되지 않은 항목(null)은 판단하지 않고 건너뜁니다.
+     */
     public HealthCheckupAnalysisDTO analyze(HealthCheckup checkup) {
         if (checkup == null) {
             return emptyAnalysis();
@@ -19,6 +28,7 @@ public class HealthCheckupAnalysisService {
         List<String> policies = new ArrayList<>();
         List<String> foodGuides = new ArrayList<>();
 
+        // 체질량지수(BMI) 25 이상
         Double bmi = resolveBmi(checkup);
         if (bmi != null && bmi >= 25) {
             risks.add("체중 관리 필요");
@@ -26,6 +36,7 @@ public class HealthCheckupAnalysisService {
             foodGuides.add("현미, 닭가슴살, 두부, 생선, 채소류를 활용하고 튀김류와 고당 간식은 줄이기");
         }
 
+        // 수축기 130 이상 또는 이완기 80 이상
         if ((checkup.getSystolicBp() != null && checkup.getSystolicBp() >= 130)
                 || (checkup.getDiastolicBp() != null && checkup.getDiastolicBp() >= 80)) {
             risks.add("혈압 관리 필요");
@@ -33,12 +44,14 @@ public class HealthCheckupAnalysisService {
             foodGuides.add("나트륨이 낮은 조리법, 칼륨이 풍부한 채소와 과일을 우선 고려");
         }
 
+        // 공복 혈당 100 이상
         if (checkup.getFastingGlucose() != null && checkup.getFastingGlucose() >= 100) {
             risks.add("혈당 관리 필요");
             policies.add("정제 탄수화물과 당류를 줄이고 복합 탄수화물과 단백질 균형을 고려");
             foodGuides.add("흰쌀밥, 설탕 많은 소스, 음료류를 줄이고 잡곡, 달걀, 콩류를 활용");
         }
 
+        // LDL 130 이상, 중성지방 150 이상, 총콜레스테롤 200 이상 중 하나
         if ((checkup.getLdl() != null && checkup.getLdl() >= 130)
                 || (checkup.getTriglyceride() != null && checkup.getTriglyceride() >= 150)
                 || (checkup.getTotalCholesterol() != null && checkup.getTotalCholesterol() >= 200)) {
@@ -47,6 +60,7 @@ public class HealthCheckupAnalysisService {
             foodGuides.add("등푸른 생선, 견과류, 올리브오일은 적정량 활용하고 가공육은 피하기");
         }
 
+        // AST 또는 ALT 40 이상
         if ((checkup.getAst() != null && checkup.getAst() >= 40)
                 || (checkup.getAlt() != null && checkup.getAlt() >= 40)) {
             risks.add("간 수치 관리 필요");
@@ -68,12 +82,14 @@ public class HealthCheckupAnalysisService {
                 .build();
     }
 
+    // 검진 기록이 없을 때 반환하는 빈 분석 결과입니다.
     public HealthCheckupAnalysisDTO emptyAnalysis() {
         return HealthCheckupAnalysisDTO.builder()
                 .summary("등록된 건강검진 결과가 없습니다.")
                 .build();
     }
 
+    // 저장된 BMI가 없으면 키와 몸무게로 계산합니다.
     private Double resolveBmi(HealthCheckup checkup) {
         if (checkup.getBmi() != null) {
             return checkup.getBmi();

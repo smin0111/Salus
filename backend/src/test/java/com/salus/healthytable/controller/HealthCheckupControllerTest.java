@@ -24,6 +24,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * {@link HealthCheckupController} 테스트입니다.
+ */
 class HealthCheckupControllerTest {
 
     private final HealthCheckupRepository healthCheckupRepository = mock(HealthCheckupRepository.class);
@@ -36,6 +39,7 @@ class HealthCheckupControllerTest {
             authenticatedUserProvider,
             clock);
 
+    // 검진 저장 시 현재 사용자로 저장하고, BMI가 없으면 키/몸무게로 계산해야 합니다.
     @Test
     void saveCheckupUsesCurrentUserAndCalculatesBmi() {
         HealthCheckupDTO dto = validDto();
@@ -59,6 +63,7 @@ class HealthCheckupControllerTest {
         assertThat(saved.getBmi()).isEqualTo(23.5);
     }
 
+    // 검진일이 없으면 저장 전에 거부해야 합니다.
     @Test
     void saveCheckupRejectsMissingDateBeforeSaving() {
         HealthCheckupDTO dto = validDto();
@@ -72,6 +77,7 @@ class HealthCheckupControllerTest {
         verifyNoInteractions(healthCheckupRepository, analysisService);
     }
 
+    // 미래 검진일은 저장 전에 거부해야 합니다.
     @Test
     void saveCheckupRejectsFutureDateBeforeSaving() {
         HealthCheckupDTO dto = validDto();
@@ -85,6 +91,7 @@ class HealthCheckupControllerTest {
         verifyNoInteractions(healthCheckupRepository, analysisService);
     }
 
+    // 허용 범위를 벗어난 수치는 저장 전에 거부해야 합니다.
     @Test
     void saveCheckupRejectsOutOfRangeValueBeforeSaving() {
         HealthCheckupDTO dto = validDto();
@@ -98,6 +105,7 @@ class HealthCheckupControllerTest {
         verifyNoInteractions(healthCheckupRepository, analysisService);
     }
 
+    // 최신 검진 조회는 현재 사용자의 기록만 읽어야 합니다.
     @Test
     void getLatestCheckupReadsOnlyCurrentUsersLatestCheckup() {
         HealthCheckup checkup = new HealthCheckup();
@@ -114,6 +122,7 @@ class HealthCheckupControllerTest {
         verify(healthCheckupRepository).findTopByUserIdOrderByCheckupDateDescIdDesc(1L);
     }
 
+    // 최신 검진 분석은 현재 사용자의 최신 기록으로 수행해야 합니다.
     @Test
     void getLatestAnalysisAnalyzesCurrentUsersLatestCheckup() {
         HealthCheckup checkup = new HealthCheckup();
@@ -133,6 +142,7 @@ class HealthCheckupControllerTest {
         verify(analysisService).analyze(checkup);
     }
 
+    // 검진 기록이 없으면 빈 분석 결과를 반환해야 합니다.
     @Test
     void getLatestAnalysisReturnsEmptyAnalysisWhenNoCheckupExists() {
         HealthCheckupAnalysisDTO empty = HealthCheckupAnalysisDTO.builder()
@@ -151,6 +161,7 @@ class HealthCheckupControllerTest {
         verify(analysisService).emptyAnalysis();
     }
 
+    // 정상 범위 값으로 채운 검진 요청 DTO를 만듭니다.
     private HealthCheckupDTO validDto() {
         HealthCheckupDTO dto = new HealthCheckupDTO();
         dto.setCheckupDate(LocalDate.of(2026, 7, 5));

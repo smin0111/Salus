@@ -72,6 +72,48 @@ public class AllergenMatcher {
         return false;
     }
 
+    /**
+     * 선언한 알레르기 표기 말고 다른 탐지 용어(파생 재료·별칭)로도 텍스트가 걸리는지 확인한다.
+     *
+     * <p>표기가 한 번 등장한다고 제거로 해결되는 것이 아니다. 2026-10-09 실측에서 두쫀쿠 단계의 "우유맛스틱" 때문에
+     * 우유가 "표기 등장 → 제거 가능"으로 판정되었고, 버터·탈지분유가 남은 레시피가 "우유 제외"로 나갔다.
+     * 이 메서드가 true면 표기만 지워서는 알레르겐이 사라지지 않는다.
+     */
+    public boolean matchesBeyondLiteral(String declaredAllergy, List<String> texts) {
+        String literal = AllergenDictionary.normalize(declaredAllergy);
+        List<String> tokens = tokenize(texts);
+        if (tokens.isEmpty()) {
+            return false;
+        }
+        for (String term : dictionary.matchTermsFor(declaredAllergy)) {
+            if (term.isBlank() || term.equals(literal)) {
+                continue;
+            }
+            for (String token : tokens) {
+                if (matches(term, token)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 차단 대상은 아니지만 제품에 따라 그 알레르겐이 들어 있을 수 있는 재료 가운데 텍스트에 나온 것입니다
+     * (밀 알레르기의 간장·고추장). 성분 표시 확인 안내에만 씁니다.
+     */
+    public List<String> findLabelCheckTerms(String declaredAllergy, List<String> texts) {
+        List<String> tokens = tokenize(texts);
+        List<String> found = new java.util.ArrayList<>();
+        for (String term : dictionary.labelCheckTermsFor(declaredAllergy)) {
+            if (!term.isBlank() && tokens.stream().anyMatch(token -> matches(term, token))) {
+                found.add(term);
+            }
+        }
+        return found;
+    }
+
+    // 탐지 용어 중 하나라도 어떤 토큰과 매칭되면 true입니다.
     private boolean matchesAny(Set<String> terms, List<String> tokens) {
         for (String term : terms) {
             if (term.isBlank()) {
@@ -96,6 +138,7 @@ public class AllergenMatcher {
         return term.length() == 1 ? token.equals(term) : token.contains(term);
     }
 
+    // 모든 텍스트를 소문자로 바꾸고 한글/영문/숫자가 아닌 문자 기준으로 잘라 중복 없는 토큰 목록을 만듭니다.
     private List<String> tokenize(List<String> texts) {
         Set<String> tokens = new LinkedHashSet<>();
         if (texts == null) {

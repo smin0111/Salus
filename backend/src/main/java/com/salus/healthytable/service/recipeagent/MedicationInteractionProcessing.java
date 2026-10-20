@@ -25,6 +25,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/*
+ * 복용 약물-음식 상호작용 조사 파이프라인의 처리 클래스들을 모아 둔 파일입니다.
+ * (입력 파싱 → 음식 개념 정규화 → 약 식별 → 근거 문장 추출 → 레시피 재료와 매칭 → 최종 결과 → 캐시)
+ */
+
+/**
+ * 사용자가 입력한 약 문자열에서 용량("500mg", "1정")과 복용 시점("식후", "하루 2회")을 분리하고 약 이름만 남깁니다.
+ */
 @Component
 class MedicationInputParser {
 
@@ -48,6 +56,10 @@ class MedicationInputParser {
     }
 }
 
+/**
+ * 음식/재료 이름을 약물 상호작용에서 자주 언급되는 음식 개념(자몽, 우유, 알코올, 카페인, 칼륨, 비타민K 등)으로 정규화합니다.
+ * 알려진 개념이 아니면 UNKNOWN 타입과 낮은 신뢰도(0.3)로 반환합니다.
+ */
 @Component
 class DefaultFoodNutrientNormalizer implements FoodNutrientNormalizer {
 
@@ -87,6 +99,10 @@ class DefaultFoodNutrientNormalizer implements FoodNutrientNormalizer {
     }
 }
 
+/**
+ * 약 설명 텍스트(식약처 e약은요, openFDA 라벨)를 문장 단위로 나눠 음식 관련 근거를 추출합니다.
+ * 문장마다 "영향 종류(피하기, 식후 복용 등)"와 "언급된 음식 개념"을 찾고, 근거 강도와 신뢰도를 매깁니다.
+ */
 @Component
 class MedicationFoodEvidenceExtractor {
 
@@ -96,6 +112,7 @@ class MedicationFoodEvidenceExtractor {
         this.normalizer = normalizer;
     }
 
+    // 식약처 e약은요 정보에서 근거를 추출합니다. 섹션별로 기본 근거 강도를 다르게 줍니다(상호작용 > 복용법 > 주의사항).
     List<MedicationFoodEvidence> fromMfds(NormalizedMedication medication, MedicationInformationResult result) {
         if (result == null || result.status() != MedicationDataStatus.FOUND) {
             return List.of();
@@ -114,6 +131,7 @@ class MedicationFoodEvidenceExtractor {
         return AgentText.distinctMedicationEvidences(evidences);
     }
 
+    // openFDA 라벨의 각 섹션에서 근거를 추출합니다.
     List<MedicationFoodEvidence> fromOpenFda(NormalizedMedication medication, DrugLabelEvidenceResult result) {
         if (result == null || result.status() != MedicationDataStatus.FOUND) {
             return List.of();
@@ -134,6 +152,10 @@ class MedicationFoodEvidenceExtractor {
         return AgentText.distinctMedicationEvidences(evidences);
     }
 
+    /**
+     * 텍스트에서 음식 근거를 추출합니다.
+     * 영향 종류를 판단할 수 없는 문장은 건너뛰고, "식후 복용"처럼 음식 이름 없이 식사 조건만 말한 문장은 일반 "음식" 개념으로 기록합니다.
+     */
     List<MedicationFoodEvidence> extractFromText(
             NormalizedMedication medication,
             String text,
@@ -171,6 +193,7 @@ class MedicationFoodEvidenceExtractor {
         return evidences;
     }
 
+    // 특정 음식이 아니라 "식사 여부"에 대한 조건인지 확인합니다.
     private boolean genericFoodCondition(MedicationFoodEffectType effect) {
         return effect == MedicationFoodEffectType.TAKE_WITH_FOOD
                 || effect == MedicationFoodEffectType.TAKE_ON_EMPTY_STOMACH
@@ -180,6 +203,7 @@ class MedicationFoodEvidenceExtractor {
                 || effect == MedicationFoodEffectType.NOT_ESTABLISHED;
     }
 
+    // 문장에 알려진 음식 개념의 별칭이 들어 있으면 모두 반환합니다.
     private List<NormalizedFoodConcept> foodConceptsIn(String sentence) {
         String normalized = RecipeCandidate.normalize(sentence);
         List<NormalizedFoodConcept> matches = new ArrayList<>();
@@ -195,6 +219,10 @@ class MedicationFoodEvidenceExtractor {
         return matches;
     }
 
+    /**
+     * 영어/한국어 키워드로 문장의 영향 종류를 판단합니다.
+     * 검사 순서가 중요합니다: "with or without food"를 "with food"보다, "not established"를 일반 주의보다 먼저 확인합니다.
+     */
     private MedicationFoodEffectType effectType(String sentence) {
         String normalized = sentence.toLowerCase(Locale.ROOT);
         String compact = RecipeCandidate.normalize(sentence);
@@ -243,6 +271,7 @@ class MedicationFoodEvidenceExtractor {
         return MedicationFoodEffectType.UNSPECIFIED;
     }
 
+    // 영향 종류와 문장 표현("may", "possible")으로 근거 강도를 정합니다. 영향 없음/확립 안 됨은 약한 근거로 둡니다.
     private InteractionEvidenceStrength strength(String sentence, InteractionEvidenceStrength fallback, MedicationFoodEffectType effect) {
         if (effect == MedicationFoodEffectType.WITH_OR_WITHOUT_FOOD
                 || effect == MedicationFoodEffectType.FOOD_DOES_NOT_AFFECT) {
@@ -270,6 +299,7 @@ class MedicationFoodEvidenceExtractor {
         return truncate(sentence, 180);
     }
 
+    // 근거 강도별 신뢰도(명시적 지시 0.95 ~ 불충분 0.2). 영향이 없거나 확립되지 않은 근거는 낮은 신뢰도로 둡니다.
     private double confidence(MedicationFoodEffectType effect, InteractionEvidenceStrength strength) {
         if (effect == MedicationFoodEffectType.WITH_OR_WITHOUT_FOOD
                 || effect == MedicationFoodEffectType.FOOD_DOES_NOT_AFFECT
@@ -290,6 +320,7 @@ class MedicationFoodEvidenceExtractor {
         return Math.max(0.0, Math.min(1.0, base));
     }
 
+    // 라벨 섹션 종류별 기본 근거 강도
     private InteractionEvidenceStrength strength(MedicationLabelSectionType type) {
         return switch (type) {
             case DRUG_INTERACTIONS, FOOD_SAFETY_WARNING -> InteractionEvidenceStrength.EXPLICIT_LABEL_WARNING;
@@ -298,6 +329,7 @@ class MedicationFoodEvidenceExtractor {
         };
     }
 
+    // 마침표/줄바꿈/한국어 "다." 기준으로 문장을 나눕니다.
     private List<String> splitSentences(String text) {
         return List.of(text.split("(?<=[.!?。])\\s+|\\R|(?<=다\\.)\\s*")).stream()
                 .map(String::trim)
@@ -305,6 +337,7 @@ class MedicationFoodEvidenceExtractor {
                 .toList();
     }
 
+    // openFDA의 "YYYYMMDD" 형식 날짜를 LocalDateTime으로 바꿉니다.
     private LocalDateTime parseEffectiveTime(String value) {
         if (value == null || value.length() < 8) {
             return null;
@@ -343,6 +376,15 @@ class MedicationFoodEvidenceExtractor {
     }
 }
 
+/**
+ * 사용자가 입력한 약 이름을 공식 데이터로 식별(정규화)합니다.
+ *
+ * 조회 순서:
+ * 1) 식약처 의약품 허가정보 → 후보를 취소되지 않은 제품, 정확한 제품명, 용량, 제형 순으로 좁혀 1개면 식별
+ * 2) 식약처 e약은요 → 제품명/성분명 일치 여부로 식별
+ * 3) RxNorm → 영문 약 이름 정규화
+ * 후보가 여러 개면 임의로 고르지 않고 MULTIPLE_MATCHES, 조회 실패가 있었으면 API_FAILED로 반환합니다.
+ */
 @Component
 class MedicationNormalizer {
 
@@ -360,6 +402,7 @@ class MedicationNormalizer {
         this.rxNormPort = rxNormPort;
     }
 
+    // 허가정보 API 없이 만드는 생성자(테스트용). 허가정보 조회는 항상 API_DISABLED로 동작합니다.
     MedicationNormalizer(MfdsMedicationInformationPort mfdsPort, RxNormMedicationNormalizationPort rxNormPort) {
         this(input -> new MfdsDrugProductSearchResult(MedicationDataStatus.API_DISABLED, List.of(), List.of("MFDS product permit API is disabled.")),
                 mfdsPort,
@@ -447,6 +490,7 @@ class MedicationNormalizer {
         return notFound(input.originalName());
     }
 
+    // 조건을 하나씩 적용해 후보를 좁히되, 조건을 적용한 결과가 비면 그 조건은 건너뜁니다.
     private List<MfdsDrugProductCandidate> narrowProductCandidates(MedicationInput input, List<MfdsDrugProductCandidate> candidates) {
         if (candidates == null || candidates.isEmpty()) {
             return List.of();
@@ -507,6 +551,7 @@ class MedicationNormalizer {
                 .toList();
     }
 
+    // 식약처 제품의 검증된 영문 유효성분이 정확히 1개일 때만 RxNorm으로 추가 정규화합니다(복합제는 임의로 하나를 고르지 않음).
     private RxNormNormalizationResult rxNormForProductCandidate(MedicationInput input, MfdsDrugProductCandidate candidate) {
         List<String> englishIngredients = candidate.activeIngredients().stream()
                 .filter(this::verifiedActiveIngredient)
@@ -521,6 +566,7 @@ class MedicationNormalizer {
         return rxNormPort.normalize(new MedicationInput(englishIngredients.get(0), input.userProvidedDosage(), input.userProvidedTiming()));
     }
 
+    // 허가정보 제품 후보로 정규화된 약을 만들고, 이후 근거 매칭에 쓸 별칭(제품명, 성분명, 영문명, RxNorm 이름 등)을 모읍니다.
     private NormalizedMedication fromProductPermit(MedicationInput input, MfdsDrugProductCandidate candidate, RxNormNormalizationResult rxNorm) {
         List<String> ingredientNames = candidate.activeIngredients().stream()
                 .filter(this::verifiedActiveIngredient)
@@ -570,6 +616,7 @@ class MedicationNormalizer {
                 AgentText.distinct(aliases));
     }
 
+    // 유효성분으로 확인되었고, 추측성 힌트(PRODUCT_CANDIDATE_HINT)에서 온 값이 아닌 성분만 인정합니다.
     private boolean verifiedActiveIngredient(MfdsActiveIngredient ingredient) {
         return ingredient != null
                 && ingredient.materialRole() == MfdsMaterialRole.ACTIVE_INGREDIENT
@@ -605,6 +652,9 @@ class MedicationNormalizer {
     }
 }
 
+/**
+ * 약물 음식 근거와 레시피 재료를 비교해, 실제로 이 레시피에 해당하는 근거만 골라냅니다.
+ */
 @Component
 @RequiredArgsConstructor
 class MedicationRecipeEvidenceMatcher {
@@ -631,6 +681,7 @@ class MedicationRecipeEvidenceMatcher {
         return AgentText.distinctMatchedMedicationEvidences(matches);
     }
 
+    // 근거가 불충분하거나 "음식 영향 없음/확립 안 됨" 같은 근거는 레시피 판단에 사용하지 않습니다.
     private boolean canAffectRecipeDecision(MedicationFoodEvidence evidence) {
         if (evidence == null || evidence.strength() == InteractionEvidenceStrength.INSUFFICIENT) {
             return false;
@@ -650,6 +701,7 @@ class MedicationRecipeEvidenceMatcher {
                 || effect == MedicationFoodEffectType.MONITOR;
     }
 
+    // 근거가 일반 "음식"(식사 조건)이면 모든 레시피에 해당하고, 아니면 음식 개념이나 별칭이 재료와 일치할 때만 해당합니다.
     private boolean matches(NormalizedFoodConcept evidence, NormalizedFoodConcept ingredient, String rawIngredient) {
         if (evidence.canonicalName().isBlank()) {
             return false;
@@ -669,6 +721,7 @@ class MedicationRecipeEvidenceMatcher {
     }
 }
 
+// 레시피 재료와 매칭된 약물 음식 근거(근거, 매칭된 재료, 음식 개념)
 record MatchedMedicationFoodEvidence(
         MedicationFoodEvidence evidence,
         String matchedIngredient,
@@ -676,6 +729,10 @@ record MatchedMedicationFoodEvidence(
 ) {
 }
 
+/**
+ * 공식 데이터(식약처, openFDA, RxNorm)를 사용하는 기본 약물-음식 상호작용 확인 구현입니다.
+ * recipe.agent.medication-interaction-enabled=false(기본값)이면 항상 UNKNOWN을 반환하는 대체 구현으로 넘깁니다.
+ */
 @Primary
 @Service
 @RequiredArgsConstructor
@@ -693,6 +750,7 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
     @Value("${recipe.agent.medication-interaction-enabled:false}")
     private boolean enabled;
 
+    // 약 하나에 대한 식별과 근거 수집 결과를 조사용으로 반환합니다(레시피 매칭은 하지 않음).
     MedicationResearchResult research(MedicationInput input) {
         NormalizedMedication normalized = medicationNormalizer.normalize(input);
         if (normalized.status() == MedicationNormalizationStatus.MULTIPLE_MATCHES) {
@@ -750,6 +808,14 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
                 lookup.warnings());
     }
 
+    /**
+     * 복용 약 목록과 레시피 재료로 상호작용을 확인합니다.
+     *
+     * 약마다: 입력 파싱 → 식별 → 근거 수집 → 레시피 재료 매칭 → 약별 결과 기록
+     * - 식별 실패/여러 후보/API 실패: 근거 없음이 아니라 해당 상태로 기록
+     * - 같은 음식에 서로 모순되는 근거: 자동 차단하지 않고 EVIDENCE_CONFLICT로 안내
+     * 하나라도 확인하지 못한 약이 있으면 "상호작용이 없다는 의미는 아닙니다" 안내를 붙입니다.
+     */
     @Override
     public MedicationInteractionResult check(List<String> medications, List<String> recipeIngredients) {
         if (!enabled) {
@@ -875,6 +941,7 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
                 failureReason);
     }
 
+    // 약 이름 원문 대신 SHA-256 해시 앞 12자리를 결과에 남겨 민감한 건강 정보 노출을 줄입니다.
     private String maskedMedicationId(String medication) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
@@ -904,6 +971,7 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
                 .toList();
     }
 
+    // 약별 상태 중 가장 중요한 상태를 전체 상태로 고릅니다(목록 앞쪽일수록 우선순위가 높음).
     private InteractionStatus aggregateStatus(List<MedicationPerDrugResult> perDrug) {
         List<InteractionStatus> statuses = perDrug.stream().map(MedicationPerDrugResult::interactionStatus).toList();
         for (InteractionStatus status : List.of(
@@ -924,6 +992,7 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
         return InteractionStatus.UNKNOWN;
     }
 
+    // 약별 결과 요약으로 사용자 안내 문구를 만듭니다(확인된 충돌, 식별 실패, 조회 오류, 여러 후보, 근거 없음).
     private List<String> summaryNotices(MedicationResultSummary summary) {
         List<String> result = new ArrayList<>();
         if (summary.confirmedConflictCount() > 0) {
@@ -963,6 +1032,7 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
         return evidenceLookupFor(medication).evidences();
     }
 
+    // 캐시에 근거가 있으면 재사용하고, 없으면 식약처 e약은요와 openFDA 라벨에서 근거를 모아 캐시에 저장합니다.
     private MedicationEvidenceLookup evidenceLookupFor(NormalizedMedication medication) {
         String cacheKey = cache.key(medication);
         Optional<CachedMedicationEvidence> cached = cache.get(cacheKey);
@@ -1012,6 +1082,7 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
                 warnings);
     }
 
+    // 근거 유무와 출처별 비활성/실패 상태로 조사 상태를 정합니다.
     private MedicationResearchStatus researchStatus(NormalizedMedication medication, MedicationEvidenceLookup lookup) {
         if (!lookup.evidences().isEmpty()) {
             return MedicationResearchStatus.IDENTIFIED_WITH_FOOD_EVIDENCE;
@@ -1035,6 +1106,13 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
         return MedicationResearchStatus.IDENTIFIED_WITHOUT_STRUCTURED_INGREDIENTS;
     }
 
+    /**
+     * 매칭된 근거로 상호작용 결과를 만듭니다.
+     * - "피하라"는 명시적 라벨 지시(신뢰도 0.8 이상): CONFIRMED_CONFLICT + 차단(BLOCKING) 충돌
+     * - 복용 간격 조건: TIMING_CONDITION 안내(복용 일정을 모르므로 시간표는 만들지 않음)
+     * - 식사/공복 복용 조건: FOOD_INTAKE_CONDITION 안내
+     * - 그 외(섭취량 제한, 모니터링 등): 주의(CAUTION) 충돌
+     */
     private MedicationInteractionResult resultFromMatches(
             List<MatchedMedicationFoodEvidence> matches,
             List<String> notices,
@@ -1081,6 +1159,7 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
         return new MedicationInteractionResult(status, AgentText.distinctConflicts(conflicts), AgentText.distinct(notices), allEvidences);
     }
 
+    // 같은 음식에 "피하라"와 "함께 복용/일정하게 섭취" 같은 모순된 근거가 동시에 있는지 확인합니다.
     private boolean evidenceConflict(List<MatchedMedicationFoodEvidence> matches) {
         Map<String, Set<MedicationFoodEffectType>> byFood = new LinkedHashMap<>();
         for (MatchedMedicationFoodEvidence match : matches) {
@@ -1100,6 +1179,7 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
     }
 }
 
+// 약 하나의 근거 수집 결과(근거 목록, 식약처/openFDA 조회 상태, 경고)
 record MedicationEvidenceLookup(
         List<MedicationFoodEvidence> evidences,
         MedicationDataStatus mfdsStatus,
@@ -1112,6 +1192,9 @@ record MedicationEvidenceLookup(
     }
 }
 
+/**
+ * 약물 근거를 서버 메모리에 12시간 보관하는 캐시입니다. 키는 제품명|성분명|품목기준코드|RXCUI입니다.
+ */
 @Component
 class InMemoryMedicationEvidenceCache {
 

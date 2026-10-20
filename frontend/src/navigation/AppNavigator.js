@@ -10,7 +10,6 @@ import ChatScreen from '../screens/ChatScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import HealthScreen from '../screens/HealthScreen';
 import HealthCheckupScreen from '../screens/HealthCheckupScreen';
-import FridgeScreen from '../screens/FridgeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import LandingPageScreen from '../screens/LandingPageScreen';
 import RecipeDetailScreen from '../screens/RecipeDetailScreen';
@@ -28,6 +27,13 @@ import SalusLogo, { SalusLogoMark } from '../components/SalusLogo';
 import { useAuth } from '../context/AuthContext';
 import { colors, radii, typography, controlStyles } from '../theme/colors';
 
+/*
+ * 앱 전체의 화면 전환을 담당하는 내비게이터입니다.
+ * React Navigation 같은 라이브러리 대신 currentScreen 상태 하나로 어떤 화면을 보여 줄지 결정합니다.
+ * 웹에서는 브라우저 주소(URL)와 currentScreen을 서로 맞춰 새로고침/뒤로가기도 동작하게 합니다.
+ */
+
+// 넓은 웹 화면에서도 왼쪽 사이드바/상단바(WebAppShell) 없이 전체 화면으로 보여 줄 화면들
 const WEB_SHELL_EXCLUDED_SCREENS = [
   'login',
   'about',
@@ -37,22 +43,22 @@ const WEB_SHELL_EXCLUDED_SCREENS = [
 
 // 보호 화면 목록은 화면 이동 직전에 한 번 더 확인합니다.
 // 라우팅만 숨기는 것으로는 부족하고, 사용자가 URL을 직접 입력하는 web 환경도 고려해야 합니다.
-const PROTECTED_SCREENS = ['community', 'fridge', 'calendar', 'health', 'health-checkup', 'account-settings', 'create-post'];
+const PROTECTED_SCREENS = ['community', 'calendar', 'health', 'health-checkup', 'account-settings', 'create-post'];
 
+// 웹 사이드바 메뉴 항목(화면 id, 이름, 설명, 아이콘, URL 경로)
 const WEB_NAV_ITEMS = [
   { id: 'chat', label: 'AI 셰프', caption: '맞춤 레시피 상담', icon: 'sparkles', path: '/chat' },
   { id: 'community', label: '레시피 허브', caption: '추천과 커뮤니티', icon: 'grid', path: '/community' },
-  { id: 'fridge', label: '냉장고', caption: '재료와 유통기한', icon: 'nutrition', path: '/fridge' },
   { id: 'calendar', label: '식단 캘린더', caption: '식사 기록', icon: 'calendar', path: '/calendar' },
   { id: 'health', label: '건강 프로필', caption: '알레르기와 식이조건', icon: 'heart', path: '/health' },
   { id: 'health-checkup', label: '검진 분석', caption: '수치 기반 추천', icon: 'document-text', path: '/health-checkup' },
 ];
 
+// 웹 상단바에 표시할 화면별 [제목, 부제목]
 const WEB_SCREEN_TITLES = {
   about: ['서비스 소개', 'Salus 개인 맞춤형 AI 요리 서비스 플랫폼'],
-  chat: ['AI 셰프 스튜디오', '냉장고와 건강정보를 함께 보는 맞춤 요리 상담'],
+  chat: ['AI 셰프 스튜디오', '건강정보를 반영해 출처가 있는 레시피를 찾는 요리 상담'],
   community: ['레시피 허브', 'AI 추천, 인기 레시피, 사용자 피드를 한곳에서 둘러보세요'],
-  fridge: ['나의 냉장고', '재료 상태와 유통기한을 기준으로 식단 기회를 찾습니다'],
   calendar: ['식단 캘린더', 'AI가 추천한 식사와 직접 기록한 식단을 관리합니다'],
   health: ['건강 프로필', '알레르기, 질환, 식이 제한을 안전하게 반영합니다'],
   'health-checkup': ['건강검진 분석', '검진 수치를 식단 추천으로 연결합니다'],
@@ -63,11 +69,11 @@ const WEB_SCREEN_TITLES = {
   'recipe-detail': ['레시피 상세', '조리 정보와 추천 이유를 확인합니다'],
 };
 
+// 웹 URL 경로 → 화면 id. 새로고침하거나 주소를 직접 입력했을 때 어떤 화면을 열지 결정합니다.
 const WEB_PATH_TO_SCREEN = {
   '/': 'chat',
   '/chat': 'chat',
   '/community': 'community',
-  '/fridge': 'fridge',
   '/calendar': 'calendar',
   '/health': 'health',
   '/health-checkup': 'health-checkup',
@@ -79,6 +85,7 @@ const WEB_PATH_TO_SCREEN = {
   '/upgrade': 'upgrade',
 };
 
+// 화면 id → 웹 URL 경로(WEB_PATH_TO_SCREEN의 반대 방향). 목록에 없으면 "/화면id"를 사용합니다.
 const getWebPathForScreen = (screen) => {
   const navItem = WEB_NAV_ITEMS.find(item => item.id === screen);
   if (navItem) return navItem.path;
@@ -95,8 +102,10 @@ const getWebPathForScreen = (screen) => {
   return map[screen] || `/${screen}`;
 };
 
+// 로그인이 필요한 화면인지 확인합니다.
 const isProtectedScreen = (screen) => PROTECTED_SCREENS.includes(screen);
 
+// 비어 있는 건강 프로필 객체를 새로 만듭니다(매번 새 배열을 만들어 이전 사용자 데이터와 공유되지 않게 합니다).
 const createEmptyHealthProfile = () => ({
   allergies: [],
   chronicConditions: [],
@@ -105,6 +114,10 @@ const createEmptyHealthProfile = () => ({
   goals: [],
 });
 
+/**
+ * 넓은 웹 화면용 레이아웃입니다.
+ * 왼쪽 아이콘 사이드바(메뉴, 서비스 소개, 계정, 로그아웃) + 상단바(화면 제목, 검색, 로그인) + 가운데 화면 내용(children)
+ */
 function WebAppShell({ children, currentScreen, onNavigate, isLoggedIn, user, onLogout }) {
   const [title, subtitle] = WEB_SCREEN_TITLES[currentScreen] || WEB_SCREEN_TITLES.chat;
   const userName = isLoggedIn && user?.name ? user.name : '게스트';
@@ -192,10 +205,16 @@ function WebAppShell({ children, currentScreen, onNavigate, isLoggedIn, user, on
   );
 }
 
+/**
+ * 최상위 화면 컴포넌트입니다.
+ * - 여러 화면이 함께 쓰는 상태(채팅 메시지, 건강 프로필, 식단)를 여기서 보관하고 props로 내려 줍니다.
+ * - desktopWebMode: 웹이면서 화면 너비가 768px 이상일 때 WebAppShell 레이아웃을 사용합니다.
+ */
 export default function AppNavigator() {
   const { width: windowWidth } = useWindowDimensions();
   const desktopWebMode = Platform.OS === 'web' && windowWidth >= 768;
   const [currentScreen, setCurrentScreen] = useState('chat');
+  // 상세 화면에 넘길 데이터와 레시피 상세에서 뒤로 갈 화면
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [recipeBackScreen, setRecipeBackScreen] = useState('community');
   const [selectedPost, setSelectedPost] = useState(null);
@@ -212,13 +231,13 @@ export default function AppNavigator() {
     ...createEmptyHealthProfile(),
   });
   const [mealData, setMealData] = useState({});
-  const [fridgeItems, setFridgeItems] = useState([]);
 
   // 진짜 로딩 관리: 앱 최초 마운트 상태
   useEffect(() => {
     setIsAppReady(true);
   }, []);
 
+  // 웹: 처음 열릴 때와 브라우저 뒤로/앞으로 가기(popstate) 때 URL에 맞는 화면으로 전환합니다.
   useEffect(() => {
     if (Platform.OS === 'web') {
       const syncPath = () => {
@@ -236,6 +255,7 @@ export default function AppNavigator() {
     }
   }, []);
 
+  // 로그인이 필요한 화면에 세션 없이 들어온 경우 로그인 화면으로 보냅니다.
   useEffect(() => {
     if (authLoading || hasSession || !isProtectedScreen(currentScreen)) {
       return;
@@ -249,6 +269,7 @@ export default function AppNavigator() {
     }
   }, [authLoading, currentScreen, hasSession]);
 
+  // 로그인 사용자가 앱을 열면 활동 기록(관리자 대시보드 DAU 집계용)을 남깁니다. 실패해도 화면에는 영향이 없습니다.
   useEffect(() => {
     if (isLoggedIn && token) {
       const logActivity = async () => {
@@ -273,6 +294,11 @@ export default function AppNavigator() {
     setHealthProfile(createEmptyHealthProfile());
   }, [isLoggedIn, token, user?.id]);
 
+  /**
+   * 화면 이동 함수입니다. 모든 화면에 onNavigate로 전달됩니다.
+   * data: 이동할 화면에 넘길 값(레시피 상세면 레시피 또는 { recipe, returnTo }, 게시글 상세면 게시글)
+   * 웹에서는 history.pushState로 URL도 함께 바꿔 브라우저 뒤로가기가 동작하게 합니다.
+   */
   const handleNavigate = (screen, data = null) => {
     if (isProtectedScreen(screen) && !hasSession) {
       // 클라이언트 보호는 사용자 경험을 위한 1차 방어입니다.
@@ -309,6 +335,7 @@ export default function AppNavigator() {
     handleNavigate('chat');
   };
 
+  // currentScreen 값에 맞는 화면 컴포넌트를 반환합니다.
   const renderScreen = () => {
     switch (currentScreen) {
       case 'payment-result':
@@ -344,8 +371,6 @@ export default function AppNavigator() {
         return <HealthCheckupScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
       case 'account-settings':
         return <AccountSettingsScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
-      case 'fridge':
-        return <FridgeScreen fridgeItems={fridgeItems} setFridgeItems={setFridgeItems} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
       case 'search':
         return <SearchScreen onBack={() => handleNavigate('community')} onNavigate={handleNavigate} user={user} webMode={desktopWebMode} />;
       case 'login':
@@ -369,6 +394,7 @@ export default function AppNavigator() {
     return <LoadingScreen />;
   }
 
+  // 넓은 웹 화면이고 제외 목록에 없는 화면이면 WebAppShell로 감쌉니다.
   const shouldUseWebShell = desktopWebMode && !WEB_SHELL_EXCLUDED_SCREENS.includes(currentScreen);
   const screenContent = renderScreen();
 
@@ -390,6 +416,7 @@ export default function AppNavigator() {
         screenContent
       )}
 
+      {/* 모바일/좁은 웹 화면에서만 슬라이드 사이드바 메뉴를 사용합니다. */}
       {(Platform.OS !== 'web' || !desktopWebMode) && (
         <Sidebar
           isOpen={isSidebarOpen}

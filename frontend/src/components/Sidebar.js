@@ -1,17 +1,14 @@
 
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Modal, Animated, Alert } from 'react-native';
+import React from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, Modal, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii } from '../theme/colors';
-import axios from 'axios';
-import config from '../config';
-import SubscriptionModal from './SubscriptionModal';
 import { SalusLogoMark } from './SalusLogo';
 
+// 사이드바 메뉴 목록(id는 AppNavigator의 화면 이름과 같음)
 const MENU_ITEMS = [
     { id: 'chat', label: 'AI 채팅', icon: 'chatbubbles' },
     { id: 'community', label: '커뮤니티', icon: 'people' },
-    { id: 'fridge', label: '나의 냉장고', icon: 'nutrition' },
     { id: 'calendar', label: '식단 캘린더', icon: 'calendar' },
     { id: 'health', label: '나의 건강정보', icon: 'heart' },
     { id: 'health-checkup', label: '건강검진', icon: 'document-text' },
@@ -21,14 +18,16 @@ const MENU_ITEMS = [
 import { useAuth } from '../context/AuthContext';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
+/**
+ * 모바일에서 햄버거 메뉴로 여는 슬라이드형 사이드바입니다.
+ * 사용자 정보, 화면 이동 메뉴, PLUS 업그레이드 배너, 로그인/로그아웃을 제공합니다.
+ */
 export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) {
     const insets = useSafeAreaInsets();
-    const { user, token, isLoggedIn, logout, refreshUser } = useAuth();
+    const { user, isLoggedIn, logout } = useAuth();
 
     // 구독 멤버십 모달 상태
-    const [subscriptionModalVisible, setSubscriptionModalVisible] = useState(false);
 
     return (
         <Modal visible={isOpen} transparent animationType="fade" onRequestClose={onClose}>
@@ -48,7 +47,7 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                                     </View>
                                 )}
                             </View>
-                            <Text style={styles.subtitle}>{isLoggedIn && user ? user.email : '당신만의 AI 요리사'}</Text>
+                            <Text style={styles.subtitle}>{isLoggedIn && user ? (user.email || user.name) : '당신만의 AI 요리사'}</Text>
                         </View>
                         <TouchableOpacity accessibilityRole="button" accessibilityLabel="메뉴 닫기" onPress={onClose} style={styles.closeButton}>
                             <Ionicons name="close" size={24} color={colors.textTertiary} />
@@ -93,11 +92,11 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                             </TouchableOpacity>
                         ))}
 
-                        {/* Premium CTA Banner */}
+                        {/* 프리미엄(PLUS) 업그레이드 유도 배너: 로그인했지만 PLUS가 아닌 사용자에게만 표시 */}
                         {isLoggedIn && user?.grade !== 'PLUS' && (
                             <TouchableOpacity
                                 style={styles.premiumBanner}
-                                onPress={() => setSubscriptionModalVisible(true)}
+                                onPress={() => { onNavigate('upgrade'); onClose(); }}
                                 accessibilityRole="button"
                                 accessibilityLabel="플러스로 업그레이드"
                             >
@@ -133,40 +132,6 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel="메뉴 닫기" style={styles.overlayTouch} onPress={onClose} />
             </View>
 
-            {/* Subscription Modal */}
-            <SubscriptionModal
-                visible={subscriptionModalVisible}
-                onClose={() => setSubscriptionModalVisible(false)}
-                user={user}
-                onSubscribe={async (impUid, merchantUid) => {
-                    setSubscriptionModalVisible(false);
-                    if (!token) {
-                        Alert.alert("로그인 필요", "결제 확인을 위해 다시 로그인해 주세요.");
-                        return;
-                    }
-
-                    try {
-                        const response = await axios.post(`${config.API_BASE_URL}/payments/verify`, {
-                            impUid: impUid,
-                            merchantUid: merchantUid
-                        }, {
-                            headers: { Authorization: `Bearer ${token}` }
-                        });
-
-                        if (response.data.success) {
-                            Alert.alert("구독 완료", "플러스 회원이 되신 것을 환영합니다.");
-                            await refreshUser(); // 유저 상태 리프레시 (PLUS 뱃지 즉시 반영)
-                            onClose(); // 사이드바 닫기
-                        } else {
-                            Alert.alert("결제 실패", response.data.message || "결제 처리에 실패했습니다.");
-                        }
-                    } catch (error) {
-                        if (isAuthError(error)) return;
-                        console.error('Payment verification failed:', error);
-                        Alert.alert("검증 에러", getErrorMessage(error, "서버 통신 중 문제가 발생했습니다."));
-                    }
-                }}
-            />
         </Modal>
     );
 }

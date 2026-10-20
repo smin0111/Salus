@@ -14,6 +14,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * 식품의약품안전처(식품안전나라) 조리식품 레시피 공개 API(COOKRCP01) 클라이언트입니다.
+ *
+ * 공식 기관 데이터라 웹 검색보다 먼저 조회합니다. API 키가 없거나 기능이 꺼져 있으면 EMPTY를 반환해
+ * 웹 검색 엔진으로 넘어가게 합니다.
+ */
 @Slf4j
 @Component
 public class MfdsRecipeSearchClient {
@@ -41,6 +47,7 @@ public class MfdsRecipeSearchClient {
         this.timeoutSeconds = timeoutSeconds;
     }
 
+    // 요리 이름(RCP_NM)으로 최대 20건을 조회합니다. 호출 실패는 FAILED로 반환합니다.
     public Mono<SearchEngine.SearchResponse> search(String requestedTitle) {
         if (!enabled || apiKey.isBlank() || requestedTitle == null || requestedTitle.isBlank()) {
             return Mono.just(emptyResponse());
@@ -64,6 +71,7 @@ public class MfdsRecipeSearchClient {
                 });
     }
 
+    // 응답 JSON의 COOKRCP01.row 배열에서 요청한 요리와 이름이 맞는 레시피만 최대 3개 근거로 만듭니다.
     private SearchEngine.SearchResponse toSearchResponse(String requestedTitle, JsonNode root) {
         JsonNode serviceNode = root == null ? null : root.get("COOKRCP01");
         JsonNode rows = serviceNode == null ? null : serviceNode.get("row");
@@ -94,6 +102,7 @@ public class MfdsRecipeSearchClient {
                 : new SearchEngine.SearchResponse(SearchEngine.SearchStatus.SUCCESS, results, SOURCE_NAME);
     }
 
+    // API 필드(요리명, 재료, MANUAL01~20 조리 단계, 조리 팁 등)를 "라벨: 값" 형태의 근거 텍스트로 만듭니다.
     private String evidenceText(JsonNode row) {
         StringBuilder evidence = new StringBuilder();
         append(evidence, "요리명", text(row, "RCP_NM"));
@@ -112,6 +121,7 @@ public class MfdsRecipeSearchClient {
         return evidence.toString().trim();
     }
 
+    // 기호/공백을 제거한 이름이 같거나 한쪽이 다른 쪽을 포함하면 같은 요리로 봅니다.
     private boolean dishMatches(String requestedTitle, String actualTitle) {
         String requested = normalize(requestedTitle);
         String actual = normalize(actualTitle);
@@ -141,6 +151,7 @@ public class MfdsRecipeSearchClient {
                 : value.replaceAll("[^가-힣a-zA-Z0-9]", "").toLowerCase(Locale.ROOT);
     }
 
+    // URL 경로에 넣을 수 있게 인코딩합니다. 공백은 +가 아니라 %20으로 바꿉니다.
     private String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
