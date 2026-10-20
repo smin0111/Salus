@@ -1,12 +1,19 @@
 name: 지속적 통합 검사
 
+# 브랜치 흐름: feat/*·fix/*·chore/* → develop(베타에서 검증) → main. 긴급 수정은 hotfix/* → main.
 on:
   pull_request:
     branches:
       - main
+      - develop
   push:
     branches:
       - main
+      - develop
+      - "feat/**"
+      - "fix/**"
+      - "chore/**"
+      - "hotfix/**"
       - "feature/**"
       - "feature-*"
       - "hotfix-*"
