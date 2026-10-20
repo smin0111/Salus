@@ -24,6 +24,8 @@ import java.util.UUID;
 /**
  * 결제 주문 생성, 결제 완료(PLUS 기간 추가), 취소(PLUS 기간 회수)를 DB 트랜잭션으로 처리하는 도우미 클래스입니다.
  *
+ * 포트원 V2의 거래 번호(transactionId)는 V1 때 만든 imp_uid 컬럼에 그대로 저장합니다(컬럼 이름만 V1 시절 것).
+ *
  * PaymentService와 분리한 이유: 스프링의 {@code @Transactional}은 프록시로 동작하므로,
  * 같은 클래스 안에서 자기 메서드를 호출하면 트랜잭션이 적용되지 않습니다.
  * 별도 Bean으로 두면 외부 결제 조회(느린 네트워크 호출)는 트랜잭션 밖에서, DB 저장만 트랜잭션 안에서 처리할 수 있습니다.
@@ -68,11 +70,11 @@ public class PaymentTxHelper {
      * 주문 행을 잠그고 상태를 다시 보므로 한 번만 처리됩니다. 같은 결제로 이미 완료된 주문이면 아무것도 하지 않습니다.
      */
     @Transactional
-    public void completeOrder(Long orderId, String impUid, int paidAmount) {
+    public void completeOrder(Long orderId, String transactionId, int paidAmount) {
         PaymentOrder order = paymentOrderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "주문을 찾을 수 없습니다."));
         if (order.getStatus() == PaymentOrderStatus.PAID) {
-            if (impUid.equals(order.getImpUid())) {
+            if (transactionId.equals(order.getImpUid())) {
                 return;
             }
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 처리된 주문입니다.");
@@ -84,14 +86,14 @@ public class PaymentTxHelper {
             throw new IllegalArgumentException("결제 금액이 일치하지 않습니다. 의심되는 거래입니다.");
         }
         // 다른 주문에 이미 쓰인 결제 번호는 받지 않습니다.
-        if (paymentRepository.findByImpUid(impUid).isPresent()) {
+        if (paymentRepository.findByImpUid(transactionId).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 처리된 결제입니다.");
         }
 
         // 결제 시각은 클라이언트 시간이 아니라 서버 Clock을 기준으로 저장합니다.
         LocalDateTime now = LocalDateTime.now(clock);
         order.setStatus(PaymentOrderStatus.PAID);
-        order.setImpUid(impUid);
+        order.setImpUid(transactionId);
         order.setPaidAt(now);
 
         User user = order.getUser();
@@ -104,7 +106,7 @@ public class PaymentTxHelper {
         }
 
         Payment payment = Payment.builder()
-                .impUid(impUid)
+                .impUid(transactionId)
                 .merchantUid(order.getMerchantUid())
                 .amount(paidAmount)
                 .status("paid")
@@ -127,9 +129,9 @@ public class PaymentTxHelper {
      * 남는 기간이 없으면 바로 BASIC이 됩니다. 처리할 주문이 아니면(이미 취소, 다른 결제) false입니다.
      */
     @Transactional
-    public boolean cancelOrder(Long orderId, String impUid) {
+    public boolean cancelOrder(Long orderId, String transactionId) {
         PaymentOrder order = paymentOrderRepository.findByIdForUpdate(orderId).orElse(null);
-        if (order == null || order.getStatus() != PaymentOrderStatus.PAID || !impUid.equals(order.getImpUid())) {
+        if (order == null || order.getStatus() != PaymentOrderStatus.PAID || !transactionId.equals(order.getImpUid())) {
             return false;
         }
         LocalDateTime now = LocalDateTime.now(clock);
@@ -137,7 +139,7 @@ public class PaymentTxHelper {
         order.setCancelledAt(now);
         paymentOrderRepository.save(order);
 
-        paymentRepository.findByImpUid(impUid).ifPresent(payment -> {
+        paymentRepository.findByImpUid(transactionId).ifPresent(payment -> {
             payment.setStatus("cancelled");
             paymentRepository.save(payment);
         });

@@ -61,6 +61,7 @@ public class PaymentOrder {
     @Column(nullable = false, length = 20)
     private PaymentOrderStatus status;
 
+    // 포트원 거래 번호입니다. V2부터는 transactionId를 담습니다(컬럼 이름은 V1 시절 것). 주문번호는 곧 포트원 paymentId입니다.
     @Column(name = "imp_uid", unique = true)
     private String impUid;
 

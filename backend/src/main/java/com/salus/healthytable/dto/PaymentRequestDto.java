@@ -7,6 +7,5 @@ import lombok.Data;
  */
 @Data
 public class PaymentRequestDto {
-    private String impUid; // 포트원 고유 결제 식별자
-    private String merchantUid; // 가맹점 주문번호
+    private String paymentId; // 포트원 V2 결제 번호(= 서버가 만든 주문번호)
 }

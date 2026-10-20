@@ -95,10 +95,14 @@ services:
       OPENFDA_API_KEY: ${OPENFDA_API_KEY:-}
       # 게스트 IP는 이 범위의 프록시(맥북 자신, docker 내부망의 nginx)를 거친 경우에만 X-Forwarded-For에서 읽습니다.
       APP_CLIENT_IP_TRUSTED_PROXIES: ${APP_CLIENT_IP_TRUSTED_PROXIES:-127.0.0.1/32,::1/128,172.16.0.0/12}
-      # 베타 서버는 결제를 받지 않습니다(결제 화면은 안내만). 실제 판매 때 PAYMENT_ENABLED=true와 포트원 키를 넣습니다.
+      # 베타 서버는 결제를 받지 않습니다(결제 화면은 안내만). 실제 판매 때 PAYMENT_ENABLED=true와 포트원 V2 값을 넣습니다.
+      # 포트원 값이 비어 있으면 PAYMENT_ENABLED=true여도 결제를 받지 않습니다.
       PAYMENT_ENABLED: ${PAYMENT_ENABLED:-false}
-      IAMPORT_API_KEY: ${IAMPORT_API_KEY:?IAMPORT_API_KEY is required}
-      IAMPORT_API_SECRET: ${IAMPORT_API_SECRET:?IAMPORT_API_SECRET is required}
+      PAYMENT_PORTONE_STORE_ID: ${PAYMENT_PORTONE_STORE_ID:-}
+      PAYMENT_PORTONE_CHANNEL_KEY: ${PAYMENT_PORTONE_CHANNEL_KEY:-}
+      PAYMENT_PORTONE_PAY_METHOD: ${PAYMENT_PORTONE_PAY_METHOD:-EASY_PAY}
+      PORTONE_API_SECRET: ${PORTONE_API_SECRET:-}
+      PORTONE_WEBHOOK_SECRET: ${PORTONE_WEBHOOK_SECRET:-}
       NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-}
       NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-}
       OAUTH_GOOGLE_CLIENT_IDS: ${OAUTH_GOOGLE_CLIENT_IDS:-}

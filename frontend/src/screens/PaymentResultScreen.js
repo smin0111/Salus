@@ -8,8 +8,8 @@ import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/api
 import { colors } from '../theme/colors';
 
 /**
- * 카카오페이 결제 완료 후 m_redirect_url로 돌아오는 결제 결과 화면입니다(주로 모바일 웹 결제 흐름).
- * URL 쿼리 파라미터: imp_uid(포트원 결제 번호), merchant_uid(주문 번호), imp_success(성공 여부)
+ * 포트원 V2 결제창이 리디렉션으로 끝난 뒤 redirectUrl(/payment-result)로 돌아오는 결제 결과 화면입니다(주로 모바일 웹).
+ * URL 쿼리 파라미터: paymentId(결제 번호 = 서버 주문번호), 실패하면 code·message가 함께 옵니다.
  */
 export default function PaymentResultScreen({ onNavigate }) {
     const [status, setStatus] = useState('loading'); // 결제 확인 상태: loading(확인 중) | success(성공) | fail(실패)
@@ -28,25 +28,22 @@ export default function PaymentResultScreen({ onNavigate }) {
         }
 
         const params = new URLSearchParams(window.location.search);
-        const impUid = params.get('imp_uid');
-        const merchantUid = params.get('merchant_uid');
-        const impSuccess = params.get('imp_success');
+        const paymentId = params.get('paymentId');
 
-        if (!impUid || !merchantUid || impSuccess === 'false') {
+        if (!paymentId || params.get('code')) {
             setStatus('fail');
-            setMessage('결제가 취소되었거나 실패했습니다.');
+            setMessage(params.get('message') || '결제가 취소되었거나 실패했습니다.');
             return;
         }
 
-        verifyPayment(impUid, merchantUid);
+        verifyPayment(paymentId);
     }, [authLoading, token]);
 
     // 백엔드에 결제 검증을 요청하고, 성공하면 사용자 정보(등급)를 새로 불러옵니다.
-    const verifyPayment = async (impUid, merchantUid) => {
+    const verifyPayment = async (paymentId) => {
         try {
             const response = await axios.post(`${config.API_BASE_URL}/payments/verify`, {
-                impUid,
-                merchantUid,
+                paymentId,
             }, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
