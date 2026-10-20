@@ -28,6 +28,28 @@ class RecipeRequestPlannerDishNameTest {
         assertThat(planner.plan("김치찌개 두 인분 레시피", false).dishName()).isEqualTo("김치찌개");
     }
 
+    // 바라는 말은 요리 이름과 검색어에서 뺍니다(2026-10-20 "마늘 보쌈 먹고싶어"로 검색하고 "마늘보쌈 만드는 법" 페이지를 버림).
+    @Test
+    void desireWordsAreRemovedFromDishNameAndQueries() {
+        RecipeResearchPlan plan = planner.plan("마늘 보쌈 먹고싶어 레시피 알려줘", false);
+        assertThat(plan.dishName()).isEqualTo("마늘 보쌈");
+        assertThat(plan.searchQueries()).containsExactly("마늘 보쌈 레시피", "마늘 보쌈 만드는 법");
+        assertThat(planner.plan("마늘 보쌈 해먹고 싶은데 레시피 알려줘", false).dishName()).isEqualTo("마늘 보쌈");
+        assertThat(planner.plan("마늘보쌈이 먹고 싶어요. 레시피 알려줘", false).dishName()).isEqualTo("마늘보쌈");
+        assertThat(planner.plan("김치찌개가 먹고파 레시피 알려줘", false).dishName()).isEqualTo("김치찌개");
+        assertThat(planner.plan("감바스를 만들어 보고 싶어 레시피 알려줘", false).dishName()).isEqualTo("감바스");
+        assertThat(planner.plan("레시피 알려줘 된장찌개 끓여 먹고 싶어", false).dishName()).isEqualTo("된장찌개");
+    }
+
+    // "이"로 끝나는 요리 이름과 "먹"이 든 요리 이름은 그대로입니다.
+    @Test
+    void desireRemovalKeepsDishNamesEndingWithI() {
+        assertThat(planner.plan("떡볶이 먹고싶어 레시피 알려줘", false).dishName()).isEqualTo("떡볶이");
+        assertThat(planner.plan("골뱅이 먹고 싶어 레시피 알려줘", false).dishName()).isEqualTo("골뱅이");
+        assertThat(planner.plan("닭꼬치가 먹고 싶어 레시피", false).dishName()).isEqualTo("닭꼬치");
+        assertThat(planner.plan("먹물 파스타 레시피 알려줘", false).dishName()).isEqualTo("먹물 파스타");
+    }
+
     @Test
     void dishNameWithoutExclusionIsUnchanged() {
         assertThat(planner.plan("두쫀쿠 레시피 알려줘", false).dishName()).isEqualTo("두쫀쿠");
