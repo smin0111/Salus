@@ -54,6 +54,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:?APP_CORS_ALLOWED_ORIGINS is required}
       APP_TIME_ZONE: ${APP_TIME_ZONE:-Asia/Seoul}
+      # JVM 기본 시간대를 DB 연결(serverTimezone=Asia/Seoul)과 맞춥니다. 다르면(컨테이너 기본 UTC) MySQL 드라이버가
+      # LocalDateTime을 UTC로 보고 바꿔 DB에 9시간 앞선 시각이 저장됩니다.
+      TZ: ${APP_TIME_ZONE:-Asia/Seoul}
       APP_ADMIN_IP_WHITELIST_ENABLED: ${APP_ADMIN_IP_WHITELIST_ENABLED:-false}
       APP_ADMIN_ALLOWED_IPS: ${APP_ADMIN_ALLOWED_IPS:-127.0.0.1,::1}
       MONITOR_DISPLAY_TOKEN_HASHES: ${MONITOR_DISPLAY_TOKEN_HASHES:-}
