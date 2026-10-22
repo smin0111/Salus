@@ -14,7 +14,7 @@ import java.util.Map;
 /**
  * PLUS 이용권 결제 API(/api/payments)입니다.
  *
- * <p>순서: GET /plus(상태) → POST /orders(서버가 주문 생성) → 포트원 결제창 → POST /verify(결제 확인).
+ * <p>순서: GET /plus(상태) → POST /orders(서버가 주문 생성) → 포트원 V2 결제창 → POST /verify(결제 확인).
  * 확인 요청이 빠진 결제는 POST /reconcile(결제 화면을 열 때)과 POST /webhook(포트원 알림)이 마무리합니다.
  */
 @Slf4j
@@ -54,7 +54,7 @@ public class PaymentController {
         }
 
         Long userId = authenticatedUserProvider.requireUserId();
-        PaymentDto.PlusStatus status = paymentService.verify(request.getImpUid(), request.getMerchantUid(), userId);
+        PaymentDto.PlusStatus status = paymentService.verify(request.getPaymentId(), userId);
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "결제가 완료되었습니다. PLUS 혜택을 이용해 보세요!",
@@ -68,12 +68,16 @@ public class PaymentController {
     }
 
     /**
-     * 포트원 웹훅(결제 완료·취소 알림)입니다. 인증 없이 호출되므로 본문은 믿지 않고 포트원에 다시 조회해 처리합니다.
-     * 처리 결과와 상관없이 200으로 답합니다(내부 상태를 알려 주지 않음).
+     * 포트원 V2 웹훅(결제 완료·취소 알림)입니다. 로그인 없이 호출되므로 서명을 확인하고, 그 뒤에도 본문은 믿지 않고
+     * 포트원에 다시 조회해 처리합니다. 서명 확인에 원문 그대로의 본문이 필요해 바이트로 받습니다.
+     * 서명이 틀리면 400, 포트원 조회가 실패하면 502(포트원이 다시 보냄), 그 밖에는 처리 결과와 상관없이 200입니다.
      */
     @PostMapping("/webhook")
-    public ResponseEntity<Void> webhook(@RequestBody(required = false) PaymentDto.Webhook webhook) {
-        paymentService.handleWebhook(webhook);
+    public ResponseEntity<Void> webhook(@RequestBody(required = false) byte[] body,
+                                        @RequestHeader(value = "webhook-id", required = false) String webhookId,
+                                        @RequestHeader(value = "webhook-timestamp", required = false) String webhookTimestamp,
+                                        @RequestHeader(value = "webhook-signature", required = false) String webhookSignature) {
+        paymentService.handleWebhook(body, webhookId, webhookTimestamp, webhookSignature);
         return ResponseEntity.ok().build();
     }
 }

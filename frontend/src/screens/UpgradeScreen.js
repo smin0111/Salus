@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ScrollView, Alert, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
@@ -6,7 +6,6 @@ import axios from 'axios';
 import config from '../config';
 import { useAuth } from '../context/AuthContext';
 import { debugLog } from '../utils/logger';
-import { PORTONE_IMP_CODE } from '../constants/subscription';
 import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
 // "2026-11-16T01:48:35" → "2026-11-16"
@@ -17,9 +16,10 @@ const formatWon = (amount) => `${Number(amount || 0).toLocaleString('ko-KR')}원
  * PLUS 이용권 결제 화면입니다.
  *
  * 순서: 화면을 열면 서버에 재확인(reconcile)을 요청해, 지난번 결제 후 확인이 빠진 주문이 있으면 마무리합니다
- * → 결제할 수 있는 상태면 서버가 주문(주문번호·금액·상품명)을 미리 만들어 둡니다 → 결제 버튼을 누르면 그 값으로 바로
- * 포트원 결제창을 열고 → 결제가 끝나면 서버가 주문 주인과 포트원 결제 내역을 확인해 PLUS 기간을 더합니다.
- * 주문을 버튼을 누른 뒤에 만들면(서버 응답을 기다린 뒤 결제창을 열면) 브라우저가 카카오페이 팝업을 막습니다.
+ * → 결제할 수 있는 상태면 서버가 주문(결제 번호·금액·상품명·상점 ID·채널 키)을 미리 만들어 둡니다 → 결제 버튼을 누르면
+ * 그 값으로 바로 포트원 V2 결제창(PortOne.requestPayment)을 열고 → 결제가 끝나면 서버가 주문 주인과 포트원 결제 내역을
+ * 확인해 PLUS 기간을 더합니다. 버튼을 누른 뒤 서버 응답을 기다렸다가 결제창을 열면 브라우저가 결제창을 막을 수 있어
+ * 주문을 미리 만듭니다. 모바일 웹은 결제창이 페이지 이동(리디렉션)으로 열리고, 끝나면 /payment-result로 돌아옵니다.
  * 웹에서는 Alert.alert가 아무것도 띄우지 않으므로 안내·오류는 화면의 알림 상자(notice)로 보여 줍니다.
  * 앱(iOS/Android) 결제는 아직 지원하지 않습니다(스토어 인앱결제 필요).
  */
@@ -33,6 +33,10 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
     const [needsRecheck, setNeedsRecheck] = useState(false);
     // 미리 만들어 둔 결제 주문(버튼을 누르면 바로 결제창을 열기 위함)
     const [order, setOrder] = useState(null);
+    // 결제창을 연 뒤 서버 확인이 끝날 때까지는 새 주문을 만들지 않습니다(결제 직후 대기 주문이 쌓이던 문제).
+    const [paying, setPaying] = useState(false);
+    // 주문 만들기 요청이 겹쳐 나가지 않게 합니다.
+    const preparingRef = useRef(false);
     // 화면에 보여 줄 안내·오류 { tone: 'error' | 'info' | 'success', text }
     const [notice, setNotice] = useState(null);
 
@@ -80,12 +84,12 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
     // 웹 환경이면 포트원 결제 SDK를 불러옵니다.
     useEffect(() => {
         if (Platform.OS !== 'web') return;
-        if (window.IMP) {
+        if (window.PortOne) {
             setSdkReady(true);
             return;
         }
         const script = document.createElement('script');
-        script.src = 'https://cdn.iamport.kr/v1/iamport.js';
+        script.src = 'https://cdn.portone.io/v2/browser-sdk.js';
         script.type = 'text/javascript';
         script.async = true;
         script.onload = () => {
@@ -113,11 +117,11 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
         }
     };
 
-    const verifyPayment = async (impUid, merchantUid) => {
+    const verifyPayment = async (paymentId) => {
         setLoading(true);
         try {
             const response = await axios.post(`${config.API_BASE_URL}/payments/verify`,
-                { impUid, merchantUid }, { headers: authHeaders });
+                { paymentId }, { headers: authHeaders });
             if (response.data?.success) {
                 setStatus(response.data.plus);
                 setNeedsRecheck(false);
@@ -145,6 +149,8 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
 
     // 결제할 수 있는 상태가 되면 주문을 미리 만들어 둡니다. 결제를 마치거나 취소하면 새 주문을 다시 만듭니다.
     const prepareOrder = useCallback(async () => {
+        if (preparingRef.current) return;
+        preparingRef.current = true;
         try {
             const response = await axios.post(`${config.API_BASE_URL}/payments/orders`, null, { headers: authHeaders });
             setOrder(response.data);
@@ -152,20 +158,24 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
             if (isAuthError(error)) return;
             setOrder(null);
             notify('error', '주문 준비 실패', getErrorMessage(error, '결제 주문을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.'));
+        } finally {
+            preparingRef.current = false;
         }
     }, [token]);
 
+    // 결제 확인 중이거나, 결제는 됐을 수 있는데 확인이 실패한 상태(다시 확인 필요)에서는 새 주문을 만들지 않습니다.
+    // 새 주문이 있으면 같은 이용권을 한 번 더 결제할 수 있기 때문입니다.
     useEffect(() => {
-        if (canPay && !order) {
+        if (canPay && !order && !paying && !needsRecheck) {
             prepareOrder();
         }
-    }, [canPay, order, prepareOrder]);
+    }, [canPay, order, paying, needsRecheck, prepareOrder]);
 
     // 결제 버튼: 미리 만든 주문으로 바로 결제창을 엽니다(서버를 기다리지 않아야 팝업이 막히지 않음).
-    const handlePayment = () => {
+    const handlePayment = async () => {
         setNotice(null);
-        const { IMP } = window;
-        if (!IMP) {
+        const { PortOne } = window;
+        if (!PortOne) {
             notify('error', '결제 모듈 준비 중', '결제 모듈을 불러오는 중이에요. 잠시 후 다시 눌러 주세요.');
             return;
         }
@@ -176,24 +186,39 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
         }
 
         const current = order;
-        IMP.init(PORTONE_IMP_CODE);
-        IMP.request_pay({
-            pg: current.pg,
-            pay_method: 'card',
-            merchant_uid: current.merchantUid,
-            name: current.productName,
-            amount: current.amount,
-            buyer_name: user?.name || '',
-            ...(user?.email ? { buyer_email: user.email } : {}),
-        }, (rsp) => {
-            // 성공·실패와 상관없이 이 주문은 썼으므로 다음 결제는 새 주문으로 합니다.
-            setOrder(null);
-            if (rsp.success) {
-                verifyPayment(rsp.imp_uid, rsp.merchant_uid);
-            } else {
-                notify('error', '결제가 끝나지 않았어요', rsp.error_msg || '결제를 취소했거나 완료되지 않았어요.');
-            }
-        });
+        setPaying(true);
+        let response;
+        try {
+            response = await PortOne.requestPayment({
+                storeId: current.storeId,
+                channelKey: current.channelKey,
+                paymentId: current.paymentId,
+                orderName: current.productName,
+                totalAmount: current.amount,
+                currency: 'CURRENCY_KRW',
+                payMethod: current.payMethod,
+                // 모바일 웹은 결제창으로 페이지가 이동했다가 이 주소로 돌아옵니다(?paymentId=...&code=...).
+                redirectUrl: `${window.location.origin}/payment-result`,
+                customer: {
+                    ...(user?.name ? { fullName: user.name } : {}),
+                    ...(user?.email ? { email: user.email } : {}),
+                },
+            });
+        } catch (error) {
+            console.error('PortOne requestPayment failed:', error);
+            response = { code: 'SDK_ERROR' };
+        }
+        // 성공·실패와 상관없이 이 주문은 썼으므로 다음 결제는 새 주문으로 합니다.
+        setOrder(null);
+        // 리디렉션으로 결제하는 경우 응답이 없고, 결과는 /payment-result 화면이 확인합니다.
+        if (!response) return;
+        if (response.code != null) {
+            setPaying(false);
+            notify('error', '결제가 끝나지 않았어요', response.message || '결제를 취소했거나 완료되지 않았어요.');
+            return;
+        }
+        await verifyPayment(response.paymentId || current.paymentId);
+        setPaying(false);
     };
 
     const renderAction = () => {

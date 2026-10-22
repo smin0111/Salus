@@ -1,7 +1,5 @@
 package com.salus.healthytable.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-
 import java.time.LocalDateTime;
 
 /**
@@ -28,16 +26,15 @@ public final class PaymentDto {
             int plusDays) {
     }
 
-    /** 서버가 만든 결제 주문입니다. 앱은 이 값 그대로 포트원 결제창을 엽니다. */
-    public record Order(String merchantUid, int amount, String productName, String pg) {
-    }
-
     /**
-     * 포트원 웹훅 본문입니다. 본문 값은 믿지 않고, 주문을 찾는 데만 쓴 뒤 포트원에 다시 조회합니다.
+     * 서버가 만든 결제 주문입니다. 앱은 이 값 그대로 포트원 V2 결제창(PortOne.requestPayment)을 엽니다.
+     *
+     * @param paymentId  서버가 만든 주문번호(포트원 paymentId)
+     * @param storeId    포트원 상점 ID
+     * @param channelKey 결제 채널 키(예: 카카오페이 테스트 채널)
+     * @param payMethod  결제 수단(EASY_PAY, CARD 등)
      */
-    public record Webhook(
-            @JsonProperty("imp_uid") String impUid,
-            @JsonProperty("merchant_uid") String merchantUid,
-            @JsonProperty("status") String status) {
+    public record Order(String paymentId, int amount, String productName,
+                        String storeId, String channelKey, String payMethod) {
     }
 }

@@ -25,7 +25,7 @@ public class Payment {
     @Column(unique = true)
     private String merchantUid; // 주문 고유 번호
 
-    private String impUid; // 포트원 결제 고유 번호
+    private String impUid; // 포트원 결제 고유 번호(V2부터는 거래 번호 transactionId)
 
     private Integer amount; // 결제 금액
 
