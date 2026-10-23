@@ -135,7 +135,8 @@ public class RecipeEvidenceService {
                 SearchEngine.SearchStatus.SUCCESS,
                 systemContextSnippet,
                 rawSearchContext,
-                searchResponse.source());
+                searchResponse.source(),
+                reliableResults);
     }
 
     // "근거 없음" 캐시를 새로 저장합니다. 저장 실패는 응답에 영향을 주지 않도록 로그만 남깁니다.
@@ -400,12 +401,22 @@ public class RecipeEvidenceService {
     /**
      * 근거 수집 결과입니다.
      * status: 검색 상태 / systemContextSnippet: LLM 프롬프트용 텍스트 / rawSearchContext: 검증용 원본 근거 / source: 출처 이름
+     * / references: LLM에 제공된 웹 검색 결과(제목·URL). 실제로 인용했다는 뜻은 아니며, 카드의 검색 근거 추적(RETRIEVED)에만 씁니다.
      */
     public record RagData(
             SearchEngine.SearchStatus status,
             String systemContextSnippet,
             String rawSearchContext,
-            String source) {
+            String source,
+            List<SearchEngine.SearchResult> references) {
+
+        public RagData {
+            references = references == null ? List.of() : List.copyOf(references);
+        }
+
+        public RagData(SearchEngine.SearchStatus status, String systemContextSnippet, String rawSearchContext, String source) {
+            this(status, systemContextSnippet, rawSearchContext, source, List.of());
+        }
 
         static RagData empty(SearchEngine.SearchStatus status, String source) {
             return new RagData(status, "", "", source);

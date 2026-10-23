@@ -64,6 +64,8 @@ public class ChatService {
     private final RecipeAgentOrchestrator recipeAgentOrchestrator;
     private final ApprovedRecipeService approvedRecipeService;
     private final KnownWebDishLookup knownWebDishLookup;
+    // 레시피 카드가 있는 모델 답변은 카드와 함께 저장합니다(대화 복원·내 레시피 저장의 원본).
+    private final ChatRecipeCardService chatRecipeCardService;
 
     // Recipe Agent 기능 플래그(기본값 false). 켜지 않으면 기존 레시피 생성 경로만 사용합니다.
     @Value("${recipe.agent.enabled:false}")
@@ -186,7 +188,8 @@ public class ChatService {
                     request.getMessage());
             if (approvedAdjustment.isPresent()) {
                 saveChatMessage(chatSession, "user", userText(request));
-                saveChatMessage(chatSession, "model", approvedAdjustment.get().getReply());
+                chatRecipeCardService.saveModelReply(chatSession, approvedAdjustment.get(),
+                        ChatRecipeCardService.CardContext.approved());
                 return Mono.just(approvedAdjustment.get());
             }
         }
@@ -212,7 +215,8 @@ public class ChatService {
             return recipeAgentOrchestrator.handle(authenticatedUserIdValue, sessionId, request, safetyContext)
                     .map(response -> {
                         if (chatSession != null) {
-                            saveChatMessage(chatSession, "model", response.getReply());
+                            chatRecipeCardService.saveModelReply(chatSession, response,
+                                    ChatRecipeCardService.CardContext.agent(response));
                         }
                         return response;
                     });
@@ -251,32 +255,12 @@ public class ChatService {
         }
         // 승인 레시피 경로: LLM으로 새로 만들지 않고, 검수된 레시피를 요청(인분 등)에 맞게 렌더링해 보여 줍니다.
         if (approvedRecipe.isPresent()) {
+            ApprovedRecipeService.RenderedRecipe rendered;
             try {
                 Recipe recipe = approvedRecipe.get();
-                ApprovedRecipeService.RenderedRecipe rendered = approvedRecipeService.renderApprovedRecipe(
+                rendered = approvedRecipeService.renderApprovedRecipe(
                         recipe,
                         request.getMessage());
-                List<String> safetyNotes = chatSafetyContextService.buildRecipeSafetyNotes(
-                        authenticatedUserId,
-                        safetyContext,
-                        rendered.recipe());
-                if (chatSession != null) {
-                    saveChatMessage(chatSession, "user", userText(request));
-                    chatFollowUpService.saveApprovedRecipeState(
-                            authenticatedUserIdValue,
-                            chatSession.getId(),
-                            rendered);
-                    saveChatMessage(chatSession, "model", rendered.reply());
-                }
-                ChatDto.Response response = new ChatDto.Response(
-                        sessionId,
-                        rendered.reply(),
-                        chatSession != null,
-                        false);
-                ChatDto.RecipeCard card = recipeResponseSanitizer.buildRecipeCard(rendered.recipe(), safetyNotes);
-                card.setSources(ApprovedRecipeService.sourceLinks(rendered));
-                response.setRecipe(card);
-                return Mono.just(response);
             // 렌더링할 수 없는 요청(지원하지 않는 조정 등)은 예외 메시지를 그대로 안내합니다.
             } catch (IllegalArgumentException | IllegalStateException error) {
                 if (chatSession != null) {
@@ -285,6 +269,29 @@ public class ChatService {
                 }
                 return Mono.just(new ChatDto.Response(sessionId, error.getMessage(), false, false));
             }
+            List<String> safetyNotes = chatSafetyContextService.buildRecipeSafetyNotes(
+                    authenticatedUserId,
+                    safetyContext,
+                    rendered.recipe());
+            // 카드를 먼저 만든 뒤 모델 답변과 함께 저장합니다(저장한 카드 = 응답으로 보낸 카드).
+            ChatDto.Response response = new ChatDto.Response(
+                    sessionId,
+                    rendered.reply(),
+                    chatSession != null,
+                    false);
+            ChatDto.RecipeCard card = recipeResponseSanitizer.buildRecipeCard(rendered.recipe(), safetyNotes);
+            card.setSources(ApprovedRecipeService.sourceLinks(rendered));
+            response.setRecipe(card);
+            if (chatSession != null) {
+                saveChatMessage(chatSession, "user", userText(request));
+                chatFollowUpService.saveApprovedRecipeState(
+                        authenticatedUserIdValue,
+                        chatSession.getId(),
+                        rendered);
+                chatRecipeCardService.saveModelReply(chatSession, response,
+                        ChatRecipeCardService.CardContext.approved());
+            }
+            return Mono.just(response);
         }
 
         // 이후 LLM 호출에 쓸 시스템 프롬프트(참고 레시피 + 건강 정보)를 조립합니다.
@@ -294,81 +301,29 @@ public class ChatService {
 
         appendSafetyContext(systemContext, safetyContext);
 
-        // 로그인 사용자 전용: 대화 저장, 후속 요청 처리, 검진/작업 세션 문맥 추가
+        // 저장 오류는 개인화/생성 실패의 폴백과 분리합니다. 사용자 메시지도 이 경계 밖에서 한 번만 저장합니다.
         if (authenticatedUserId.isPresent()) {
+            Long userIdLong = authenticatedUserId.get();
+            saveChatMessage(chatSession, "user", userText(request));
+            if (isSaveToCalendarRequest(request.getMessage())) {
+                Optional<ChatDto.Response> savedResponse = saveCurrentRecommendation(userIdLong, chatSession, request.getMessage());
+                if (savedResponse.isPresent()) {
+                    saveChatMessage(chatSession, "model", savedResponse.get().getReply());
+                    return Mono.just(savedResponse.get());
+                }
+            }
+
+            Optional<ChatDto.Response> personalizedReply = Optional.empty();
             try {
-                Long userIdLong = authenticatedUserId.get();
-
-                saveChatMessage(chatSession, "user", userText(request));
-
-                if (isSaveToCalendarRequest(request.getMessage())) {
-                    Optional<ChatDto.Response> savedResponse = saveCurrentRecommendation(userIdLong, chatSession, request.getMessage());
-                    if (savedResponse.isPresent()) {
-                        saveChatMessage(chatSession, "model", savedResponse.get().getReply());
-                        return Mono.just(savedResponse.get());
-                    }
-                }
-
-                if (isAlternativeExclusionRecipeRequest(request.getMessage())) {
-                    Optional<ChatDto.Response> alternativeResponse = buildAlternativeRecipeExcludingIngredients(userIdLong, chatSession, request, safetyContext);
-                    if (alternativeResponse.isPresent()) {
-                        saveChatMessage(chatSession, "model", alternativeResponse.get().getReply());
-                        return Mono.just(alternativeResponse.get());
-                    }
-                }
-
-                if (isIngredientSubstitutionFollowUp(request.getMessage())) {
-                    Optional<ChatDto.Response> substitutionResponse = buildRecipeSubstitutionFollowUp(
-                            userIdLong, chatSession, request, safetyContext);
-                    if (substitutionResponse.isPresent()) {
-                        saveChatMessage(chatSession, "model", substitutionResponse.get().getReply());
-                        return Mono.just(substitutionResponse.get());
-                    }
-                }
-
-                // "양파 빼줘", "깻잎 말고 상추 넣어줘", "치즈 넣어줘": 직전 레시피에 규칙으로 적용합니다.
-                // 일반 대화로 넘기면 LLM이 검증 없는 레시피를 새로 써서 막히고 70~100초가 걸렸습니다(2026-10-09).
-                Optional<ChatDto.Response> ingredientEditResponse = chatFollowUpService.buildIngredientEditFollowUp(
-                        userIdLong, chatSession, request, safetyContext);
-                if (ingredientEditResponse.isPresent()) {
-                    saveChatMessage(chatSession, "model", ingredientEditResponse.get().getReply());
-                    return Mono.just(ingredientEditResponse.get());
-                }
-
-                if (isDetailFollowUp) {
-                    Optional<ChatDto.Response> detailedResponse = buildDetailedRecipeFollowUp(userIdLong, chatSession, request);
-                    if (detailedResponse.isPresent()) {
-                        saveChatMessage(chatSession, "model", detailedResponse.get().getReply());
-                        return Mono.just(detailedResponse.get());
-                    }
-                }
-
-                // 1. 건강검진 분석
-                if (!chatSafetyContextService.appendLatestCheckupContext(systemContext, userIdLong)) {
-                    String unavailableReply = "건강 정보를 안전하게 확인하지 못해 개인화 레시피를 제공하지 않았습니다. 잠시 후 다시 시도해 주세요.";
-                    saveChatMessage(chatSession, "model", unavailableReply);
-                    return Mono.just(new ChatDto.Response(
-                            chatSession != null ? chatSession.getId() : null,
-                            unavailableReply,
-                            false,
-                            false));
-                }
-
-                // 2. 작업 세션
-                chatFollowUpService.appendWorkSessionContext(
-                        userIdLong, chatSession.getId(), request.getMessage(), systemContext);
-
-                if (!isRecipeRequestIntent) {
-                    systemContext.append("\n=== 일반 대화 ===\n");
-                    systemContext.append("사용자가 인사, 자기소개 요청, 잡담을 한 경우 레시피를 만들지 말고 Salus를 짧게 소개하며 자연스럽게 답하세요.\n");
-                    systemContext.append("사용자가 메뉴 추천만 원하면 조리법을 쓰지 말고 메뉴 후보와 이유만 짧게 답하세요. 사용자가 불만을 말하면 인정하고 더 쉬운 대안으로 전환하세요.\n");
-                    systemContext.append("정체를 묻지 않은 일반 질문에는 자기소개를 반복하지 마세요.\n");
-                    systemContext.append("================\n");
-                }
-
-            // 개인화 문맥 준비 중 예상치 못한 오류는 기록만 하고 일반 흐름을 계속 진행합니다.
+                personalizedReply = preparePersonalizedReply(userIdLong, chatSession, request, safetyContext,
+                        isDetailFollowUp, isRecipeRequestIntent, systemContext);
             } catch (Exception e) {
                 logRequestFailure(intent.name(), request.getMessage(), "PERSONALIZATION_CONTEXT_FAILED", e);
+            }
+            if (personalizedReply.isPresent()) {
+                ChatDto.Response response = personalizedReply.get();
+                chatRecipeCardService.saveModelReply(chatSession, response, ChatRecipeCardService.CardContext.variant());
+                return Mono.just(response);
             }
         }
 
@@ -421,7 +376,8 @@ public class ChatService {
                         ragData.status())
                         .map(response -> {
                             if (chatSession != null) {
-                                saveChatMessage(chatSession, "model", response.getReply());
+                                chatRecipeCardService.saveModelReply(chatSession, response,
+                                        ChatRecipeCardService.CardContext.aiGenerated(ragData, trustedRecipes));
                             }
                             return response;
                         });
@@ -447,6 +403,64 @@ public class ChatService {
                         return new ChatDto.Response(sessionIdForWork, responseReply, false, false);
                     });
         });
+    }
+
+    /** 후속 응답과 개인화 문맥만 준비합니다. 답변의 DB 저장은 호출자의 폴백 경계 밖에서 수행합니다. */
+    private Optional<ChatDto.Response> preparePersonalizedReply(
+            Long userIdLong, ChatSession chatSession, ChatDto.Request request, SafetyContext safetyContext,
+            boolean isDetailFollowUp, boolean isRecipeRequestIntent, StringBuilder systemContext) {
+        if (isAlternativeExclusionRecipeRequest(request.getMessage())) {
+            Optional<ChatDto.Response> alternativeResponse = buildAlternativeRecipeExcludingIngredients(userIdLong, chatSession, request, safetyContext);
+            if (alternativeResponse.isPresent()) {
+                return alternativeResponse;
+            }
+        }
+
+        if (isIngredientSubstitutionFollowUp(request.getMessage())) {
+            Optional<ChatDto.Response> substitutionResponse = buildRecipeSubstitutionFollowUp(
+                    userIdLong, chatSession, request, safetyContext);
+            if (substitutionResponse.isPresent()) {
+                return substitutionResponse;
+            }
+        }
+
+        // "양파 빼줘", "깻잎 말고 상추 넣어줘", "치즈 넣어줘": 직전 레시피에 규칙으로 적용합니다.
+        // 일반 대화로 넘기면 LLM이 검증 없는 레시피를 새로 써서 막히고 70~100초가 걸렸습니다(2026-10-09).
+        Optional<ChatDto.Response> ingredientEditResponse = chatFollowUpService.buildIngredientEditFollowUp(
+                userIdLong, chatSession, request, safetyContext);
+        if (ingredientEditResponse.isPresent()) {
+            return ingredientEditResponse;
+        }
+
+        if (isDetailFollowUp) {
+            Optional<ChatDto.Response> detailedResponse = buildDetailedRecipeFollowUp(userIdLong, chatSession, request);
+            if (detailedResponse.isPresent()) {
+                return detailedResponse;
+            }
+        }
+
+        // 1. 건강검진 분석
+        if (!chatSafetyContextService.appendLatestCheckupContext(systemContext, userIdLong)) {
+            String unavailableReply = "건강 정보를 안전하게 확인하지 못해 개인화 레시피를 제공하지 않았습니다. 잠시 후 다시 시도해 주세요.";
+            return Optional.of(new ChatDto.Response(
+                    chatSession != null ? chatSession.getId() : null,
+                    unavailableReply,
+                    false,
+                    false));
+        }
+
+        // 2. 작업 세션
+        chatFollowUpService.appendWorkSessionContext(
+                userIdLong, chatSession.getId(), request.getMessage(), systemContext);
+
+        if (!isRecipeRequestIntent) {
+            systemContext.append("\n=== 일반 대화 ===\n");
+            systemContext.append("사용자가 인사, 자기소개 요청, 잡담을 한 경우 레시피를 만들지 말고 Salus를 짧게 소개하며 자연스럽게 답하세요.\n");
+            systemContext.append("사용자가 메뉴 추천만 원하면 조리법을 쓰지 말고 메뉴 후보와 이유만 짧게 답하세요. 사용자가 불만을 말하면 인정하고 더 쉬운 대안으로 전환하세요.\n");
+            systemContext.append("정체를 묻지 않은 일반 질문에는 자기소개를 반복하지 마세요.\n");
+            systemContext.append("================\n");
+        }
+        return Optional.empty();
     }
 
     private boolean hasStructuredAgentSession(Long userId, Long chatSessionId) {
