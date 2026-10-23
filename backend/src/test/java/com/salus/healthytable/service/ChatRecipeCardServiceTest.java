@@ -220,6 +220,38 @@ class ChatRecipeCardServiceTest {
         org.mockito.Mockito.verifyNoMoreInteractions(chatRecipeCardRepository);
     }
 
+    // 응답 카드의 출처 URL도 저장 전에 정리해, 응답·card_json·sources_json·복원 결과가 같은 정리된 주소를 씁니다.
+    @Test
+    void sensitiveSourceUrlsAreRemovedFromResponseCardJsonAndRestore() throws Exception {
+        ChatDto.Response response = responseWithCard();
+        response.getRecipe().setSources(List.of(
+                new ChatDto.SourceLink("블로그", "https://blog.example.com/p?logNo=1&access_token=review-fixture#c", false),
+                new ChatDto.SourceLink("인코딩", "https://blog.example.com/q?to%6ben=review-fixture", false),
+                new ChatDto.SourceLink("사용자 정보", "https://user:pw@example.com/r", false)));
+        ArgumentCaptor<ChatReplyWriter.PreparedCard> captor = ArgumentCaptor.forClass(ChatReplyWriter.PreparedCard.class);
+        when(chatReplyWriter.saveWithCard(any(), any(), captor.capture())).thenAnswer(invocation ->
+                new ChatReplyWriter.SavedReply(5L, ((ChatReplyWriter.PreparedCard) invocation.getArgument(2)).publicId()));
+
+        service.saveModelReply(session(), response, ChatRecipeCardService.CardContext.agent(response));
+
+        assertThat(response.getRecipe().getSources()).extracting(ChatDto.SourceLink::getUrl)
+                .containsExactly("https://blog.example.com/p?logNo=1", "https://blog.example.com/q", null);
+        assertThat(response.getRecipe().getSources()).extracting(ChatDto.SourceLink::getTitle)
+                .containsExactly("블로그", "인코딩", "사용자 정보");
+        ChatReplyWriter.PreparedCard prepared = captor.getValue();
+        assertThat(prepared.cardJson()).doesNotContain("review-fixture", "user:pw", "#c");
+        assertThat(prepared.sourcesJson()).doesNotContain("review-fixture", "user:pw");
+
+        ChatRecipeCard stored = new ChatRecipeCard();
+        stored.setId(1L);
+        stored.setPublicId(prepared.publicId());
+        stored.setChatMessageId(100L);
+        stored.setCardJson(prepared.cardJson());
+        when(chatRecipeCardRepository.findByChatMessageIdIn(List.of(100L))).thenReturn(List.of(stored));
+        ChatDto.RecipeCard restored = service.findCardsByMessageIds(List.of(100L)).get(100L);
+        assertThat(objectMapper.writeValueAsString(restored)).isEqualTo(objectMapper.writeValueAsString(response.getRecipe()));
+    }
+
     private double failures(String stage) {
         var counter = meterRegistry.find(ChatRecipeCardService.PERSIST_FAILURES).tag("stage", stage).counter();
         return counter == null ? 0.0 : counter.count();

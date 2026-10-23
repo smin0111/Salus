@@ -71,4 +71,19 @@ class RecipeCardSourcesTest {
         assertThat(RecipeCardSources.sanitizeUrl("not a url")).isNull();
         assertThat(RecipeCardSources.sanitizeUrl(null)).isNull();
     }
+
+    // 인코딩된 파라미터 이름도 디코딩해서 검사합니다(to%6ben = token, 이중 인코딩 포함). 일반 한글 값은 그대로 둡니다.
+    @Test
+    void sanitizesEncodedAndMalformedParameterNames() {
+        assertThat(RecipeCardSources.sanitizeUrl("https://example.com/p?to%6ben=review-fixture&page=2"))
+                .isEqualTo("https://example.com/p?page=2");
+        assertThat(RecipeCardSources.sanitizeUrl("https://example.com/p?ACCESS%5FTOKEN=x&logNo=7"))
+                .isEqualTo("https://example.com/p?logNo=7");
+        assertThat(RecipeCardSources.sanitizeUrl("https://example.com/p?to%256ben=x&page=2"))
+                .isEqualTo("https://example.com/p?page=2");
+        // 잘못된 인코딩(%zz)은 URI 자체가 성립하지 않아 주소 전체를 저장하지 않습니다(파라미터 하나만 빼는 것보다 보수적).
+        assertThat(RecipeCardSources.sanitizeUrl("https://example.com/p?%zz=1&page=2")).isNull();
+        assertThat(RecipeCardSources.sanitizeUrl("https://example.com/p?q=%EA%B9%80%EC%B9%98&page=2"))
+                .isEqualTo("https://example.com/p?q=%EA%B9%80%EC%B9%98&page=2");
+    }
 }

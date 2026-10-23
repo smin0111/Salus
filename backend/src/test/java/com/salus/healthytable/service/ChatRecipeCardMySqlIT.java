@@ -280,6 +280,29 @@ class ChatRecipeCardMySqlIT {
         assertThat(count("chat_recipe_cards")).isZero();
     }
 
+    // 토큰·사용자 정보가 든 출처 주소는 응답 카드에서부터 정리돼, DB의 card_json·sources_json과 복원 결과에 남지 않습니다.
+    @Test
+    void sensitiveSourceUrlsNeverReachDatabaseOrRestore() throws Exception {
+        ChatSession session = newSession(userId);
+        ChatDto.Response response = responseWithCard("김치볶음밥");
+        response.getRecipe().setSources(List.of(
+                new ChatDto.SourceLink("블로그", "https://blog.example.com/p?logNo=1&access_token=review-fixture#c", false),
+                new ChatDto.SourceLink("인코딩", "https://blog.example.com/q?to%6ben=review-fixture", false),
+                new ChatDto.SourceLink("사용자 정보", "https://user:pw@example.com/r", false)));
+
+        chatRecipeCardService.saveModelReply(session, response, ChatRecipeCardService.CardContext.agent(response));
+
+        Map<String, Object> row = jdbc.queryForMap("SELECT card_json, sources_json FROM chat_recipe_cards");
+        assertThat(String.valueOf(row.get("card_json"))).doesNotContain("review-fixture", "user:pw");
+        assertThat(String.valueOf(row.get("sources_json"))).doesNotContain("review-fixture", "user:pw");
+        List<Long> ids = jdbc.queryForList(
+                "SELECT id FROM chat_messages WHERE session_id = ? AND role = 'model'", Long.class, session.getId());
+        ChatDto.RecipeCard restored = chatRecipeCardService.findCardsByMessageIds(ids).values().iterator().next();
+        assertThat(restored.getSources()).extracting(ChatDto.SourceLink::getUrl)
+                .containsExactly("https://blog.example.com/p?logNo=1", "https://blog.example.com/q", null);
+        assertThat(objectMapper.writeValueAsString(restored)).isEqualTo(objectMapper.writeValueAsString(response.getRecipe()));
+    }
+
     private ChatReplyWriter.PreparedCard prepared(String publicId) throws Exception {
         return new ChatReplyWriter.PreparedCard(publicId, RecipeCardProvenance.VARIANT,
                 objectMapper.writeValueAsString(responseWithCard("테스트 레시피").getRecipe()), "[]");

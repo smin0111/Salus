@@ -110,6 +110,10 @@ public class ChatRecipeCardService {
 
         ChatReplyWriter.PreparedCard prepared;
         try {
+            // 응답 카드의 출처 링크도 저장용과 같은 규칙으로 정리합니다. 그래야 응답·card_json·sources_json·복원 결과가
+            // 모두 같은 정리된 주소를 쓰고, 토큰·사용자 정보가 든 원래 주소가 DB에 남지 않습니다.
+            // 출처 구성 작업이므로 실패하면 아래와 같이 카드 없이 메시지만 저장합니다.
+            card.setSources(sanitizedSources(card.getSources()));
             card.setCardId(null);
             String cardJson = objectMapper.writeValueAsString(card);
             String sourcesJson = objectMapper.writeValueAsString(RecipeCardSources.build(
@@ -152,6 +156,18 @@ public class ChatRecipeCardService {
             }
         }
         return cards;
+    }
+
+    // 정리할 수 없는 주소는 링크 없이 이름만 남깁니다(카드는 이미 url이 없는 출처를 이름만으로 보여 줌).
+    private static List<ChatDto.SourceLink> sanitizedSources(List<ChatDto.SourceLink> sources) {
+        if (sources == null) {
+            return List.of();
+        }
+        return sources.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(source -> new ChatDto.SourceLink(source.getTitle(), RecipeCardSources.sanitizeUrl(source.getUrl()),
+                        source.isReviewed(), source.isPrimary()))
+                .toList();
     }
 
     private void recordFailure(String stage, RecipeCardProvenance provenance, Exception e) {

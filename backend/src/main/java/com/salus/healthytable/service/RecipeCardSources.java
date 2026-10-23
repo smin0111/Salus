@@ -6,6 +6,8 @@ import com.salus.healthytable.dto.ChatDto;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -128,8 +130,8 @@ final class RecipeCardSources {
         if (query != null && !query.isBlank()) {
             List<String> kept = new ArrayList<>();
             for (String pair : query.split("&")) {
-                String name = pair.split("=", 2)[0].toLowerCase(Locale.ROOT);
-                if (!name.isBlank() && SENSITIVE_PARAM_PARTS.stream().noneMatch(name::contains)) {
+                String name = decodedParamName(pair.split("=", 2)[0]);
+                if (name != null && !name.isBlank() && SENSITIVE_PARAM_PARTS.stream().noneMatch(name::contains)) {
                     kept.add(pair);
                 }
             }
@@ -142,6 +144,27 @@ final class RecipeCardSources {
             return null;
         }
         return url.toString();
+    }
+
+    /**
+     * 파라미터 이름을 디코딩해 소문자로 돌려줍니다("to%6ben" → "token"). 이중 인코딩도 풀리도록 바뀌지 않을 때까지
+     * 몇 번 더 디코딩하고, 잘못된 인코딩이거나 끝까지 풀리지 않으면 null(= 저장하지 않음)입니다.
+     */
+    private static String decodedParamName(String rawName) {
+        String name = rawName;
+        for (int i = 0; i < 3; i++) {
+            String decoded;
+            try {
+                decoded = URLDecoder.decode(name, StandardCharsets.UTF_8);
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
+            if (decoded.equals(name)) {
+                return decoded.toLowerCase(Locale.ROOT);
+            }
+            name = decoded;
+        }
+        return null;
     }
 
     private static String truncate(String title) {
