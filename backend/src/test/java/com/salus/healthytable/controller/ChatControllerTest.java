@@ -3,10 +3,12 @@ package com.salus.healthytable.controller;
 import com.salus.healthytable.domain.ChatMessage;
 import com.salus.healthytable.domain.ChatSession;
 import com.salus.healthytable.dto.ChatDto;
+import com.salus.healthytable.dto.ChatHistoryMessageDTO;
 import com.salus.healthytable.repository.ChatMessageRepository;
 import com.salus.healthytable.repository.ChatSessionRepository;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
 import com.salus.healthytable.service.ChatRateLimitService;
+import com.salus.healthytable.service.ChatRecipeCardService;
 import com.salus.healthytable.service.ChatService;
 import com.salus.healthytable.service.InterruptedRequestMerger;
 import com.salus.healthytable.service.RecipeWorkSessionService;
@@ -44,6 +46,7 @@ class ChatControllerTest {
     private final ChatService chatService = mock(ChatService.class);
     private final ChatRateLimitService chatRateLimitService = mock(ChatRateLimitService.class);
     private final InterruptedRequestMerger interruptedRequestMerger = mock(InterruptedRequestMerger.class);
+    private final ChatRecipeCardService chatRecipeCardService = mock(ChatRecipeCardService.class);
     private final ChatController controller = new ChatController(
             authenticatedUserProvider,
             chatSessionRepository,
@@ -51,7 +54,8 @@ class ChatControllerTest {
             recipeWorkSessionService,
             chatService,
             chatRateLimitService,
-            interruptedRequestMerger);
+            interruptedRequestMerger,
+            chatRecipeCardService);
 
     // 멈춘 질문이 있으면 새 메시지와 합친 요청으로 처리하고, 없으면 합치기를 건너뜁니다.
     @Test
@@ -310,13 +314,13 @@ class ChatControllerTest {
         when(chatMessageRepository.findBySessionOrderByCreatedAtAsc(session))
                 .thenReturn(List.of(userMessage, modelMessage));
 
-        List<ChatDto.Message> response = controller.getMessages(7L);
+        List<ChatHistoryMessageDTO> response = controller.getMessages(7L);
 
         assertThat(response).hasSize(2);
-        assertThat(response.get(0).getRole()).isEqualTo("user");
-        assertThat(response.get(0).getContent()).isEqualTo("수박 없는 디저트 추천해줘");
-        assertThat(response.get(1).getRole()).isEqualTo("model");
-        assertThat(response.get(1).getContent()).isEqualTo("수박을 제외한 과일 요거트를 추천합니다.");
+        assertThat(response.get(0).role()).isEqualTo("user");
+        assertThat(response.get(0).content()).isEqualTo("수박 없는 디저트 추천해줘");
+        assertThat(response.get(1).role()).isEqualTo("model");
+        assertThat(response.get(1).content()).isEqualTo("수박을 제외한 과일 요거트를 추천합니다.");
         verify(chatSessionRepository).findByIdAndUserId(7L, 1L);
     }
 
@@ -390,6 +394,45 @@ class ChatControllerTest {
         session.setUserId(userId);
         session.setTitle(title);
         return session;
+    }
+
+    // 대화 복원: 저장된 카드는 해당 모델 답변에만 붙이고, 카드 없는 예전 답변·사용자 메시지는 recipe가 null입니다.
+    @Test
+    void getMessagesAttachesStoredCardsToModelRepliesOnly() {
+        ChatSession session = chatSession(7L, 1L, "저녁 메뉴");
+        ChatMessage userMessage = chatMessage(session, "user", "김치찌개 레시피 알려줘");
+        userMessage.setId(100L);
+        ChatMessage oldReply = chatMessage(session, "model", "예전 답변(카드 없이 저장됨)");
+        oldReply.setId(101L);
+        ChatMessage cardReply = chatMessage(session, "model", "김치찌개 답변");
+        cardReply.setId(102L);
+        ChatDto.RecipeCard card = new ChatDto.RecipeCard(null, "김치찌개", "얼큰한 찌개", List.of("김치 300g"),
+                List.of("김치를 볶는다."), 2, 360, 360, 2, 30, null, List.of());
+        card.setCardId("11111111-1111-1111-1111-111111111111");
+
+        when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
+        when(chatSessionRepository.findByIdAndUserId(7L, 1L)).thenReturn(Optional.of(session));
+        when(chatMessageRepository.findBySessionOrderByCreatedAtAsc(session))
+                .thenReturn(List.of(userMessage, oldReply, cardReply));
+        when(chatRecipeCardService.findCardsByMessageIds(List.of(101L, 102L))).thenReturn(java.util.Map.of(102L, card));
+
+        List<ChatHistoryMessageDTO> response = controller.getMessages(7L);
+
+        assertThat(response).extracting(ChatHistoryMessageDTO::recipe).containsExactly(null, null, card);
+        assertThat(response.get(2).recipe().getCardId()).isEqualTo("11111111-1111-1111-1111-111111111111");
+        // 사용자 메시지 ID로는 카드를 찾지 않습니다.
+        verify(chatRecipeCardService).findCardsByMessageIds(List.of(101L, 102L));
+    }
+
+    // 남의 대화방이면 메시지·카드를 조회하지 않고 404입니다.
+    @Test
+    void getMessagesOfAnotherUsersSessionIsNotFoundWithoutCardLookup() {
+        when(authenticatedUserProvider.requireUserId()).thenReturn(2L);
+        when(chatSessionRepository.findByIdAndUserId(7L, 2L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> controller.getMessages(7L))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        verifyNoInteractions(chatMessageRepository, chatRecipeCardService);
     }
 
     private ChatMessage chatMessage(ChatSession session, String role, String content) {

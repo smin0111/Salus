@@ -12,6 +12,7 @@ import com.salus.healthytable.security.IpWhitelistFilter;
 import com.salus.healthytable.security.JwtAuthenticationFilter;
 import com.salus.healthytable.security.JwtTokenProvider;
 import com.salus.healthytable.service.ChatRateLimitService;
+import com.salus.healthytable.service.ChatRecipeCardService;
 import com.salus.healthytable.service.ChatService;
 import com.salus.healthytable.service.InterruptedRequestMerger;
 import com.salus.healthytable.service.RecipeWorkSessionService;
@@ -82,6 +83,9 @@ class ChatSecurityTest {
 
     @MockBean
     private InterruptedRequestMerger interruptedRequestMerger;
+
+    @MockBean
+    private ChatRecipeCardService chatRecipeCardService;
 
     @MockBean
     private JwtTokenProvider jwtTokenProvider;

@@ -117,12 +117,14 @@ public class ChatDto {
         private List<SourceLink> sources = List.of();
         // "초보라서 자세히"에 덧붙인 단계별 초보 팁(steps와 같은 순서, 없는 단계는 빈 문자열). 원문에 없는 설명입니다.
         private List<String> stepTips = List.of();
+        // 서버가 이 카드를 저장하고 발급한 ID입니다(chat_recipe_cards.public_id). 저장하지 못했거나 게스트면 null입니다.
+        private String cardId;
 
         public RecipeCard(Long id, String title, String description, List<String> ingredients, List<String> steps,
                           Integer servings, Integer calories, Integer caloriesPerServing, Integer difficulty,
                           Integer cookingTime, String imageUrl, List<String> safetyNotes) {
             this(id, title, description, ingredients, steps, servings, calories, caloriesPerServing, difficulty,
-                    cookingTime, imageUrl, safetyNotes, List.of(), List.of(), List.of());
+                    cookingTime, imageUrl, safetyNotes, List.of(), List.of(), List.of(), null);
         }
     }
 

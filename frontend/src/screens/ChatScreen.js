@@ -618,11 +618,13 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             if (loadSeq !== requestSeqRef.current || loadEpoch !== authEpochRef.current) {
                 return;
             }
+            // 서버가 저장한 레시피 카드(recipe)가 있으면 그대로 쓰고, 카드 없이 저장된 예전 메시지는 지금처럼 글자에서 카드를 읽습니다.
             const loadedMessages = (response.data || []).map((msg, index) => ({
                 id: `${sessionId}-${index}-${Date.now()}`,
                 text: msg.content,
                 sender: msg.role === 'user' ? 'user' : 'ai',
                 isTyping: false,
+                ...(msg.role !== 'user' && msg.recipe ? { recipe: msg.recipe } : {}),
             }));
             setChatSessionId(sessionId);
             setMessages(loadedMessages);

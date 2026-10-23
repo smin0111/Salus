@@ -4,7 +4,9 @@ import com.salus.healthytable.domain.Recipe;
 import com.salus.healthytable.domain.ChatSession;
 import com.salus.healthytable.domain.HealthProfile;
 import com.salus.healthytable.domain.SearchCache;
+import com.salus.healthytable.domain.ChatMessage;
 import com.salus.healthytable.domain.User;
+import com.salus.healthytable.domain.RecipeCardProvenance;
 import com.salus.healthytable.dto.ChatDto;
 import com.salus.healthytable.dto.MealLogDTO;
 import com.salus.healthytable.dto.RecipeWorkSessionDTO;
@@ -26,6 +28,8 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -41,6 +45,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -139,6 +144,18 @@ class ChatServiceSafetyTest {
             approvedRecipeService,
             clock);
 
+    private final com.fasterxml.jackson.databind.ObjectMapper cardMapper =
+            new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+    // 카드 저장은 ChatReplyWriter(DB)를 흉내 내고, 직렬화·폴백 로직은 실제 ChatRecipeCardService로 돌립니다.
+    private final ChatReplyWriter chatReplyWriter = mock(ChatReplyWriter.class);
+    private final ChatRecipeCardService chatRecipeCardService = new ChatRecipeCardService(
+            chatReplyWriter,
+            chatSessionService,
+            mock(com.salus.healthytable.repository.ChatRecipeCardRepository.class),
+            cardMapper,
+            new io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
+            clock);
+
     private final ChatService chatService = new ChatService(
             llmService,
             chatSafetyContextService,
@@ -151,11 +168,15 @@ class ChatServiceSafetyTest {
             recipeNormalizer,
             recipeAgentOrchestrator,
             approvedRecipeService,
-            knownWebDishLookup);
+            knownWebDishLookup,
+            chatRecipeCardService);
 
     // 기본 설정: 식약처 공식 레시피 검색은 결과 없음으로 두어 웹 검색 경로를 타게 합니다.
     @BeforeEach
     void useWebSearchWhenOfficialRecipeIsUnavailable() {
+        when(chatReplyWriter.saveWithCard(any(), any(), any()))
+                .thenAnswer(invocation -> new ChatReplyWriter.SavedReply(
+                        1L, ((ChatReplyWriter.PreparedCard) invocation.getArgument(2)).publicId()));
         when(mfdsRecipeSearchClient.search(anyString())).thenReturn(Mono.just(new SearchEngine.SearchResponse(
                 SearchEngine.SearchStatus.EMPTY,
                 List.of(),
@@ -272,12 +293,97 @@ class ChatServiceSafetyTest {
 
     // "양파 빼줘"는 LLM 없이 직전 레시피에서 양파만 빼서 카드로 답합니다(2026-10-09 실전 평가: 일반 대화로 가서 79초 후 카드 없음).
     @Test
-    void removalFollowUpEditsPreviousRecipeWithoutLlm() {
+    void removalFollowUpEditsPreviousRecipeWithoutLlm() throws Exception {
         ChatDto.Response response = chatService.processChat(Optional.of(1L), editFollowUp("양파 빼줘", List.of())).block();
 
         assertThat(response.getRecipe()).isNotNull();
         assertThat(String.join(" ", response.getRecipe().getIngredients())).contains("김치 300g").doesNotContain("양파");
         assertThat(String.join(" ", response.getRecipe().getSteps())).doesNotContain("양파").contains("대파를 넣고");
+        verify(llmService, never()).getChatResponse(anyString(), any());
+        verify(recipeGenerationClient, never()).generate(any());
+        // 변형 카드임은 기록하지만 실제 수정 대상의 카드 ID 없이 부모를 추측하지 않습니다.
+        assertCardPersisted(response, RecipeCardProvenance.VARIANT);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"양파 빼줘", "돼지고기 말고 참치 넣어줘", "양파 없는 다른 볶음밥 레시피로 바꿔줘"})
+    void followUpPersistenceFailureDoesNotStartAnotherGeneration(String message) {
+        ChatDto.Request request = editFollowUp(message, List.of());
+        RuntimeException failure = new org.springframework.dao.DataAccessResourceFailureException("database unavailable");
+        org.mockito.Mockito.doThrow(failure).when(chatReplyWriter).saveWithCard(any(), any(), any());
+
+        assertThatThrownBy(() -> chatService.processChat(Optional.of(1L), request).block()).isSameAs(failure);
+
+        verify(chatReplyWriter, times(1)).saveWithCard(any(), any(), any());
+        verify(chatMessageRepository, times(1)).save(any());
+        verify(llmService, never()).getChatResponse(anyString(), any());
+        verify(recipeGenerationClient, never()).generate(any());
+        verify(searchEngine, never()).search(anyString());
+    }
+
+    @Test
+    void unknownCommitFailureDoesNotStartAnotherGeneration() {
+        ChatDto.Request request = editFollowUp("양파 빼줘", List.of());
+        RuntimeException failure = new IllegalStateException("commit failed");
+        org.mockito.Mockito.doThrow(failure).when(chatReplyWriter).saveWithCard(any(), any(), any());
+
+        assertThatThrownBy(() -> chatService.processChat(Optional.of(1L), request).block()).isSameAs(failure);
+        verify(llmService, never()).getChatResponse(anyString(), any());
+        verify(recipeGenerationClient, never()).generate(any());
+        verify(chatMessageRepository, times(1)).save(any());
+    }
+
+    @Test
+    void followUpCardConstraintFailureStillSavesMessageWithoutRegeneration() {
+        ChatDto.Request request = editFollowUp("양파 빼줘", List.of());
+        org.mockito.Mockito.doThrow(new CardInsertFailedException(
+                new org.springframework.dao.DataIntegrityViolationException("duplicate card")))
+                .when(chatReplyWriter).saveWithCard(any(), any(), any());
+
+        ChatDto.Response response = chatService.processChat(Optional.of(1L), request).block();
+
+        assertThat(response.getRecipe()).isNotNull();
+        assertThat(response.getRecipe().getCardId()).isNull();
+        ArgumentCaptor<com.salus.healthytable.domain.ChatMessage> messages =
+                ArgumentCaptor.forClass(com.salus.healthytable.domain.ChatMessage.class);
+        verify(chatMessageRepository, times(2)).save(messages.capture());
+        assertThat(messages.getAllValues()).extracting(com.salus.healthytable.domain.ChatMessage::getRole)
+                .containsExactly("user", "model");
+        verify(llmService, never()).getChatResponse(anyString(), any());
+        verify(recipeGenerationClient, never()).generate(any());
+    }
+
+    @Test
+    void userMessageFailureDoesNotStartGeneration() {
+        ChatDto.Request request = editFollowUp("양파 빼줘", List.of());
+        RuntimeException failure = new org.springframework.dao.DataAccessResourceFailureException("insert failed");
+        when(chatMessageRepository.save(any())).thenThrow(failure);
+
+        assertThatThrownBy(() -> chatService.processChat(Optional.of(1L), request).block()).isSameAs(failure);
+        verify(chatReplyWriter, never()).saveWithCard(any(), any(), any());
+        verify(llmService, never()).getChatResponse(anyString(), any());
+        verify(recipeGenerationClient, never()).generate(any());
+    }
+
+    // 식단 저장(DB) 실패는 오류로 올려 보냅니다. 예전처럼 삼키고 LLM 답변으로 넘어가면 사용자는 저장된 줄 알 수 있습니다.
+    // 사용자 메시지만 남고, 모델 답변·카드 저장과 레시피 생성은 하지 않으며, 작업 세션도 지우지 않습니다.
+    @Test
+    void calendarSaveFailurePropagatesWithoutFallbackReply() {
+        ChatDto.Request request = editFollowUp("내일 점심 식단으로 저장해줘", List.of());
+        User user = new User();
+        user.setId(1L);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        RuntimeException failure = new org.springframework.dao.DataAccessResourceFailureException("meal log insert failed");
+        when(mealLogService.saveOrUpdateMealLog(any(User.class), any(MealLogDTO.class))).thenThrow(failure);
+
+        assertThatThrownBy(() -> chatService.processChat(Optional.of(1L), request).block()).isSameAs(failure);
+
+        verify(mealLogService).saveOrUpdateMealLog(any(User.class), any(MealLogDTO.class));
+        ArgumentCaptor<ChatMessage> saved = ArgumentCaptor.forClass(ChatMessage.class);
+        verify(chatMessageRepository, times(1)).save(saved.capture());
+        assertThat(saved.getValue().getRole()).isEqualTo("user");
+        verify(chatReplyWriter, never()).saveWithCard(any(), any(), any());
+        verify(recipeWorkSessionService, never()).clear(any(), any());
         verify(llmService, never()).getChatResponse(anyString(), any());
         verify(recipeGenerationClient, never()).generate(any());
     }
@@ -785,7 +891,7 @@ class ChatServiceSafetyTest {
 
     // 재료 대체 후속 요청은 직전 레시피를 대체 재료로 다시 작성해야 합니다.
     @Test
-    void substitutionFollowUpRewritesPreviousRecipeWithReplacementIngredient() {
+    void substitutionFollowUpRewritesPreviousRecipeWithReplacementIngredient() throws Exception {
         ChatSession chatSession = new ChatSession();
         chatSession.setId(10L);
         chatSession.setUserId(1L);
@@ -866,6 +972,8 @@ class ChatServiceSafetyTest {
                 .doesNotContain("불은 사용하지 않습니다");
         assertThat(response.getRecipe()).isNotNull();
         assertThat(response.getRecipe().getTitle()).isEqualTo("사이다 청포도 에이드");
+        // 재료 대체(AI 생성 함수를 다시 거치는 경로)도 VARIANT 카드로 저장합니다.
+        assertCardPersisted(response, RecipeCardProvenance.VARIANT);
 
         ArgumentCaptor<RecipeGenerationRequest> requestCaptor = ArgumentCaptor.forClass(RecipeGenerationRequest.class);
         verify(recipeGenerationClient).generate(requestCaptor.capture());
@@ -1140,7 +1248,7 @@ class ChatServiceSafetyTest {
 
     // 제외 요청한 재료가 재료 목록이나 조리 단계로 다시 나타나면 안 됩니다.
     @Test
-    void excludedIngredientDoesNotReturnAsRecipeIngredientOrCookingStep() {
+    void excludedIngredientDoesNotReturnAsRecipeIngredientOrCookingStep() throws Exception {
         ChatSession chatSession = new ChatSession();
         chatSession.setId(10L);
         chatSession.setUserId(1L);
@@ -1179,6 +1287,8 @@ class ChatServiceSafetyTest {
         assertThat(response.getRecipe()).isNotNull();
         assertThat(response.getRecipe().getIngredients()).noneMatch(value -> value.contains("양파"));
         assertThat(response.getRecipe().getSteps()).noneMatch(value -> value.contains("양파"));
+        // 재료를 뺀 다른 버전도 VARIANT 카드로 저장합니다.
+        assertCardPersisted(response, RecipeCardProvenance.VARIANT);
         assertThat(response.getReply()).doesNotContain("양파 1/2개", "양파와 당근", "팬에 양파");
     }
 
@@ -1260,6 +1370,8 @@ class ChatServiceSafetyTest {
         assertThat(response.getRecipe().getSteps())
                 .allSatisfy(step -> assertThat(step)
                         .doesNotContain("센불", "중불", "약불", "타는 냄새"));
+        verify(chatReplyWriter, never()).saveWithCard(any(), any(), any());
+        assertThat(response.getRecipe().getCardId()).isNull();
     }
 
     // 내부 DB 레시피를 근거로 해도 구조화 정확도 검증 파이프라인을 똑같이 거쳐야 합니다.
@@ -1368,6 +1480,9 @@ class ChatServiceSafetyTest {
         });
         verify(llmService, never()).getChatResponse(anyString(), any());
         verify(recipeAgentOrchestrator, never()).handle(any(), any(), any());
+        // 게스트는 대화방이 없으므로 카드를 저장하지 않고 cardId도 없습니다.
+        verify(chatReplyWriter, never()).saveWithCard(any(), any(), any());
+        assertThat(response.getRecipe().getCardId()).isNull();
     }
 
     // 요청과 무관한 웹 검색 결과는 레시피 생성 전에 거부해야 합니다.
@@ -1504,5 +1619,200 @@ class ChatServiceSafetyTest {
                         "https://example.com/recipe",
                         normalizedTitle + " 재료와 조리 순서 근거입니다.")),
                 "test")));
+    }
+
+    // 카드가 있는 답변은 ChatReplyWriter로 메시지와 카드를 함께 저장하고, 응답 카드에 같은 cardId를 넣어야 합니다.
+    // 저장한 카드 JSON은 응답으로 보낸 카드와 같아야 합니다(cardId만 저장 뒤에 붙음).
+    private ChatReplyWriter.PreparedCard assertCardPersisted(ChatDto.Response response, RecipeCardProvenance provenance)
+            throws Exception {
+        org.mockito.ArgumentCaptor<ChatReplyWriter.PreparedCard> captor =
+                org.mockito.ArgumentCaptor.forClass(ChatReplyWriter.PreparedCard.class);
+        verify(chatReplyWriter).saveWithCard(any(), eq(response.getReply()), captor.capture());
+        ChatReplyWriter.PreparedCard prepared = captor.getValue();
+        assertThat(prepared.provenance()).isEqualTo(provenance);
+        assertThat(response.getRecipe().getCardId()).isEqualTo(prepared.publicId());
+        ChatDto.RecipeCard stored = cardMapper.readValue(prepared.cardJson(), ChatDto.RecipeCard.class);
+        stored.setCardId(prepared.publicId());
+        assertThat(cardMapper.writeValueAsString(stored)).isEqualTo(cardMapper.writeValueAsString(response.getRecipe()));
+        return prepared;
+    }
+
+    // 로그인 사용자의 AI 생성 카드: 웹 검색 결과는 RETRIEVED(검색 근거)로만 남기고 카드에 출처로 붙이지 않습니다.
+    @Test
+    void loggedInGeneratedRecipeKeepsSearchResultsAsRetrievedOnly() throws Exception {
+        ChatSession chatSession = new ChatSession();
+        chatSession.setId(10L);
+        chatSession.setUserId(1L);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setSessionId(10L);
+        request.setMessage("수박화채 레시피 알려줘");
+
+        when(chatSessionRepository.findByIdAndUserId(10L, 1L)).thenReturn(Optional.of(chatSession));
+        when(chatMessageRepository.findTop12BySessionOrderByCreatedAtDesc(chatSession)).thenReturn(List.of());
+        when(healthProfileRepository.findByUserId(1L)).thenReturn(Optional.empty());
+        when(healthCheckupRepository.findTopByUserIdOrderByCheckupDateDescIdDesc(1L)).thenReturn(Optional.empty());
+        when(recipeWorkSessionService.find(1L, 10L)).thenReturn(Optional.empty());
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.RECIPE_REQUEST);
+        when(recipeNormalizer.normalize(anyString())).thenReturn("수박화채");
+        when(recipeRepository.findByTitleContaining(anyString())).thenReturn(List.of());
+        when(searchCacheRepository.findByQuery("수박화채")).thenReturn(Optional.empty());
+        when(searchEngine.search("수박화채")).thenReturn(Mono.just(new SearchEngine.SearchResponse(
+                SearchEngine.SearchStatus.SUCCESS,
+                List.of(new SearchEngine.SearchResult(
+                        "수박화채 레시피",
+                        "https://example.com/watermelon?utm_source=x&access_token=secret#top",
+                        "수박, 블루베리, 얼음을 넣어 차갑게 섞는 수박화채 레시피입니다.")),
+                "test")));
+        when(recipeGenerationClient.generate(any(RecipeGenerationRequest.class))).thenReturn(Mono.just(new GeneratedRecipeDraft(
+                "수박화채",
+                "시원하고 달콤한 여름 디저트입니다.",
+                2,
+                10,
+                80,
+                1,
+                List.of(
+                        new GeneratedIngredient("수박", 0.5, "개", null),
+                        new GeneratedIngredient("블루베리", "50g")),
+                List.of(
+                        new GeneratedCookingStep(1, "수박을 한입 크기로 썰어줍니다", "무가열", null, "한입 크기", null, List.of("수박")),
+                        new GeneratedCookingStep(2, "수박과 블루베리를 담습니다", "무가열", null, "고르게 담긴 상태", null, List.of("수박", "블루베리"))),
+                List.of())));
+        when(recipeValidator.validateStructured(any(Recipe.class), anyString(), anyString(), any(GeneratedRecipeDraft.class)))
+                .thenReturn(new RecipeValidator.ValidationResult(true, true, false, 1.0, 2, 2, false, List.of(), List.of()));
+
+        ChatDto.Response response = chatService.processChat(Optional.of(1L), request).block();
+
+        assertThat(response.getRecipe()).isNotNull();
+        assertThat(response.getRecipe().getSources()).isEmpty();
+        ChatReplyWriter.PreparedCard prepared = assertCardPersisted(response, RecipeCardProvenance.AI_FROM_WEB_SEARCH);
+        com.fasterxml.jackson.databind.JsonNode sources = cardMapper.readTree(prepared.sourcesJson());
+        assertThat(sources).hasSize(1);
+        assertThat(sources.get(0).get("role").asText()).isEqualTo("RETRIEVED");
+        assertThat(sources.get(0).get("provider").asText()).isEqualTo("test");
+        // 토큰으로 보이는 파라미터와 # 뒤 조각은 지우고, 나머지 파라미터는 남깁니다.
+        assertThat(sources.get(0).get("url").asText()).isEqualTo("https://example.com/watermelon?utm_source=x");
+    }
+
+    // 로그인 사용자의 승인 레시피: 카드를 먼저 만든 뒤 저장하므로 저장한 카드와 응답 카드가 같고, 출처는 REGISTERED입니다.
+    @Test
+    void loggedInApprovedRecipeSavesSameCardAsResponse() throws Exception {
+        ChatSession chatSession = new ChatSession();
+        chatSession.setId(10L);
+        chatSession.setUserId(1L);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setSessionId(10L);
+        request.setMessage("김치찌개 레시피 알려줘");
+        Recipe approved = new Recipe();
+        approved.setId(92L);
+        approved.setTitle("김치찌개");
+        approved.setDescription("승인 김치찌개");
+        approved.setIngredients(List.of("김치 300g", "돼지고기 150g"));
+        approved.setSteps(List.of("김치와 돼지고기를 볶고 물을 넣어 끓인다."));
+        approved.setBaseServings(2);
+        approved.setCaloriesPerServing(360);
+
+        when(chatSessionRepository.findByIdAndUserId(10L, 1L)).thenReturn(Optional.of(chatSession));
+        when(healthProfileRepository.findByUserId(1L)).thenReturn(Optional.empty());
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.RECIPE_REQUEST);
+        when(recipeNormalizer.normalize(anyString())).thenReturn("김치찌개");
+        when(approvedRecipeService.findApprovedMatch(request.getMessage())).thenReturn(Optional.of(approved));
+        when(approvedRecipeService.renderApprovedRecipe(eq(approved), eq(request.getMessage())))
+                .thenReturn(new ApprovedRecipeService.RenderedRecipe(
+                        approved, "승인 김치찌개 응답", 2, ApprovedRecipeService.SpiceLevel.NORMAL, 2,
+                        List.of(new ApprovedRecipeCatalogDefinition.SourceDefinition(
+                                "recipe", "Maangchi - Kimchi stew", "https://www.maangchi.com/recipe/kimchi-jjigae", "2026-08-01"))));
+
+        ChatDto.Response response = chatService.processChat(Optional.of(1L), request).block();
+
+        ChatReplyWriter.PreparedCard prepared = assertCardPersisted(response, RecipeCardProvenance.APPROVED_CATALOG);
+        com.fasterxml.jackson.databind.JsonNode sources = cardMapper.readTree(prepared.sourcesJson());
+        assertThat(sources).singleElement().satisfies(source -> {
+            assertThat(source.get("role").asText()).isEqualTo("REGISTERED");
+            assertThat(source.get("url").asText()).isEqualTo("https://www.maangchi.com/recipe/kimchi-jjigae");
+        });
+        // 사용자 메시지는 따로 저장되고, 모델 답변은 ChatReplyWriter가 저장합니다(chatMessageRepository로 두 번 저장하지 않음).
+        verify(chatMessageRepository, times(1)).save(any());
+    }
+
+    @Test
+    void approvedAdjustmentPersistsRenderedCardAndRegisteredSources() throws Exception {
+        ChatDto.Request request = editFollowUp("4인분으로 바꿔줘", List.of());
+        Recipe recipe = new Recipe();
+        recipe.setId(92L);
+        recipe.setTitle("김치찌개");
+        recipe.setIngredients(List.of("김치 600g", "돼지고기 300g"));
+        recipe.setSteps(List.of("김치와 돼지고기를 볶고 끓인다."));
+        recipe.setBaseServings(4);
+        when(recipeWorkSessionService.find(1L, 10L)).thenReturn(Optional.of(RecipeWorkSessionDTO.builder()
+                .userId(1L).chatSessionId(10L).recipeId(92L).recipeVersion(2).servings(2)
+                .spiceLevel("NORMAL").build()));
+        when(approvedRecipeService.parseAdjustment(request.getMessage())).thenReturn(Optional.of(
+                new ApprovedRecipeService.AdjustmentRequest(4, null)));
+        when(approvedRecipeService.renderApprovedRecipe(92L, 2, 4, ApprovedRecipeService.SpiceLevel.NORMAL))
+                .thenReturn(new ApprovedRecipeService.RenderedRecipe(recipe, "4인분 김치찌개", 4,
+                        ApprovedRecipeService.SpiceLevel.NORMAL, 2,
+                        List.of(new ApprovedRecipeCatalogDefinition.SourceDefinition(
+                                "recipe", "승인 출처", "https://example.com/approved", "2026-08-01"))));
+
+        ChatDto.Response response = chatService.processChat(Optional.of(1L), request).block();
+
+        ChatReplyWriter.PreparedCard prepared = assertCardPersisted(response, RecipeCardProvenance.APPROVED_CATALOG);
+        assertThat(response.getRecipe().getServings()).isEqualTo(4);
+        assertThat(cardMapper.readTree(prepared.sourcesJson()).get(0).get("role").asText()).isEqualTo("REGISTERED");
+        verify(recipeWorkSessionService).saveApprovedRecommendation(1L, 10L, "4인분 김치찌개", 92L, 2, 4,
+                ApprovedRecipeService.SpiceLevel.NORMAL);
+        verify(chatMessageRepository, times(1)).save(any());
+        verify(recipeGenerationClient, never()).generate(any());
+    }
+
+    @Test
+    void agentCardPersistsPrimaryAndComparedSources() throws Exception {
+        ChatDto.Request request = editFollowUp("양파 빼줘", List.of());
+        when(recipeWorkSessionService.find(1L, 10L)).thenReturn(Optional.of(RecipeWorkSessionDTO.builder()
+                .userId(1L).chatSessionId(10L).agentSession(Map.of("originalRecipe", Map.of("title", "김치찌개")))
+                .build()));
+        ReflectionTestUtils.setField(chatService, "recipeAgentEnabled", true);
+        ChatDto.Response agentResponse = new ChatDto.Response(10L, "Agent 레시피", true, false);
+        ChatDto.RecipeCard card = new ChatDto.RecipeCard();
+        card.setTitle("김치찌개");
+        card.setSources(List.of(new ChatDto.SourceLink("원본", "https://example.com/primary", false),
+                new ChatDto.SourceLink("비교", "https://example.com/compared", false)));
+        agentResponse.setRecipe(card);
+        when(recipeAgentOrchestrator.handle(eq(1L), eq(10L), any(), any())).thenReturn(Mono.just(agentResponse));
+
+        ChatDto.Response response = chatService.processChat(Optional.of(1L), request).block();
+
+        ChatReplyWriter.PreparedCard prepared = assertCardPersisted(response, RecipeCardProvenance.WEB_EXTRACTED);
+        assertThat(cardMapper.readTree(prepared.sourcesJson())).extracting(item -> item.get("role").asText())
+                .containsExactly("PRIMARY", "COMPARED");
+        verify(chatMessageRepository, times(1)).save(any());
+        verify(recipeGenerationClient, never()).generate(any());
+    }
+
+    @Test
+    void followUpGenerationFailureKeepsExistingGeneralChatFallback() {
+        ChatDto.Request request = editFollowUp("양파 빼줘", List.of());
+        when(recipeWorkSessionService.saveRecommendation(any(), any(), anyString()))
+                .thenThrow(new IllegalStateException("cannot prepare follow-up"));
+        when(llmService.getChatResponse(anyString(), any())).thenReturn(Mono.just("일반 대화 응답"));
+
+        ChatDto.Response response = chatService.processChat(Optional.of(1L), request).block();
+
+        assertThat(response.getReply()).isEqualTo("일반 대화 응답");
+        verify(llmService, times(1)).getChatResponse(anyString(), any());
+        verify(chatReplyWriter, never()).saveWithCard(any(), any(), any());
+    }
+
+    // 카드가 없는 일반 대화는 지금처럼 메시지만 저장하고 카드 저장을 쓰지 않습니다.
+    @Test
+    void generalChatWithoutCardDoesNotUseCardWriter() {
+        ChatDto.Request request = editFollowUp("오늘 날씨에 어울리는 음료가 뭐가 있을까?", List.of());
+        when(llmService.getChatResponse(anyString(), any())).thenReturn(Mono.just("따뜻한 보리차를 추천해요."));
+
+        ChatDto.Response response = chatService.processChat(Optional.of(1L), request).block();
+
+        assertThat(response.getRecipe()).isNull();
+        verify(chatReplyWriter, never()).saveWithCard(any(), any(), any());
+        verify(chatMessageRepository, times(2)).save(any());
     }
 }

@@ -1,12 +1,15 @@
 package com.salus.healthytable.controller;
 
+import com.salus.healthytable.domain.ChatMessage;
 import com.salus.healthytable.domain.ChatSession;
 import com.salus.healthytable.dto.ChatDto;
+import com.salus.healthytable.dto.ChatHistoryMessageDTO;
 import com.salus.healthytable.repository.ChatMessageRepository;
 import com.salus.healthytable.repository.ChatSessionRepository;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
 import com.salus.healthytable.service.ChatCancellation;
 import com.salus.healthytable.service.ChatProgress;
+import com.salus.healthytable.service.ChatRecipeCardService;
 import com.salus.healthytable.service.ChatRateLimitService;
 import com.salus.healthytable.service.ChatService;
 import com.salus.healthytable.service.InterruptedRequestMerger;
@@ -58,6 +61,7 @@ public class ChatController {
     private final ChatService chatService;
     private final ChatRateLimitService chatRateLimitService;
     private final InterruptedRequestMerger interruptedRequestMerger;
+    private final ChatRecipeCardService chatRecipeCardService;
 
     /**
      * 내 채팅방 목록을 최근 대화 순으로 조회합니다. 게스트는 저장된 채팅방이 없으므로 빈 목록을 반환합니다.
@@ -83,14 +87,21 @@ public class ChatController {
      * 특정 채팅방의 메시지를 조회합니다. 다른 사용자의 채팅방이면 404로 응답해 존재 여부도 노출하지 않습니다.
      */
     @GetMapping("/sessions/{sessionId}/messages")
-    public List<ChatDto.Message> getMessages(@PathVariable Long sessionId) {
+    public List<ChatHistoryMessageDTO> getMessages(@PathVariable Long sessionId) {
         Long userId = authenticatedUserProvider.requireUserId();
 
         ChatSession session = chatSessionRepository.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "대화 세션을 찾을 수 없습니다."));
 
-        return chatMessageRepository.findBySessionOrderByCreatedAtAsc(session).stream()
-                .map(message -> new ChatDto.Message(message.getRole(), message.getContent()))
+        List<ChatMessage> messages = chatMessageRepository.findBySessionOrderByCreatedAtAsc(session);
+        // 내 대화방의 모델 답변에 붙은 카드만 한 번에 불러옵니다(대화방 주인 확인은 위에서 끝남).
+        Map<Long, ChatDto.RecipeCard> cards = chatRecipeCardService.findCardsByMessageIds(messages.stream()
+                .filter(message -> "model".equals(message.getRole()) && message.getId() != null)
+                .map(ChatMessage::getId)
+                .toList());
+        return messages.stream()
+                .map(message -> new ChatHistoryMessageDTO(message.getRole(), message.getContent(),
+                        message.getId() == null ? null : cards.get(message.getId())))
                 .toList();
     }
 
