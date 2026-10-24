@@ -9,6 +9,7 @@ import { SalusLogoMark } from './SalusLogo';
 const MENU_ITEMS = [
     { id: 'chat', label: 'AI 채팅', icon: 'chatbubbles' },
     { id: 'community', label: '커뮤니티', icon: 'people' },
+    { id: 'my-recipes', label: '내 레시피', icon: 'bookmark' },
     { id: 'calendar', label: '식단 캘린더', icon: 'calendar' },
     { id: 'health', label: '나의 건강정보', icon: 'heart' },
     { id: 'health-checkup', label: '건강검진', icon: 'document-text' },

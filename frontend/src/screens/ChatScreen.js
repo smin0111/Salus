@@ -8,6 +8,7 @@ import config from '../config';
 import { useAuth } from '../context/AuthContext';
 import { debugLog } from '../utils/logger';
 import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
+import { saveMyRecipeFromCard } from '../api/myRecipes';
 
 /*
  * AI 셰프 채팅 화면입니다.
@@ -300,7 +301,7 @@ const pendingInterruptedTexts = (messages, justInterruptedId) => {
     return pending;
 };
 
-const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, openPlanModal, handleStreamingComplete, copiedMessageId, setCopiedMessageId }) => {
+const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, openPlanModal, handleStreamingComplete, copiedMessageId, setCopiedMessageId, saveToMyRecipes, savingRecipeId }) => {
     const scaleAnim = useRef(new Animated.Value(0.95)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
     const isHovered = useRef(new Animated.Value(1)).current;
@@ -446,6 +447,36 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
                                 </Text>
                             </TouchableOpacity>
                         )}
+
+                        {/* 내 레시피 저장은 서버가 저장해 둔 카드(cardId)가 있을 때만 됩니다. 글자에서 읽어 낸 카드나
+                            저장에 실패한 카드는 원본을 보증할 수 없어 저장할 수 없다고 알려 줍니다. */}
+                        {isLoggedIn && recipe && (recipe.cardId ? (
+                            <TouchableOpacity
+                                style={[styles.addToPlanButton, item.isRecipeSaved && styles.addToPlanButtonSaved]}
+                                onPress={() => saveToMyRecipes(item, recipe.cardId)}
+                                disabled={item.isRecipeSaved || savingRecipeId === item.id}
+                                accessibilityRole="button"
+                                accessibilityLabel={item.isRecipeSaved ? '내 레시피에 저장됨' : '내 레시피에 저장'}
+                            >
+                                {savingRecipeId === item.id ? (
+                                    <ActivityIndicator size="small" color={colors.secondary} />
+                                ) : (
+                                    <Ionicons
+                                        name={item.isRecipeSaved ? "bookmark" : "bookmark-outline"}
+                                        size={14}
+                                        color={item.isRecipeSaved ? colors.success : colors.secondary}
+                                    />
+                                )}
+                                <Text style={[styles.addToPlanText, item.isRecipeSaved && styles.addToPlanTextSaved]}>
+                                    {item.isRecipeSaved ? '내 레시피에 저장됨' : '내 레시피에 저장'}
+                                </Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={styles.addToPlanButton} accessibilityRole="text">
+                                <Ionicons name="bookmark-outline" size={14} color={colors.disabledText} />
+                                <Text style={[styles.addToPlanText, { color: colors.disabledText }]}>저장할 수 없는 레시피</Text>
+                            </View>
+                        ))}
                     </View>
                 )}
             </View>
@@ -505,6 +536,8 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
     // 복사 상태
     const [copiedMessageId, setCopiedMessageId] = useState(null);
+    // 내 레시피에 저장 중인 메시지(버튼 연타 방지). 서버도 같은 카드는 한 번만 저장합니다.
+    const [savingRecipeId, setSavingRecipeId] = useState(null);
 
     // 기기에서 사용할 수 있는 음성 목록 중 가장 좋은 한국어 음성을 한 번 찾아 둡니다.
     useEffect(() => {
@@ -1101,6 +1134,32 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     };
 
+    // 채팅 카드를 내 레시피로 저장합니다. 레시피 내용은 보내지 않고 서버가 발급한 cardId만 보냅니다.
+    const saveToMyRecipes = async (message, cardId) => {
+        if (!cardId || savingRecipeId) return;
+        setSavingRecipeId(message.id);
+        try {
+            const response = await saveMyRecipeFromCard(cardId, token);
+            setMessages(prev => prev.map(item => (item.id === message.id ? { ...item, isRecipeSaved: true } : item)));
+            // 웹은 버튼이 '내 레시피에 저장됨'으로 바뀌는 것으로 알립니다(react-native-web의 Alert는 아무것도 띄우지 않음).
+            if (Platform.OS !== 'web') {
+                Alert.alert('내 레시피', response.status === 200
+                    ? '이미 내 레시피에 있어요.'
+                    : '내 레시피에 저장했어요. 내 입맛대로 고쳐 보세요.');
+            }
+        } catch (error) {
+            if (isAuthError(error)) return;
+            const message = getErrorMessage(error, '내 레시피에 저장하지 못했어요.');
+            if (Platform.OS === 'web') {
+                window.alert(message);
+            } else {
+                Alert.alert('저장 실패', message);
+            }
+        } finally {
+            setSavingRecipeId(null);
+        }
+    };
+
     // FlatList가 메시지 한 개를 그릴 때 사용하는 함수
     const renderItem = ({ item }) => (
         <AnimatedMessageBubble
@@ -1112,6 +1171,8 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             handleStreamingComplete={handleStreamingComplete}
             copiedMessageId={copiedMessageId}
             setCopiedMessageId={setCopiedMessageId}
+            saveToMyRecipes={saveToMyRecipes}
+            savingRecipeId={savingRecipeId}
         />
     );
 

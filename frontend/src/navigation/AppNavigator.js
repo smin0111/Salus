@@ -14,6 +14,7 @@ import LoginScreen from '../screens/LoginScreen';
 import LandingPageScreen from '../screens/LandingPageScreen';
 import RecipeDetailScreen from '../screens/RecipeDetailScreen';
 import CommunityScreen from '../screens/CommunityScreen';
+import MyRecipesScreen from '../screens/MyRecipesScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
 import SearchScreen from '../screens/SearchScreen';
@@ -43,12 +44,13 @@ const WEB_SHELL_EXCLUDED_SCREENS = [
 
 // 보호 화면 목록은 화면 이동 직전에 한 번 더 확인합니다.
 // 라우팅만 숨기는 것으로는 부족하고, 사용자가 URL을 직접 입력하는 web 환경도 고려해야 합니다.
-const PROTECTED_SCREENS = ['community', 'calendar', 'health', 'health-checkup', 'account-settings', 'create-post'];
+const PROTECTED_SCREENS = ['community', 'my-recipes', 'calendar', 'health', 'health-checkup', 'account-settings', 'create-post'];
 
 // 웹 사이드바 메뉴 항목(화면 id, 이름, 설명, 아이콘, URL 경로)
 const WEB_NAV_ITEMS = [
   { id: 'chat', label: 'AI 셰프', caption: '맞춤 레시피 상담', icon: 'sparkles', path: '/chat' },
   { id: 'community', label: '레시피 허브', caption: '추천과 커뮤니티', icon: 'grid', path: '/community' },
+  { id: 'my-recipes', label: '내 레시피', caption: '저장하고 고친 레시피', icon: 'bookmark', path: '/my-recipes' },
   { id: 'calendar', label: '식단 캘린더', caption: '식사 기록', icon: 'calendar', path: '/calendar' },
   { id: 'health', label: '건강 프로필', caption: '알레르기와 식이조건', icon: 'heart', path: '/health' },
   { id: 'health-checkup', label: '검진 분석', caption: '수치 기반 추천', icon: 'document-text', path: '/health-checkup' },
@@ -59,6 +61,7 @@ const WEB_SCREEN_TITLES = {
   about: ['서비스 소개', 'Salus 개인 맞춤형 AI 요리 서비스 플랫폼'],
   chat: ['AI 셰프 스튜디오', '건강정보를 반영해 출처가 있는 레시피를 찾는 요리 상담'],
   community: ['레시피 허브', 'AI 추천, 인기 레시피, 사용자 피드를 한곳에서 둘러보세요'],
+  'my-recipes': ['내 레시피', '저장하고 내 입맛대로 고친 레시피를 모아 봅니다'],
   calendar: ['식단 캘린더', 'AI가 추천한 식사와 직접 기록한 식단을 관리합니다'],
   health: ['건강 프로필', '알레르기, 질환, 식이 제한을 안전하게 반영합니다'],
   'health-checkup': ['건강검진 분석', '검진 수치를 식단 추천으로 연결합니다'],
@@ -74,6 +77,7 @@ const WEB_PATH_TO_SCREEN = {
   '/': 'chat',
   '/chat': 'chat',
   '/community': 'community',
+  '/my-recipes': 'my-recipes',
   '/calendar': 'calendar',
   '/health': 'health',
   '/health-checkup': 'health-checkup',
@@ -359,6 +363,8 @@ export default function AppNavigator() {
         );
       case 'community':
         return <CommunityScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} user={user} webMode={desktopWebMode} />;
+      case 'my-recipes':
+        return <MyRecipesScreen onToggleSidebar={() => setIsSidebarOpen(true)} webMode={desktopWebMode} />;
       case 'create-post':
         return <CreatePostScreen onNavigate={handleNavigate} user={user} webMode={desktopWebMode} />;
       case 'post-detail':
