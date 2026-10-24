@@ -50,6 +50,14 @@ public class User {
     @Column(length = 20)
     private UserRole role = UserRole.USER;
 
+    // 커뮤니티 활동에 보이는 이름입니다(소셜 실명 name은 공개하지 않음). 정하지 않았으면 null입니다.
+    @Column(length = 12)
+    private String nickname;
+
+    // 닉네임 중복 판정용(NFKC 정규화 + 소문자). DB 비교 규칙은 utf8mb4_bin이고 UNIQUE입니다.
+    @Column(name = "nickname_normalized", length = 12, unique = true)
+    private String nicknameNormalized;
+
     /** 지금 PLUS 혜택을 쓸 수 있는지 봅니다. 만료 시각이 없거나 지났으면 PLUS가 아닙니다. */
     public boolean hasActivePlus(LocalDateTime now) {
         return grade == UserGrade.PLUS && plusExpiresAt != null && now != null && now.isBefore(plusExpiresAt);

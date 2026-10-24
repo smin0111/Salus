@@ -7,6 +7,7 @@ import com.salus.healthytable.dto.CommunityFeedItemDTO;
 import com.salus.healthytable.repository.RecipeRepository;
 import com.salus.healthytable.repository.RecipeShareRepository;
 import com.salus.healthytable.repository.UserRepository;
+import com.salus.healthytable.util.PublicUserName;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -56,7 +57,7 @@ public class CommunityService {
                                         return new CommunityFeedItemDTO(
                                                         share.getId(),
                                                         user != null ? user.getId() : null,
-                                                        user != null ? user.getName() : "알 수 없음",
+                                                        PublicUserName.of(user),
                                                         recipe != null ? recipe.getId() : null,
                                                         recipe != null ? recipe.getTitle() : "삭제된 레시피",
                                                         recipe != null ? recipe.getDescription() : "",

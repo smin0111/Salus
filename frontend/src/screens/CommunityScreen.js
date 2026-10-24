@@ -147,6 +147,11 @@ export default function CommunityScreen({ onToggleSidebar, onNavigate, user, web
       Alert.alert('로그인 필요', '이야기 작성은 로그인 후 사용할 수 있습니다.');
       return;
     }
+    // 글은 닉네임으로 보이므로 닉네임이 없으면 먼저 정하게 합니다(서버도 428로 막음). 정하면 글쓰기로, 취소하면 허브로 돌아옵니다.
+    if (!user?.nickname) {
+      onNavigate?.('nickname', { returnTo: 'create-post', cancelTo: 'community' });
+      return;
+    }
     onNavigate?.('create-post');
   };
 

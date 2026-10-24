@@ -28,6 +28,8 @@ const getPostErrorMessage = (error, fallback) => getApiErrorMessage(error, fallb
     prefixRequestError: true,
 });
 
+const NICKNAME_NEEDED_MESSAGE = '레시피 공유와 댓글은 닉네임으로 보여요. 닉네임을 먼저 정해 주세요.';
+
 // 오류 알림. 웹에서는 React Native Alert가 제대로 보이지 않을 수 있어 브라우저 alert를 사용합니다.
 const showError = (message) => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -42,16 +44,32 @@ const showError = (message) => {
  * 게시글 본문(재료/조리 순서 포함), 좋아요, 댓글/답글 목록과 작성/삭제 기능을 제공합니다.
  * 작성자 본인에게만 게시글 삭제 버튼이 보입니다(실제 권한 확인은 백엔드가 합니다).
  * user prop(propUser)은 전달만 받고, 실제로는 AuthContext의 user를 사용합니다.
+ *
+ * initialCommentDraft: 닉네임을 정하러 갔다 돌아왔을 때 이어 쓸 댓글 초안({ content, replyingTo }). 자동으로 등록하지는 않습니다.
+ * onCommentDraftRestored: 초안을 받아 쓴 뒤 부모가 보관본을 지우도록 알립니다.
  */
-export default function PostDetailScreen({ post, user: propUser, onNavigate, onBack, webMode = false }) {
+export default function PostDetailScreen({ post, user: propUser, onNavigate, onBack, webMode = false, initialCommentDraft = null, onCommentDraftRestored }) {
     const { user, token } = useAuth();
     const insets = useSafeAreaInsets();
     const [postData, setPostData] = useState(post);
     const [comments, setComments] = useState([]);
-    const [newComment, setNewComment] = useState('');
+    const [newComment, setNewComment] = useState(initialCommentDraft?.content || '');
     const [loading, setLoading] = useState(false);
     const [submittingComment, setSubmittingComment] = useState(false);
-    const [replyingTo, setReplyingTo] = useState(null); // { id: 식별값, userName: 사용자명 }
+    const [replyingTo, setReplyingTo] = useState(initialCommentDraft?.replyingTo || null); // { id: 식별값, userName: 사용자명 }
+
+    useEffect(() => {
+        if (initialCommentDraft) onCommentDraftRestored?.();
+    }, []);
+
+    const requireNickname = (message = NICKNAME_NEEDED_MESSAGE) => {
+        showError(message);
+        onNavigate?.('nickname', {
+            returnTo: 'post-detail',
+            returnData: postData || post,
+            commentDraft: { postId: post.id, content: newComment, replyingTo },
+        });
+    };
 
     // 목록에서 받은 post는 요약 정보일 수 있어, 화면이 열리면 상세 정보와 댓글을 서버에서 다시 불러옵니다.
     useEffect(() => {
@@ -134,6 +152,13 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
             return;
         }
 
+        // 댓글은 닉네임으로 보이므로 닉네임이 없으면 먼저 정하고 이 글로 돌아옵니다(서버도 428로 막음).
+        // 쓰던 댓글과 답글 대상은 들고 갔다가 되돌려 놓습니다.
+        if (!user.nickname) {
+            requireNickname();
+            return;
+        }
+
         debugLog('댓글 작성 요청:', {
             contentLength: newComment.trim().length,
             hasParent: Boolean(replyingTo)
@@ -162,7 +187,11 @@ export default function PostDetailScreen({ post, user: propUser, onNavigate, onB
                 contentLength: newComment.trim().length,
                 hasParent: Boolean(replyingTo)
             });
-            Alert.alert('오류', getPostErrorMessage(error, '댓글 작성에 실패했습니다.'));
+            if (error?.response?.status === 428) {
+                requireNickname(getApiErrorMessage(error, NICKNAME_NEEDED_MESSAGE));
+                return;
+            }
+            showError(getPostErrorMessage(error, '댓글 작성에 실패했습니다.'));
         } finally {
             setSubmittingComment(false);
         }

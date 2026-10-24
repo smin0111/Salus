@@ -3,6 +3,7 @@ package com.salus.healthytable.controller;
 import com.salus.healthytable.dto.*;
 import com.salus.healthytable.service.CommunityService;
 import com.salus.healthytable.service.CommunityPostService;
+import com.salus.healthytable.service.NicknameService;
 import com.salus.healthytable.service.PostCommentService;
 import com.salus.healthytable.service.RecommendationService;
 import com.salus.healthytable.dto.RecommendationDTO;
@@ -20,6 +21,7 @@ import java.util.Map;
  * 레시피 공유 피드, 개인화 추천, 게시글 CRUD, 좋아요, 댓글 기능을 제공합니다.
  *
  * 조회(GET)는 대부분 로그인 없이 가능하지만, 로그인한 경우 "내가 좋아요를 눌렀는지" 같은 정보가 함께 채워집니다.
+ * 다른 사람에게 보이는 글을 새로 쓰는 요청(게시글·댓글·레시피 공유)은 닉네임이 있어야 하고, 없으면 428입니다.
  */
 @RestController
 @RequestMapping("/api/community")
@@ -38,6 +40,7 @@ public class CommunityController {
     private final PostCommentService postCommentService;
     private final RecommendationService recommendationService;
     private final AuthenticatedUserProvider authenticatedUserProvider;
+    private final NicknameService nicknameService;
 
     // ========== 레시피 공유 기능 ==========
     /**
@@ -54,6 +57,7 @@ public class CommunityController {
     @PostMapping("/share")
     public ResponseEntity<?> shareRecipe(@Valid @RequestBody RecipeShareRequestDTO request) {
         Long userId = authenticatedUserProvider.requireUserId();
+        nicknameService.requireNickname(userId);
         // @Valid는 null/길이/패턴처럼 형식 검증을 담당하고, Controller는 인증된 사용자 ID 주입을 담당합니다.
         // 요청 body의 userId를 그대로 믿으면 다른 사용자 이름으로 공유하는 보안 문제가 생길 수 있습니다.
         String message = request.getMessage() != null ? request.getMessage().trim() : null;
@@ -137,6 +141,7 @@ public class CommunityController {
     public ResponseEntity<?> createPost(
             @Valid @RequestBody CreatePostRequestDTO request) {
         Long userId = authenticatedUserProvider.requireUserId();
+        nicknameService.requireNickname(userId);
         // Bean Validation은 "비어 있지 않다"와 "최대 길이"를 보장합니다.
         // 저장 전 trim과 현재 사용자 ID 덮어쓰기는 데이터 정합성과 보안을 위한 Controller의 마지막 정리입니다.
         request.setTitle(request.getTitle().trim());
@@ -199,6 +204,7 @@ public class CommunityController {
             @PathVariable Long postId,
             @Valid @RequestBody CreateCommentRequestDTO request) {
         Long userId = authenticatedUserProvider.requireUserId();
+        nicknameService.requireNickname(userId);
         request.setContent(request.getContent().trim());
         request.setUserId(userId);
         postCommentService.createComment(postId, request);

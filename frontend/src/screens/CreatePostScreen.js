@@ -26,6 +26,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 const MAX_POST_TITLE_LENGTH = 200;
 const MAX_POST_CONTENT_LENGTH = 10000;
 
+// 웹에서는 React Native Alert가 보이지 않아 브라우저 alert를 씁니다.
+const notify = (title, message) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert(`${title}\n\n${message}`);
+        return;
+    }
+    Alert.alert(title, message);
+};
+
+const NICKNAME_NEEDED_MESSAGE = '게시글은 닉네임으로 보여요. 닉네임을 먼저 정해 주세요.';
+
 /**
  * 커뮤니티 레시피 게시글 작성 화면입니다.
  * 제목/내용(필수), 재료/조리 순서(한 줄에 하나씩), 사진, 태그를 입력해 게시글을 등록합니다.
@@ -163,6 +174,11 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
             console.error('에러 응답:', error.response?.data);
             console.error('에러 상태:', error.response?.status);
 
+            // 닉네임이 없어 거절되면 쓰던 글은 그대로 두고 이유만 알립니다(화면을 옮기면 글이 사라짐).
+            if (error?.response?.status === 428) {
+                notify('닉네임 필요', getApiErrorMessage(error, NICKNAME_NEEDED_MESSAGE));
+                return;
+            }
             Alert.alert('오류', getApiErrorMessage(error, '게시글 작성에 실패했습니다.', {
                 includeStatus: true,
                 networkMessage: '서버에 연결할 수 없습니다. 백엔드 서버가 실행 중인지 확인해주세요.',

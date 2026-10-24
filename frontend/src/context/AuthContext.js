@@ -21,7 +21,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 /**
  * 로그인 상태를 앱 전체에 제공하는 Provider 컴포넌트입니다.
- * 제공 값: isLoggedIn, user, token, login(소셜 종류), logout, refreshUser, loading
+ * 제공 값: isLoggedIn, user, token, login(소셜 종류), logout, refreshUser, applyUser, loading
  * 화면에서는 const { user, login } = useAuth(); 처럼 꺼내 씁니다.
  */
 export const AuthProvider = ({ children }) => {
@@ -728,16 +728,24 @@ export const AuthProvider = ({ children }) => {
     };
 
     // 결제처럼 사용자 등급이 바뀌는 작업 뒤에는 서버의 최신 사용자 정보를 다시 가져옵니다.
+    // 서버가 돌려준 사용자 정보(예: 닉네임 저장 응답)를 화면 상태와 저장소에 반영합니다.
+    const applyUser = async (userData) => {
+        setUser(userData);
+        await SafeStorage.setItem('user_data', JSON.stringify(userData));
+    };
+
+    // 서버에서 사용자 정보를 다시 받습니다. 성공하면 true, 실패하면 기존 정보를 그대로 두고 false를 돌려줍니다.
     const refreshUser = async () => {
-        if (!token) return;
+        if (!token) return false;
         try {
             const response = await axios.get(`${config.API_BASE_URL}/users/me`);
             const userData = response.data;
-            setUser(userData);
-            await SafeStorage.setItem('user_data', JSON.stringify(userData));
+            await applyUser(userData);
             debugLog('User data refreshed:', userData.grade);
+            return true;
         } catch (e) {
             console.error('Failed to refresh user data:', e);
+            return false;
         }
     };
 
@@ -801,7 +809,7 @@ export const AuthProvider = ({ children }) => {
 
     return (
         <AuthContext.Provider value={{
-            isLoggedIn, user, token, login, logout, refreshUser, loading,
+            isLoggedIn, user, token, login, logout, refreshUser, applyUser, loading,
             getLoginMethods, addLoginMethod, reauthenticate, hasRecentIdentityConfirmation,
         }}>
             {children}

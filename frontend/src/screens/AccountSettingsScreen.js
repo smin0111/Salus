@@ -164,6 +164,22 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
             </View>}
 
             <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+                {/* 닉네임: 커뮤니티 활동에 보이는 이름(소셜 실명은 공개하지 않음) */}
+                <View style={styles.nicknameRow}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.membershipLabel}>닉네임</Text>
+                        <Text style={styles.nicknameValue}>{user?.nickname || '아직 정하지 않았어요'}</Text>
+                    </View>
+                    <TouchableOpacity
+                        style={styles.nicknameButton}
+                        onPress={() => onNavigate('nickname')}
+                        accessibilityRole="button"
+                        accessibilityLabel={user?.nickname ? '닉네임 바꾸기' : '닉네임 정하기'}
+                    >
+                        <Text style={styles.nicknameButtonText}>{user?.nickname ? '바꾸기' : '정하기'}</Text>
+                    </TouchableOpacity>
+                </View>
+
                 {/* 나의 멤버십 섹션 */}
                 <View style={styles.membershipCard}>
                     <View style={styles.membershipHeader}>
@@ -361,6 +377,10 @@ const styles = StyleSheet.create({
         borderBottomColor: colors.border,
     },
     headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    nicknameRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 16, marginBottom: 16 },
+    nicknameValue: { fontSize: 17, fontWeight: '700', color: colors.text, marginTop: 4 },
+    nicknameButton: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt },
+    nicknameButtonText: { fontSize: 14, fontWeight: '700', color: colors.primary },
     menuButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', marginRight: 12, borderWidth: 1, borderColor: colors.border },
     headerTitle: { fontSize: 20, fontWeight: '800', color: colors.text },
     headerSubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },

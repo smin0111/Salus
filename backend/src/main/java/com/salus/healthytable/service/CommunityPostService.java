@@ -10,6 +10,7 @@ import com.salus.healthytable.repository.CommunityPostRepository;
 import com.salus.healthytable.repository.PostCommentRepository;
 import com.salus.healthytable.repository.PostLikeRepository;
 import com.salus.healthytable.repository.UserRepository;
+import com.salus.healthytable.util.PublicUserName;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -243,7 +244,7 @@ public class CommunityPostService {
             return new CommunityPostDTO(
                     post.getId(),
                     post.getUserId(),
-                    user != null ? user.getName() : "알 수 없음",
+                    PublicUserName.of(user),
                     post.getTitle(),
                     post.getContent(),
                     post.getIngredients(),

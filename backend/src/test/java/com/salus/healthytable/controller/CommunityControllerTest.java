@@ -9,6 +9,7 @@ import com.salus.healthytable.exception.GlobalExceptionHandler;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
 import com.salus.healthytable.service.CommunityPostService;
 import com.salus.healthytable.service.CommunityService;
+import com.salus.healthytable.service.NicknameService;
 import com.salus.healthytable.service.PostCommentService;
 import com.salus.healthytable.service.RecommendationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +41,7 @@ class CommunityControllerTest {
     private PostCommentService postCommentService;
     private RecommendationService recommendationService;
     private AuthenticatedUserProvider authenticatedUserProvider;
+    private NicknameService nicknameService;
 
     private MockMvc mockMvc;
     private ObjectMapper objectMapper;
@@ -51,13 +53,15 @@ class CommunityControllerTest {
         postCommentService = mock(PostCommentService.class);
         recommendationService = mock(RecommendationService.class);
         authenticatedUserProvider = mock(AuthenticatedUserProvider.class);
+        nicknameService = mock(NicknameService.class);
 
         CommunityController controller = new CommunityController(
                 communityService,
                 communityPostService,
                 postCommentService,
                 recommendationService,
-                authenticatedUserProvider);
+                authenticatedUserProvider,
+                nicknameService);
 
         // 단순 메서드 호출 테스트가 아니라 MockMvc로 Spring MVC 요청 흐름을 태웁니다.
         // 그래야 @Valid, JSON 변환, ControllerAdvice가 실제 HTTP 요청처럼 동작하는지 검증할 수 있습니다.
@@ -288,5 +292,28 @@ class CommunityControllerTest {
         mockMvc.perform(post("/api/community/posts/99/like"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("게시글을 찾을 수 없습니다."));
+    }
+
+    // 닉네임이 없으면 게시글·댓글·레시피 공유를 새로 쓸 수 없고(428) 서비스에 닿지 않습니다. 좋아요는 막지 않습니다.
+    @Test
+    void publicWritesRequireNickname() throws Exception {
+        when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
+        doThrow(new ResponseStatusException(HttpStatus.PRECONDITION_REQUIRED, "닉네임 필요"))
+                .when(nicknameService).requireNickname(1L);
+
+        mockMvc.perform(post("/api/community/posts").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"제목\",\"content\":\"본문\"}"))
+                .andExpect(status().isPreconditionRequired())
+                .andExpect(jsonPath("$.error").value("PRECONDITION_REQUIRED"));
+        mockMvc.perform(post("/api/community/posts/7/comments").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"댓글\"}"))
+                .andExpect(status().isPreconditionRequired());
+        mockMvc.perform(post("/api/community/share").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"recipeId\":7}"))
+                .andExpect(status().isPreconditionRequired());
+        verifyNoInteractions(communityPostService, postCommentService, communityService);
+
+        when(communityPostService.toggleLike(7L, 1L)).thenReturn(Map.of("liked", true));
+        mockMvc.perform(post("/api/community/posts/7/like")).andExpect(status().isOk());
     }
 }

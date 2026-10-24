@@ -19,6 +19,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // ID 목록으로 사용자 조회
     List<User> findByIdIn(List<Long> ids);
 
+    // 닉네임 중복 확인(정규화 값 기준)
+    java.util.Optional<User> findByNicknameNormalized(String nicknameNormalized);
+
     // 특정 시각 이후 가입한 사용자 수 (관리자 대시보드의 오늘 신규 가입자 수)
     long countByCreatedAtAfter(java.time.LocalDateTime dateTime);
 
