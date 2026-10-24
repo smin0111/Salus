@@ -10,6 +10,7 @@ import com.salus.healthytable.security.JwtAuthenticationFilter;
 import com.salus.healthytable.security.JwtTokenProvider;
 import com.salus.healthytable.service.CommunityPostService;
 import com.salus.healthytable.service.CommunityService;
+import com.salus.healthytable.service.NicknameService;
 import com.salus.healthytable.service.PostCommentService;
 import com.salus.healthytable.service.RecommendationService;
 import org.junit.jupiter.api.Test;
@@ -68,6 +69,9 @@ class CommunitySecurityTest {
 
     @MockBean
     private AuthenticatedUserProvider authenticatedUserProvider;
+
+    @MockBean
+    private NicknameService nicknameService;
 
     @MockBean
     private JwtTokenProvider jwtTokenProvider;

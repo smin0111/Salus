@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, Modal, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { colors } from '../theme/colors';
@@ -8,14 +8,27 @@ import config from '../config';
 import { useAuth } from '../context/AuthContext';
 import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
+// 웹에서는 React Native Alert가 보이지 않아 브라우저 alert를 씁니다.
+const notify = (title, message) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert(`${title}\n\n${message}`);
+        return;
+    }
+    Alert.alert(title, message);
+};
+
+const NICKNAME_NEEDED_MESSAGE = '레시피 공유와 댓글은 닉네임으로 보여요. 닉네임을 먼저 정해 주세요.';
+
 /**
  * 레시피 상세 화면입니다.
  * 대표 이미지, 제목/요약 지표(조리 시간, 인분, 칼로리, 난이도, 평점), 재료, 조리 순서를 보여 주고
  * 로그인 사용자는 레시피를 커뮤니티에 공유할 수 있습니다.
  * 재료/조리 순서가 없고 전체 본문(fullText)만 있는 레시피는 본문을 그대로 보여 줍니다.
+ *
+ * onRequireNickname: 닉네임이 없을 때 닉네임 화면으로 보냈다가 이 레시피로 돌아오게 합니다.
  */
-export default function RecipeDetailScreen({ recipe, onBack }) {
-    const { token, isLoggedIn } = useAuth();
+export default function RecipeDetailScreen({ recipe, onBack, onRequireNickname }) {
+    const { token, isLoggedIn, user } = useAuth();
     const [shareModalVisible, setShareModalVisible] = useState(false);
     const [shareMessage, setShareMessage] = useState('');
     const [sharing, setSharing] = useState(false);
@@ -67,6 +80,13 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
             return;
         }
 
+        // 공유 글은 닉네임으로 보이므로 메시지를 쓰기 전에 확인합니다(서버도 428로 막음).
+        if (!user?.nickname) {
+            notify('닉네임 필요', NICKNAME_NEEDED_MESSAGE);
+            onRequireNickname?.();
+            return;
+        }
+
         setShareModalVisible(true);
     };
 
@@ -97,7 +117,13 @@ export default function RecipeDetailScreen({ recipe, onBack }) {
         } catch (error) {
             if (isAuthError(error)) return;
             console.error('Share error:', error);
-            Alert.alert('오류', getErrorMessage(error, '공유에 실패했습니다.'));
+            if (error?.response?.status === 428) {
+                setShareModalVisible(false);
+                notify('닉네임 필요', getErrorMessage(error, NICKNAME_NEEDED_MESSAGE));
+                onRequireNickname?.();
+                return;
+            }
+            notify('오류', getErrorMessage(error, '공유에 실패했습니다.'));
         } finally {
             setSharing(false);
         }

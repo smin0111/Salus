@@ -15,6 +15,7 @@ import LandingPageScreen from '../screens/LandingPageScreen';
 import RecipeDetailScreen from '../screens/RecipeDetailScreen';
 import CommunityScreen from '../screens/CommunityScreen';
 import MyRecipesScreen from '../screens/MyRecipesScreen';
+import NicknameScreen from '../screens/NicknameScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
 import SearchScreen from '../screens/SearchScreen';
@@ -44,7 +45,7 @@ const WEB_SHELL_EXCLUDED_SCREENS = [
 
 // 보호 화면 목록은 화면 이동 직전에 한 번 더 확인합니다.
 // 라우팅만 숨기는 것으로는 부족하고, 사용자가 URL을 직접 입력하는 web 환경도 고려해야 합니다.
-const PROTECTED_SCREENS = ['community', 'my-recipes', 'calendar', 'health', 'health-checkup', 'account-settings', 'create-post'];
+const PROTECTED_SCREENS = ['community', 'my-recipes', 'nickname', 'calendar', 'health', 'health-checkup', 'account-settings', 'create-post'];
 
 // 웹 사이드바 메뉴 항목(화면 id, 이름, 설명, 아이콘, URL 경로)
 const WEB_NAV_ITEMS = [
@@ -62,6 +63,7 @@ const WEB_SCREEN_TITLES = {
   chat: ['AI 셰프 스튜디오', '건강정보를 반영해 출처가 있는 레시피를 찾는 요리 상담'],
   community: ['레시피 허브', 'AI 추천, 인기 레시피, 사용자 피드를 한곳에서 둘러보세요'],
   'my-recipes': ['내 레시피', '저장하고 내 입맛대로 고친 레시피를 모아 봅니다'],
+  nickname: ['닉네임', '커뮤니티 활동에 보이는 이름을 정합니다'],
   calendar: ['식단 캘린더', 'AI가 추천한 식사와 직접 기록한 식단을 관리합니다'],
   health: ['건강 프로필', '알레르기, 질환, 식이 제한을 안전하게 반영합니다'],
   'health-checkup': ['건강검진 분석', '검진 수치를 식단 추천으로 연결합니다'],
@@ -78,6 +80,7 @@ const WEB_PATH_TO_SCREEN = {
   '/chat': 'chat',
   '/community': 'community',
   '/my-recipes': 'my-recipes',
+  '/nickname': 'nickname',
   '/calendar': 'calendar',
   '/health': 'health',
   '/health-checkup': 'health-checkup',
@@ -224,7 +227,30 @@ export default function AppNavigator() {
   const [selectedPost, setSelectedPost] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAppReady, setIsAppReady] = useState(false);
-  const { isLoggedIn, user, token, logout, loading: authLoading } = useAuth();
+  const { isLoggedIn, user, token, logout, refreshUser, loading: authLoading } = useAuth();
+  // 닉네임 안내: 저장해 둔 사용자 정보에는 닉네임이 빠져 있을 수 있어, 로그인할 때 서버 정보를 새로 받는 데 성공한 뒤에만 판단합니다.
+  // 받지 못하면(네트워크 오류 등) 묻지 않고 기존 화면을 그대로 둡니다.
+  const [nicknameChecked, setNicknameChecked] = useState(false);
+  // "나중에 하기"를 누르면 이번 실행 동안은 다시 묻지 않습니다(다음 로그인·새로 열 때 다시 물음).
+  const [nicknamePromptSkipped, setNicknamePromptSkipped] = useState(false);
+  // 닉네임 화면을 떠날 곳. 저장하면 screen, 취소하면 cancelScreen(없으면 screen)으로 갑니다. null이면 계정 화면.
+  const [nicknameReturn, setNicknameReturn] = useState(null); // { screen, data, cancelScreen, cancelData } | null
+  // 댓글을 쓰다 닉네임을 정하러 간 경우 돌아와서 이어 쓸 초안({ postId, content, replyingTo }). 화면 상태라 메모리에만 둡니다.
+  const [commentDraft, setCommentDraft] = useState(null);
+
+  useEffect(() => {
+    if (!isLoggedIn || !token) {
+      setNicknameChecked(false);
+      setNicknamePromptSkipped(false);
+      return;
+    }
+    let cancelled = false;
+    setNicknameChecked(false);
+    Promise.resolve(refreshUser()).then((refreshed) => {
+      if (!cancelled && refreshed) setNicknameChecked(true);
+    });
+    return () => { cancelled = true; };
+  }, [isLoggedIn, token]);
   const hasSession = isLoggedIn && Boolean(token);
 
   // 공용 상태 관리 (게스트 또는 API 동기화 기반)
@@ -323,6 +349,18 @@ export default function AppNavigator() {
     if (screen === 'post-detail') {
       setSelectedPost(data);
     }
+    if (screen === 'nickname') {
+      // 글쓰기·댓글에서 닉네임이 필요해 넘어온 경우, 정한 뒤(또는 취소하면) 원래 화면으로 돌아갑니다.
+      setNicknameReturn(data?.returnTo ? {
+        screen: data.returnTo,
+        data: data.returnData,
+        cancelScreen: data.cancelTo || data.returnTo,
+        cancelData: data.cancelTo ? data.cancelData : data.returnData,
+      } : null);
+      setCommentDraft(data?.commentDraft || null);
+    } else if (screen !== 'post-detail') {
+      setCommentDraft(null);
+    }
     setCurrentScreen(screen);
     if (Platform.OS === 'web') {
       window.history.pushState({}, '', getWebPathForScreen(screen));
@@ -339,13 +377,40 @@ export default function AppNavigator() {
     handleNavigate('chat');
   };
 
+  // 로그인했는데 서버 기준으로 닉네임이 없으면(첫 가입·기존 회원) 닉네임 화면을 먼저 보여 줍니다. 건너뛸 수 있습니다.
+  const NICKNAME_PROMPT_EXCLUDED = ['login', 'payment-result', 'upgrade', 'about', 'nickname'];
+  const shouldPromptNickname = isLoggedIn && nicknameChecked && !!user && !user.nickname
+    && !nicknamePromptSkipped && !NICKNAME_PROMPT_EXCLUDED.includes(currentScreen);
+
   // currentScreen 값에 맞는 화면 컴포넌트를 반환합니다.
   const renderScreen = () => {
+    if (shouldPromptNickname) {
+      return <NicknameScreen mode="onboarding" onDone={() => setNicknamePromptSkipped(true)} onSkip={() => setNicknamePromptSkipped(true)} />;
+    }
     switch (currentScreen) {
+      case 'nickname':
+        {
+          const afterSave = () => (nicknameReturn
+            ? handleNavigate(nicknameReturn.screen, nicknameReturn.data)
+            : handleNavigate('account-settings'));
+          const afterCancel = () => (nicknameReturn
+            ? handleNavigate(nicknameReturn.cancelScreen, nicknameReturn.cancelData)
+            : handleNavigate('account-settings'));
+          return <NicknameScreen mode="edit" onDone={afterSave} onSkip={afterCancel} />;
+        }
       case 'payment-result':
         return <PaymentResultScreen onNavigate={handleNavigate} />;
       case 'recipe-detail':
-        return <RecipeDetailScreen recipe={selectedRecipe} onBack={() => handleNavigate(recipeBackScreen || 'community')} />;
+        return (
+          <RecipeDetailScreen
+            recipe={selectedRecipe}
+            onBack={() => handleNavigate(recipeBackScreen || 'community')}
+            onRequireNickname={() => handleNavigate('nickname', {
+              returnTo: 'recipe-detail',
+              returnData: { recipe: selectedRecipe, returnTo: recipeBackScreen },
+            })}
+          />
+        );
       case 'about':
         return <LandingPageScreen onNavigate={handleNavigate} />;
       case 'chat':
@@ -368,7 +433,17 @@ export default function AppNavigator() {
       case 'create-post':
         return <CreatePostScreen onNavigate={handleNavigate} user={user} webMode={desktopWebMode} />;
       case 'post-detail':
-        return <PostDetailScreen post={selectedPost} user={user} onNavigate={handleNavigate} onBack={() => handleNavigate('community')} webMode={desktopWebMode} />;
+        return (
+          <PostDetailScreen
+            post={selectedPost}
+            user={user}
+            onNavigate={handleNavigate}
+            onBack={() => handleNavigate('community')}
+            webMode={desktopWebMode}
+            initialCommentDraft={commentDraft && commentDraft.postId === selectedPost?.id ? commentDraft : null}
+            onCommentDraftRestored={() => setCommentDraft(null)}
+          />
+        );
       case 'calendar':
         return <CalendarScreen mealData={mealData} setMealData={setMealData} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
       case 'health':

@@ -27,6 +27,8 @@ public class UserResponseDTO {
     // PLUS 이용권이 끝나는 시각(PLUS가 아니면 null)
     private LocalDateTime plusExpiresAt;
     private UserRole role;
+    // 커뮤니티 닉네임(아직 정하지 않았으면 null → 앱이 닉네임 화면을 보여 줌)
+    private String nickname;
 
     /**
      * User 엔티티를 응답 DTO로 변환하는 정적 팩토리 메서드입니다.
@@ -44,6 +46,7 @@ public class UserResponseDTO {
                 .grade(user.effectiveGrade(now))
                 .plusExpiresAt(plusActive ? user.getPlusExpiresAt() : null)
                 .role(user.getRole())
+                .nickname(user.getNickname())
                 .build();
     }
 }

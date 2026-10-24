@@ -1,7 +1,9 @@
 package com.salus.healthytable.service;
 
 import com.salus.healthytable.domain.PostComment;
+import com.salus.healthytable.domain.User;
 import com.salus.healthytable.dto.CreateCommentRequestDTO;
+import com.salus.healthytable.dto.PostCommentDTO;
 import com.salus.healthytable.repository.CommunityPostRepository;
 import com.salus.healthytable.repository.PostCommentRepository;
 import com.salus.healthytable.repository.UserRepository;
@@ -14,6 +16,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,6 +40,33 @@ class PostCommentServiceTest {
             postRepository,
             userRepository,
             clock);
+
+    // 댓글 작성자 이름은 소셜 실명(User.name)이 아니라 닉네임이고, 닉네임이 없으면 일반 표시명, 회원을 못 찾으면 "알 수 없음"입니다.
+    @Test
+    void commentAuthorIsNicknameNeverRealName() {
+        User withNickname = new User();
+        withNickname.setId(1L);
+        withNickname.setName("홍길동");
+        withNickname.setNickname("김치러버");
+        User withoutNickname = new User();
+        withoutNickname.setId(2L);
+        withoutNickname.setName("김철수");
+        when(commentRepository.findByPostIdOrderByCreatedAtAsc(7L)).thenReturn(List.of(
+                comment(1L), comment(2L), comment(3L)));
+        when(userRepository.findByIdIn(any())).thenReturn(List.of(withNickname, withoutNickname));
+
+        List<String> names = service.getCommentsByPostId(7L).stream().map(PostCommentDTO::getUserName).toList();
+
+        assertThat(names).containsExactly("김치러버", "Salus 사용자", "알 수 없음");
+    }
+
+    private static PostComment comment(Long userId) {
+        PostComment comment = new PostComment();
+        comment.setUserId(userId);
+        comment.setPostId(7L);
+        comment.setContent("댓글");
+        return comment;
+    }
 
     // 댓글 작성 시각은 주입한 Clock 기준이어야 합니다.
     @Test
