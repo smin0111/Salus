@@ -3,6 +3,7 @@ package com.salus.healthytable.controller;
 import com.salus.healthytable.dto.FeedDto;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
 import com.salus.healthytable.service.FeedCommentService;
+import com.salus.healthytable.service.FeedReportService;
 import com.salus.healthytable.service.FeedService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -31,6 +32,7 @@ public class FeedController {
 
     private final FeedService feedService;
     private final FeedCommentService feedCommentService;
+    private final FeedReportService feedReportService;
     private final AuthenticatedUserProvider authenticatedUserProvider;
 
     @GetMapping("/status")
@@ -109,5 +111,12 @@ public class FeedController {
     public ResponseEntity<Void> deleteComment(@PathVariable Long commentId) {
         feedCommentService.delete(authenticatedUserProvider.requireUserId(), commentId);
         return ResponseEntity.noContent().build();
+    }
+
+    /** 신고. 새로 만들면 201, 같은 대상에 이미 낸 내 신고면 200과 기존 신고 ID입니다. */
+    @PostMapping("/reports")
+    public ResponseEntity<FeedDto.ReportResult> report(@RequestBody FeedDto.ReportRequest request) {
+        FeedDto.ReportResult result = feedReportService.report(authenticatedUserProvider.requireUserId(), request);
+        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK).body(result);
     }
 }

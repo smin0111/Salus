@@ -58,10 +58,15 @@ public final class FeedDto {
             AllergenStatus allergen,
             long likeCount,
             boolean likedByMe,
-            long commentCount) {
+            long commentCount,
+            // 관리자가 숨긴 공유본(작성자 본인 목록에만 나옴). 인기순에는 숨긴 공유본이 없습니다.
+            boolean moderationHidden) {
     }
 
-    /** 상세. stepsPublic이 false면 steps는 null이고 원본 링크(sources)와 작성자 메모만 공개합니다. */
+    /**
+     * 상세. stepsPublic이 false면 steps는 null이고 원본 링크(sources)와 작성자 메모만 공개합니다.
+     * moderationHidden이 true면 관리자가 숨긴 공유본이며 작성자 본인만 이 응답을 받습니다(신고자·신고 수·관리자 메모는 없음).
+     */
     public record Detail(
             Long id,
             String title,
@@ -83,7 +88,8 @@ public final class FeedDto {
             AllergenStatus allergen,
             long likeCount,
             boolean likedByMe,
-            long commentCount) {
+            long commentCount,
+            boolean moderationHidden) {
     }
 
     /** 최신순 목록 한 페이지입니다. nextCursor가 null이면 마지막 페이지입니다. */
@@ -106,6 +112,7 @@ public final class FeedDto {
 
     /**
      * 댓글 하나. 삭제된 댓글은 content·authorName이 null이고 deleted가 true입니다(자리표시).
+     * 관리자가 숨긴 댓글은 hidden이 true이며, 작성자 본인에게만 content가 있고 다른 사람에게는 자리표시입니다.
      * replyToName은 대댓글에 다시 답한 경우 답한 대상의 공개 이름이며, 대상이 탈퇴했으면 "탈퇴한 사용자"입니다.
      */
     public record Comment(
@@ -116,6 +123,7 @@ public final class FeedDto {
             boolean mine,
             String content,
             boolean deleted,
+            boolean hidden,
             boolean edited,
             String replyToName,
             LocalDateTime createdAt) {
@@ -134,5 +142,13 @@ public final class FeedDto {
 
     /** 댓글 작성 결과. created가 false면 같은 요청 ID로 이미 저장한 댓글입니다(그 사이 수정·삭제됐으면 지금 상태 그대로). */
     public record CommentResult(Comment comment, boolean created) {
+    }
+
+    /** 신고. targetType은 FEED_POST 또는 FEED_COMMENT, reason은 정해진 사유 중 하나, detail은 500자 이하(선택). */
+    public record ReportRequest(String targetType, Long targetId, String reason, String detail) {
+    }
+
+    /** 신고 결과. created가 false면 같은 대상에 이미 낸 내 신고입니다. 다른 사람의 신고나 신고 수는 담지 않습니다. */
+    public record ReportResult(Long reportId, boolean created) {
     }
 }

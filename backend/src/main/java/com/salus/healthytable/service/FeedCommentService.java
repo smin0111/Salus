@@ -40,7 +40,10 @@ import java.util.stream.Collectors;
  * 이미 저장된 댓글이 그 사이 수정·삭제됐어도 지금 상태 그대로 돌려주고 본문을 되살리지 않습니다.
  * 보장 범위는 앱의 같은 입력(같은 화면) 안의 재전송입니다.
  *
- * <p>삭제: 소프트 삭제(본문 지움, 답글 유지). 살아 있는 답글이 있는 최상위 댓글만 자리표시로 남고, 개수는 살아 있는 댓글만 셉니다.
+ * <p>삭제: 소프트 삭제(본문 지움, 답글 유지). 공개 답글이 있는 최상위 댓글만 자리표시로 남고, 개수는 공개 댓글만 셉니다.
+ *
+ * <p>관리자 숨김(V25): 숨긴 공유본은 작성자만 읽을 수 있고(목록·상세·댓글 조회 예외) 새 댓글은 받지 않습니다.
+ * 접근은 공유본 → 댓글 순서로 검사합니다. 숨긴 댓글은 작성자 본인에게만 내용이 보이고, 숨기거나 지운 댓글에는 답할 수 없습니다.
  */
 @Service
 @RequiredArgsConstructor
@@ -53,7 +56,7 @@ public class FeedCommentService {
     static final String WITHDRAWN_NAME = "탈퇴한 사용자";
     static final String NOT_FOUND_MESSAGE = "댓글을 찾을 수 없습니다.";
     static final String PARENT_INVALID_MESSAGE = "답글을 달 댓글을 이 레시피에서 찾을 수 없어요.";
-    static final String PARENT_DELETED_MESSAGE = "삭제된 댓글에는 답글을 달 수 없어요.";
+    static final String PARENT_DELETED_MESSAGE = "삭제되었거나 숨겨진 댓글에는 답글을 달 수 없어요.";
     static final String EDIT_DELETED_MESSAGE = "삭제된 댓글은 고칠 수 없어요.";
     static final String REQUEST_REUSED_MESSAGE = "같은 댓글 요청으로 다른 내용을 보냈습니다. 다시 작성해 주세요.";
     private static final Pattern UUID_FORMAT =
@@ -68,9 +71,9 @@ public class FeedCommentService {
     /** 최상위 댓글 한 페이지(오래된 순)와 각 댓글의 답글 첫 페이지입니다. */
     public FeedDto.CommentPage list(Long viewerId, Long postId, String cursor, Integer size) {
         feedService.requireEnabled();
-        feedService.findPost(postId);
+        feedService.readablePost(viewerId, postId);
         int pageSize = size == null ? PAGE_SIZE : Math.max(1, Math.min(MAX_PAGE_SIZE, size));
-        List<FeedComment> rows = commentRepository.findVisibleRoots(postId, parseCursor(cursor), PageRequest.of(0, pageSize + 1));
+        List<FeedComment> rows = commentRepository.findVisibleRoots(postId, viewerId, parseCursor(cursor), PageRequest.of(0, pageSize + 1));
         boolean hasMore = rows.size() > pageSize;
         List<FeedComment> roots = hasMore ? rows.subList(0, pageSize) : rows;
 
@@ -80,7 +83,7 @@ public class FeedCommentService {
         Map<Long, List<FeedComment>> repliesByRoot = new java.util.LinkedHashMap<>();
         List<FeedComment> all = new ArrayList<>(roots);
         for (FeedComment root : roots) {
-            List<FeedComment> replies = activeReplies(root.getId(), 0L, REPLY_PAGE_SIZE + 1);
+            List<FeedComment> replies = visibleReplies(root.getId(), viewerId, 0L, REPLY_PAGE_SIZE + 1);
             repliesByRoot.put(root.getId(), replies);
             all.addAll(replies.size() > REPLY_PAGE_SIZE ? replies.subList(0, REPLY_PAGE_SIZE) : replies);
         }
@@ -105,8 +108,8 @@ public class FeedCommentService {
         FeedComment root = commentRepository.findById(rootId)
                 .filter(found -> found.getRootCommentId() == null)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_MESSAGE));
-        feedService.findPost(root.getPostId());
-        List<FeedComment> rows = activeReplies(rootId, parseCursor(cursor), REPLY_PAGE_SIZE + 1);
+        feedService.readablePost(viewerId, root.getPostId());
+        List<FeedComment> rows = visibleReplies(rootId, viewerId, parseCursor(cursor), REPLY_PAGE_SIZE + 1);
         boolean hasMore = rows.size() > REPLY_PAGE_SIZE;
         List<FeedComment> items = hasMore ? rows.subList(0, REPLY_PAGE_SIZE) : rows;
         Mapper mapper = mapper(viewerId, items);
@@ -138,13 +141,13 @@ public class FeedCommentService {
         }
 
         nicknameService.requireNickname(userId);
-        feedService.findPost(postId);
+        feedService.writablePost(userId, postId);
         Long rootId = null;
         if (request.parentCommentId() != null) {
             FeedComment parent = commentRepository.findById(request.parentCommentId())
                     .filter(found -> found.getPostId().equals(postId))
                     .orElseThrow(() -> new IllegalArgumentException(PARENT_INVALID_MESSAGE));
-            if (!parent.isActive()) {
+            if (!parent.isPublic()) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, PARENT_DELETED_MESSAGE);
             }
             rootId = parent.getRootCommentId() != null ? parent.getRootCommentId() : parent.getId();
@@ -170,7 +173,10 @@ public class FeedCommentService {
     @Transactional
     public FeedDto.Comment update(Long userId, Long commentId, FeedDto.CommentUpdateRequest request) {
         feedService.requireEnabled();
+        // 잠금 조회를 먼저 합니다. 잠그기 전에 같은 댓글을 일반 조회하면 영속성 컨텍스트의 옛 상태를 그대로 쓰게 되어
+        // 먼저 끝난 삭제를 놓칩니다. 남의 댓글은 여기서 404이고, 내 댓글이라도 숨긴 공유본이면 다음 검사에서 404입니다.
         FeedComment comment = ownComment(userId, commentId);
+        feedService.readablePost(userId, comment.getPostId());
         if (!comment.isActive()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, EDIT_DELETED_MESSAGE);
         }
@@ -178,7 +184,10 @@ public class FeedCommentService {
         return single(userId, commentRepository.save(comment));
     }
 
-    /** 내 댓글 지우기(소프트 삭제). 이미 지웠으면 그대로 둡니다. 남의 댓글이면 404입니다. */
+    /**
+     * 내 댓글 지우기(소프트 삭제). 이미 지웠으면 그대로 둡니다. 남의 댓글이면 404입니다.
+     * 관리자가 숨긴 댓글이나 숨긴 공유본에 단 댓글도 작성자는 지울 수 있습니다(내용을 지우는 것뿐이라 볼 권한이 생기지 않음).
+     */
     @Transactional
     public void delete(Long userId, Long commentId) {
         feedService.requireEnabled();
@@ -217,6 +226,9 @@ public class FeedCommentService {
         if (!hash.equals(saved.getRequestHash())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, REQUEST_REUSED_MESSAGE);
         }
+        // 본문을 돌려주기 전에 소속 공유본을 지금 읽을 수 있는지 봅니다(숨긴 남의 공유본이면 404). 부모 댓글 상태는 보지 않으므로
+        // 부모가 그 뒤 삭제됐어도 재전송은 기존 댓글을 돌려줍니다.
+        feedService.readablePost(userId, saved.getPostId());
         return new FeedDto.CommentResult(single(userId, saved), false);
     }
 
@@ -227,9 +239,8 @@ public class FeedCommentService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_MESSAGE));
     }
 
-    private List<FeedComment> activeReplies(Long rootId, Long after, int limit) {
-        return commentRepository.findByRootCommentIdAndStatusAndIdGreaterThanOrderByIdAsc(
-                rootId, FeedComment.ACTIVE, after, PageRequest.of(0, limit));
+    private List<FeedComment> visibleReplies(Long rootId, Long viewerId, Long after, int limit) {
+        return commentRepository.findVisibleReplies(rootId, viewerId, after, PageRequest.of(0, limit));
     }
 
     private FeedDto.Comment single(Long viewerId, FeedComment comment) {
@@ -265,6 +276,10 @@ public class FeedCommentService {
     private record Mapper(Long viewerId, Map<Long, FeedComment> parents, Map<Long, User> users) {
         FeedDto.Comment map(FeedComment comment) {
             boolean deleted = !comment.isActive();
+            boolean hidden = !deleted && comment.isHidden();
+            boolean mine = comment.getUserId() != null && Objects.equals(comment.getUserId(), viewerId);
+            // 다른 사람에게는 삭제·숨김 댓글이 자리표시입니다. 숨긴 댓글은 작성자 본인에게만 내용을 보여 줍니다(조회 예외).
+            boolean showContent = !deleted && (!hidden || mine);
             String replyToName = null;
             if (isReplyToReply(comment)) {
                 FeedComment parent = parents.get(comment.getParentCommentId());
@@ -273,9 +288,8 @@ public class FeedCommentService {
                 }
             }
             return new FeedDto.Comment(comment.getId(), comment.getParentCommentId(), comment.getRootCommentId(),
-                    deleted ? null : PublicUserName.of(users.get(comment.getUserId())),
-                    Objects.equals(comment.getUserId(), viewerId) && comment.getUserId() != null,
-                    deleted ? null : comment.getContent(), deleted, comment.isEdited(), replyToName,
+                    showContent ? PublicUserName.of(users.get(comment.getUserId())) : null,
+                    mine, showContent ? comment.getContent() : null, deleted, hidden, comment.isEdited(), replyToName,
                     comment.getCreatedAt());
         }
     }

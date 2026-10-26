@@ -3,9 +3,11 @@ package com.salus.healthytable.service;
 import com.salus.healthytable.domain.FeedComment;
 import com.salus.healthytable.domain.FeedLike;
 import com.salus.healthytable.domain.FeedPost;
+import com.salus.healthytable.domain.FeedReport;
 import com.salus.healthytable.repository.FeedCommentRepository;
 import com.salus.healthytable.repository.FeedLikeRepository;
 import com.salus.healthytable.repository.FeedPostRepository;
+import com.salus.healthytable.repository.FeedReportRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +25,7 @@ public class FeedTxHelper {
     private final FeedPostRepository feedPostRepository;
     private final FeedLikeRepository feedLikeRepository;
     private final FeedCommentRepository feedCommentRepository;
+    private final FeedReportRepository feedReportRepository;
 
     /** flush해서 UNIQUE 위반이 이 메서드 안에서 드러나게 합니다. */
     @Transactional
@@ -55,5 +58,16 @@ public class FeedTxHelper {
     @Transactional(readOnly = true)
     public Optional<FeedComment> findCommentByRequest(Long userId, String clientRequestId) {
         return feedCommentRepository.findByUserIdAndClientRequestId(userId, clientRequestId);
+    }
+
+    /** 신고 저장. flush해서 같은 사용자·대상의 동시 신고로 생긴 UNIQUE 위반이 이 메서드 안에서 드러나게 합니다. */
+    @Transactional
+    public FeedReport insertReport(FeedReport report) {
+        return feedReportRepository.saveAndFlush(report);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<FeedReport> findReport(Long reporterId, String targetType, Long targetId) {
+        return feedReportRepository.findByReporterIdAndTargetTypeAndTargetId(reporterId, targetType, targetId);
     }
 }

@@ -66,6 +66,7 @@ public class FeedService {
     static final int POPULAR_DAYS = 7;
     static final int POPULAR_LIMIT = 30;
     static final int MAX_LIKE_ATTEMPTS = 3;
+    static final String HIDDEN_WRITE_MESSAGE = "운영 검토로 숨겨진 레시피라 지금은 새 댓글을 받을 수 없어요.";
     static final String SELF_LIKE_MESSAGE = "내가 공유한 레시피에는 좋아요를 누를 수 없어요.";
     private static final Pattern UUID_FORMAT =
             Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
@@ -174,14 +175,14 @@ public class FeedService {
                 : trimmed.substring(0, trimmed.offsetByCodePoints(0, TITLE_COLUMN_LENGTH));
     }
 
-    /** 최신순 목록입니다. 커서는 앞 페이지 마지막 공유본 ID입니다. */
+    /** 최신순 목록입니다. 커서는 앞 페이지 마지막 공유본 ID입니다. 숨긴 공유본은 작성자 본인 목록에만 숨김 표시와 함께 나옵니다. */
     public FeedDto.Page list(Long viewerId, String cursor, Integer size) {
         requireEnabled();
         int pageSize = size == null ? DEFAULT_PAGE_SIZE : Math.max(1, Math.min(MAX_PAGE_SIZE, size));
         PageRequest page = PageRequest.of(0, pageSize + 1);
         List<FeedPost> rows = cursor == null || cursor.isBlank()
-                ? feedPostRepository.findAllByOrderByIdDesc(page)
-                : feedPostRepository.findByIdLessThanOrderByIdDesc(parseCursor(cursor), page);
+                ? feedPostRepository.findVisibleLatest(viewerId, page)
+                : feedPostRepository.findVisibleLatestBefore(viewerId, parseCursor(cursor), page);
         boolean hasMore = rows.size() > pageSize;
         List<FeedPost> items = hasMore ? rows.subList(0, pageSize) : rows;
         return new FeedDto.Page(summaries(viewerId, items),
@@ -206,7 +207,7 @@ public class FeedService {
     /** 좋아요. 이미 눌렀으면 그대로 두고 같은 결과를 돌려줍니다. 본인 공유본은 400, 닉네임이 없으면 428입니다. */
     public FeedDto.LikeResult like(Long userId, Long postId) {
         requireEnabled();
-        FeedPost post = findPost(postId);
+        FeedPost post = readablePost(userId, postId);
         if (post.getUserId().equals(userId)) {
             throw new IllegalArgumentException(SELF_LIKE_MESSAGE);
         }
@@ -232,7 +233,7 @@ public class FeedService {
     /** 좋아요 취소. 누르지 않은 상태여도 같은 결과입니다. 이미 누른 좋아요는 닉네임과 상관없이 취소할 수 있습니다. */
     public FeedDto.LikeResult unlike(Long userId, Long postId) {
         requireEnabled();
-        findPost(postId);
+        readablePost(userId, postId);
         txHelper.deleteLike(postId, userId);
         return new FeedDto.LikeResult(false, feedLikeRepository.countByPostId(postId));
     }
@@ -255,19 +256,64 @@ public class FeedService {
                         PublicUserName.of(authors.get(post.getUserId())), post.getOriginType(), post.getProvenance(),
                         post.isStepsPublic(), post.getUserId().equals(viewerId), post.getCreatedAt(),
                         allergenStatus(viewer, post), likeCounts.getOrDefault(post.getId(), 0L),
-                        liked.contains(post.getId()), commentCounts.getOrDefault(post.getId(), 0L)))
+                        liked.contains(post.getId()), commentCounts.getOrDefault(post.getId(), 0L), post.isHidden()))
                 .toList();
     }
 
-    /** 공유본을 찾습니다. 없으면 404입니다(댓글 서비스도 같은 규칙을 씁니다). */
+    /**
+     * 신고 시점 복사본·관리자 화면용 공개 내용입니다. 상세 응답과 같은 공개 범위만 담습니다: 조리 단계를 공개하지 않는 출처면
+     * 설명·조리 단계를 넣지 않고, 공유본 전체(snapshot_json)나 보는 사람의 건강정보·알레르기 판정은 넣지 않습니다.
+     */
+    Map<String, Object> publicSnapshot(FeedPost post) {
+        MyRecipeDto.Content content = readContent(post);
+        boolean open = post.isStepsPublic() && content != null;
+        Map<String, Object> snapshot = new java.util.LinkedHashMap<>();
+        snapshot.put("type", "FEED_POST");
+        snapshot.put("postId", post.getId());
+        snapshot.put("title", content != null && content.title() != null ? content.title() : post.getTitle());
+        snapshot.put("authorName", PublicUserName.of(userRepository.findById(post.getUserId()).orElse(null)));
+        snapshot.put("originType", post.getOriginType());
+        snapshot.put("provenance", post.getProvenance());
+        snapshot.put("stepsPublic", post.isStepsPublic());
+        snapshot.put("description", open ? content.description() : null);
+        snapshot.put("ingredients", content == null ? List.of() : nonNull(content.ingredients()));
+        snapshot.put("steps", open ? nonNull(content.steps()) : null);
+        snapshot.put("sources", readSources(post));
+        snapshot.put("note", post.getNote());
+        snapshot.put("createdAt", String.valueOf(post.getCreatedAt()));
+        return snapshot;
+    }
+
+    /** 공유본을 찾습니다. 없으면 404입니다. */
     FeedPost findPost(Long postId) {
         return feedPostRepository.findById(postId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_MESSAGE));
     }
 
+    /**
+     * 보는 사람이 읽을 수 있는 공유본. 관리자가 숨긴 공유본은 작성자 본인만 읽을 수 있고(조회 예외) 다른 사람에게는 404입니다.
+     * 댓글 관련 API도 이 검사를 먼저 거칩니다(공유본 → 댓글 순서). 숨긴 공유본에 댓글을 단 사람이라고 볼 권한이 생기지 않습니다.
+     */
+    FeedPost readablePost(Long viewerId, Long postId) {
+        FeedPost post = findPost(postId);
+        if (post.isHidden() && !post.getUserId().equals(viewerId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_MESSAGE);
+        }
+        return post;
+    }
+
+    /** 새 활동(댓글 작성 등)을 받을 수 있는 공유본. 숨긴 공유본은 작성자 본인에게 409, 다른 사람에게 404입니다. */
+    FeedPost writablePost(Long viewerId, Long postId) {
+        FeedPost post = readablePost(viewerId, postId);
+        if (post.isHidden()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, HIDDEN_WRITE_MESSAGE);
+        }
+        return post;
+    }
+
     public FeedDto.Detail get(Long viewerId, Long postId) {
         requireEnabled();
-        FeedPost post = findPost(postId);
+        FeedPost post = readablePost(viewerId, postId);
         MyRecipeDto.Content content = readContent(post);
         User author = userRepository.findById(post.getUserId()).orElse(null);
         // 공개 응답은 허용한 필드만 골라 만듭니다. 조리 단계를 공개하지 않는 출처면 원본 설명도 넣지 않습니다
@@ -289,7 +335,8 @@ public class FeedService {
                 allergenStatus(viewerAllergies(viewerId), post), feedLikeRepository.countByPostId(post.getId()),
                 feedLikeRepository.findByPostIdAndUserId(post.getId(), viewerId).isPresent(),
                 feedCommentRepository.countActiveByPostIds(List.of(post.getId())).stream()
-                        .mapToLong(FeedCommentRepository.IdCount::getCount).sum());
+                        .mapToLong(FeedCommentRepository.IdCount::getCount).sum(),
+                post.isHidden());
     }
 
     /** 내 공유본만 지울 수 있고, 남의 것이면 404입니다. 원래 내 레시피는 그대로입니다. */

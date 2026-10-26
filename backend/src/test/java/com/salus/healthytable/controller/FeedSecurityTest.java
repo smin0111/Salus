@@ -9,6 +9,7 @@ import com.salus.healthytable.security.IpWhitelistFilter;
 import com.salus.healthytable.security.JwtAuthenticationFilter;
 import com.salus.healthytable.security.JwtTokenProvider;
 import com.salus.healthytable.service.FeedCommentService;
+import com.salus.healthytable.service.FeedReportService;
 import com.salus.healthytable.service.FeedService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +55,9 @@ class FeedSecurityTest {
     private FeedCommentService feedCommentService;
 
     @MockBean
+    private FeedReportService feedReportService;
+
+    @MockBean
     private AuthenticatedUserProvider authenticatedUserProvider;
 
     @MockBean
@@ -84,6 +88,9 @@ class FeedSecurityTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{\"content\":\"댓글\"}"))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(delete("/api/feed/comments/1")).andExpect(status().isUnauthorized());
-        verifyNoInteractions(feedService, feedCommentService);
+        mockMvc.perform(post("/api/feed/reports")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"targetType\":\"FEED_POST\",\"targetId\":1,\"reason\":\"SPAM\"}"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(feedService, feedCommentService, feedReportService);
     }
 }

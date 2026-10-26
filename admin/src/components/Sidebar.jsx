@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
     LayoutDashboard,
+    Flag,
     LogOut
 } from 'lucide-react';
 import SalusLogo from './SalusLogo';
@@ -11,6 +12,7 @@ const Sidebar = ({ onLogout }) => {
     // 메뉴 항목. 새 페이지를 추가하면 App.jsx의 Route와 함께 여기에 항목을 추가합니다.
     const menuItems = [
         { icon: <LayoutDashboard size={20} />, label: '대시보드', path: '/' },
+        { icon: <Flag size={20} />, label: '신고 검토', path: '/moderation' },
     ];
 
     return (
@@ -39,6 +41,7 @@ const Sidebar = ({ onLogout }) => {
                     <NavLink
                         key={item.label}
                         to={item.path}
+                        end={item.path === '/'}
                         // NavLink는 현재 주소와 일치하는지(isActive)를 알려 주므로 선택된 메뉴를 강조할 수 있습니다.
                         style={({ isActive }) => ({
                             display: 'flex',

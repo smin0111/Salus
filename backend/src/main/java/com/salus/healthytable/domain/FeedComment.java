@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
  * 대댓글에 다시 답해도 root는 그 대댓글의 root라서 화면은 2단계까지만 쌓입니다.
  *
  * <p>삭제는 소프트 삭제입니다(status=DELETED, content=null). 답글 구조를 유지하고 본문은 지웁니다.
+ * 관리자 숨김(hidden)은 이와 따로 관리합니다(숨긴 댓글도 작성자가 지우면 본문이 지워짐).
  * 회원 탈퇴 시에도 탈퇴 처리에서 같은 방식으로 지우고, 회원 행이 지워지면 userId만 null이 됩니다.
  * clientRequestId·requestHash는 처음 저장할 때 정하고 수정·삭제해도 바꾸지 않습니다.
  */
@@ -72,6 +73,14 @@ public class FeedComment {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+    // 관리자 숨김(V25). 작성자 삭제(status)와 따로 관리합니다: 숨김 해제가 지운 본문을 되살리지 않고,
+    // 작성자가 숨긴 댓글을 고쳐도 숨김은 그대로입니다.
+    @Column(nullable = false)
+    private boolean hidden;
+
+    @Column(name = "hidden_at")
+    private LocalDateTime hiddenAt;
+
     public static FeedComment write(Long postId, Long userId, Long parentCommentId, Long rootCommentId, String content,
                                     String clientRequestId, String requestHash, LocalDateTime now) {
         FeedComment comment = new FeedComment();
@@ -91,6 +100,25 @@ public class FeedComment {
 
     public boolean isActive() {
         return ACTIVE.equals(status);
+    }
+
+    /** 다른 사람에게 보이는 상태: 작성자가 지우지 않았고 관리자가 숨기지 않음. */
+    public boolean isPublic() {
+        return isActive() && !hidden;
+    }
+
+    /** 관리자 숨김. 본문과 작성자 삭제 상태는 건드리지 않습니다. 이미 숨겼으면 그대로입니다. */
+    public void hide(LocalDateTime now) {
+        if (!hidden) {
+            hidden = true;
+            hiddenAt = now;
+        }
+    }
+
+    /** 관리자 숨김 해제. 작성자가 지운 댓글은 지운 상태 그대로입니다(본문을 되살리지 않음). */
+    public void unhide() {
+        hidden = false;
+        hiddenAt = null;
     }
 
     public void edit(String content, LocalDateTime now) {

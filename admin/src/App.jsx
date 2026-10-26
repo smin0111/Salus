@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
+import Moderation from './pages/Moderation'
 import Login from './pages/Login'
 import config from './config'
 
@@ -54,6 +55,7 @@ function App() {
             <Routes>
                 <Route path="/" element={<Layout onLogout={handleLogout} />}>
                     <Route index element={<Dashboard adminToken={adminToken} onAuthError={handleAuthError} />} />
+                    <Route path="moderation" element={<Moderation adminToken={adminToken} onAuthError={handleAuthError} />} />
                     {/* 다른 팀원들이 여기에 라우트를 추가할 수 있습니다 */}
                 </Route>
             </Routes>

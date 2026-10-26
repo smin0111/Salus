@@ -33,3 +33,6 @@ export const getFeedReplies = (rootId, token, cursor) => apiClient.get(`/feed/co
 export const createFeedComment = (postId, body, token) => apiClient.post(`/feed/posts/${postId}/comments`, body, { headers: authHeaders(token) });
 export const updateFeedComment = (id, body, token) => apiClient.patch(`/feed/comments/${id}`, body, { headers: authHeaders(token) });
 export const deleteFeedComment = (id, token) => apiClient.delete(`/feed/comments/${id}`, { headers: authHeaders(token) });
+
+// 신고. 같은 대상을 다시 신고하면 기존 신고를 돌려줍니다(created=false). 내 글·댓글은 400, 숨겼거나 지운 대상은 404입니다.
+export const reportFeedTarget = (body, token) => apiClient.post('/feed/reports', body, { headers: authHeaders(token) });

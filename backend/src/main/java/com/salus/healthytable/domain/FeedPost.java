@@ -72,6 +72,13 @@ public class FeedPost {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    // 관리자 숨김(V25). 작성자 삭제(행 삭제)와 별개이며 관리자 조치로만 바뀝니다.
+    @Column(nullable = false)
+    private boolean hidden;
+
+    @Column(name = "hidden_at")
+    private LocalDateTime hiddenAt;
+
     public static FeedPost share(Long userId, Long sourceUserRecipeId, UserRecipeOrigin originType,
                                  RecipeCardProvenance provenance, boolean stepsPublic, String title, String snapshotJson,
                                  String sourcesJson, String note, String clientRequestId, String requestHash,
@@ -90,5 +97,19 @@ public class FeedPost {
         post.requestHash = requestHash;
         post.createdAt = now;
         return post;
+    }
+
+    /** 관리자 숨김. 이미 숨겼으면 그대로입니다. */
+    public void hide(LocalDateTime now) {
+        if (!hidden) {
+            hidden = true;
+            hiddenAt = now;
+        }
+    }
+
+    /** 관리자 숨김 해제. */
+    public void unhide() {
+        hidden = false;
+        hiddenAt = null;
     }
 }
