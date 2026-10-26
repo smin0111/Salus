@@ -332,14 +332,20 @@ export default function FeedScreen({ onBack, webMode = false }) {
   };
 
   const removePost = async () => {
+    if (!detail) return;
+    // 확인창을 띄우기 전에 대상 공유본과 상세 세대를 정해 둡니다. 응답을 기다리는 동안 다른 글을 열었으면
+    // 그 화면(작성 중인 댓글 포함)을 닫거나 알림을 띄우지 않고, 목록에서 지운 공유본만 뺍니다.
+    const postId = detail.id;
+    const gen = detail.gen;
     if (!(await confirmAction('공유 삭제', '피드에서 이 공유를 지울까요? 내 레시피는 그대로 남아요.'))) return;
     try {
-      await deleteFeedPost(detail.id, token);
+      await deleteFeedPost(postId, token);
+      setItems(prev => prev.filter(item => item.id !== postId));
+      if (!isCurrentDetail(gen)) return;
       closeDetail();
       showToast('공유를 지웠어요.');
-      loadList(tab);
     } catch (e) {
-      if (!isAuthError(e)) showToast(getApiErrorMessage(e, '지우지 못했어요.'));
+      if (!isAuthError(e) && isCurrentDetail(gen)) showToast(getApiErrorMessage(e, '지우지 못했어요.'));
     }
   };
 
