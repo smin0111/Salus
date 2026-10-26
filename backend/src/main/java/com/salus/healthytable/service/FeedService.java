@@ -2,12 +2,15 @@ package com.salus.healthytable.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.salus.healthytable.domain.FeedLike;
 import com.salus.healthytable.domain.FeedPost;
 import com.salus.healthytable.domain.RecipeCardProvenance;
 import com.salus.healthytable.domain.User;
 import com.salus.healthytable.domain.UserRecipeOrigin;
 import com.salus.healthytable.dto.FeedDto;
 import com.salus.healthytable.dto.MyRecipeDto;
+import com.salus.healthytable.repository.FeedCommentRepository;
+import com.salus.healthytable.repository.FeedLikeRepository;
 import com.salus.healthytable.repository.FeedPostRepository;
 import com.salus.healthytable.repository.UserRepository;
 import com.salus.healthytable.service.allergen.AllergenDictionary;
@@ -33,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -59,11 +63,17 @@ public class FeedService {
     static final int TITLE_COLUMN_LENGTH = 200;
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 50;
+    static final int POPULAR_DAYS = 7;
+    static final int POPULAR_LIMIT = 30;
+    static final int MAX_LIKE_ATTEMPTS = 3;
+    static final String SELF_LIKE_MESSAGE = "내가 공유한 레시피에는 좋아요를 누를 수 없어요.";
     private static final Pattern UUID_FORMAT =
             Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
 
     private final boolean enabled;
     private final FeedPostRepository feedPostRepository;
+    private final FeedLikeRepository feedLikeRepository;
+    private final FeedCommentRepository feedCommentRepository;
     private final FeedTxHelper txHelper;
     private final UserRecipeService userRecipeService;
     private final NicknameService nicknameService;
@@ -76,6 +86,8 @@ public class FeedService {
 
     public FeedService(@Value("${feed.enabled:false}") boolean enabled,
                        FeedPostRepository feedPostRepository,
+                       FeedLikeRepository feedLikeRepository,
+                       FeedCommentRepository feedCommentRepository,
                        FeedTxHelper txHelper,
                        UserRecipeService userRecipeService,
                        NicknameService nicknameService,
@@ -87,6 +99,8 @@ public class FeedService {
                        Clock clock) {
         this.enabled = enabled;
         this.feedPostRepository = feedPostRepository;
+        this.feedLikeRepository = feedLikeRepository;
+        this.feedCommentRepository = feedCommentRepository;
         this.txHelper = txHelper;
         this.userRecipeService = userRecipeService;
         this.nicknameService = nicknameService;
@@ -170,22 +184,90 @@ public class FeedService {
                 : feedPostRepository.findByIdLessThanOrderByIdDesc(parseCursor(cursor), page);
         boolean hasMore = rows.size() > pageSize;
         List<FeedPost> items = hasMore ? rows.subList(0, pageSize) : rows;
+        return new FeedDto.Page(summaries(viewerId, items),
+                hasMore ? String.valueOf(items.get(items.size() - 1).getId()) : null);
+    }
 
-        Map<Long, User> authors = authors(items);
+    /**
+     * 인기순: 최근 7일간 받은 좋아요 수가 많은 공유본 최대 30개입니다(페이지 없음). 취소한 좋아요는 빠지고, 취소 뒤 다시 누르면
+     * 새 반응으로 셉니다. 본인 공유본에는 좋아요를 누를 수 없어 스스로 순위를 올릴 수 없습니다.
+     * 동점이면 가장 최근 좋아요 시각, 그다음 공유본 ID 내림차순입니다. 응답의 likeCount는 전체 좋아요 수입니다.
+     */
+    public List<FeedDto.Summary> popular(Long viewerId) {
+        requireEnabled();
+        List<FeedLikeRepository.PopularRow> rows = feedLikeRepository.findPopularSince(
+                now().minusDays(POPULAR_DAYS), PageRequest.of(0, POPULAR_LIMIT));
+        Map<Long, FeedPost> posts = feedPostRepository.findAllById(rows.stream().map(FeedLikeRepository.PopularRow::getPostId).toList())
+                .stream().collect(Collectors.toMap(FeedPost::getId, Function.identity()));
+        List<FeedPost> ordered = rows.stream().map(row -> posts.get(row.getPostId())).filter(Objects::nonNull).toList();
+        return summaries(viewerId, ordered);
+    }
+
+    /** 좋아요. 이미 눌렀으면 그대로 두고 같은 결과를 돌려줍니다. 본인 공유본은 400, 닉네임이 없으면 428입니다. */
+    public FeedDto.LikeResult like(Long userId, Long postId) {
+        requireEnabled();
+        FeedPost post = findPost(postId);
+        if (post.getUserId().equals(userId)) {
+            throw new IllegalArgumentException(SELF_LIKE_MESSAGE);
+        }
+        nicknameService.requireNickname(userId);
+        // 이미 있으면 그대로(같은 결과). 동시에 들어온 다른 좋아요와 UNIQUE가 겹치면 다시 확인하는데, 그 사이 취소(DELETE)가 끼어
+        // 행이 없어졌을 수 있으므로 공유본이 남아 있으면 다시 저장합니다(취소 뒤에 이 좋아요가 처리된 순서). 공유본이 지워졌으면 404입니다.
+        for (int attempt = 1; feedLikeRepository.findByPostIdAndUserId(postId, userId).isEmpty(); attempt++) {
+            try {
+                txHelper.insertLike(FeedLike.of(postId, userId, now()));
+                break;
+            } catch (DataIntegrityViolationException e) {
+                if (!feedPostRepository.existsById(postId)) {
+                    throw new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_MESSAGE);
+                }
+                if (attempt >= MAX_LIKE_ATTEMPTS) {
+                    throw e;
+                }
+            }
+        }
+        return new FeedDto.LikeResult(true, feedLikeRepository.countByPostId(postId));
+    }
+
+    /** 좋아요 취소. 누르지 않은 상태여도 같은 결과입니다. 이미 누른 좋아요는 닉네임과 상관없이 취소할 수 있습니다. */
+    public FeedDto.LikeResult unlike(Long userId, Long postId) {
+        requireEnabled();
+        findPost(postId);
+        txHelper.deleteLike(postId, userId);
+        return new FeedDto.LikeResult(false, feedLikeRepository.countByPostId(postId));
+    }
+
+    // 목록(최신순·인기순) 공통 변환. 작성자·좋아요·댓글 수와 보는 사람의 좋아요 여부를 공유본마다가 아니라 한 번에 조회합니다.
+    private List<FeedDto.Summary> summaries(Long viewerId, List<FeedPost> posts) {
+        if (posts.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = posts.stream().map(FeedPost::getId).toList();
+        Map<Long, User> authors = authors(posts);
+        Map<Long, Long> likeCounts = feedLikeRepository.countByPostIds(ids).stream()
+                .collect(Collectors.toMap(FeedLikeRepository.PostCount::getPostId, FeedLikeRepository.PostCount::getCount));
+        Set<Long> liked = Set.copyOf(feedLikeRepository.findLikedPostIds(viewerId, ids));
+        Map<Long, Long> commentCounts = feedCommentRepository.countActiveByPostIds(ids).stream()
+                .collect(Collectors.toMap(FeedCommentRepository.IdCount::getId, FeedCommentRepository.IdCount::getCount));
         ViewerAllergies viewer = viewerAllergies(viewerId);
-        List<FeedDto.Summary> summaries = items.stream()
+        return posts.stream()
                 .map(post -> new FeedDto.Summary(post.getId(), post.getTitle(),
                         PublicUserName.of(authors.get(post.getUserId())), post.getOriginType(), post.getProvenance(),
                         post.isStepsPublic(), post.getUserId().equals(viewerId), post.getCreatedAt(),
-                        allergenStatus(viewer, post)))
+                        allergenStatus(viewer, post), likeCounts.getOrDefault(post.getId(), 0L),
+                        liked.contains(post.getId()), commentCounts.getOrDefault(post.getId(), 0L)))
                 .toList();
-        return new FeedDto.Page(summaries, hasMore ? String.valueOf(items.get(items.size() - 1).getId()) : null);
+    }
+
+    /** 공유본을 찾습니다. 없으면 404입니다(댓글 서비스도 같은 규칙을 씁니다). */
+    FeedPost findPost(Long postId) {
+        return feedPostRepository.findById(postId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_MESSAGE));
     }
 
     public FeedDto.Detail get(Long viewerId, Long postId) {
         requireEnabled();
-        FeedPost post = feedPostRepository.findById(postId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_MESSAGE));
+        FeedPost post = findPost(postId);
         MyRecipeDto.Content content = readContent(post);
         User author = userRepository.findById(post.getUserId()).orElse(null);
         // 공개 응답은 허용한 필드만 골라 만듭니다. 조리 단계를 공개하지 않는 출처면 원본 설명도 넣지 않습니다
@@ -204,7 +286,10 @@ public class FeedService {
                 content == null ? null : content.difficulty(),
                 content == null ? null : content.caloriesPerServing(),
                 readSources(post), post.getNote(), post.getUserId().equals(viewerId), post.getCreatedAt(),
-                allergenStatus(viewerAllergies(viewerId), post));
+                allergenStatus(viewerAllergies(viewerId), post), feedLikeRepository.countByPostId(post.getId()),
+                feedLikeRepository.findByPostIdAndUserId(post.getId(), viewerId).isPresent(),
+                feedCommentRepository.countActiveByPostIds(List.of(post.getId())).stream()
+                        .mapToLong(FeedCommentRepository.IdCount::getCount).sum());
     }
 
     /** 내 공유본만 지울 수 있고, 남의 것이면 404입니다. 원래 내 레시피는 그대로입니다. */
@@ -282,7 +367,7 @@ public class FeedService {
                 "확인한 재료에서 등록한 알레르기와 일치하는 항목을 찾지 못했어요. 안전하다는 뜻은 아니니 원재료와 교차오염을 직접 확인하세요.");
     }
 
-    private void requireEnabled() {
+    void requireEnabled() {
         if (!enabled) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, DISABLED_MESSAGE);
         }
@@ -349,7 +434,7 @@ public class FeedService {
         }
     }
 
-    private LocalDateTime now() {
+    LocalDateTime now() {
         return LocalDateTime.now(clock).truncatedTo(ChronoUnit.SECONDS);
     }
 

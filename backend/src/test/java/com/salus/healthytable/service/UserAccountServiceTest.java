@@ -51,6 +51,8 @@ class UserAccountServiceTest {
     private final ChatMessageRepository chatMessageRepository = mock(ChatMessageRepository.class);
     private final ChatSessionRepository chatSessionRepository = mock(ChatSessionRepository.class);
 
+    private final com.salus.healthytable.repository.FeedCommentRepository feedCommentRepository =
+            mock(com.salus.healthytable.repository.FeedCommentRepository.class);
     private final UserAccountService service = new UserAccountService(
             userRepository,
             healthProfileRepository,
@@ -64,7 +66,9 @@ class UserAccountServiceTest {
             recipeShareRepository,
             paymentRepository,
             chatMessageRepository,
-            chatSessionRepository);
+            chatSessionRepository,
+            feedCommentRepository,
+            java.time.Clock.fixed(java.time.Instant.parse("2026-10-26T01:00:00Z"), java.time.ZoneId.of("Asia/Seoul")));
 
     // 데이터 요약에 채팅방과 채팅 메시지 수가 포함되어야 합니다.
     @Test
@@ -125,6 +129,7 @@ class UserAccountServiceTest {
                 chatMessageRepository,
                 chatSessionRepository,
                 paymentRepository,
+                feedCommentRepository,
                 userRepository);
 
         inOrder.verify(postCommentRepository).deleteByPostIdIn(List.of(10L));
@@ -141,6 +146,8 @@ class UserAccountServiceTest {
         inOrder.verify(chatMessageRepository).deleteBySession_UserId(1L);
         inOrder.verify(chatSessionRepository).deleteByUserId(1L);
         inOrder.verify(paymentRepository).anonymizeByUser(user);
+        // 피드 댓글은 회원 행을 지우기 전에 같은 트랜잭션에서 삭제 상태로 바꿉니다(본문 삭제, 답글 구조 유지).
+        inOrder.verify(feedCommentRepository).deleteAllByAuthor(1L, java.time.LocalDateTime.of(2026, 10, 26, 10, 0));
         inOrder.verify(userRepository).delete(user);
     }
 
