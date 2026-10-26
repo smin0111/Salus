@@ -11,12 +11,17 @@ import com.salus.healthytable.repository.PostCommentRepository;
 import com.salus.healthytable.repository.PostLikeRepository;
 import com.salus.healthytable.repository.UserRepository;
 import com.salus.healthytable.util.PublicUserName;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -35,6 +40,10 @@ public class CommunityPostService {
     private final PostCommentRepository commentRepository;
     private final UserRepository userRepository;
     private final Clock clock;
+    private final CommunityPostTxHelper txHelper;
+
+    // 요청 해시용 직렬화(목록·문자열만 쓰므로 설정 없이 순서가 고정됩니다).
+    private static final ObjectMapper CANONICAL_JSON = new ObjectMapper();
 
     /**
      * 전체 게시글 조회 (좋아요 수, 댓글 수 포함)
@@ -100,21 +109,84 @@ public class CommunityPostService {
         return dtos.isEmpty() ? null : dtos.get(0);
     }
 
+    static final String REQUEST_REUSED_MESSAGE = "같은 등록 요청으로 다른 내용을 보냈습니다. 화면을 다시 열어 등록해 주세요.";
+
+    /** 등록 결과. created가 false면 같은 요청 ID로 이미 저장한 게시글을 돌려준 것입니다. */
+    public record CreateResult(CommunityPost post, boolean created) {
+    }
+
     /**
-     * 게시글 작성
+     * 게시글 작성. 트랜잭션 밖에서 흐름만 잡고, 저장은 {@link CommunityPostTxHelper}가 트랜잭션 단위로 합니다.
+     *
+     * 요청 ID(clientRequestId)가 있으면 같은 사용자의 같은 요청 ID는 한 번만 저장합니다. 다시 오면 처음 요청 내용의 해시와
+     * 비교해 같으면 기존 게시글을, 다르면 409를 돌려줍니다(다른 글을 같은 ID로 보낸 것은 성공으로 보지 않음).
+     * 동시에 들어와 UNIQUE 위반이 나면 새 트랜잭션에서 먼저 저장된 게시글을 찾아 같은 규칙으로 판단합니다.
+     * 요청 ID가 없으면(예전 앱) 판별 없이 저장합니다.
+     *
+     * 보장 범위: 앱은 글쓰기 화면이 열릴 때 요청 ID를 만들고 그 화면 안의 재전송에만 같은 ID를 씁니다. 화면을 다시 열거나
+     * 새로고침하면 새 ID가 되므로, 그 뒤의 재전송은 별개 등록으로 저장됩니다.
      */
-    @Transactional
-    public CommunityPost createPost(CreatePostRequestDTO request) {
+    public CreateResult createPost(CreatePostRequestDTO request) {
+        Long userId = request.getUserId();
+        String requestId = request.getClientRequestId();
+        String hash = requestHash(request);
+        if (requestId != null) {
+            Optional<CommunityPost> existing = txHelper.findByRequest(userId, requestId);
+            if (existing.isPresent()) {
+                return replayed(existing.get(), hash);
+            }
+        }
+
         CommunityPost post = new CommunityPost();
-        post.setUserId(request.getUserId());
+        post.setUserId(userId);
         post.setTitle(request.getTitle());
         post.setContent(request.getContent());
         post.setIngredients(request.getIngredients());
         post.setSteps(request.getSteps());
         post.setTags(request.getTags());
         post.setImageUrl(request.getImageUrl());
+        post.setClientRequestId(requestId);
+        post.setRequestHash(requestId == null ? null : hash);
+        try {
+            return new CreateResult(txHelper.insert(post), true);
+        } catch (DataIntegrityViolationException e) {
+            if (requestId == null) {
+                throw e;
+            }
+            CommunityPost saved = txHelper.findByRequest(userId, requestId).orElseThrow(() -> e);
+            return replayed(saved, hash);
+        }
+    }
 
-        return postRepository.save(post);
+    private static CreateResult replayed(CommunityPost saved, String hash) {
+        if (!hash.equals(saved.getRequestHash())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, REQUEST_REUSED_MESSAGE);
+        }
+        return new CreateResult(saved, false);
+    }
+
+    /**
+     * 처음 요청의 전체 내용(제목·본문·재료·단계·태그·사진)을 정해진 순서로 직렬화한 SHA-256입니다.
+     * 컨트롤러가 정리(trim)한 뒤의 값을 쓰고, 빈 목록과 null은 같게 봅니다. 게시글을 수정해도 저장된 해시는 바뀌지 않습니다.
+     */
+    static String requestHash(CreatePostRequestDTO request) {
+        List<Object> canonical = Arrays.asList(
+                Objects.toString(request.getTitle(), ""),
+                Objects.toString(request.getContent(), ""),
+                orEmpty(request.getIngredients()),
+                orEmpty(request.getSteps()),
+                orEmpty(request.getTags()),
+                Objects.toString(request.getImageUrl(), "").trim());
+        try {
+            byte[] json = CANONICAL_JSON.writeValueAsBytes(canonical);
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(json));
+        } catch (JsonProcessingException | NoSuchAlgorithmException e) {
+            throw new IllegalStateException("게시글 요청 해시를 만들지 못했습니다.", e);
+        }
+    }
+
+    private static List<String> orEmpty(List<String> values) {
+        return values == null ? List.of() : values;
     }
 
     /**

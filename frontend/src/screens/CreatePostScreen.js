@@ -14,6 +14,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
+import * as Crypto from 'expo-crypto';
 import { colors } from '../theme/colors';
 import config from '../config';
 import { debugLog } from '../utils/logger';
@@ -55,6 +56,10 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
     // 성공하면 풀지 않습니다(같은 글을 다시 보내지 않도록). 실패하면 풀어서 다시 시도할 수 있게 합니다.
     const submitLockRef = useRef(false);
     const [posted, setPosted] = useState(false);
+    // 등록 요청 ID: 이 화면이 열려 있는 동안 같은 값을 써서, 응답을 못 받고 다시 눌러도 서버가 한 번만 저장합니다.
+    // 화면을 다시 열거나 새로고침하면 새 ID가 됩니다(그 경우의 재전송은 보장 범위 밖).
+    const requestIdRef = useRef(null);
+    if (!requestIdRef.current) requestIdRef.current = Crypto.randomUUID();
 
     // 선택할 수 있는 태그 목록
     const PREDEFINED_TAGS = ['한식', '중식', '일식', '양식', '비건', '다이어트', '디저트', '안주', '자취요리', '간편식'];
@@ -165,12 +170,17 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
                 ingredients: ingredients.length > 0 ? ingredients : null,
                 steps: steps.length > 0 ? steps : null,
                 tags: selectedTags,
-                imageUrl: imageUrl.trim() || null
+                imageUrl: imageUrl.trim() || null,
+                clientRequestId: requestIdRef.current
             }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
             debugLog('게시글 작성 성공:', response.data);
+            // 서버가 게시글 ID를 돌려준 경우만 성공입니다(처음 저장 201, 같은 요청의 재전송 200).
+            if (!response.data?.postId) {
+                throw new Error('게시글 등록 결과를 확인하지 못했습니다.');
+            }
 
             // 웹에서는 Alert 버튼이 보이지 않아 이동하지 못했으므로, 안내한 뒤 바로 허브로 이동합니다.
             succeeded = true;

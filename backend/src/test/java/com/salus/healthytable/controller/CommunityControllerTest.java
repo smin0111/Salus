@@ -1,6 +1,7 @@
 package com.salus.healthytable.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.salus.healthytable.domain.CommunityPost;
 import com.salus.healthytable.dto.CreateCommentRequestDTO;
 import com.salus.healthytable.dto.CreatePostRequestDTO;
 import com.salus.healthytable.dto.RecipeShareRequestDTO;
@@ -26,6 +27,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -101,12 +103,16 @@ class CommunityControllerTest {
         request.setContent("  본문입니다.  ");
         request.setUserId(999L);
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
+        CommunityPost created = new CommunityPost();
+        created.setId(10L);
+        when(communityPostService.createPost(any())).thenReturn(new CommunityPostService.CreateResult(created, true));
 
         mockMvc.perform(post("/api/community/posts")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(content().string("게시글이 작성되었습니다."));
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.postId").value(10))
+                .andExpect(jsonPath("$.created").value(true));
 
         ArgumentCaptor<CreatePostRequestDTO> captor = ArgumentCaptor.forClass(CreatePostRequestDTO.class);
         verify(communityPostService).createPost(captor.capture());
@@ -115,6 +121,32 @@ class CommunityControllerTest {
         assertThat(saved.getUserId()).isEqualTo(1L);
         assertThat(saved.getTitle()).isEqualTo("제목");
         assertThat(saved.getContent()).isEqualTo("본문입니다.");
+    }
+
+    // 같은 요청 ID의 재전송이면 이미 저장된 게시글 ID와 함께 200, created=false입니다.
+    @Test
+    void createPostReplayReturnsExistingPost() throws Exception {
+        when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
+        CommunityPost existing = new CommunityPost();
+        existing.setId(10L);
+        when(communityPostService.createPost(any())).thenReturn(new CommunityPostService.CreateResult(existing, false));
+
+        mockMvc.perform(post("/api/community/posts").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"제목\",\"content\":\"본문\",\"clientRequestId\":\"0f8fad5b-d9cb-469f-a165-70867728950e\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.postId").value(10))
+                .andExpect(jsonPath("$.created").value(false));
+    }
+
+    // 요청 ID가 UUID 형식이 아니면 서비스 호출 전에 400입니다.
+    @Test
+    void createPostRejectsMalformedRequestId() throws Exception {
+        when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
+
+        mockMvc.perform(post("/api/community/posts").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"제목\",\"content\":\"본문\",\"clientRequestId\":\"not-a-uuid\"}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(communityPostService);
     }
 
     // 요청 본문이 없으면 서비스 호출 전에 400이어야 합니다.
