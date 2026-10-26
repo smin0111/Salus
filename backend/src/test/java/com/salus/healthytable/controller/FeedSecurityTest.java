@@ -8,6 +8,7 @@ import com.salus.healthytable.security.AuthenticatedUserProvider;
 import com.salus.healthytable.security.IpWhitelistFilter;
 import com.salus.healthytable.security.JwtAuthenticationFilter;
 import com.salus.healthytable.security.JwtTokenProvider;
+import com.salus.healthytable.service.FeedCommentService;
 import com.salus.healthytable.service.FeedService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,7 +22,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -48,6 +51,9 @@ class FeedSecurityTest {
     private FeedService feedService;
 
     @MockBean
+    private FeedCommentService feedCommentService;
+
+    @MockBean
     private AuthenticatedUserProvider authenticatedUserProvider;
 
     @MockBean
@@ -56,7 +62,7 @@ class FeedSecurityTest {
     @MockBean
     private UserRepository userRepository;
 
-    // 로그인하지 않으면 상태·목록·상세·공유·삭제 모두 401이고 서비스에 닿지 않습니다.
+    // 로그인하지 않으면 상태·목록·상세·공유·삭제와 좋아요·인기순·댓글 API 모두 401이고 서비스에 닿지 않습니다.
     @Test
     void feedEndpointsRequireLogin() throws Exception {
         mockMvc.perform(get("/api/feed/status")).andExpect(status().isUnauthorized());
@@ -66,6 +72,18 @@ class FeedSecurityTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{\"userRecipeId\":1}"))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(delete("/api/feed/posts/1")).andExpect(status().isUnauthorized());
-        verifyNoInteractions(feedService);
+        mockMvc.perform(get("/api/feed/posts/popular")).andExpect(status().isUnauthorized());
+        mockMvc.perform(put("/api/feed/posts/1/like")).andExpect(status().isUnauthorized());
+        mockMvc.perform(delete("/api/feed/posts/1/like")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/feed/posts/1/comments")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/feed/comments/1/replies")).andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/feed/posts/1/comments")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"content\":\"댓글\"}"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(patch("/api/feed/comments/1")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"content\":\"댓글\"}"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(delete("/api/feed/comments/1")).andExpect(status().isUnauthorized());
+        verifyNoInteractions(feedService, feedCommentService);
     }
 }

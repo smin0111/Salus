@@ -55,7 +55,10 @@ public final class FeedDto {
             boolean stepsPublic,
             boolean mine,
             LocalDateTime createdAt,
-            AllergenStatus allergen) {
+            AllergenStatus allergen,
+            long likeCount,
+            boolean likedByMe,
+            long commentCount) {
     }
 
     /** 상세. stepsPublic이 false면 steps는 null이고 원본 링크(sources)와 작성자 메모만 공개합니다. */
@@ -77,10 +80,59 @@ public final class FeedDto {
             String note,
             boolean mine,
             LocalDateTime createdAt,
-            AllergenStatus allergen) {
+            AllergenStatus allergen,
+            long likeCount,
+            boolean likedByMe,
+            long commentCount) {
     }
 
     /** 최신순 목록 한 페이지입니다. nextCursor가 null이면 마지막 페이지입니다. */
     public record Page(List<Summary> items, String nextCursor) {
+    }
+
+    /** 좋아요(PUT)·취소(DELETE) 결과. 같은 요청을 반복해도 같은 결과입니다. likeCount는 현재 전체 좋아요 수입니다. */
+    public record LikeResult(boolean liked, long likeCount) {
+    }
+
+    /**
+     * 댓글 작성. parentCommentId가 있으면 답글이며 같은 공유본의 댓글이어야 합니다.
+     * clientRequestId는 처음 보낼 때 내용과 함께 정하고, 응답을 못 받아 다시 보낼 때만 같은 값을 씁니다(UUID, 없으면 판별 안 함).
+     */
+    public record CommentRequest(String content, Long parentCommentId, String clientRequestId) {
+    }
+
+    public record CommentUpdateRequest(String content) {
+    }
+
+    /**
+     * 댓글 하나. 삭제된 댓글은 content·authorName이 null이고 deleted가 true입니다(자리표시).
+     * replyToName은 대댓글에 다시 답한 경우 답한 대상의 공개 이름이며, 대상이 탈퇴했으면 "탈퇴한 사용자"입니다.
+     */
+    public record Comment(
+            Long id,
+            Long parentCommentId,
+            Long rootCommentId,
+            String authorName,
+            boolean mine,
+            String content,
+            boolean deleted,
+            boolean edited,
+            String replyToName,
+            LocalDateTime createdAt) {
+    }
+
+    /** 최상위 댓글과 그 아래 답글 첫 페이지. replyCount는 살아 있는 답글 수, repliesNextCursor가 null이면 답글을 다 보낸 것입니다. */
+    public record CommentThread(Comment comment, List<Comment> replies, long replyCount, String repliesNextCursor) {
+    }
+
+    /** 최상위 댓글 한 페이지(오래된 순). commentCount는 공유본의 살아 있는 댓글 수(최상위·답글, 자리표시 제외)입니다. */
+    public record CommentPage(List<CommentThread> items, String nextCursor, long commentCount) {
+    }
+
+    public record ReplyPage(List<Comment> items, String nextCursor) {
+    }
+
+    /** 댓글 작성 결과. created가 false면 같은 요청 ID로 이미 저장한 댓글입니다(그 사이 수정·삭제됐으면 지금 상태 그대로). */
+    public record CommentResult(Comment comment, boolean created) {
     }
 }

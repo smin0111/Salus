@@ -4,12 +4,15 @@ import com.salus.healthytable.domain.CommunityPost;
 import com.salus.healthytable.domain.User;
 import com.salus.healthytable.dto.UserDataSummaryDTO;
 import com.salus.healthytable.repository.*;
+import com.salus.healthytable.repository.FeedCommentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -32,6 +35,8 @@ public class UserAccountService {
     private final PaymentRepository paymentRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final ChatSessionRepository chatSessionRepository;
+    private final FeedCommentRepository feedCommentRepository;
+    private final Clock clock;
 
     /**
      * 사용자가 남긴 데이터의 종류별 건수를 집계합니다.
@@ -88,6 +93,9 @@ public class UserAccountService {
         chatMessageRepository.deleteBySession_UserId(userId);
         chatSessionRepository.deleteByUserId(userId);
         paymentRepository.anonymizeByUser(user);
+        // 피드 댓글: 다른 사람의 답글 구조를 유지하려고 행은 남기고 본문을 지운 삭제 상태로 바꿉니다(부모·root 연결 유지).
+        // 작성자 연결은 회원 행을 지울 때 FK(SET NULL)가 끊습니다. 내 공유본·좋아요는 FK(CASCADE)로 함께 지워집니다.
+        feedCommentRepository.deleteAllByAuthor(userId, LocalDateTime.now(clock));
         userRepository.delete(user);
     }
 

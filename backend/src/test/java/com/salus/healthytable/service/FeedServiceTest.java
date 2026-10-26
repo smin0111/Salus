@@ -2,12 +2,15 @@ package com.salus.healthytable.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.salus.healthytable.domain.FeedLike;
 import com.salus.healthytable.domain.FeedPost;
 import com.salus.healthytable.domain.RecipeCardProvenance;
 import com.salus.healthytable.domain.User;
 import com.salus.healthytable.domain.UserRecipeOrigin;
 import com.salus.healthytable.dto.FeedDto;
 import com.salus.healthytable.dto.MyRecipeDto;
+import com.salus.healthytable.repository.FeedCommentRepository;
+import com.salus.healthytable.repository.FeedLikeRepository;
 import com.salus.healthytable.repository.FeedPostRepository;
 import com.salus.healthytable.repository.UserRepository;
 import com.salus.healthytable.service.allergen.AllergenDictionary;
@@ -29,6 +32,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -46,6 +50,8 @@ class FeedServiceTest {
     private static final AllergenDictionary DICTIONARY = loadedDictionary();
 
     private final FeedPostRepository feedPostRepository = mock(FeedPostRepository.class);
+    private final FeedLikeRepository feedLikeRepository = mock(FeedLikeRepository.class);
+    private final FeedCommentRepository feedCommentRepository = mock(FeedCommentRepository.class);
     private final FeedTxHelper txHelper = mock(FeedTxHelper.class);
     private final UserRecipeService userRecipeService = mock(UserRecipeService.class);
     private final NicknameService nicknameService = mock(NicknameService.class);
@@ -63,7 +69,8 @@ class FeedServiceTest {
     }
 
     private FeedService service(boolean enabled) {
-        return new FeedService(enabled, feedPostRepository, txHelper, userRecipeService, nicknameService,
+        return new FeedService(enabled, feedPostRepository, feedLikeRepository, feedCommentRepository, txHelper,
+                userRecipeService, nicknameService,
                 userRepository, safetyContextService, new AllergenMatcher(DICTIONARY), DICTIONARY, objectMapper, clock);
     }
 
@@ -188,11 +195,14 @@ class FeedServiceTest {
                 () -> off.share(1L, new FeedDto.ShareRequest(5L, null, null)),
                 () -> off.list(1L, null, null),
                 () -> off.get(1L, 7L),
-                () -> off.delete(1L, 7L))) {
+                () -> off.delete(1L, 7L),
+                () -> off.like(1L, 7L),
+                () -> off.unlike(1L, 7L),
+                () -> off.popular(1L))) {
             assertThatThrownBy(call::run).isInstanceOfSatisfying(ResponseStatusException.class,
                     e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
         }
-        verifyNoInteractions(feedPostRepository, userRecipeService, nicknameService, safetyContextService);
+        verifyNoInteractions(feedPostRepository, feedLikeRepository, userRecipeService, nicknameService, safetyContextService);
         verify(txHelper, never()).insert(any());
     }
 
@@ -201,6 +211,7 @@ class FeedServiceTest {
                 stepsPublic, content.title(), objectMapper.writeValueAsString(content),
                 objectMapper.writeValueAsString(List.of(new MyRecipeDto.Source("PRIMARY", "원본", "https://example.com/r"))),
                 "메모", null, null, LocalDateTime.now(clock));
+        org.springframework.test.util.ReflectionTestUtils.setField(post, "id", 7L);
         when(feedPostRepository.findById(7L)).thenReturn(Optional.of(post));
         User author = new User();
         author.setId(1L);
@@ -320,5 +331,117 @@ class FeedServiceTest {
 
         service.delete(1L, 7L);
         verify(feedPostRepository).delete(post);
+    }
+
+    // 좋아요: 처음이면 저장, 이미 눌렀으면 그대로(같은 결과). 응답은 현재 전체 좋아요 수입니다.
+    @Test
+    void likeIsIdempotent() throws Exception {
+        stored(true, content("두부조림", List.of("두부"), List.of("굽는다")));
+        when(feedLikeRepository.findByPostIdAndUserId(7L, 2L)).thenReturn(Optional.empty());
+        when(feedLikeRepository.countByPostId(7L)).thenReturn(1L);
+
+        FeedDto.LikeResult first = service.like(2L, 7L);
+        assertThat(first.liked()).isTrue();
+        assertThat(first.likeCount()).isEqualTo(1L);
+        verify(txHelper).insertLike(any(FeedLike.class));
+        verify(nicknameService).requireNickname(2L);
+
+        when(feedLikeRepository.findByPostIdAndUserId(7L, 2L))
+                .thenReturn(Optional.of(FeedLike.of(7L, 2L, LocalDateTime.now(clock))));
+        FeedDto.LikeResult again = service.like(2L, 7L);
+        assertThat(again).isEqualTo(first);
+        verify(txHelper).insertLike(any(FeedLike.class)); // 두 번째는 저장하지 않음
+    }
+
+    // 동시 좋아요로 UNIQUE가 겹치면 다시 확인해 이미 있으면 같은 결과입니다. 그 사이 취소가 끼어 행이 없어졌으면 다시 저장합니다.
+    // 공유본이 지워졌으면 404, 계속 겹치면(3회) 위반을 그대로 알립니다.
+    @Test
+    void concurrentLikeViolationRechecksAndRetries() throws Exception {
+        stored(true, content("두부조림", List.of("두부"), List.of("굽는다")));
+        org.springframework.dao.DataIntegrityViolationException unique = new org.springframework.dao.DataIntegrityViolationException("uk");
+        when(feedPostRepository.existsById(7L)).thenReturn(true);
+
+        // 겹친 뒤 다시 보니 이미 있음 → 같은 결과
+        when(txHelper.insertLike(any(FeedLike.class))).thenThrow(unique);
+        when(feedLikeRepository.findByPostIdAndUserId(7L, 2L))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(FeedLike.of(7L, 2L, LocalDateTime.now(clock))));
+        assertThat(service.like(2L, 7L).liked()).isTrue();
+
+        // 겹친 뒤 취소가 끼어 없어짐 → 다시 저장해 성공
+        when(feedLikeRepository.findByPostIdAndUserId(7L, 4L)).thenReturn(Optional.empty());
+        when(txHelper.insertLike(any(FeedLike.class))).thenThrow(unique).thenReturn(FeedLike.of(7L, 4L, LocalDateTime.now(clock)));
+        assertThat(service.like(4L, 7L).liked()).isTrue();
+
+        // 계속 겹치면 3회 뒤 위반을 그대로 알림
+        when(feedLikeRepository.findByPostIdAndUserId(7L, 3L)).thenReturn(Optional.empty());
+        when(txHelper.insertLike(any(FeedLike.class))).thenThrow(unique);
+        assertThatThrownBy(() -> service.like(3L, 7L)).isSameAs(unique);
+
+        // 그 사이 공유본이 지워졌으면 404
+        when(feedPostRepository.existsById(7L)).thenReturn(false);
+        assertThatThrownBy(() -> service.like(3L, 7L)).isInstanceOfSatisfying(ResponseStatusException.class,
+                e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    // 본인 공유본에는 좋아요 400, 닉네임 없으면 428(저장 안 함). 없는 공유본은 404.
+    @Test
+    void likeRejectsSelfMissingNicknameAndMissingPost() throws Exception {
+        stored(true, content("두부조림", List.of("두부"), List.of("굽는다")));
+
+        assertThatThrownBy(() -> service.like(1L, 7L)).isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(FeedService.SELF_LIKE_MESSAGE);
+        doThrow(new ResponseStatusException(HttpStatus.PRECONDITION_REQUIRED, "닉네임")).when(nicknameService).requireNickname(3L);
+        assertThatThrownBy(() -> service.like(3L, 7L)).isInstanceOfSatisfying(ResponseStatusException.class,
+                e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.PRECONDITION_REQUIRED));
+        when(feedPostRepository.findById(99L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.like(2L, 99L)).isInstanceOfSatisfying(ResponseStatusException.class,
+                e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        verify(txHelper, never()).insertLike(any());
+    }
+
+    // 취소: 누르지 않았어도 같은 결과이고, 닉네임을 요구하지 않습니다(이미 누른 좋아요는 언제든 취소).
+    @Test
+    void unlikeIsIdempotentAndNeedsNoNickname() throws Exception {
+        stored(true, content("두부조림", List.of("두부"), List.of("굽는다")));
+        doThrow(new ResponseStatusException(HttpStatus.PRECONDITION_REQUIRED, "닉네임")).when(nicknameService).requireNickname(2L);
+
+        assertThat(service.unlike(2L, 7L)).isEqualTo(new FeedDto.LikeResult(false, 0L));
+        assertThat(service.unlike(2L, 7L)).isEqualTo(new FeedDto.LikeResult(false, 0L));
+        verify(txHelper, org.mockito.Mockito.times(2)).deleteLike(7L, 2L);
+        verify(nicknameService, never()).requireNickname(any());
+    }
+
+    // 인기순: 저장소가 정한 순서(최근 7일 좋아요 수 → 최근 좋아요 시각 → ID)를 그대로 지키고, 기간은 7일·개수는 30입니다.
+    @Test
+    void popularKeepsRepositoryOrderWithSevenDaysAndThirtyLimit() throws Exception {
+        FeedPost a = FeedPost.share(1L, 5L, UserRecipeOrigin.MANUAL, null, true, "A", objectMapper.writeValueAsString(
+                content("A", List.of("두부"), List.of("굽는다"))), "[]", null, null, null, LocalDateTime.now(clock));
+        FeedPost b = FeedPost.share(1L, 6L, UserRecipeOrigin.MANUAL, null, true, "B", objectMapper.writeValueAsString(
+                content("B", List.of("두부"), List.of("굽는다"))), "[]", null, null, null, LocalDateTime.now(clock));
+        org.springframework.test.util.ReflectionTestUtils.setField(a, "id", 10L);
+        org.springframework.test.util.ReflectionTestUtils.setField(b, "id", 20L);
+        FeedLikeRepository.PopularRow rowB = popularRow(20L, 3L);
+        FeedLikeRepository.PopularRow rowA = popularRow(10L, 1L);
+        when(feedLikeRepository.findPopularSince(any(), any())).thenReturn(List.of(rowB, rowA));
+        when(feedPostRepository.findAllById(any())).thenReturn(List.of(a, b));
+        viewerHas(true, List.of());
+
+        List<FeedDto.Summary> popular = service.popular(2L);
+
+        assertThat(popular).extracting(FeedDto.Summary::id).containsExactly(20L, 10L);
+        ArgumentCaptor<LocalDateTime> since = ArgumentCaptor.forClass(LocalDateTime.class);
+        ArgumentCaptor<org.springframework.data.domain.Pageable> page = ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        verify(feedLikeRepository).findPopularSince(since.capture(), page.capture());
+        assertThat(since.getValue()).isEqualTo(LocalDateTime.of(2026, 10, 19, 10, 0));
+        assertThat(page.getValue().getPageSize()).isEqualTo(30);
+    }
+
+    private static FeedLikeRepository.PopularRow popularRow(Long postId, Long count) {
+        return new FeedLikeRepository.PopularRow() {
+            public Long getPostId() { return postId; }
+            public Long getCount() { return count; }
+            public LocalDateTime getLastLikedAt() { return null; }
+        };
     }
 }
