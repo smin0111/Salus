@@ -4,6 +4,7 @@ import com.salus.healthytable.domain.FeedComment;
 import com.salus.healthytable.domain.User;
 import com.salus.healthytable.dto.FeedDto;
 import com.salus.healthytable.repository.FeedCommentRepository;
+import com.salus.healthytable.repository.UserBlockRepository;
 import com.salus.healthytable.repository.UserRepository;
 import com.salus.healthytable.util.PublicUserName;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +45,10 @@ import java.util.stream.Collectors;
  *
  * <p>관리자 숨김(V25): 숨긴 공유본은 작성자만 읽을 수 있고(목록·상세·댓글 조회 예외) 새 댓글은 받지 않습니다.
  * 접근은 공유본 → 댓글 순서로 검사합니다. 숨긴 댓글은 작성자 본인에게만 내용이 보이고, 숨기거나 지운 댓글에는 답할 수 없습니다.
+ *
+ * <p>차단(V26): 차단한 사람 화면에만 적용합니다. 차단한 사람의 댓글은 보여 줄 답글이 있을 때만 "차단한 사용자의 댓글" 자리표시로
+ * 남고(이름·본문 없음), 답글은 목록에서 빠집니다. 그 사람에게 답한 대댓글의 대상 이름은 "차단한 사용자"입니다.
+ * 댓글 수는 보는 사람마다 달라지지 않도록 공개 댓글 기준 그대로 셉니다.
  */
 @Service
 @RequiredArgsConstructor
@@ -54,6 +59,8 @@ public class FeedCommentService {
     static final int MAX_PAGE_SIZE = 50;
     static final int REPLY_PAGE_SIZE = 20;
     static final String WITHDRAWN_NAME = "탈퇴한 사용자";
+    static final String BLOCKED_NAME = "차단한 사용자";
+    static final String PARENT_BLOCKED_MESSAGE = "차단한 사용자의 댓글에는 답글을 달 수 없어요.";
     static final String NOT_FOUND_MESSAGE = "댓글을 찾을 수 없습니다.";
     static final String PARENT_INVALID_MESSAGE = "답글을 달 댓글을 이 레시피에서 찾을 수 없어요.";
     static final String PARENT_DELETED_MESSAGE = "삭제되었거나 숨겨진 댓글에는 답글을 달 수 없어요.";
@@ -67,6 +74,7 @@ public class FeedCommentService {
     private final FeedTxHelper txHelper;
     private final NicknameService nicknameService;
     private final UserRepository userRepository;
+    private final UserBlockRepository userBlockRepository;
 
     /** 최상위 댓글 한 페이지(오래된 순)와 각 댓글의 답글 첫 페이지입니다. */
     public FeedDto.CommentPage list(Long viewerId, Long postId, String cursor, Integer size) {
@@ -120,6 +128,8 @@ public class FeedCommentService {
     /**
      * 댓글·답글 작성. 순서: 피드 켜짐 → 입력 형식 → 재전송 확인 → 닉네임(428) → 공유본(404) → 부모 확인 → 저장.
      * 재전송 확인을 부모 확인보다 먼저 해서, 이미 성공한 요청은 부모가 그 뒤에 삭제됐어도 기존 댓글을 돌려줍니다.
+     * 내가 차단한 사람의 댓글에는 답할 수 없습니다(409). 저장 단계에서 작성 제한(10분 20개·하루 200개)을 넘으면 429이고,
+     * 재전송은 차감 전에 기존 댓글을 돌려줍니다(FeedTxHelper의 순서 참고).
      */
     public FeedDto.CommentResult create(Long userId, Long postId, FeedDto.CommentRequest request) {
         feedService.requireEnabled();
@@ -150,6 +160,9 @@ public class FeedCommentService {
             if (!parent.isPublic()) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, PARENT_DELETED_MESSAGE);
             }
+            if (parent.getUserId() != null && userBlockRepository.existsByBlockerIdAndBlockedId(userId, parent.getUserId())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, PARENT_BLOCKED_MESSAGE);
+            }
             rootId = parent.getRootCommentId() != null ? parent.getRootCommentId() : parent.getId();
         }
         FeedComment comment = FeedComment.write(postId, userId, request.parentCommentId(), rootId, content, requestId,
@@ -157,7 +170,8 @@ public class FeedCommentService {
         try {
             FeedComment saved = txHelper.insertComment(comment);
             return new FeedDto.CommentResult(single(userId, saved), true);
-        } catch (DataIntegrityViolationException e) {
+        } catch (DataIntegrityViolationException | FeedTxHelper.AlreadyApplied e) {
+            // UNIQUE 위반 또는 카운터 잠금 뒤 재확인에서 같은 요청을 찾은 경우(둘 다 이 요청의 차감은 롤백됨)
             if (requestId == null) {
                 throw e;
             }
@@ -265,7 +279,10 @@ public class FeedCommentService {
         Map<Long, User> users = userIds.isEmpty() ? Map.of()
                 : userRepository.findByIdIn(List.copyOf(userIds)).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
-        return new Mapper(viewerId, parents, users);
+        userIds.remove(viewerId);
+        Set<Long> blocked = userIds.isEmpty() ? Set.of()
+                : Set.copyOf(userBlockRepository.findBlockedAmong(viewerId, userIds));
+        return new Mapper(viewerId, parents, users, blocked);
     }
 
     // 대댓글에 다시 답한 경우만 "@대상"을 붙입니다(최상위 댓글에 바로 단 답글은 묶음 자체가 대상).
@@ -273,24 +290,30 @@ public class FeedCommentService {
         return comment.getParentCommentId() != null && !comment.getParentCommentId().equals(comment.getRootCommentId());
     }
 
-    private record Mapper(Long viewerId, Map<Long, FeedComment> parents, Map<Long, User> users) {
+    // blocked: 이 페이지의 작성자·답한 대상 가운데 보는 사람이 차단한 사용자 ID
+    private record Mapper(Long viewerId, Map<Long, FeedComment> parents, Map<Long, User> users, Set<Long> blocked) {
         FeedDto.Comment map(FeedComment comment) {
+            // 자리표시 우선순위: 삭제 > 차단 > 숨김. 지운 댓글은 누가 썼든 "삭제된 댓글"이고, 차단한 사람의 숨긴 댓글은 "차단한 사용자의 댓글"입니다.
             boolean deleted = !comment.isActive();
-            boolean hidden = !deleted && comment.isHidden();
+            boolean blockedAuthor = !deleted && comment.getUserId() != null && blocked.contains(comment.getUserId());
+            boolean hidden = !deleted && !blockedAuthor && comment.isHidden();
             boolean mine = comment.getUserId() != null && Objects.equals(comment.getUserId(), viewerId);
             // 다른 사람에게는 삭제·숨김 댓글이 자리표시입니다. 숨긴 댓글은 작성자 본인에게만 내용을 보여 줍니다(조회 예외).
-            boolean showContent = !deleted && (!hidden || mine);
+            // 차단한 사람의 댓글은 이름·본문 없이 자리표시입니다.
+            boolean showContent = !deleted && !blockedAuthor && (!hidden || mine);
             String replyToName = null;
             if (isReplyToReply(comment)) {
                 FeedComment parent = parents.get(comment.getParentCommentId());
                 if (parent != null) {
-                    replyToName = parent.getUserId() == null ? WITHDRAWN_NAME : PublicUserName.of(users.get(parent.getUserId()));
+                    replyToName = parent.getUserId() == null ? WITHDRAWN_NAME
+                            : blocked.contains(parent.getUserId()) ? BLOCKED_NAME
+                            : PublicUserName.of(users.get(parent.getUserId()));
                 }
             }
             return new FeedDto.Comment(comment.getId(), comment.getParentCommentId(), comment.getRootCommentId(),
                     showContent ? PublicUserName.of(users.get(comment.getUserId())) : null,
-                    mine, showContent ? comment.getContent() : null, deleted, hidden, comment.isEdited(), replyToName,
-                    comment.getCreatedAt());
+                    mine, showContent ? comment.getContent() : null, deleted, hidden, blockedAuthor, comment.isEdited(),
+                    replyToName, comment.getCreatedAt());
         }
     }
 

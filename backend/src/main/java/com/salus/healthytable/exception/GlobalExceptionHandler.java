@@ -79,7 +79,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, Object>> handleResponseStatusException(ResponseStatusException ex,
             HttpServletRequest request) {
-        return apiError(ex.getStatusCode(), resolveErrorCode(ex.getStatusCode()), ex.getReason(), request);
+        ResponseEntity<Map<String, Object>> response =
+                apiError(ex.getStatusCode(), resolveErrorCode(ex.getStatusCode()), ex.getReason(), request);
+        // 예외가 담은 헤더(작성 제한 429의 Retry-After 등)는 그대로 붙입니다.
+        if (ex.getHeaders().isEmpty()) {
+            return response;
+        }
+        return ResponseEntity.status(response.getStatusCode()).headers(ex.getHeaders()).body(response.getBody());
     }
 
     // 필수 헤더(주로 Authorization)가 없으면 로그인이 필요한 것으로 보고 401로 응답합니다.

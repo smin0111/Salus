@@ -33,15 +33,16 @@ public interface FeedLikeRepository extends JpaRepository<FeedLike, Long> {
     /**
      * 인기순: since 이후에 받은 좋아요 수로 정렬합니다(취소한 좋아요는 행이 없어 빠지고, 다시 누르면 새 시각으로 셉니다).
      * 동점이면 가장 최근 좋아요 시각, 그다음 공유본 ID 내림차순입니다. 개수 제한은 호출자가 Pageable로 줍니다.
-     * 관리자가 숨긴 공유본은 집계에서 빠집니다(30개 자리를 차지하지 않음).
+     * 관리자가 숨긴 공유본과 보는 사람이 차단한 사람의 공유본은 집계에서 빠집니다(30개 자리를 차지하지 않음).
      */
     @Query("""
             SELECT l.postId AS postId, COUNT(l) AS count, MAX(l.createdAt) AS lastLikedAt
             FROM FeedLike l, FeedPost p WHERE p.id = l.postId AND p.hidden = false AND l.createdAt >= :since
+              AND NOT EXISTS (SELECT b.id FROM UserBlock b WHERE b.blockerId = :viewerId AND b.blockedId = p.userId)
             GROUP BY l.postId
             ORDER BY COUNT(l) DESC, MAX(l.createdAt) DESC, l.postId DESC
             """)
-    List<PopularRow> findPopularSince(@Param("since") LocalDateTime since, Pageable pageable);
+    List<PopularRow> findPopularSince(@Param("viewerId") Long viewerId, @Param("since") LocalDateTime since, Pageable pageable);
 
     interface PostCount {
         Long getPostId();

@@ -25,6 +25,7 @@ import java.util.Optional;
  * <p>순서: 피드 켜짐 → 입력 형식 → <b>같은 사용자·대상의 기존 신고 확인</b> → 닉네임 → 대상 공개 여부 → 저장.
  * 기존 신고를 대상의 지금 상태보다 먼저 확인해서, 신고한 뒤 대상이 숨겨지거나 지워져도 같은 신고를 다시 보내면 기존 신고 ID와
  * created=false를 돌려줍니다. 동시에 같은 신고가 들어오면 DB UNIQUE가 한 건만 남기고 새 트랜잭션에서 기존 신고를 찾습니다.
+ * 작성 제한(하루 20번)은 새 신고를 저장할 때만 차감합니다(같은 신고의 재전송은 차감 전에 기존 신고를 돌려줌).
  *
  * <p>신고 시점 복사본은 서버가 공개 필드만 골라 저장합니다(비공개 설명·조리 단계, 건강정보·알레르기 판정은 넣지 않음).
  * 신고자에게는 자기 신고 ID만 돌려주고, 다른 사람의 신고나 신고 수는 어떤 응답에도 넣지 않습니다. 자동 숨김은 없습니다.
@@ -75,7 +76,8 @@ public class FeedReportService {
                 request.reason(), detail, write(target.snapshot()), feedService.now());
         try {
             return new FeedDto.ReportResult(txHelper.insertReport(report).getId(), true);
-        } catch (DataIntegrityViolationException e) {
+        } catch (DataIntegrityViolationException | FeedTxHelper.AlreadyApplied e) {
+            // UNIQUE 위반 또는 카운터 잠금 뒤 재확인에서 같은 신고를 찾은 경우(둘 다 이 요청의 차감은 롤백됨)
             FeedReport saved = txHelper.findReport(userId, request.targetType(), request.targetId()).orElseThrow(() -> e);
             return new FeedDto.ReportResult(saved.getId(), false);
         }

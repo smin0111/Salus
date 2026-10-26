@@ -40,6 +40,19 @@ class GlobalExceptionHandlerTest {
         assertErrorResponse(response, 400, "BAD_REQUEST", "제목은 필수입니다.", "/api/community/posts");
     }
 
+    // 작성 제한 429는 공통 JSON 형식에 Retry-After 헤더(초)를 함께 보냅니다.
+    @Test
+    void writeLimitKeepsRetryAfterHeader() {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/feed/posts/1/comments");
+
+        ResponseEntity<Map<String, Object>> response = handler.handleResponseStatusException(
+                new WriteLimitExceededException("댓글은 10분에 20개까지 쓸 수 있어요.", 149), request);
+
+        assertErrorResponse(response, 429, "TOO_MANY_REQUESTS", "댓글은 10분에 20개까지 쓸 수 있어요.",
+                "/api/feed/posts/1/comments");
+        assertThat(response.getHeaders().getFirst("Retry-After")).isEqualTo("149");
+    }
+
     // 필수 요청 파라미터 누락은 400이어야 합니다.
     @Test
     void missingRequestParameterReturnsBadRequest() {

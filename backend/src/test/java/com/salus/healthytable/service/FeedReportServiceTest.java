@@ -195,4 +195,19 @@ class FeedReportServiceTest {
         verify(txHelper, never()).insertReport(any());
     }
 
+
+    // 카운터 잠금 뒤 재확인에서 같은 신고가 이미 저장된 것으로 나오면(AlreadyApplied) 기존 신고를 돌려줍니다(429 아님).
+    @Test
+    void alreadyAppliedReturnsExistingReport() {
+        FeedPost target = post(7L, 1L);
+        when(feedService.readablePost(2L, 7L)).thenReturn(target);
+        when(feedService.publicSnapshot(target)).thenReturn(Map.of("type", "FEED_POST"));
+        FeedReport existing = FeedReport.open(2L, "FEED_POST", 7L, 1L, "SPAM", null, "{}", NOW);
+        ReflectionTestUtils.setField(existing, "id", 42L);
+        when(txHelper.findReport(2L, "FEED_POST", 7L)).thenReturn(Optional.empty()).thenReturn(Optional.of(existing));
+        when(txHelper.insertReport(any(FeedReport.class))).thenThrow(new FeedTxHelper.AlreadyApplied());
+
+        assertThat(service.report(2L, new FeedDto.ReportRequest("FEED_POST", 7L, "SPAM", null)))
+                .isEqualTo(new FeedDto.ReportResult(42L, false));
+    }
 }

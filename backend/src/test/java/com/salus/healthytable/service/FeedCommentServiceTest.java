@@ -6,6 +6,7 @@ import com.salus.healthytable.domain.FeedComment;
 import com.salus.healthytable.domain.User;
 import com.salus.healthytable.dto.FeedDto;
 import com.salus.healthytable.repository.FeedCommentRepository;
+import com.salus.healthytable.repository.UserBlockRepository;
 import com.salus.healthytable.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,8 +42,9 @@ class FeedCommentServiceTest {
     private final FeedTxHelper txHelper = mock(FeedTxHelper.class);
     private final NicknameService nicknameService = mock(NicknameService.class);
     private final UserRepository userRepository = mock(UserRepository.class);
+    private final UserBlockRepository userBlockRepository = mock(UserBlockRepository.class);
     private final FeedCommentService service =
-            new FeedCommentService(feedService, commentRepository, txHelper, nicknameService, userRepository);
+            new FeedCommentService(feedService, commentRepository, txHelper, nicknameService, userRepository, userBlockRepository);
 
     @BeforeEach
     void setUp() {
@@ -291,5 +293,73 @@ class FeedCommentServiceTest {
         }
         verify(txHelper, never()).insertComment(any());
         verify(commentRepository, never()).save(any());
+    }
+
+    // 차단(보는 사람 기준): 차단한 사람의 댓글은 이름·본문 없는 자리표시(blocked=true), 그 사람에게 답한 대댓글의 대상 이름은
+    // "차단한 사용자"입니다. 삭제가 차단보다 우선하고, 차단한 사람의 숨긴 댓글은 숨김이 아니라 차단 자리표시입니다.
+    @Test
+    void listMasksBlockedAuthorsAndReplyTargets() throws Exception {
+        User blockedUser = new User();
+        blockedUser.setId(9L);
+        blockedUser.setNickname("차단된닉");
+        User me = new User();
+        me.setId(2L);
+        me.setNickname("댓글러");
+        when(userRepository.findByIdIn(any())).thenReturn(List.of(blockedUser, me));
+        when(userBlockRepository.findBlockedAmong(org.mockito.ArgumentMatchers.eq(2L), any())).thenReturn(List.of(9L));
+
+        FeedComment root = comment(60L, 7L, 9L, null, null, "차단된 사람의 루트", null, null);
+        root.hide(NOW);
+        FeedComment blockedReply = comment(61L, 7L, 9L, 60L, 60L, "차단된 사람의 답글", null, null);
+        FeedComment answer = comment(62L, 7L, 2L, 61L, 60L, "그 답글에 단 내 답", null, null);
+        when(commentRepository.findVisibleRoots(any(), any(), any(), any())).thenReturn(List.of(root));
+        when(commentRepository.findVisibleReplies(any(), any(), any(), any())).thenReturn(List.of(answer));
+        when(commentRepository.countActiveReplies(any())).thenReturn(List.of());
+        when(commentRepository.findByIdIn(any())).thenReturn(List.of(blockedReply));
+
+        FeedDto.CommentPage page = service.list(2L, 7L, null, null);
+
+        FeedDto.Comment shownRoot = page.items().get(0).comment();
+        assertThat(shownRoot.blocked()).isTrue();
+        assertThat(shownRoot.hidden()).isFalse();
+        assertThat(shownRoot.content()).isNull();
+        assertThat(shownRoot.authorName()).isNull();
+        FeedDto.Comment mine = page.items().get(0).replies().get(0);
+        assertThat(mine.blocked()).isFalse();
+        assertThat(mine.replyToName()).isEqualTo(FeedCommentService.BLOCKED_NAME);
+        assertThat(new ObjectMapper().registerModule(new JavaTimeModule()).writeValueAsString(page))
+                .doesNotContain("차단된닉").doesNotContain("차단된 사람의");
+
+        // 지운 댓글은 작성자를 차단했어도 "삭제된 댓글"(blocked=false)
+        root.softDelete(NOW);
+        FeedDto.Comment deleted = service.list(2L, 7L, null, null).items().get(0).comment();
+        assertThat(deleted.deleted()).isTrue();
+        assertThat(deleted.blocked()).isFalse();
+    }
+
+    // 내가 차단한 사람의 댓글에는 답글을 달 수 없습니다(409, 저장·차감 없음).
+    @Test
+    void cannotReplyToBlockedAuthor() {
+        when(commentRepository.findById(70L)).thenReturn(Optional.of(comment(70L, 7L, 9L, null, null, "루트", null, null)));
+        when(userBlockRepository.existsByBlockerIdAndBlockedId(2L, 9L)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.create(2L, 7L, new FeedDto.CommentRequest("답글", 70L, REQUEST_ID)))
+                .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(e.getReason()).isEqualTo(FeedCommentService.PARENT_BLOCKED_MESSAGE);
+                });
+        verify(txHelper, never()).insertComment(any());
+    }
+
+    // 카운터 잠금 뒤 재확인에서 같은 요청이 이미 저장된 것으로 나오면(AlreadyApplied) 그 댓글을 돌려줍니다(429·오류 아님).
+    @Test
+    void alreadyAppliedAfterQuotaLockReturnsSavedComment() {
+        FeedComment saved = comment(33L, 7L, 2L, null, null, "본문", REQUEST_ID, FeedCommentService.requestHash(7L, null, "본문"));
+        when(txHelper.findCommentByRequest(2L, REQUEST_ID)).thenReturn(Optional.empty()).thenReturn(Optional.of(saved));
+        when(txHelper.insertComment(any(FeedComment.class))).thenThrow(new FeedTxHelper.AlreadyApplied());
+
+        FeedDto.CommentResult result = service.create(2L, 7L, new FeedDto.CommentRequest("본문", null, REQUEST_ID));
+        assertThat(result.created()).isFalse();
+        assertThat(result.comment().id()).isEqualTo(33L);
     }
 }

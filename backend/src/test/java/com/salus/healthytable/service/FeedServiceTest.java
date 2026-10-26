@@ -12,6 +12,7 @@ import com.salus.healthytable.dto.MyRecipeDto;
 import com.salus.healthytable.repository.FeedCommentRepository;
 import com.salus.healthytable.repository.FeedLikeRepository;
 import com.salus.healthytable.repository.FeedPostRepository;
+import com.salus.healthytable.repository.UserBlockRepository;
 import com.salus.healthytable.repository.UserRepository;
 import com.salus.healthytable.service.allergen.AllergenDictionary;
 import com.salus.healthytable.service.allergen.AllergenMatcher;
@@ -52,6 +53,7 @@ class FeedServiceTest {
     private final FeedPostRepository feedPostRepository = mock(FeedPostRepository.class);
     private final FeedLikeRepository feedLikeRepository = mock(FeedLikeRepository.class);
     private final FeedCommentRepository feedCommentRepository = mock(FeedCommentRepository.class);
+    private final UserBlockRepository userBlockRepository = mock(UserBlockRepository.class);
     private final FeedTxHelper txHelper = mock(FeedTxHelper.class);
     private final UserRecipeService userRecipeService = mock(UserRecipeService.class);
     private final NicknameService nicknameService = mock(NicknameService.class);
@@ -69,7 +71,7 @@ class FeedServiceTest {
     }
 
     private FeedService service(boolean enabled) {
-        return new FeedService(enabled, feedPostRepository, feedLikeRepository, feedCommentRepository, txHelper,
+        return new FeedService(enabled, feedPostRepository, feedLikeRepository, feedCommentRepository, userBlockRepository, txHelper,
                 userRecipeService, nicknameService,
                 userRepository, safetyContextService, new AllergenMatcher(DICTIONARY), DICTIONARY, objectMapper, clock);
     }
@@ -423,7 +425,7 @@ class FeedServiceTest {
         org.springframework.test.util.ReflectionTestUtils.setField(b, "id", 20L);
         FeedLikeRepository.PopularRow rowB = popularRow(20L, 3L);
         FeedLikeRepository.PopularRow rowA = popularRow(10L, 1L);
-        when(feedLikeRepository.findPopularSince(any(), any())).thenReturn(List.of(rowB, rowA));
+        when(feedLikeRepository.findPopularSince(any(), any(), any())).thenReturn(List.of(rowB, rowA));
         when(feedPostRepository.findAllById(any())).thenReturn(List.of(a, b));
         viewerHas(true, List.of());
 
@@ -432,7 +434,7 @@ class FeedServiceTest {
         assertThat(popular).extracting(FeedDto.Summary::id).containsExactly(20L, 10L);
         ArgumentCaptor<LocalDateTime> since = ArgumentCaptor.forClass(LocalDateTime.class);
         ArgumentCaptor<org.springframework.data.domain.Pageable> page = ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
-        verify(feedLikeRepository).findPopularSince(since.capture(), page.capture());
+        verify(feedLikeRepository).findPopularSince(org.mockito.ArgumentMatchers.eq(2L), since.capture(), page.capture());
         assertThat(since.getValue()).isEqualTo(LocalDateTime.of(2026, 10, 19, 10, 0));
         assertThat(page.getValue().getPageSize()).isEqualTo(30);
     }
@@ -443,5 +445,34 @@ class FeedServiceTest {
             public Long getCount() { return count; }
             public LocalDateTime getLastLikedAt() { return null; }
         };
+    }
+
+    // 차단: 내가 차단한 사람의 공유본은 상세·좋아요가 404입니다. 작성자 본인 공유본에는 차단 검사를 하지 않습니다.
+    @Test
+    void blockedAuthorPostIsNotReadable() throws Exception {
+        stored(true, content("두부조림", List.of("두부"), List.of("굽는다")));
+        when(userBlockRepository.existsByBlockerIdAndBlockedId(2L, 1L)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.get(2L, 7L)).isInstanceOfSatisfying(ResponseStatusException.class,
+                e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        assertThatThrownBy(() -> service.like(2L, 7L)).isInstanceOfSatisfying(ResponseStatusException.class,
+                e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        assertThat(service.unhiddenPost(2L, 7L).getId()).isEqualTo(7L); // 차단 요청의 작성자 확인용은 차단을 보지 않음
+        verify(txHelper, never()).insertLike(any());
+        verify(userBlockRepository, never()).existsByBlockerIdAndBlockedId(1L, 1L);
+        service.readablePost(1L, 7L);
+        verify(userBlockRepository, never()).existsByBlockerIdAndBlockedId(1L, 1L);
+    }
+
+    // 카운터 잠금 뒤 다시 보니 이미 눌려 있으면(AlreadyApplied, 차감 롤백) 오류 없이 같은 결과입니다.
+    @Test
+    void likeAlreadyAppliedIsSameResult() throws Exception {
+        stored(true, content("두부조림", List.of("두부"), List.of("굽는다")));
+        when(feedLikeRepository.findByPostIdAndUserId(7L, 2L)).thenReturn(Optional.empty());
+        when(txHelper.insertLike(any(FeedLike.class))).thenThrow(new FeedTxHelper.AlreadyApplied());
+        when(feedLikeRepository.countByPostId(7L)).thenReturn(1L);
+
+        assertThat(service.like(2L, 7L)).isEqualTo(new FeedDto.LikeResult(true, 1L));
+        verify(txHelper).insertLike(any(FeedLike.class));
     }
 }
