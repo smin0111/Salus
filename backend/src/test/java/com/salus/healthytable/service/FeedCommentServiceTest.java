@@ -107,7 +107,7 @@ class FeedCommentServiceTest {
         assertThat(result.comment().authorName()).isEqualTo("댓글러");
         assertThat(result.comment().mine()).isTrue();
         verify(nicknameService).requireNickname(2L);
-        verify(feedService).findPost(7L);
+        verify(feedService).writablePost(2L, 7L);
     }
 
     // 답글: 최상위 댓글에 답하면 parent=root=그 댓글, 대댓글에 다시 답하면 parent=그 대댓글, root=그 대댓글의 root.
@@ -163,6 +163,21 @@ class FeedCommentServiceTest {
         assertThat(result.comment().id()).isEqualTo(30L);
         verify(txHelper, never()).insertComment(any());
         verify(nicknameService, never()).requireNickname(any());
+    }
+
+    // 재전송도 본문을 돌려주기 전에 소속 공유본 읽기 권한을 봅니다: 남의 공유본이 그 뒤 숨겨졌으면 404이고 본문을 주지 않습니다.
+    @Test
+    void replayChecksPostReadabilityBeforeReturningContent() {
+        String hash = FeedCommentService.requestHash(7L, null, "본문");
+        FeedComment saved = comment(33L, 7L, 2L, null, null, "본문", REQUEST_ID, hash);
+        when(txHelper.findCommentByRequest(2L, REQUEST_ID)).thenReturn(Optional.of(saved));
+        when(feedService.readablePost(2L, 7L)).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "숨김"));
+
+        assertThatThrownBy(() -> service.create(2L, 7L, new FeedDto.CommentRequest("본문", null, REQUEST_ID)))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        verify(feedService).readablePost(2L, 7L);
+        verify(txHelper, never()).insertComment(any());
     }
 
     // 지운 댓글을 재전송하면 기존 ID와 삭제 상태만 돌려주고 본문을 되살리지 않습니다. 같은 ID에 다른 본문이면 409.
@@ -245,9 +260,8 @@ class FeedCommentServiceTest {
         FeedComment withdrawnReply = comment(51L, 7L, null, 50L, 50L, null, null, null);
         withdrawnReply.softDelete(NOW);
         FeedComment answer = comment(52L, 7L, 2L, 51L, 50L, "탈퇴한 분께 답", null, null);
-        when(commentRepository.findVisibleRoots(any(), any(), any())).thenReturn(List.of(root));
-        when(commentRepository.findByRootCommentIdAndStatusAndIdGreaterThanOrderByIdAsc(any(), any(), any(), any()))
-                .thenReturn(List.of(answer));
+        when(commentRepository.findVisibleRoots(any(), any(), any(), any())).thenReturn(List.of(root));
+        when(commentRepository.findVisibleReplies(any(), any(), any(), any())).thenReturn(List.of(answer));
         when(commentRepository.countActiveReplies(any())).thenReturn(List.of());
         when(commentRepository.findByIdIn(any())).thenReturn(List.of(withdrawnReply));
 

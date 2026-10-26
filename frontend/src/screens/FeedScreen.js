@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Crypto from 'expo-crypto';
 import { useAuth } from '../context/AuthContext';
 import {
   createFeedComment, deleteFeedComment, deleteFeedPost, getFeedComments, getFeedPost, getFeedPosts, getFeedReplies,
-  getFeedStatus, getPopularFeed, likeFeedPost, unlikeFeedPost, updateFeedComment,
+  getFeedStatus, getPopularFeed, likeFeedPost, reportFeedTarget, unlikeFeedPost, updateFeedComment,
 } from '../api/feed';
 import { getApiErrorMessage, isAuthError } from '../utils/apiError';
 import { Button, Card, EmptyState, ErrorState, Input, Toast } from '../components/common';
@@ -46,6 +46,17 @@ const isDefiniteFailure = (error) => {
   const status = error?.response?.status;
   return !!status && status >= 400 && status < 500;
 };
+
+// 신고 사유(서버 코드와 같은 순서). 신고는 운영자가 직접 확인하며 자동으로 숨기지 않습니다.
+const REPORT_REASONS = [
+  { code: 'SPAM', label: '광고·도배' },
+  { code: 'ABUSE', label: '욕설·괴롭힘' },
+  { code: 'HARMFUL_HEALTH_INFO', label: '위험한 건강 정보' },
+  { code: 'ALLERGEN_INFO_ERROR', label: '알레르기 정보 오류' },
+  { code: 'COPYRIGHT', label: '저작권 침해' },
+  { code: 'PRIVACY', label: '개인정보 노출' },
+  { code: 'OTHER', label: '기타' },
+];
 
 // 서버와 같은 기준(줄바꿈 통일, 앞뒤 공백 제거)으로 보낼 본문을 정합니다.
 const normalizeComment = (text) => (text || '').replace(/\r\n?/g, '\n').trim();
@@ -91,6 +102,13 @@ export default function FeedScreen({ onBack, webMode = false }) {
   const [sending, setSending] = useState(false);
   const [editing, setEditing] = useState(null); // { id, text }
   const pendingCommentRef = useRef(null); // { requestId, postId, parentCommentId, content }
+  // 신고 창: { targetType, targetId }. 보내는 중에는 같은 창에서 다시 보내지 않습니다.
+  const [reporting, setReporting] = useState(null);
+  const [reportReason, setReportReason] = useState(null);
+  const [reportDetail, setReportDetail] = useState('');
+  const [reportSending, setReportSending] = useState(false);
+  const [reportTitle, setReportTitle] = useState(''); // 창이 닫히는 동안에도 제목이 비지 않도록 따로 둡니다.
+  const reportBusyRef = useRef(false);
   // 지금 진행 중인 댓글 전송 시도(없으면 null). 잠금·로딩은 이 시도의 응답만 풉니다.
   const currentSendRef = useRef(null);
   // 상세 화면 세대: 글을 열거나 닫을 때마다 올라갑니다. 같은 글로 다시 돌아와도(A→B→A) 새 세대라,
@@ -349,6 +367,68 @@ export default function FeedScreen({ onBack, webMode = false }) {
     }
   };
 
+  const openReport = (targetType, targetId, title) => {
+    if (reportBusyRef.current) return;
+    setReportReason(null);
+    setReportDetail('');
+    setReportTitle(title);
+    setReporting({ targetType, targetId });
+  };
+
+  const closeReport = () => {
+    if (reportBusyRef.current) return;
+    setReporting(null);
+  };
+
+  const sendReport = async () => {
+    if (!reporting || !reportReason || reportBusyRef.current) return;
+    reportBusyRef.current = true;
+    setReportSending(true);
+    try {
+      const response = await reportFeedTarget({
+        targetType: reporting.targetType,
+        targetId: reporting.targetId,
+        reason: reportReason,
+        detail: reportDetail.trim() || null,
+      }, token);
+      setReporting(null);
+      showToast(response.data?.created ? '신고를 접수했어요. 운영자가 확인할게요.' : '이미 신고한 대상이에요.');
+    } catch (e) {
+      if (!isAuthError(e)) notify('신고하지 못했어요', getApiErrorMessage(e, '잠시 후 다시 시도해 주세요.'));
+      // 확정적인 거절(400·404 등)이면 창을 닫고, 연결 오류면 다시 보낼 수 있게 창을 남깁니다(서버가 중복을 한 건으로 처리).
+      if (isDefiniteFailure(e)) setReporting(null);
+    } finally {
+      reportBusyRef.current = false;
+      setReportSending(false);
+    }
+  };
+
+  const renderReportModal = () => (
+    <Modal visible={!!reporting} transparent animationType="fade" onRequestClose={closeReport}>
+      <View style={styles.modalBackdrop}>
+        <Card style={styles.modalCard}>
+          <Text style={styles.sectionTitleInCard}>{reportTitle} 신고</Text>
+          <Text style={styles.hint}>사유를 고르면 운영자가 확인해요. 신고한 사실은 작성자에게 알리지 않아요.</Text>
+          {REPORT_REASONS.map(reason => (
+            <TouchableOpacity key={reason.code} onPress={() => setReportReason(reason.code)} style={styles.reasonRow}
+              accessibilityRole="radio" accessibilityState={{ selected: reportReason === reason.code }}>
+              <Ionicons name={reportReason === reason.code ? 'radio-button-on' : 'radio-button-off'} size={18}
+                color={reportReason === reason.code ? colors.primary : colors.textSecondary} />
+              <Text style={styles.reasonText}>{reason.label}</Text>
+            </TouchableOpacity>
+          ))}
+          <Input label="상세 내용(선택)" value={reportDetail} onChangeText={setReportDetail} multiline maxLength={500}
+            placeholder="운영자가 참고할 내용을 적어 주세요" />
+          <View style={styles.row}>
+            <Button label="신고하기" loading={reportSending} disabled={!reportReason || reportSending} onPress={sendReport}
+              style={styles.smallButton} />
+            <Button label="취소" variant="ghost" disabled={reportSending} onPress={closeReport} />
+          </View>
+        </Card>
+      </View>
+    </Modal>
+  );
+
   const header = (title, back) => (
     <View style={styles.header}>
       {back ? (
@@ -400,6 +480,7 @@ export default function FeedScreen({ onBack, webMode = false }) {
             accessibilityRole="button" accessibilityLabel={`${item.title} 열기`}>
             <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
             <Text style={styles.itemMeta}>{item.authorName} · {originLabel(item)} · {formatDate(item.createdAt)}</Text>
+            {item.moderationHidden ? <Text style={styles.hiddenLabel}>운영 정책에 따라 숨겨졌어요(나만 보여요)</Text> : null}
             <View style={styles.row}>
               <AllergenBadge allergen={item.allergen} />
               <View style={styles.spacer} />
@@ -417,6 +498,8 @@ export default function FeedScreen({ onBack, webMode = false }) {
     <View key={comment.id} style={[styles.comment, isReply && styles.reply]}>
       {comment.deleted ? (
         <Text style={styles.deleted}>삭제된 댓글입니다</Text>
+      ) : comment.hidden && !comment.mine ? (
+        <Text style={styles.deleted}>운영 정책에 따라 숨겨진 댓글입니다</Text>
       ) : editing?.id === comment.id ? (
         <>
           <Input value={editing.text} onChangeText={text => setEditing({ id: comment.id, text })} multiline maxLength={1000} />
@@ -430,14 +513,17 @@ export default function FeedScreen({ onBack, webMode = false }) {
           <Text style={styles.commentMeta}>
             {comment.authorName} · {formatDate(comment.createdAt)}{comment.edited ? ' · 수정됨' : ''}
           </Text>
+          {comment.hidden ? <Text style={styles.hiddenLabel}>운영 정책에 따라 다른 사용자에게 숨겨졌어요(나만 보여요)</Text> : null}
           <Text style={styles.commentBody}>
             {comment.replyToName ? <Text style={styles.mention}>@{comment.replyToName} </Text> : null}
             {comment.content}
           </Text>
           <View style={styles.row}>
-            <TouchableOpacity onPress={() => setReplyTo({ id: comment.id, name: comment.authorName })} accessibilityRole="button">
-              <Text style={styles.action}>답글</Text>
-            </TouchableOpacity>
+            {!comment.hidden && !detail.moderationHidden ? (
+              <TouchableOpacity onPress={() => setReplyTo({ id: comment.id, name: comment.authorName })} accessibilityRole="button">
+                <Text style={styles.action}>답글</Text>
+              </TouchableOpacity>
+            ) : null}
             {comment.mine ? (
               <>
                 <TouchableOpacity onPress={() => setEditing({ id: comment.id, text: comment.content })} accessibilityRole="button">
@@ -447,7 +533,11 @@ export default function FeedScreen({ onBack, webMode = false }) {
                   <Text style={styles.action}>삭제</Text>
                 </TouchableOpacity>
               </>
-            ) : null}
+            ) : (
+              <TouchableOpacity onPress={() => openReport('FEED_COMMENT', comment.id, '댓글')} accessibilityRole="button">
+                <Text style={styles.action}>신고</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </>
       )}
@@ -463,7 +553,18 @@ export default function FeedScreen({ onBack, webMode = false }) {
           <Text style={styles.itemMeta}>{detail.authorName} · {formatDate(detail.createdAt)}</Text>
           <View style={styles.spacer} />
           {likeButton(detail)}
+          {!detail.mine ? (
+            <TouchableOpacity onPress={() => openReport('FEED_POST', detail.id, '공유 레시피')} style={styles.likeButton}
+              accessibilityRole="button" accessibilityLabel="신고">
+              <Ionicons name="flag-outline" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
+          ) : null}
         </View>
+        {detail.moderationHidden ? (
+          <Text style={styles.notice}>
+            운영 정책에 따라 다른 사용자에게 숨겨진 공유예요. 나만 볼 수 있고 새 댓글은 달 수 없어요. 공유 삭제는 할 수 있어요.
+          </Text>
+        ) : null}
         {detail.allergen && detail.allergen.state !== 'NOT_REGISTERED' ? (
           <Card style={styles.allergenCard}>
             <AllergenBadge allergen={detail.allergen} />
@@ -521,15 +622,19 @@ export default function FeedScreen({ onBack, webMode = false }) {
         ))}
         {comments.nextCursor ? <Button label="댓글 더 보기" variant="ghost" onPress={loadMoreComments} /> : null}
 
-        {replyTo ? (
+        {detail.moderationHidden ? null : replyTo ? (
           <View style={styles.row}>
             <Text style={styles.hint}>@{replyTo.name}님에게 답글</Text>
             <TouchableOpacity onPress={() => setReplyTo(null)} accessibilityRole="button"><Text style={styles.action}>취소</Text></TouchableOpacity>
           </View>
         ) : null}
-        <Input label="댓글" value={draft} onChangeText={setDraft} multiline maxLength={1000}
-          placeholder="레시피에 대한 생각을 남겨 주세요" />
-        <Button label="댓글 등록" loading={sending} disabled={sending || !normalizeComment(draft)} onPress={sendComment} />
+        {detail.moderationHidden ? null : (
+          <>
+            <Input label="댓글" value={draft} onChangeText={setDraft} multiline maxLength={1000}
+              placeholder="레시피에 대한 생각을 남겨 주세요" />
+            <Button label="댓글 등록" loading={sending} disabled={sending || !normalizeComment(draft)} onPress={sendComment} />
+          </>
+        )}
       </ScrollView>
     </>
   );
@@ -537,6 +642,7 @@ export default function FeedScreen({ onBack, webMode = false }) {
   return (
     <SafeAreaView style={styles.container}>
       {detail ? renderDetail() : renderList()}
+      {renderReportModal()}
       <Toast visible={!!toast} message={toast} />
     </SafeAreaView>
   );
@@ -582,4 +688,9 @@ const styles = StyleSheet.create({
   deleted: { fontSize: 14, color: colors.textTertiary, fontStyle: 'italic' },
   action: { fontSize: 13, color: colors.textSecondary, marginRight: 12, marginTop: 4 },
   smallButton: { marginRight: 8 },
+  hiddenLabel: { fontSize: 12, color: colors.warning, marginTop: 2 },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 16 },
+  modalCard: { width: '100%', maxWidth: 480, alignSelf: 'center' },
+  reasonRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+  reasonText: { fontSize: 15, color: colors.text, marginLeft: 8 },
 });
