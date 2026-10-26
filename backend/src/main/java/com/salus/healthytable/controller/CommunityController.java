@@ -10,9 +10,11 @@ import com.salus.healthytable.dto.RecommendationDTO;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -147,8 +149,13 @@ public class CommunityController {
         request.setTitle(request.getTitle().trim());
         request.setContent(request.getContent().trim());
         request.setUserId(userId);
-        communityPostService.createPost(request);
-        return ResponseEntity.ok("게시글이 작성되었습니다.");
+        // 처음 저장이면 201, 같은 요청 ID의 재전송이면 이미 저장된 게시글로 200입니다. 둘 다 postId가 있어야 성공입니다.
+        CommunityPostService.CreateResult result = communityPostService.createPost(request);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("postId", result.post().getId());
+        body.put("created", result.created());
+        body.put("message", result.created() ? "게시글이 작성되었습니다." : "이미 등록된 게시글입니다.");
+        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK).body(body);
     }
 
     /**

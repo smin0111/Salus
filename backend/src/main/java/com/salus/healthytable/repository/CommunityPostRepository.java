@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * {@link CommunityPost} 엔티티의 DB 접근 인터페이스입니다.
@@ -30,4 +31,7 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, Lo
 
     // 검색 (제목 또는 내용)
     List<CommunityPost> findByTitleContainingOrContentContainingOrderByCreatedAtDesc(String title, String content);
+
+    // 등록 재전송 판별: 같은 사용자의 같은 요청 ID로 이미 저장한 게시글
+    Optional<CommunityPost> findByUserIdAndClientRequestId(Long userId, String clientRequestId);
 }

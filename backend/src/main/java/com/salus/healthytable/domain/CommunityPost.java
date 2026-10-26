@@ -47,6 +47,13 @@ public class CommunityPost {
     @Column(name = "image_url", length = 500)
     private String imageUrl;
 
+    // 등록 재전송 판별용(V22). 처음 저장할 때만 정하고 바꾸지 않습니다. 요청 ID 없이 등록한 글은 NULL입니다.
+    @Column(name = "client_request_id", length = 36, updatable = false)
+    private String clientRequestId;
+
+    @Column(name = "request_hash", length = 64, updatable = false)
+    private String requestHash;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

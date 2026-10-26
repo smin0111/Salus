@@ -1,6 +1,7 @@
 package com.salus.healthytable.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -34,4 +35,10 @@ public class CreatePostRequestDTO {
     private List<String> steps;
     private List<String> tags;
     private String imageUrl;
+
+    // 등록 재전송 판별용 요청 ID(UUID). 글쓰기 화면이 열릴 때 앱이 만들고, 그 화면에서 다시 보내면 같은 값을 씁니다.
+    // 보내지 않으면(예전 앱) 재전송 판별 없이 저장합니다.
+    @Pattern(regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            message = "요청 ID 형식이 올바르지 않습니다.")
+    private String clientRequestId;
 }
