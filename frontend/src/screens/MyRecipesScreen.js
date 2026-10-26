@@ -1,14 +1,16 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import * as Crypto from 'expo-crypto';
 import { createMyRecipe, deleteMyRecipe, getMyRecipe, getMyRecipes, updateMyRecipe } from '../api/myRecipes';
+import { getFeedStatus, shareToFeed } from '../api/feed';
 import { getApiErrorMessage, isAuthError } from '../utils/apiError';
 import { Button, Card, EmptyState, ErrorState, Input, Toast } from '../components/common';
 import { colors } from '../theme/colors';
 
 // 레시피가 어디서 왔는지 보여 주는 문구입니다(AI가 만든 레시피는 검증되지 않았다는 점을 알립니다).
-const PROVENANCE_LABELS = {
+export const PROVENANCE_LABELS = {
   APPROVED_CATALOG: '살루스 검토 레시피',
   WEB_EXTRACTED: '웹 레시피에서 가져온 레시피',
   INTERNAL_DB_EXTRACTED: '살루스 레시피에서 가져온 레시피',
@@ -18,7 +20,7 @@ const PROVENANCE_LABELS = {
 };
 
 // 출처 역할 이름입니다(검색만 된 자료는 서버가 보내지 않음).
-const SOURCE_ROLE_LABELS = {
+export const SOURCE_ROLE_LABELS = {
   REGISTERED: '등록 출처',
   PRIMARY: '원본',
   COMPARED: '비교한 자료',
@@ -26,7 +28,7 @@ const SOURCE_ROLE_LABELS = {
   UNCLASSIFIED: '출처',
 };
 
-const originLabel = (recipe) => (recipe?.originType === 'MANUAL'
+export const originLabel = (recipe) => (recipe?.originType === 'MANUAL'
   ? '직접 작성한 레시피'
   : PROVENANCE_LABELS[recipe?.provenance] || '채팅에서 저장한 레시피');
 
@@ -82,7 +84,7 @@ const confirmAction = (title, message, confirmLabel = '삭제') => new Promise(r
  * 채팅에서 저장한 레시피는 원본(저장 당시 내용)이 남고, 지금 버전과 수정 메모만 고칠 수 있습니다.
  * 레시피는 의료 조언이 아니며 알레르기 성분은 직접 확인해야 한다는 안내를 상세 화면에 보여 줍니다.
  */
-export default function MyRecipesScreen({ onToggleSidebar, webMode = false }) {
+export default function MyRecipesScreen({ onToggleSidebar, onNavigate, webMode = false }) {
   const { token } = useAuth();
   const [mode, setMode] = useState('list'); // list | detail | edit | create
   const [items, setItems] = useState([]);
@@ -96,6 +98,14 @@ export default function MyRecipesScreen({ onToggleSidebar, webMode = false }) {
   const [toast, setToast] = useState('');
   // 수정 충돌(409): 작성 중인 폼은 그대로 두고, 다른 곳에서 저장된 최신 내용을 따로 들고 사용자가 고르게 합니다.
   const [conflict, setConflict] = useState(null); // { message, latest }
+  // 피드 공유: 서버에서 피드가 켜져 있을 때만 버튼을 보여 줍니다(꺼져 있으면 서버도 공유를 404로 막음).
+  const [feedEnabled, setFeedEnabled] = useState(false);
+  const [shareNote, setShareNote] = useState('');
+  const [sharing, setSharing] = useState(false);
+  const [sharedPostId, setSharedPostId] = useState(null);
+  // 공유 요청 ID: 이 레시피 상세를 연 동안 같은 값을 써서 재전송해도 한 번만 공유됩니다. 잠금은 연속 클릭을 바로 막습니다.
+  const shareRequestIdRef = useRef(null);
+  const shareLockRef = useRef(false);
 
   const showToast = (message) => {
     setToast(message);
@@ -121,6 +131,46 @@ export default function MyRecipesScreen({ onToggleSidebar, webMode = false }) {
     loadList();
   }, [loadList]);
 
+  useEffect(() => {
+    if (!token) return;
+    getFeedStatus(token)
+      .then(response => setFeedEnabled(!!response.data?.enabled))
+      .catch(() => setFeedEnabled(false));
+  }, [token]);
+
+  const shareRecipe = async () => {
+    if (shareLockRef.current || sharedPostId) return;
+    if (!shareRequestIdRef.current) shareRequestIdRef.current = Crypto.randomUUID();
+    shareLockRef.current = true;
+    setSharing(true);
+    // 이 공유 시도의 요청 ID. 응답이 오기 전에 다른 레시피로 옮기면(showDetail이 새 ID를 만듦) 이 응답은
+    // 이미 끝난 시도의 것이므로 지금 화면의 완료 상태·알림·잠금·로딩을 건드리지 않습니다(성공·실패·finally 모두).
+    const attemptId = shareRequestIdRef.current;
+    const isCurrentAttempt = () => shareRequestIdRef.current === attemptId;
+    let succeeded = false;
+    try {
+      const response = await shareToFeed({
+        userRecipeId: detail.id,
+        note: shareNote.trim() || null,
+        clientRequestId: attemptId,
+      }, token);
+      // 공유본 ID를 받은 경우만 성공입니다(새로 만들면 201, 같은 요청의 재전송이면 200).
+      if (!response.data?.postId) throw new Error('공유 결과를 확인하지 못했습니다.');
+      succeeded = true;
+      if (!isCurrentAttempt()) return;
+      setSharedPostId(response.data.postId);
+      showToast('피드에 공유했어요.');
+    } catch (e) {
+      if (!isCurrentAttempt()) return;
+      if (!isAuthError(e)) showToast(getApiErrorMessage(e, '공유하지 못했어요.'));
+    } finally {
+      if (isCurrentAttempt()) {
+        if (!succeeded) shareLockRef.current = false;
+        setSharing(false);
+      }
+    }
+  };
+
   const loadMore = async () => {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
@@ -135,12 +185,24 @@ export default function MyRecipesScreen({ onToggleSidebar, webMode = false }) {
     }
   };
 
+  // 상세 화면으로 들어가는 모든 경로(열기·작성 직후·수정 직후)는 여기를 거칩니다.
+  // 들어갈 때마다 새 공유 시도로 보고 요청 ID·메모·잠금·완료·로딩 상태를 함께 초기화합니다
+  // (작성 직후 요청 ID가 비어 있거나, 앞서 공유한 레시피의 완료 상태가 남아 새 공유를 막지 않도록).
+  const showDetail = (data) => {
+    shareRequestIdRef.current = Crypto.randomUUID();
+    shareLockRef.current = false;
+    setSharedPostId(null);
+    setShareNote('');
+    setSharing(false);
+    setDetail(data);
+    setMode('detail');
+  };
+
   const openDetail = async (id) => {
     setLoading(true);
     try {
       const response = await getMyRecipe(id, token);
-      setDetail(response.data);
-      setMode('detail');
+      showDetail(response.data);
     } catch (e) {
       if (!isAuthError(e)) showToast(getApiErrorMessage(e, '레시피를 불러오지 못했어요.'));
     } finally {
@@ -178,14 +240,12 @@ export default function MyRecipesScreen({ onToggleSidebar, webMode = false }) {
     try {
       if (mode === 'edit') {
         const response = await updateMyRecipe(detail.id, { ...body, version }, token);
-        setDetail(response.data);
         setConflict(null);
-        setMode('detail');
+        showDetail(response.data);
         showToast('수정했어요.');
       } else {
         const response = await createMyRecipe(body, token);
-        setDetail(response.data);
-        setMode('detail');
+        showDetail(response.data);
         showToast('내 레시피에 저장했어요.');
       }
       loadList();
@@ -260,6 +320,9 @@ export default function MyRecipesScreen({ onToggleSidebar, webMode = false }) {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.lead}>AI 셰프 대화에서 저장했거나 직접 쓴 레시피예요. 나만 볼 수 있어요.</Text>
         <Button label="직접 작성하기" icon="create-outline" variant="secondary" onPress={() => { setForm(emptyForm()); setMode('create'); }} style={styles.topAction} />
+        {feedEnabled && onNavigate ? (
+          <Button label="레시피 피드 보기" icon="people-outline" variant="ghost" onPress={() => onNavigate('feed')} style={styles.topAction} />
+        ) : null}
         {loading ? <ActivityIndicator color={colors.primary} style={styles.loader} /> : null}
         {!loading && error ? <ErrorState description={getApiErrorMessage(error, '목록을 불러오지 못했어요.')} onAction={loadList} /> : null}
         {!loading && !error && items.length === 0 ? (
@@ -321,6 +384,21 @@ export default function MyRecipesScreen({ onToggleSidebar, webMode = false }) {
                 </Pressable>
               ))}
             </>
+          )}
+
+          {feedEnabled && (
+            <Card style={styles.changeCard}>
+              <Text style={styles.sectionTitleInCard}>피드에 공유</Text>
+              <Text style={styles.shareHint}>
+                {detail.originType === 'MANUAL' || ['APPROVED_CATALOG', 'INTERNAL_DB_EXTRACTED', 'AI_FROM_INTERNAL_DB'].includes(detail.provenance)
+                  ? '지금 버전이 닉네임으로 공유돼요. 공유한 뒤에 레시피를 고쳐도 공유본은 바뀌지 않아요.'
+                  : '웹 레시피를 바탕으로 해서 조리 순서는 공개되지 않고, 재료·원본 링크·메모만 공유돼요.'}
+              </Text>
+              <Input label="메모 (선택)" value={shareNote} onChangeText={setShareNote} multiline maxLength={500}
+                placeholder="예: 간을 줄이고 두부를 더했어요" editable={!sharedPostId} />
+              <Button label={sharedPostId ? '공유했어요' : '피드에 공유'} icon="share-social-outline" loading={sharing}
+                disabled={!!sharedPostId} onPress={shareRecipe} />
+            </Card>
           )}
 
           <View style={styles.actions}>
@@ -406,6 +484,7 @@ const styles = StyleSheet.create({
   link: { color: colors.info, textDecorationLine: 'underline' },
   changeCard: { marginTop: 16 },
   changeLine: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
+  shareHint: { fontSize: 13, color: colors.textSecondary, lineHeight: 19, marginTop: 4, marginBottom: 8 },
   actions: { flexDirection: 'row', marginTop: 24 },
   actionButton: { flex: 1, marginRight: 8 },
   row: { flexDirection: 'row' },
