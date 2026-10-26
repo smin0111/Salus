@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
     StyleSheet,
     Text,
@@ -51,6 +51,10 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
     const [imageUrl, setImageUrl] = useState('');
     const [selectedTags, setSelectedTags] = useState([]);
     const [submitting, setSubmitting] = useState(false);
+    // 등록 요청이 나가는 순간 바로 잠급니다. state(submitting)는 화면이 다시 그려진 뒤에야 바뀌어 빠른 연속 클릭을 못 막습니다.
+    // 성공하면 풀지 않습니다(같은 글을 다시 보내지 않도록). 실패하면 풀어서 다시 시도할 수 있게 합니다.
+    const submitLockRef = useRef(false);
+    const [posted, setPosted] = useState(false);
 
     // 선택할 수 있는 태그 목록
     const PREDEFINED_TAGS = ['한식', '중식', '일식', '양식', '비건', '다이어트', '디저트', '안주', '자취요리', '간편식'];
@@ -106,7 +110,7 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
     // 로그인과 입력값(공백 정리 후 필수값, 최대 길이)을 확인한 뒤 게시글을 등록합니다.
     const handleSubmit = async () => {
         if (!token) {
-            Alert.alert('로그인 필요', '게시글 작성은 로그인 후 사용할 수 있습니다.');
+            notify('로그인 필요', '게시글 작성은 로그인 후 사용할 수 있습니다.');
             return;
         }
 
@@ -114,23 +118,26 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
         const normalizedContent = content.trim();
 
         if (!normalizedTitle) {
-            Alert.alert('알림', '제목을 입력해주세요.');
+            notify('알림', '제목을 입력해주세요.');
             return;
         }
         if (normalizedTitle.length > MAX_POST_TITLE_LENGTH) {
-            Alert.alert('알림', `제목은 ${MAX_POST_TITLE_LENGTH}자 이하로 입력해 주세요.`);
+            notify('알림', `제목은 ${MAX_POST_TITLE_LENGTH}자 이하로 입력해 주세요.`);
             return;
         }
         if (!normalizedContent) {
-            Alert.alert('알림', '내용을 입력해주세요.');
+            notify('알림', '내용을 입력해주세요.');
             return;
         }
         if (normalizedContent.length > MAX_POST_CONTENT_LENGTH) {
-            Alert.alert('알림', `내용은 ${MAX_POST_CONTENT_LENGTH}자 이하로 입력해 주세요.`);
+            notify('알림', `내용은 ${MAX_POST_CONTENT_LENGTH}자 이하로 입력해 주세요.`);
             return;
         }
 
+        if (submitLockRef.current) return;
+        submitLockRef.current = true;
         setSubmitting(true);
+        let succeeded = false;
         try {
             // 재료와 조리법을 줄바꿈 기준으로 배열로 변환
             const ingredients = ingredientsText
@@ -165,9 +172,11 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
 
             debugLog('게시글 작성 성공:', response.data);
 
-            Alert.alert('성공', '게시글이 작성되었습니다.', [
-                { text: '확인', onPress: () => onNavigate && onNavigate('community') }
-            ]);
+            // 웹에서는 Alert 버튼이 보이지 않아 이동하지 못했으므로, 안내한 뒤 바로 허브로 이동합니다.
+            succeeded = true;
+            setPosted(true);
+            notify('등록 완료', '게시글이 작성되었습니다.');
+            if (onNavigate) onNavigate('community');
         } catch (error) {
             if (isAuthError(error)) return;
             console.error('게시글 작성 실패:', error);
@@ -179,12 +188,13 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
                 notify('닉네임 필요', getApiErrorMessage(error, NICKNAME_NEEDED_MESSAGE));
                 return;
             }
-            Alert.alert('오류', getApiErrorMessage(error, '게시글 작성에 실패했습니다.', {
+            notify('오류', getApiErrorMessage(error, '게시글 작성에 실패했습니다.', {
                 includeStatus: true,
                 networkMessage: '서버에 연결할 수 없습니다. 백엔드 서버가 실행 중인지 확인해주세요.',
                 prefixRequestError: true,
             }));
         } finally {
+            if (!succeeded) submitLockRef.current = false;
             setSubmitting(false);
         }
     };
@@ -205,7 +215,7 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
                 <Text style={styles.headerTitle}>레시피 작성</Text>
                 <TouchableOpacity
                     onPress={handleSubmit}
-                    disabled={submitting}
+                    disabled={submitting || posted}
                     style={styles.submitButton}
                 >
                     <Text style={[styles.submitText, submitting && styles.submitTextDisabled]}>
@@ -227,7 +237,7 @@ export default function CreatePostScreen({ onNavigate, user, webMode = false }) 
                     </TouchableOpacity>
                     <TouchableOpacity
                         onPress={handleSubmit}
-                        disabled={submitting}
+                        disabled={submitting || posted}
                         style={styles.submitButton}
                     >
                         <Text style={[styles.submitText, submitting && styles.submitTextDisabled]}>
