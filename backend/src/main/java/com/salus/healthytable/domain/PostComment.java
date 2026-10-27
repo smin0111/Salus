@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 /**
  * 커뮤니티 게시글의 댓글 엔티티입니다(post_comments 테이블).
  * parentId가 있으면 다른 댓글에 단 답글(대댓글)입니다.
+ * 예전 커뮤니티 API는 제거했습니다. 표가 남아 있는 동안 회원 탈퇴 정리와 계정 화면의 건수 집계를 위해서만 엔티티를 남겨 둡니다.
  */
 @Entity
 @Table(name = "post_comments")

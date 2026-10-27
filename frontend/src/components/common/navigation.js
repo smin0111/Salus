@@ -7,13 +7,11 @@ import { color, radius, shadow, size, spacing, typography, zIndex } from '../../
 export const PRIMARY_NAV_ITEMS = [
   { id: 'chat', label: 'AI 셰프', icon: 'sparkles-outline', activeIcon: 'sparkles' },
   { id: 'calendar', label: '식단', icon: 'calendar-outline', activeIcon: 'calendar' },
-  { id: 'community', label: '피드', icon: 'people-outline', activeIcon: 'people' },
   { id: 'my', label: 'MY', icon: 'person-circle-outline', activeIcon: 'person-circle' },
 ];
 
-// 메뉴에 직접 없는 하위 화면도 어떤 메뉴를 활성으로 표시할지 정합니다(예: 게시글 상세 → 피드 메뉴).
+// 메뉴에 직접 없는 하위 화면도 어떤 메뉴를 활성으로 표시할지 정합니다(예: 건강검진 → MY 메뉴).
 const ACTIVE_ALIASES = {
-  community: ['community', 'search', 'create-post', 'post-detail', 'recipe-detail'],
   my: ['my', 'health', 'health-checkup', 'account-settings', 'upgrade'],
 };
 

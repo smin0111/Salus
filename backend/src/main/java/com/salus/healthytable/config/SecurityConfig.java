@@ -136,12 +136,6 @@ public class SecurityConfig {
                         // 홈 화면 공개 레시피 조회와 게스트 추천만 열어두고, 향후 추가될 쓰기 API는 기본 인증 규칙을 따르게 합니다.
                         .requestMatchers(HttpMethod.GET, "/api/recipes/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/recipes/recommend").permitAll()
-                        // 개인화 추천은 조회 요청이어도 사용자 데이터 기반이므로 인증 필요
-                        .requestMatchers(HttpMethod.GET, "/api/community/recommendations").authenticated()
-                        // 커뮤니티 읽기 엔드포인트는 공개, 작성/수정/삭제/좋아요는 인증 필요
-                        .requestMatchers(HttpMethod.GET, "/api/community/**").permitAll()
-                        // 그 외 요청은 인증 필요
-                        .requestMatchers("/api/community/**").authenticated()
                         .requestMatchers("/api/health-checkups/**").authenticated()
                         .requestMatchers("/api/users/**").authenticated()
                         .anyRequest().authenticated()

@@ -11,6 +11,7 @@ import java.util.List;
 /**
  * 커뮤니티 게시글 엔티티입니다(community_posts 테이블).
  * 사용자가 공유한 레시피 형태의 글(재료, 조리 단계, 태그 포함)을 저장합니다.
+ * 예전 커뮤니티 API는 제거했습니다. 표가 남아 있는 동안 회원 탈퇴 정리와 계정 화면의 건수 집계를 위해서만 엔티티를 남겨 둡니다.
  */
 @Entity
 @Table(name = "community_posts")

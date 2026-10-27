@@ -8,7 +8,6 @@ import { SalusLogoMark } from './SalusLogo';
 // 사이드바 메뉴 목록(id는 AppNavigator의 화면 이름과 같음)
 const MENU_ITEMS = [
     { id: 'chat', label: 'AI 채팅', icon: 'chatbubbles' },
-    { id: 'community', label: '커뮤니티', icon: 'people' },
     { id: 'my-recipes', label: '내 레시피', icon: 'bookmark' },
     { id: 'calendar', label: '식단 캘린더', icon: 'calendar' },
     { id: 'health', label: '나의 건강정보', icon: 'heart' },

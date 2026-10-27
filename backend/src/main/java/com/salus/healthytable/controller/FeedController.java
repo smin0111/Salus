@@ -24,7 +24,7 @@ import java.util.List;
 
 /**
  * 피드 API(/api/feed)입니다. 모두 로그인이 필요하고(SecurityConfig의 기본 규칙), 사용자는 인증 정보에서 꺼냅니다.
- * feed.enabled가 꺼져 있으면 /status 외에는 404입니다. 기존 커뮤니티(/api/community)와는 별개입니다.
+ * feed.enabled가 꺼져 있으면 /status 외에는 404입니다. 예전 커뮤니티(/api/community)는 제거했습니다.
  */
 @RestController
 @RequestMapping("/api/feed")

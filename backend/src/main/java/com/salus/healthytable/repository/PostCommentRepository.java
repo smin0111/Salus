@@ -2,36 +2,31 @@ package com.salus.healthytable.repository;
 
 import com.salus.healthytable.domain.PostComment;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
-@Repository
 /**
  * {@link PostComment} 엔티티의 DB 접근 인터페이스입니다.
+ * 예전 커뮤니티 API는 제거했고, 표가 남아 있는 동안 회원 탈퇴 정리와 계정 화면의 건수 집계에만 씁니다.
+ *
+ * 삭제는 행을 불러와 하나씩 지우지 않고 DELETE 한 문장으로 합니다. 부모 댓글을 지우면 DB가 답글을 FK(CASCADE)로 먼저 지우므로,
+ * 하나씩 지우면 이미 사라진 답글을 다시 지우려다 실패합니다(탈퇴 500).
  */
+@Repository
 public interface PostCommentRepository extends JpaRepository<PostComment, Long> {
-
-    // 댓글 목록처럼 실제 댓글 내용을 보여줄 때만 Entity 목록을 조회합니다.
-    List<PostComment> findByPostIdOrderByCreatedAtAsc(Long postId);
-
-    // 상세 화면처럼 게시글 1개만 다룰 때 사용하는 단건 댓글 수 집계입니다.
-    long countByPostId(Long postId);
-
-    // 마이페이지나 사용자 데이터 정리처럼 특정 사용자의 댓글을 다룰 때 사용합니다.
-    List<PostComment> findByUserIdOrderByCreatedAtDesc(Long userId);
 
     long countByUserId(Long userId);
 
-    void deleteByUserId(Long userId);
+    @Modifying
+    @Query("DELETE FROM PostComment c WHERE c.userId = :userId")
+    void deleteByUserId(@Param("userId") Long userId);
 
     // 여러 게시글을 한꺼번에 삭제할 때 그 게시글들에 달린 댓글도 함께 삭제합니다.
-    void deleteByPostIdIn(List<Long> postIds);
-
-    // 게시글 목록에서 댓글 수를 붙일 때 countByPostId를 반복하면 N+1 문제가 생깁니다.
-    // IN + GROUP BY 집계로 쿼리 수를 고정해 목록 조회 성능을 예측 가능하게 만듭니다.
-    @Query("SELECT c.postId, COUNT(c) FROM PostComment c WHERE c.postId IN :postIds GROUP BY c.postId")
-    List<Object[]> countCommentsByPostIds(@Param("postIds") List<Long> postIds);
+    @Modifying
+    @Query("DELETE FROM PostComment c WHERE c.postId IN :postIds")
+    void deleteByPostIdIn(@Param("postIds") List<Long> postIds);
 }

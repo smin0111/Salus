@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 /**
  * 게시글 좋아요 기록 엔티티입니다(post_likes 테이블).
  * 한 행이 "어떤 사용자가 어떤 글에 좋아요를 눌렀는지"를 의미합니다.
+ * 예전 커뮤니티 API는 제거했습니다. 표가 남아 있는 동안 회원 탈퇴 정리와 계정 화면의 건수 집계를 위해서만 엔티티를 남겨 둡니다.
  */
 @Entity
 @Table(name = "post_likes")

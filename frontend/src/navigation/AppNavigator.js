@@ -12,14 +12,9 @@ import HealthScreen from '../screens/HealthScreen';
 import HealthCheckupScreen from '../screens/HealthCheckupScreen';
 import LoginScreen from '../screens/LoginScreen';
 import LandingPageScreen from '../screens/LandingPageScreen';
-import RecipeDetailScreen from '../screens/RecipeDetailScreen';
-import CommunityScreen from '../screens/CommunityScreen';
 import MyRecipesScreen from '../screens/MyRecipesScreen';
 import FeedScreen from '../screens/FeedScreen';
 import NicknameScreen from '../screens/NicknameScreen';
-import CreatePostScreen from '../screens/CreatePostScreen';
-import PostDetailScreen from '../screens/PostDetailScreen';
-import SearchScreen from '../screens/SearchScreen';
 import LoadingScreen from '../screens/LoadingScreen';
 import UpgradeScreen from '../screens/UpgradeScreen';
 import PaymentResultScreen from '../screens/PaymentResultScreen';
@@ -46,12 +41,11 @@ const WEB_SHELL_EXCLUDED_SCREENS = [
 
 // 보호 화면 목록은 화면 이동 직전에 한 번 더 확인합니다.
 // 라우팅만 숨기는 것으로는 부족하고, 사용자가 URL을 직접 입력하는 web 환경도 고려해야 합니다.
-const PROTECTED_SCREENS = ['community', 'my-recipes', 'feed', 'nickname', 'calendar', 'health', 'health-checkup', 'account-settings', 'create-post'];
+const PROTECTED_SCREENS = ['my-recipes', 'feed', 'nickname', 'calendar', 'health', 'health-checkup', 'account-settings'];
 
 // 웹 사이드바 메뉴 항목(화면 id, 이름, 설명, 아이콘, URL 경로)
 const WEB_NAV_ITEMS = [
   { id: 'chat', label: 'AI 셰프', caption: '맞춤 레시피 상담', icon: 'sparkles', path: '/chat' },
-  { id: 'community', label: '레시피 허브', caption: '추천과 커뮤니티', icon: 'grid', path: '/community' },
   { id: 'my-recipes', label: '내 레시피', caption: '저장하고 고친 레시피', icon: 'bookmark', path: '/my-recipes' },
   { id: 'calendar', label: '식단 캘린더', caption: '식사 기록', icon: 'calendar', path: '/calendar' },
   { id: 'health', label: '건강 프로필', caption: '알레르기와 식이조건', icon: 'heart', path: '/health' },
@@ -62,7 +56,6 @@ const WEB_NAV_ITEMS = [
 const WEB_SCREEN_TITLES = {
   about: ['서비스 소개', 'Salus 개인 맞춤형 AI 요리 서비스 플랫폼'],
   chat: ['AI 셰프 스튜디오', '건강정보를 반영해 출처가 있는 레시피를 찾는 요리 상담'],
-  community: ['레시피 허브', 'AI 추천, 인기 레시피, 사용자 피드를 한곳에서 둘러보세요'],
   'my-recipes': ['내 레시피', '저장하고 내 입맛대로 고친 레시피를 모아 봅니다'],
   feed: ['레시피 피드', '다른 사용자가 공유한 레시피를 봅니다'],
   nickname: ['닉네임', '커뮤니티 활동에 보이는 이름을 정합니다'],
@@ -70,17 +63,12 @@ const WEB_SCREEN_TITLES = {
   health: ['건강 프로필', '알레르기, 질환, 식이 제한을 안전하게 반영합니다'],
   'health-checkup': ['건강검진 분석', '검진 수치를 식단 추천으로 연결합니다'],
   'account-settings': ['계정과 개인정보', '계정, 구독, 개인정보 설정을 관리합니다'],
-  search: ['통합 검색', '레시피와 커뮤니티 글을 빠르게 찾습니다'],
-  'create-post': ['레시피 공유', '나만의 건강한 식탁을 커뮤니티에 소개합니다'],
-  'post-detail': ['커뮤니티 글', '레시피 이야기와 반응을 확인합니다'],
-  'recipe-detail': ['레시피 상세', '조리 정보와 추천 이유를 확인합니다'],
 };
 
 // 웹 URL 경로 → 화면 id. 새로고침하거나 주소를 직접 입력했을 때 어떤 화면을 열지 결정합니다.
 const WEB_PATH_TO_SCREEN = {
   '/': 'chat',
   '/chat': 'chat',
-  '/community': 'community',
   '/my-recipes': 'my-recipes',
   '/feed': 'feed',
   '/nickname': 'nickname',
@@ -88,11 +76,15 @@ const WEB_PATH_TO_SCREEN = {
   '/health': 'health',
   '/health-checkup': 'health-checkup',
   '/account': 'account-settings',
-  '/search': 'search',
   '/login': 'login',
   '/about': 'about',
   '/payment-result': 'payment-result',
   '/upgrade': 'upgrade',
+};
+
+// 예전 커뮤니티(레시피 허브) 주소는 화면을 없앴으므로 내 레시피 주소로 바꿔 엽니다. 로그인 확인은 내 레시피의 보호 흐름을 그대로 따릅니다.
+const LEGACY_WEB_PATH_REDIRECTS = {
+  '/community': '/my-recipes',
 };
 
 // 화면 id → 웹 URL 경로(WEB_PATH_TO_SCREEN의 반대 방향). 목록에 없으면 "/화면id"를 사용합니다.
@@ -102,7 +94,6 @@ const getWebPathForScreen = (screen) => {
 
   const map = {
     'account-settings': '/account',
-    search: '/search',
     login: '/login',
     about: '/about',
     'payment-result': '/payment-result',
@@ -196,9 +187,6 @@ function WebAppShell({ children, currentScreen, onNavigate, isLoggedIn, user, on
             <Text style={styles.webPageSubtitle}>{subtitle}</Text>
           </View>
           <View style={styles.webTopActions}>
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="검색" style={styles.webIconButton} onPress={() => onNavigate('search')}>
-              <Ionicons name="search" size={19} color={colors.textSecondary} />
-            </TouchableOpacity>
             {!isLoggedIn && (
               <TouchableOpacity style={styles.webPrimaryAction} onPress={() => onNavigate('login')}>
                 <Text style={styles.webPrimaryActionText}>로그인</Text>
@@ -224,10 +212,6 @@ export default function AppNavigator() {
   const { width: windowWidth } = useWindowDimensions();
   const desktopWebMode = Platform.OS === 'web' && windowWidth >= 768;
   const [currentScreen, setCurrentScreen] = useState('chat');
-  // 상세 화면에 넘길 데이터와 레시피 상세에서 뒤로 갈 화면
-  const [selectedRecipe, setSelectedRecipe] = useState(null);
-  const [recipeBackScreen, setRecipeBackScreen] = useState('community');
-  const [selectedPost, setSelectedPost] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isAppReady, setIsAppReady] = useState(false);
   const { isLoggedIn, user, token, logout, refreshUser, loading: authLoading } = useAuth();
@@ -238,8 +222,6 @@ export default function AppNavigator() {
   const [nicknamePromptSkipped, setNicknamePromptSkipped] = useState(false);
   // 닉네임 화면을 떠날 곳. 저장하면 screen, 취소하면 cancelScreen(없으면 screen)으로 갑니다. null이면 계정 화면.
   const [nicknameReturn, setNicknameReturn] = useState(null); // { screen, data, cancelScreen, cancelData } | null
-  // 댓글을 쓰다 닉네임을 정하러 간 경우 돌아와서 이어 쓸 초안({ postId, content, replyingTo }). 화면 상태라 메모리에만 둡니다.
-  const [commentDraft, setCommentDraft] = useState(null);
 
   useEffect(() => {
     if (!isLoggedIn || !token) {
@@ -274,7 +256,11 @@ export default function AppNavigator() {
   useEffect(() => {
     if (Platform.OS === 'web') {
       const syncPath = () => {
-        const path = window.location.pathname;
+        let path = window.location.pathname;
+        if (LEGACY_WEB_PATH_REDIRECTS[path]) {
+          path = LEGACY_WEB_PATH_REDIRECTS[path];
+          window.history.replaceState({}, '', path);
+        }
         const nextScreen = WEB_PATH_TO_SCREEN[path] || 'chat';
         setCurrentScreen(nextScreen);
         if (nextScreen === 'payment-result') {
@@ -329,7 +315,7 @@ export default function AppNavigator() {
 
   /**
    * 화면 이동 함수입니다. 모든 화면에 onNavigate로 전달됩니다.
-   * data: 이동할 화면에 넘길 값(레시피 상세면 레시피 또는 { recipe, returnTo }, 게시글 상세면 게시글)
+   * data: 이동할 화면에 넘길 값(닉네임 화면이면 돌아갈 곳 { returnTo, returnData, cancelTo, cancelData })
    * 웹에서는 history.pushState로 URL도 함께 바꿔 브라우저 뒤로가기가 동작하게 합니다.
    */
   const handleNavigate = (screen, data = null) => {
@@ -344,25 +330,14 @@ export default function AppNavigator() {
       return;
     }
 
-    if (screen === 'recipe-detail') {
-      const recipePayload = data && data.recipe ? data.recipe : data;
-      setSelectedRecipe(recipePayload);
-      setRecipeBackScreen(data?.returnTo || currentScreen || 'community');
-    }
-    if (screen === 'post-detail') {
-      setSelectedPost(data);
-    }
     if (screen === 'nickname') {
-      // 글쓰기·댓글에서 닉네임이 필요해 넘어온 경우, 정한 뒤(또는 취소하면) 원래 화면으로 돌아갑니다.
+      // 다른 화면에서 닉네임이 필요해 넘어온 경우, 정한 뒤(또는 취소하면) 원래 화면으로 돌아갑니다.
       setNicknameReturn(data?.returnTo ? {
         screen: data.returnTo,
         data: data.returnData,
         cancelScreen: data.cancelTo || data.returnTo,
         cancelData: data.cancelTo ? data.cancelData : data.returnData,
       } : null);
-      setCommentDraft(data?.commentDraft || null);
-    } else if (screen !== 'post-detail') {
-      setCommentDraft(null);
     }
     setCurrentScreen(screen);
     if (Platform.OS === 'web') {
@@ -403,17 +378,6 @@ export default function AppNavigator() {
         }
       case 'payment-result':
         return <PaymentResultScreen onNavigate={handleNavigate} />;
-      case 'recipe-detail':
-        return (
-          <RecipeDetailScreen
-            recipe={selectedRecipe}
-            onBack={() => handleNavigate(recipeBackScreen || 'community')}
-            onRequireNickname={() => handleNavigate('nickname', {
-              returnTo: 'recipe-detail',
-              returnData: { recipe: selectedRecipe, returnTo: recipeBackScreen },
-            })}
-          />
-        );
       case 'about':
         return <LandingPageScreen onNavigate={handleNavigate} />;
       case 'chat':
@@ -429,26 +393,10 @@ export default function AppNavigator() {
             webMode={desktopWebMode}
           />
         );
-      case 'community':
-        return <CommunityScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} user={user} webMode={desktopWebMode} />;
       case 'my-recipes':
         return <MyRecipesScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
       case 'feed':
         return <FeedScreen onBack={() => handleNavigate('my-recipes')} webMode={desktopWebMode} />;
-      case 'create-post':
-        return <CreatePostScreen onNavigate={handleNavigate} user={user} webMode={desktopWebMode} />;
-      case 'post-detail':
-        return (
-          <PostDetailScreen
-            post={selectedPost}
-            user={user}
-            onNavigate={handleNavigate}
-            onBack={() => handleNavigate('community')}
-            webMode={desktopWebMode}
-            initialCommentDraft={commentDraft && commentDraft.postId === selectedPost?.id ? commentDraft : null}
-            onCommentDraftRestored={() => setCommentDraft(null)}
-          />
-        );
       case 'calendar':
         return <CalendarScreen mealData={mealData} setMealData={setMealData} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
       case 'health':
@@ -457,8 +405,6 @@ export default function AppNavigator() {
         return <HealthCheckupScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
       case 'account-settings':
         return <AccountSettingsScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
-      case 'search':
-        return <SearchScreen onBack={() => handleNavigate('community')} onNavigate={handleNavigate} user={user} webMode={desktopWebMode} />;
       case 'login':
         return <LoginScreen onLogin={() => handleNavigate('chat')} onGuest={() => handleNavigate('chat')} />;
       case 'upgrade':
@@ -631,14 +577,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     width: 160,
     gap: 8,
-  },
-  webIconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: radii.md,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   webPrimaryAction: {
     ...controlStyles.primaryButton,
