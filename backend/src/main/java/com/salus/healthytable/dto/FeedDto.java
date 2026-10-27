@@ -113,7 +113,9 @@ public final class FeedDto {
     /**
      * 댓글 하나. 삭제된 댓글은 content·authorName이 null이고 deleted가 true입니다(자리표시).
      * 관리자가 숨긴 댓글은 hidden이 true이며, 작성자 본인에게만 content가 있고 다른 사람에게는 자리표시입니다.
-     * replyToName은 대댓글에 다시 답한 경우 답한 대상의 공개 이름이며, 대상이 탈퇴했으면 "탈퇴한 사용자"입니다.
+     * blocked는 보는 사람이 차단한 사람의 댓글이라는 뜻이며 content·authorName이 null입니다(자리표시, 삭제가 우선).
+     * replyToName은 대댓글에 다시 답한 경우 답한 대상의 공개 이름이며, 대상이 탈퇴했으면 "탈퇴한 사용자",
+     * 보는 사람이 차단한 사람이면 "차단한 사용자"입니다.
      */
     public record Comment(
             Long id,
@@ -124,6 +126,7 @@ public final class FeedDto {
             String content,
             boolean deleted,
             boolean hidden,
+            boolean blocked,
             boolean edited,
             String replyToName,
             LocalDateTime createdAt) {
@@ -150,5 +153,17 @@ public final class FeedDto {
 
     /** 신고 결과. created가 false면 같은 대상에 이미 낸 내 신고입니다. 다른 사람의 신고나 신고 수는 담지 않습니다. */
     public record ReportResult(Long reportId, boolean created) {
+    }
+
+    /** 차단. 상대의 사용자 ID 대신 그 사람이 쓴 대상(FEED_POST·FEED_COMMENT와 ID)을 보내고, 서버가 작성자를 찾습니다. */
+    public record BlockRequest(String targetType, Long targetId) {
+    }
+
+    /** 차단 결과. created가 false면 이미 차단한 사람입니다. 상대의 사용자 ID는 담지 않습니다. */
+    public record BlockResult(Long blockId, boolean created) {
+    }
+
+    /** 내 차단 목록 한 줄(공개 이름만). 해제는 blockId로 합니다. */
+    public record BlockedUser(Long blockId, String name, LocalDateTime createdAt) {
     }
 }

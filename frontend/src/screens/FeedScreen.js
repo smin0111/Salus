@@ -4,8 +4,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Crypto from 'expo-crypto';
 import { useAuth } from '../context/AuthContext';
 import {
-  createFeedComment, deleteFeedComment, deleteFeedPost, getFeedComments, getFeedPost, getFeedPosts, getFeedReplies,
-  getFeedStatus, getPopularFeed, likeFeedPost, reportFeedTarget, unlikeFeedPost, updateFeedComment,
+  blockFeedAuthor, createFeedComment, deleteFeedComment, deleteFeedPost, getFeedBlocks, getFeedComments, getFeedPost,
+  getFeedPosts, getFeedReplies, getFeedStatus, getPopularFeed, likeFeedPost, reportFeedTarget, unblockFeedUser,
+  unlikeFeedPost, updateFeedComment,
 } from '../api/feed';
 import { getApiErrorMessage, isAuthError } from '../utils/apiError';
 import { Button, Card, EmptyState, ErrorState, Input, Toast } from '../components/common';
@@ -30,22 +31,24 @@ const notify = (title, message) => {
   Alert.alert(title, message);
 };
 
-const confirmAction = (title, message) => new Promise(resolve => {
+const confirmAction = (title, message, confirmLabel = '삭제') => new Promise(resolve => {
   if (Platform.OS === 'web') {
     resolve(window.confirm(`${title}\n${message}`));
     return;
   }
   Alert.alert(title, message, [
     { text: '취소', style: 'cancel', onPress: () => resolve(false) },
-    { text: '삭제', style: 'destructive', onPress: () => resolve(true) },
+    { text: confirmLabel, style: 'destructive', onPress: () => resolve(true) },
   ]);
 });
 
-// 서버가 확정적으로 거절한 경우(입력 오류·권한·충돌·닉네임 필요 등). 이때는 같은 요청 ID로 다시 보내지 않습니다.
+// 서버가 확정적으로 거절한 경우(입력 오류·권한·충돌·닉네임 필요·작성 제한 429 등). 이때는 같은 요청 ID로 다시 보내지 않습니다.
+// 작성 제한(429)이어도 입력하던 내용은 지우지 않습니다(서버 안내에 다시 할 수 있는 시각이 들어 있음).
 const isDefiniteFailure = (error) => {
   const status = error?.response?.status;
   return !!status && status >= 400 && status < 500;
 };
+const isRateLimited = (error) => error?.response?.status === 429;
 
 // 신고 사유(서버 코드와 같은 순서). 신고는 운영자가 직접 확인하며 자동으로 숨기지 않습니다.
 const REPORT_REASONS = [
@@ -75,6 +78,9 @@ function AllergenBadge({ allergen }) {
  *
  * 댓글: 처음 보낼 때 요청 ID와 내용(공유본·부모·본문)을 함께 정해 두고, 응답을 못 받아 다시 보낼 때만 같은 ID·같은 내용을 씁니다.
  * 서버가 확정적으로 거절했거나 내용을 고쳐 보내면 새 ID입니다. 늦게 온 응답은 지금 보고 있는 글·입력에 반영하지 않습니다.
+ *
+ * 차단: 공유본·댓글의 작성자를 차단하면 그 사람의 글은 내 목록에서 빠지고 댓글은 자리표시가 됩니다(상대에게 알리지 않음).
+ * 차단한 사람의 글은 보이지 않아 신고할 수 없으므로, 차단 확인창에서 신고가 필요하면 먼저 신고하라고 안내합니다.
  */
 export default function FeedScreen({ onBack, webMode = false }) {
   const { token } = useAuth();
@@ -89,6 +95,9 @@ export default function FeedScreen({ onBack, webMode = false }) {
   const [toast, setToast] = useState('');
   // 목록 조회 세대: 탭을 바꾸거나 다시 불러올 때마다 올라갑니다. 늦게 온 이전 조회·더 보기 응답은 버립니다.
   const listGenRef = useRef(0);
+  // 지금 탭. 늦게 끝난 차단·해제 요청이 목록을 다시 불러올 때, 요청을 시작한 때가 아니라 응답 시점의 탭을 씁니다.
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
 
   // 좋아요 요청 중인 공유본 ID(잠금은 ref로 바로, 화면 표시는 state로).
   const likeBusyRef = useRef(new Set());
@@ -109,6 +118,13 @@ export default function FeedScreen({ onBack, webMode = false }) {
   const [reportSending, setReportSending] = useState(false);
   const [reportTitle, setReportTitle] = useState(''); // 창이 닫히는 동안에도 제목이 비지 않도록 따로 둡니다.
   const reportBusyRef = useRef(false);
+  // 차단: 요청 중 잠금, 차단 목록 창({ items, loading } 또는 null), 창 세대·조회 세대·창 열림 여부와 해제 후 목록 다시 불러오기 여부
+  const blockBusyRef = useRef(false);
+  const [blockList, setBlockList] = useState(null);
+  const blockListGenRef = useRef(0);
+  const blockFetchGenRef = useRef(0);
+  const blockListOpenRef = useRef(false);
+  const blockListChangedRef = useRef(false);
   // 지금 진행 중인 댓글 전송 시도(없으면 null). 잠금·로딩은 이 시도의 응답만 풉니다.
   const currentSendRef = useRef(null);
   // 상세 화면 세대: 글을 열거나 닫을 때마다 올라갑니다. 같은 글로 다시 돌아와도(A→B→A) 새 세대라,
@@ -396,12 +412,124 @@ export default function FeedScreen({ onBack, webMode = false }) {
     } catch (e) {
       if (!isAuthError(e)) notify('신고하지 못했어요', getApiErrorMessage(e, '잠시 후 다시 시도해 주세요.'));
       // 확정적인 거절(400·404 등)이면 창을 닫고, 연결 오류면 다시 보낼 수 있게 창을 남깁니다(서버가 중복을 한 건으로 처리).
-      if (isDefiniteFailure(e)) setReporting(null);
+      // 작성 제한(429)이면 고른 사유·적은 내용을 잃지 않도록 창을 남깁니다.
+      if (isDefiniteFailure(e) && !isRateLimited(e)) setReporting(null);
     } finally {
       reportBusyRef.current = false;
       setReportSending(false);
     }
   };
+
+  // 작성자 차단. 공유본·댓글 어느 쪽으로 지정했든 그 사람의 글이 목록에서 빠지도록 지금 탭을 다시 불러옵니다.
+  // 상세는 차단을 시작한 화면(세대)이 그대로일 때만 건드립니다: 공유본으로 차단했으면 닫고, 댓글로 차단했으면
+  // 지금 공유본을 다시 확인해(공유본 작성자를 차단했으면 404) 닫거나 댓글을 다시 불러옵니다.
+  const blockAuthor = async (targetType, targetId) => {
+    if (blockBusyRef.current || !detail) return;
+    const postId = detail.id;
+    const gen = detail.gen;
+    const confirmed = await confirmAction('작성자 차단',
+      '이 사용자의 공유와 댓글이 내 화면에서 보이지 않아요. 상대에게는 알리지 않고, 차단 목록에서 언제든 해제할 수 있어요.\n'
+      + '신고가 필요하면 차단하기 전에 먼저 신고해 주세요(차단하면 그 사용자의 글을 신고할 수 없어요).', '차단');
+    if (!confirmed || blockBusyRef.current) return;
+    blockBusyRef.current = true;
+    try {
+      const response = await blockFeedAuthor({ targetType, targetId }, token);
+      loadList(tabRef.current);
+      showToast(response.data?.created ? '차단했어요. 차단 목록에서 해제할 수 있어요.' : '이미 차단한 사용자예요.');
+      if (!isCurrentDetail(gen)) return;
+      if (targetType === 'FEED_POST') {
+        closeDetail();
+        return;
+      }
+      setReplyTo(prev => (prev?.id === targetId ? null : prev));
+      try {
+        await getFeedPost(postId, token);
+        if (isCurrentDetail(gen)) loadComments(postId, gen);
+      } catch (e) {
+        if (!isCurrentDetail(gen)) return;
+        if (e?.response?.status === 404) closeDetail(); // 공유본 작성자를 차단함(또는 그 사이 지워짐)
+        else if (!isAuthError(e)) loadComments(postId, gen);
+      }
+    } catch (e) {
+      if (!isAuthError(e)) notify('차단하지 못했어요', getApiErrorMessage(e, '잠시 후 다시 시도해 주세요.'));
+    } finally {
+      blockBusyRef.current = false;
+    }
+  };
+
+  // 차단 목록 창. 창 세대(blockListGenRef)는 창을 열고 닫을 때마다, 조회 세대(blockFetchGenRef)는 목록을 조회할 때마다 올라갑니다.
+  // 조회 응답은 둘 다 그대로일 때만 반영하므로, 이전에 연 창의 응답이나 해제 성공 전에 시작한 조회 응답이 최신 목록을 덮지 않습니다.
+  const fetchBlockList = async (windowGen) => {
+    const fetchGen = ++blockFetchGenRef.current;
+    const isCurrent = () => blockListGenRef.current === windowGen && blockFetchGenRef.current === fetchGen;
+    try {
+      const response = await getFeedBlocks(token);
+      if (isCurrent()) setBlockList({ items: response.data || [], loading: false });
+    } catch (e) {
+      if (!isCurrent()) return;
+      setBlockList(prev => (prev ? { ...prev, loading: false } : prev));
+      if (!isAuthError(e)) notify('차단 목록', getApiErrorMessage(e, '불러오지 못했어요.'));
+    }
+  };
+
+  const openBlockList = () => {
+    const gen = ++blockListGenRef.current;
+    blockListOpenRef.current = true;
+    blockListChangedRef.current = false;
+    setBlockList({ items: [], loading: true });
+    fetchBlockList(gen);
+  };
+
+  const closeBlockList = () => {
+    blockListGenRef.current += 1;
+    blockListOpenRef.current = false;
+    setBlockList(null);
+    if (blockListChangedRef.current) loadList(tabRef.current); // 해제한 사람의 글을 목록에 다시 보여 줍니다.
+    blockListChangedRef.current = false;
+  };
+
+  // 해제 성공: 같은 창이 열려 있으면 닫을 때 목록을 다시 불러오고, 응답 전에 창을 닫았거나 다시 열었으면 바로 지금 탭을 다시 불러옵니다.
+  // 창이 열려 있으면 그 줄을 빼고 차단 목록을 새로 조회합니다(해제 전에 시작한 조회 응답은 조회 세대가 바뀌어 버려짐).
+  const unblock = async (blockId) => {
+    const gen = blockListGenRef.current;
+    try {
+      await unblockFeedUser(blockId, token);
+      if (blockListGenRef.current === gen) {
+        blockListChangedRef.current = true;
+      } else {
+        loadList(tabRef.current);
+      }
+      blockFetchGenRef.current += 1;
+      setBlockList(prev => (prev ? { ...prev, items: prev.items.filter(item => item.blockId !== blockId) } : prev));
+      if (blockListOpenRef.current) fetchBlockList(blockListGenRef.current);
+    } catch (e) {
+      if (!isAuthError(e)) notify('차단 해제', getApiErrorMessage(e, '해제하지 못했어요.'));
+    }
+  };
+
+  const renderBlockListModal = () => (
+    <Modal visible={!!blockList} transparent animationType="fade" onRequestClose={closeBlockList}>
+      <View style={styles.modalBackdrop}>
+        <Card style={styles.modalCard}>
+          <Text style={styles.sectionTitleInCard}>차단 목록</Text>
+          <Text style={styles.hint}>차단한 사용자의 공유와 댓글은 내 화면에서만 보이지 않아요. 상대에게는 알리지 않아요.</Text>
+          {blockList?.loading ? <ActivityIndicator color={colors.primary} /> : null}
+          {!blockList?.loading && (blockList?.items || []).length === 0 ? <Text style={styles.hint}>차단한 사용자가 없어요.</Text> : null}
+          <ScrollView style={styles.blockScroll}>
+            {(blockList?.items || []).map(item => (
+              <View key={item.blockId} style={styles.blockRow}>
+                <Text style={styles.reasonText}>{item.name}</Text>
+                <Text style={styles.commentMeta}>  {formatDate(item.createdAt)}</Text>
+                <View style={styles.spacer} />
+                <Button label="해제" size="sm" variant="ghost" onPress={() => unblock(item.blockId)} />
+              </View>
+            ))}
+          </ScrollView>
+          <Button label="닫기" variant="ghost" onPress={closeBlockList} />
+        </Card>
+      </View>
+    </Modal>
+  );
 
   const renderReportModal = () => (
     <Modal visible={!!reporting} transparent animationType="fade" onRequestClose={closeReport}>
@@ -429,7 +557,7 @@ export default function FeedScreen({ onBack, webMode = false }) {
     </Modal>
   );
 
-  const header = (title, back) => (
+  const header = (title, back, right = null) => (
     <View style={styles.header}>
       {back ? (
         <TouchableOpacity onPress={back} style={styles.headerButton} accessibilityRole="button" accessibilityLabel="뒤로">
@@ -437,6 +565,7 @@ export default function FeedScreen({ onBack, webMode = false }) {
         </TouchableOpacity>
       ) : null}
       <Text style={styles.headerTitle} accessibilityRole="header">{title}</Text>
+      {right}
     </View>
   );
 
@@ -453,7 +582,11 @@ export default function FeedScreen({ onBack, webMode = false }) {
 
   const renderList = () => (
     <>
-      {header('레시피 피드', onBack)}
+      {header('레시피 피드', onBack, enabled ? (
+        <TouchableOpacity onPress={openBlockList} style={styles.headerButton} accessibilityRole="button" accessibilityLabel="차단 목록">
+          <Ionicons name="ban-outline" size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
+      ) : null)}
       <ScrollView contentContainerStyle={styles.content}>
         {enabled ? (
           <View style={styles.tabs}>
@@ -498,6 +631,8 @@ export default function FeedScreen({ onBack, webMode = false }) {
     <View key={comment.id} style={[styles.comment, isReply && styles.reply]}>
       {comment.deleted ? (
         <Text style={styles.deleted}>삭제된 댓글입니다</Text>
+      ) : comment.blocked ? (
+        <Text style={styles.deleted}>차단한 사용자의 댓글입니다</Text>
       ) : comment.hidden && !comment.mine ? (
         <Text style={styles.deleted}>운영 정책에 따라 숨겨진 댓글입니다</Text>
       ) : editing?.id === comment.id ? (
@@ -534,9 +669,14 @@ export default function FeedScreen({ onBack, webMode = false }) {
                 </TouchableOpacity>
               </>
             ) : (
-              <TouchableOpacity onPress={() => openReport('FEED_COMMENT', comment.id, '댓글')} accessibilityRole="button">
-                <Text style={styles.action}>신고</Text>
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity onPress={() => openReport('FEED_COMMENT', comment.id, '댓글')} accessibilityRole="button">
+                  <Text style={styles.action}>신고</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => blockAuthor('FEED_COMMENT', comment.id)} accessibilityRole="button">
+                  <Text style={styles.action}>차단</Text>
+                </TouchableOpacity>
+              </>
             )}
           </View>
         </>
@@ -554,10 +694,16 @@ export default function FeedScreen({ onBack, webMode = false }) {
           <View style={styles.spacer} />
           {likeButton(detail)}
           {!detail.mine ? (
-            <TouchableOpacity onPress={() => openReport('FEED_POST', detail.id, '공유 레시피')} style={styles.likeButton}
-              accessibilityRole="button" accessibilityLabel="신고">
-              <Ionicons name="flag-outline" size={18} color={colors.textSecondary} />
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity onPress={() => openReport('FEED_POST', detail.id, '공유 레시피')} style={styles.likeButton}
+                accessibilityRole="button" accessibilityLabel="신고">
+                <Ionicons name="flag-outline" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => blockAuthor('FEED_POST', detail.id)} style={styles.likeButton}
+                accessibilityRole="button" accessibilityLabel="작성자 차단">
+                <Ionicons name="ban-outline" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </>
           ) : null}
         </View>
         {detail.moderationHidden ? (
@@ -643,6 +789,7 @@ export default function FeedScreen({ onBack, webMode = false }) {
     <SafeAreaView style={styles.container}>
       {detail ? renderDetail() : renderList()}
       {renderReportModal()}
+      {renderBlockListModal()}
       <Toast visible={!!toast} message={toast} />
     </SafeAreaView>
   );
@@ -693,4 +840,6 @@ const styles = StyleSheet.create({
   modalCard: { width: '100%', maxWidth: 480, alignSelf: 'center' },
   reasonRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
   reasonText: { fontSize: 15, color: colors.text, marginLeft: 8 },
+  blockScroll: { maxHeight: 320, marginVertical: 8 },
+  blockRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
 });

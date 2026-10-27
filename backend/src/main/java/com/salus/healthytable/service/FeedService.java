@@ -12,6 +12,7 @@ import com.salus.healthytable.dto.MyRecipeDto;
 import com.salus.healthytable.repository.FeedCommentRepository;
 import com.salus.healthytable.repository.FeedLikeRepository;
 import com.salus.healthytable.repository.FeedPostRepository;
+import com.salus.healthytable.repository.UserBlockRepository;
 import com.salus.healthytable.repository.UserRepository;
 import com.salus.healthytable.service.allergen.AllergenDictionary;
 import com.salus.healthytable.service.allergen.AllergenMatcher;
@@ -45,6 +46,9 @@ import java.util.stream.Collectors;
  * 피드(내 레시피 공유)입니다. 로그인한 사용자만 쓰고, feed.enabled가 꺼져 있으면 상태 조회 외의 모든 피드 API가 404입니다
  * (신고·차단·관리자 검토가 준비된 뒤 켭니다. 기존 커뮤니티와는 별개).
  *
+ * <p>작성 제한: 공유 하루 10회, 좋아요 1분 60회(FeedWriteQuota, DB 카운터). 차단: 내가 차단한 사람의 공유본은 목록·인기순에서
+ * 빠지고 상세·댓글·좋아요는 404입니다.
+ *
  * <p>공유: 앱은 내 레시피 ID만 보내고, 서버가 소유권을 확인한 뒤 그 순간의 지금 버전을 복사해 공유본을 만듭니다.
  * 공개 범위는 출처로 정합니다. 직접 작성·살루스 승인/DB 기반 레시피는 전체 공개, 웹에서 추출했거나 웹 검색을 근거로
  * AI가 구성했거나 출처 계보를 확인할 수 없는 변형(VARIANT·출처 없음)은 조리 단계를 공개하지 않습니다(재료·원본 링크·메모만).
@@ -75,6 +79,7 @@ public class FeedService {
     private final FeedPostRepository feedPostRepository;
     private final FeedLikeRepository feedLikeRepository;
     private final FeedCommentRepository feedCommentRepository;
+    private final UserBlockRepository userBlockRepository;
     private final FeedTxHelper txHelper;
     private final UserRecipeService userRecipeService;
     private final NicknameService nicknameService;
@@ -89,6 +94,7 @@ public class FeedService {
                        FeedPostRepository feedPostRepository,
                        FeedLikeRepository feedLikeRepository,
                        FeedCommentRepository feedCommentRepository,
+                       UserBlockRepository userBlockRepository,
                        FeedTxHelper txHelper,
                        UserRecipeService userRecipeService,
                        NicknameService nicknameService,
@@ -102,6 +108,7 @@ public class FeedService {
         this.feedPostRepository = feedPostRepository;
         this.feedLikeRepository = feedLikeRepository;
         this.feedCommentRepository = feedCommentRepository;
+        this.userBlockRepository = userBlockRepository;
         this.txHelper = txHelper;
         this.userRecipeService = userRecipeService;
         this.nicknameService = nicknameService;
@@ -152,7 +159,8 @@ public class FeedService {
                 note, requestId, requestId == null ? null : hash, now());
         try {
             return new FeedDto.ShareResult(txHelper.insert(post).getId(), true);
-        } catch (DataIntegrityViolationException e) {
+        } catch (DataIntegrityViolationException | FeedTxHelper.AlreadyApplied e) {
+            // UNIQUE 위반 또는 카운터 잠금 뒤 재확인에서 같은 요청을 찾은 경우(둘 다 이 요청의 차감은 롤백됨)
             if (requestId == null) {
                 throw e;
             }
@@ -175,7 +183,10 @@ public class FeedService {
                 : trimmed.substring(0, trimmed.offsetByCodePoints(0, TITLE_COLUMN_LENGTH));
     }
 
-    /** 최신순 목록입니다. 커서는 앞 페이지 마지막 공유본 ID입니다. 숨긴 공유본은 작성자 본인 목록에만 숨김 표시와 함께 나옵니다. */
+    /**
+     * 최신순 목록입니다. 커서는 앞 페이지 마지막 공유본 ID입니다. 숨긴 공유본은 작성자 본인 목록에만 숨김 표시와 함께 나옵니다.
+     * 내가 차단한 사람의 공유본은 조회 조건에서 빠집니다(빈 페이지가 생기지 않음).
+     */
     public FeedDto.Page list(Long viewerId, String cursor, Integer size) {
         requireEnabled();
         int pageSize = size == null ? DEFAULT_PAGE_SIZE : Math.max(1, Math.min(MAX_PAGE_SIZE, size));
@@ -193,18 +204,22 @@ public class FeedService {
      * 인기순: 최근 7일간 받은 좋아요 수가 많은 공유본 최대 30개입니다(페이지 없음). 취소한 좋아요는 빠지고, 취소 뒤 다시 누르면
      * 새 반응으로 셉니다. 본인 공유본에는 좋아요를 누를 수 없어 스스로 순위를 올릴 수 없습니다.
      * 동점이면 가장 최근 좋아요 시각, 그다음 공유본 ID 내림차순입니다. 응답의 likeCount는 전체 좋아요 수입니다.
+     * 내가 차단한 사람의 공유본은 집계 단계에서 빠집니다(30개 자리를 차지하지 않음). 순위 자체는 모두에게 같은 좋아요 수 기준입니다.
      */
     public List<FeedDto.Summary> popular(Long viewerId) {
         requireEnabled();
         List<FeedLikeRepository.PopularRow> rows = feedLikeRepository.findPopularSince(
-                now().minusDays(POPULAR_DAYS), PageRequest.of(0, POPULAR_LIMIT));
+                viewerId, now().minusDays(POPULAR_DAYS), PageRequest.of(0, POPULAR_LIMIT));
         Map<Long, FeedPost> posts = feedPostRepository.findAllById(rows.stream().map(FeedLikeRepository.PopularRow::getPostId).toList())
                 .stream().collect(Collectors.toMap(FeedPost::getId, Function.identity()));
         List<FeedPost> ordered = rows.stream().map(row -> posts.get(row.getPostId())).filter(Objects::nonNull).toList();
         return summaries(viewerId, ordered);
     }
 
-    /** 좋아요. 이미 눌렀으면 그대로 두고 같은 결과를 돌려줍니다. 본인 공유본은 400, 닉네임이 없으면 428입니다. */
+    /**
+     * 좋아요. 이미 눌렀으면 그대로 두고 같은 결과를 돌려줍니다. 본인 공유본은 400, 닉네임이 없으면 428입니다.
+     * 작성 제한(1분 60회)은 실제로 새 좋아요가 저장될 때만 차감하고, 넘으면 429입니다. 취소는 제한하지 않습니다.
+     */
     public FeedDto.LikeResult like(Long userId, Long postId) {
         requireEnabled();
         FeedPost post = readablePost(userId, postId);
@@ -218,6 +233,8 @@ public class FeedService {
             try {
                 txHelper.insertLike(FeedLike.of(postId, userId, now()));
                 break;
+            } catch (FeedTxHelper.AlreadyApplied e) {
+                break; // 카운터 잠금 뒤 다시 보니 이미 눌려 있음(차감 롤백)
             } catch (DataIntegrityViolationException e) {
                 if (!feedPostRepository.existsById(postId)) {
                     throw new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_MESSAGE);
@@ -292,9 +309,22 @@ public class FeedService {
 
     /**
      * 보는 사람이 읽을 수 있는 공유본. 관리자가 숨긴 공유본은 작성자 본인만 읽을 수 있고(조회 예외) 다른 사람에게는 404입니다.
+     * 내가 차단한 사람의 공유본도 404입니다(차단한 사람 화면에만 적용, 상대 화면은 그대로).
      * 댓글 관련 API도 이 검사를 먼저 거칩니다(공유본 → 댓글 순서). 숨긴 공유본에 댓글을 단 사람이라고 볼 권한이 생기지 않습니다.
      */
     FeedPost readablePost(Long viewerId, Long postId) {
+        FeedPost post = unhiddenPost(viewerId, postId);
+        if (!post.getUserId().equals(viewerId) && userBlockRepository.existsByBlockerIdAndBlockedId(viewerId, post.getUserId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_MESSAGE);
+        }
+        return post;
+    }
+
+    /**
+     * 관리자 숨김만 확인한 공유본(차단 여부는 보지 않음). 차단 요청에서 작성자를 찾을 때만 씁니다: 이미 차단한 작성자의 공유본으로
+     * 다시 보낸 차단 요청도 404가 아니라 기존 차단을 돌려줄 수 있도록 합니다.
+     */
+    FeedPost unhiddenPost(Long viewerId, Long postId) {
         FeedPost post = findPost(postId);
         if (post.isHidden() && !post.getUserId().equals(viewerId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND_MESSAGE);

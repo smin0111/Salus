@@ -36,3 +36,10 @@ export const deleteFeedComment = (id, token) => apiClient.delete(`/feed/comments
 
 // 신고. 같은 대상을 다시 신고하면 기존 신고를 돌려줍니다(created=false). 내 글·댓글은 400, 숨겼거나 지운 대상은 404입니다.
 export const reportFeedTarget = (body, token) => apiClient.post('/feed/reports', body, { headers: authHeaders(token) });
+
+// 차단. 상대의 사용자 ID 대신 그 사람이 쓴 대상 { targetType: FEED_POST|FEED_COMMENT, targetId }를 보냅니다.
+// 새로 차단하면 201, 이미 차단한 사람이면 200(created=false), 500명을 넘으면 409입니다. 상대에게는 알리지 않습니다.
+export const blockFeedAuthor = (body, token) => apiClient.post('/feed/blocks', body, { headers: authHeaders(token) });
+// 내 차단 목록 [{ blockId, name, createdAt }]과 해제(반복해도 같은 결과)
+export const getFeedBlocks = (token) => apiClient.get('/feed/blocks', { headers: authHeaders(token) });
+export const unblockFeedUser = (blockId, token) => apiClient.delete(`/feed/blocks/${blockId}`, { headers: authHeaders(token) });

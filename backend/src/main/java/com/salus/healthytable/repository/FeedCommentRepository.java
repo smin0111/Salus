@@ -23,26 +23,34 @@ public interface FeedCommentRepository extends JpaRepository<FeedComment, Long> 
      * 최상위 댓글 한 페이지(오래된 순, 커서 = 앞 페이지 마지막 ID). 보는 사람에게 보여 줄 것만 조회 조건에서 고릅니다:
      * 공개 댓글(지우지 않았고 숨기지 않음), 보는 사람이 쓴 숨긴 댓글(본인 조회 예외), 또는 보는 사람에게 보이는 답글
      * (공개 답글이나 보는 사람이 쓴 숨긴 답글, findVisibleReplies와 같은 기준)이 있어 자리표시가 필요한 삭제·숨김 댓글.
-     * 그래서 페이지를 나눈 뒤 걸러 빈 페이지가 생기지 않습니다.
+     * 보는 사람이 차단한 사람의 댓글은 공개 댓글이어도 보여 줄 답글이 있을 때만 자리표시로 남고, 차단한 사람의 답글은
+     * "보여 줄 답글"로 치지 않습니다. 그래서 페이지를 나눈 뒤 걸러 빈 페이지가 생기지 않습니다.
      */
     @Query("""
             SELECT c FROM FeedComment c
             WHERE c.postId = :postId AND c.rootCommentId IS NULL AND c.id > :after
-              AND ((c.status = 'ACTIVE' AND c.hidden = false)
+              AND ((c.status = 'ACTIVE' AND c.hidden = false
+                    AND NOT EXISTS (SELECT b.id FROM UserBlock b WHERE b.blockerId = :viewerId AND b.blockedId = c.userId))
                    OR (c.status = 'ACTIVE' AND c.userId = :viewerId)
                    OR EXISTS (SELECT r.id FROM FeedComment r
                               WHERE r.rootCommentId = c.id AND r.status = 'ACTIVE'
-                                AND (r.hidden = false OR r.userId = :viewerId)))
+                                AND (r.hidden = false OR r.userId = :viewerId)
+                                AND NOT EXISTS (SELECT b2.id FROM UserBlock b2
+                                                WHERE b2.blockerId = :viewerId AND b2.blockedId = r.userId)))
             ORDER BY c.id ASC
             """)
     List<FeedComment> findVisibleRoots(@Param("postId") Long postId, @Param("viewerId") Long viewerId,
                                        @Param("after") Long after, Pageable pageable);
 
-    /** 답글 한 페이지(오래된 순). 공개 답글과 보는 사람이 쓴 숨긴 답글만 보여 주고, 삭제된 답글은 보내지 않습니다. */
+    /**
+     * 답글 한 페이지(오래된 순). 공개 답글과 보는 사람이 쓴 숨긴 답글만 보여 주고, 삭제된 답글과 보는 사람이 차단한 사람의
+     * 답글은 보내지 않습니다(그 답글에 다시 단 답글은 남고, 답한 대상 이름이 "차단한 사용자"로 나감).
+     */
     @Query("""
             SELECT c FROM FeedComment c
             WHERE c.rootCommentId = :rootId AND c.id > :after AND c.status = 'ACTIVE'
               AND (c.hidden = false OR c.userId = :viewerId)
+              AND NOT EXISTS (SELECT b.id FROM UserBlock b WHERE b.blockerId = :viewerId AND b.blockedId = c.userId)
             ORDER BY c.id ASC
             """)
     List<FeedComment> findVisibleReplies(@Param("rootId") Long rootId, @Param("viewerId") Long viewerId,

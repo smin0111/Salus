@@ -8,6 +8,7 @@ import com.salus.healthytable.security.AuthenticatedUserProvider;
 import com.salus.healthytable.security.IpWhitelistFilter;
 import com.salus.healthytable.security.JwtAuthenticationFilter;
 import com.salus.healthytable.security.JwtTokenProvider;
+import com.salus.healthytable.service.FeedBlockService;
 import com.salus.healthytable.service.FeedCommentService;
 import com.salus.healthytable.service.FeedReportService;
 import com.salus.healthytable.service.FeedService;
@@ -58,6 +59,9 @@ class FeedSecurityTest {
     private FeedReportService feedReportService;
 
     @MockBean
+    private FeedBlockService feedBlockService;
+
+    @MockBean
     private AuthenticatedUserProvider authenticatedUserProvider;
 
     @MockBean
@@ -91,6 +95,11 @@ class FeedSecurityTest {
         mockMvc.perform(post("/api/feed/reports")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"targetType\":\"FEED_POST\",\"targetId\":1,\"reason\":\"SPAM\"}"))
                 .andExpect(status().isUnauthorized());
-        verifyNoInteractions(feedService, feedCommentService, feedReportService);
+        mockMvc.perform(post("/api/feed/blocks")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"targetType\":\"FEED_POST\",\"targetId\":1}"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/feed/blocks")).andExpect(status().isUnauthorized());
+        mockMvc.perform(delete("/api/feed/blocks/1")).andExpect(status().isUnauthorized());
+        verifyNoInteractions(feedService, feedCommentService, feedReportService, feedBlockService);
     }
 }

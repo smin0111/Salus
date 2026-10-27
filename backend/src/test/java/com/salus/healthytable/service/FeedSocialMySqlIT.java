@@ -53,7 +53,7 @@ import static org.mockito.Mockito.when;
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({FeedService.class, FeedCommentService.class, FeedTxHelper.class, UserRecipeService.class, UserRecipeTxHelper.class,
+@Import({FeedService.class, FeedCommentService.class, FeedTxHelper.class, FeedWriteQuota.class, UserRecipeService.class, UserRecipeTxHelper.class,
         NicknameService.class, UserAccountService.class, AllergenDictionary.class, AllergenMatcher.class, TimeConfig.class,
         JacksonAutoConfiguration.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)

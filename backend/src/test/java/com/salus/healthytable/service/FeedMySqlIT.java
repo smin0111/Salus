@@ -49,7 +49,7 @@ import static org.mockito.Mockito.when;
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({FeedService.class, FeedTxHelper.class, UserRecipeService.class, UserRecipeTxHelper.class, NicknameService.class,
+@Import({FeedService.class, FeedTxHelper.class, FeedWriteQuota.class, UserRecipeService.class, UserRecipeTxHelper.class, NicknameService.class,
         AllergenDictionary.class, AllergenMatcher.class, TimeConfig.class, JacksonAutoConfiguration.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @EnabledIfEnvironmentVariable(named = "SALUS_IT_MYSQL_URL", matches = "jdbc:mysql:.+")

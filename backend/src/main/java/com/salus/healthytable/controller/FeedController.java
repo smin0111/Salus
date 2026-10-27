@@ -2,6 +2,7 @@ package com.salus.healthytable.controller;
 
 import com.salus.healthytable.dto.FeedDto;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
+import com.salus.healthytable.service.FeedBlockService;
 import com.salus.healthytable.service.FeedCommentService;
 import com.salus.healthytable.service.FeedReportService;
 import com.salus.healthytable.service.FeedService;
@@ -33,6 +34,7 @@ public class FeedController {
     private final FeedService feedService;
     private final FeedCommentService feedCommentService;
     private final FeedReportService feedReportService;
+    private final FeedBlockService feedBlockService;
     private final AuthenticatedUserProvider authenticatedUserProvider;
 
     @GetMapping("/status")
@@ -118,5 +120,24 @@ public class FeedController {
     public ResponseEntity<FeedDto.ReportResult> report(@RequestBody FeedDto.ReportRequest request) {
         FeedDto.ReportResult result = feedReportService.report(authenticatedUserProvider.requireUserId(), request);
         return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK).body(result);
+    }
+
+    /** 작성자 차단(대상 공유본·댓글로 지정). 새로 차단하면 201, 이미 차단한 사람이면 200과 기존 차단 ID입니다. 500명 초과는 409. */
+    @PostMapping("/blocks")
+    public ResponseEntity<FeedDto.BlockResult> block(@RequestBody FeedDto.BlockRequest request) {
+        FeedDto.BlockResult result = feedBlockService.block(authenticatedUserProvider.requireUserId(), request);
+        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK).body(result);
+    }
+
+    @GetMapping("/blocks")
+    public List<FeedDto.BlockedUser> blocks() {
+        return feedBlockService.list(authenticatedUserProvider.requireUserId());
+    }
+
+    /** 차단 해제(반복해도 같은 결과). */
+    @DeleteMapping("/blocks/{blockId}")
+    public ResponseEntity<Void> unblock(@PathVariable Long blockId) {
+        feedBlockService.unblock(authenticatedUserProvider.requireUserId(), blockId);
+        return ResponseEntity.noContent().build();
     }
 }
