@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -107,6 +108,12 @@ public class GlobalExceptionHandler {
                 "RECIPE_GENERATION_TIMEOUT",
                 "레시피 생성 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.",
                 request);
+    }
+
+    // 없는 주소(예: 제거한 예전 /api/community). Spring Boot 3.2부터 이 예외로 오므로, 아래 전체 처리기에 걸려 500이 되지 않게 404로 돌려줍니다.
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleNoResource(NoResourceFoundException ex, HttpServletRequest request) {
+        return apiError(HttpStatus.NOT_FOUND, "NOT_FOUND", "요청한 주소를 찾을 수 없습니다.", request);
     }
 
     // 위에서 처리하지 못한 나머지 모든 예외. 내부 정보는 숨기고 500 응답만 돌려줍니다.

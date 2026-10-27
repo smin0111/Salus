@@ -4,22 +4,12 @@ import com.salus.healthytable.domain.RecipeShare;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
-
 /**
  * {@link RecipeShare} 엔티티의 DB 접근 인터페이스입니다.
+ * 예전 레시피 공유 API는 제거했고, 표가 남아 있는 동안 회원 탈퇴 정리와 계정 화면의 건수 집계에만 씁니다.
  */
 @Repository
 public interface RecipeShareRepository extends JpaRepository<RecipeShare, Long> {
-
-    // 최신순으로 공유된 레시피 조회
-    List<RecipeShare> findAllByOrderByCreatedAtDesc();
-
-    // 공개 상태로 공유된 레시피만 조회
-    List<RecipeShare> findByVisibilityOrderByCreatedAtDesc(String visibility);
-
-    // 특정 사용자가 공유한 레시피 조회
-    List<RecipeShare> findByUserIdOrderByCreatedAtDesc(Long userId);
 
     long countByUserId(Long userId);
 

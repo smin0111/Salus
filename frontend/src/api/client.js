@@ -8,7 +8,7 @@ const url = path => `${config.API_BASE_URL}${path}`;
 // 로그인 토큰이 있으면 "Authorization: Bearer 토큰" 헤더를 만들고, 없으면 빈 객체를 반환합니다.
 export const authHeaders = token => token ? { Authorization: `Bearer ${token}` } : {};
 
-// axios를 감싼 간단한 클라이언트. 호출하는 쪽은 "/community/posts" 같은 경로만 넘기면 됩니다.
+// axios를 감싼 간단한 클라이언트. 호출하는 쪽은 "/my-recipes" 같은 경로만 넘기면 됩니다.
 export const apiClient = {
   get: (path, options) => axios.get(url(path), options),
   post: (path, body, options) => axios.post(url(path), body, options),
