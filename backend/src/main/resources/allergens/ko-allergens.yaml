@@ -9,6 +9,8 @@
 # declarationAllergens: 라벨 관찰 전용 ID/그룹. 기존 Matcher의 루트를 추가하지 않는다.
 # parent: Registry의 명시적 부모 ID. 라벨의 explicitChildren이나 안전 판정으로 확장하지 않는다.
 # labelCheck: 제품에 따라 이 알레르겐이 들어 있을 수 있는 재료. 차단하지 않고 성분 표시 확인을 안내한다.
+# profileOnlyAllergens: 법정 표시 대상은 아니지만 사용자가 등록하는 알레르기. 프로필 Matcher에만 쓰고 라벨 Registry에는 넣지 않는다.
+# members: 묶음 알레르기(견과류)에 속한 재료. 탐지에는 쓰지만 "호두"만 등록한 사람을 묶음 전체로 넓히지 않는다.
 #
 # 한 글자 용어는 토큰 전체가 일치할 때만 매칭한다. "밀"이 "밀크"에,
 # "게"가 "게으른"에 걸리는 오탐을 막기 위해서다. 파생 재료가 실제 탐지를 담당한다.
@@ -168,3 +170,79 @@ declarationAllergens:
   - id: MUSSEL
     name: 홍합
     parent: SHELLFISH
+
+# 법정 표시 대상 밖의 흔한 식품 알레르기(2026-10-29 추가). 두 글자 이상 용어는 재료명 안에서도 잡히므로
+# "애플", "apple"처럼 파인애플·pineapple에 걸리는 말은 넣지 않는다.
+profileOnlyAllergens:
+  - id: TREE_NUT
+    name: 견과류
+    aliases: [견과류, 견과, 너트류]
+    members: [호두, 잣, 아몬드, almond, 캐슈넛, 캐슈너트, 캐슈, cashew, 피스타치오, pistachio, 헤이즐넛, 개암, hazelnut,
+              피칸, pecan, 마카다미아, macadamia, 브라질너트, 누텔라, 마지팬, 잔두야, 프랄린, 믹스너트, 하루견과,
+              # 재료 텍스트는 공백에서 나뉘므로 "tree nut(s)"는 "nut"으로 잡는다(nuts 포함). doughnut·coconut·nutmeg에도 걸리지만 막는 쪽으로 둔다.
+              nut]
+
+  - id: ALMOND
+    name: 아몬드
+    aliases: [아몬드, almond]
+    derived: [마지팬, 아마레티]
+
+  - id: CASHEW
+    name: 캐슈넛
+    aliases: [캐슈넛, 캐슈너트, 캐슈, cashew]
+
+  - id: PISTACHIO
+    name: 피스타치오
+    aliases: [피스타치오, pistachio]
+
+  - id: HAZELNUT
+    name: 헤이즐넛
+    aliases: [헤이즐넛, 개암, hazelnut]
+    derived: [누텔라, 잔두야, 프랄린]
+
+  - id: PECAN
+    name: 피칸
+    aliases: [피칸, pecan]
+
+  - id: MACADAMIA
+    name: 마카다미아
+    aliases: [마카다미아, macadamia]
+
+  - id: SESAME
+    name: 참깨
+    aliases: [참깨, 깨, sesame]
+    derived: [참기름, 깨소금, 통깨, 볶은깨, 깨드레싱, 타히니, 흑임자]
+
+  - id: APPLE
+    name: 사과
+    aliases: [사과]
+    derived: [애플소스, 애플사이다, 애플파이, 사과식초, 사과즙]
+
+  - id: KIWI
+    name: 키위
+    aliases: [키위, 참다래, kiwi]
+
+  - id: BANANA
+    name: 바나나
+    aliases: [바나나, banana]
+
+  - id: MANGO
+    name: 망고
+    aliases: [망고, mango]
+
+  - id: STRAWBERRY
+    name: 딸기
+    aliases: [딸기, strawberry]
+
+  - id: MELON
+    name: 멜론
+    aliases: [멜론, 메론, melon]
+
+  - id: AVOCADO
+    name: 아보카도
+    aliases: [아보카도, avocado]
+    derived: [과카몰리]
+
+  - id: CELERY
+    name: 셀러리
+    aliases: [셀러리, 샐러리, celery]
