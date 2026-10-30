@@ -78,6 +78,7 @@ Ollama settings live in `application.properties` (`ollama.*`: model `qwen3:8b`, 
 ## Clients
 - `frontend/src/`: `screens/` (large: `ChatScreen.js` ~70KB), `api/` (HTTP client modules), `navigation/`, `context/AuthContext.js`, `components/`, `theme/`. Local `src/secrets.js` comes from `secrets.example.js`.
 - `admin/src/`: `pages/Dashboard.jsx`, `pages/Login.jsx` (admin id/password + TOTP steps), `pages/Monitor.jsx` (`/monitor` unattended wall display, display token from `#display-token=`), `components/StatsBoard.jsx`; build-time `VITE_API_BASE_URL`.
+- Beta admin access: the user web nginx (`frontend/deploy/nginx.conf`) returns 404 for `/api/admin*` and `/api/monitor*`; the admin container binds only `127.0.0.1:8081`. `scripts/beta/admin-access.sh anywhere|home|status` switches modes without rebuilding: `anywhere` = Tailscale Funnel `:8443` → admin (port 443 untouched), `home` = 8443 closed + LAN HTTPS (`docker-compose.admin-home.yml`, `admin/nginx-lan-tls.conf`, cert from `scripts/beta/admin-lan-cert.sh`). Each admin origin must be listed exactly in `APP_CORS_ALLOWED_ORIGINS`.
 
 ## Commands
 | Purpose | Command |

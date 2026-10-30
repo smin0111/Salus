@@ -72,6 +72,15 @@ else
     echo "[주의] Tailscale 이 없어 외부 공개는 건너뜁니다."
 fi
 
+# 관리자 접근 모드를 마지막으로 성공한 모드(기록이 없으면 anywhere)로 되돌립니다. 위 빌드가 admin을 서버 본체 전용으로 다시 만들기 때문입니다.
+# 마지막 전환이 실패·중단됐으면 restore는 아무것도 열지 않습니다. 실패하면 실제 상태를 다시 읽어 보여 줍니다.
+if [ -n "$TS" ]; then
+    if ! scripts/beta/admin-access.sh restore; then
+        echo "[주의] 관리자 접근 모드를 적용하지 못했습니다. 실제 상태:"
+        scripts/beta/admin-access.sh status || true
+    fi
+fi
+
 # 5. 잠자기 방지(덮개를 닫으면 전원 연결 여부와 상관없이 잠들 수 있으니 열어 두세요).
 if [ -f "$CAFFEINATE_PID_FILE" ] && kill -0 "$(cat "$CAFFEINATE_PID_FILE")" 2>/dev/null; then
     :
