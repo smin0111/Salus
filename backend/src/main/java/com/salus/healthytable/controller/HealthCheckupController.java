@@ -5,6 +5,7 @@ import com.salus.healthytable.dto.HealthCheckupAnalysisDTO;
 import com.salus.healthytable.dto.HealthCheckupDTO;
 import com.salus.healthytable.repository.HealthCheckupRepository;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
+import com.salus.healthytable.service.ConsentService;
 import com.salus.healthytable.service.HealthCheckupAnalysisService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -33,6 +34,7 @@ public class HealthCheckupController {
     private final HealthCheckupRepository healthCheckupRepository;
     private final HealthCheckupAnalysisService analysisService;
     private final AuthenticatedUserProvider authenticatedUserProvider;
+    private final ConsentService consentService;
     private final Clock clock;
 
     /**
@@ -41,6 +43,8 @@ public class HealthCheckupController {
     @PostMapping
     public ResponseEntity<HealthCheckup> saveCheckup(@RequestBody HealthCheckupDTO dto) {
         Long userId = authenticatedUserProvider.requireUserId();
+        // 건강정보(민감정보) 수집 동의 없이는 저장하지 않습니다.
+        consentService.requireConsent(userId);
         validateCheckup(dto);
 
         HealthCheckup checkup = new HealthCheckup();
@@ -79,6 +83,8 @@ public class HealthCheckupController {
     @GetMapping("/analysis")
     public ResponseEntity<HealthCheckupAnalysisDTO> getLatestAnalysis() {
         Long userId = authenticatedUserProvider.requireUserId();
+        // 분석은 건강정보를 이용하는 기능이라 동의가 있어야 합니다(저장된 기록 조회 GET /latest는 본인 열람이라 막지 않음).
+        consentService.requireConsent(userId);
         HealthCheckupAnalysisDTO analysis = healthCheckupRepository.findTopByUserIdOrderByCheckupDateDescIdDesc(userId)
                 .map(analysisService::analyze)
                 .orElseGet(analysisService::emptyAnalysis);

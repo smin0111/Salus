@@ -4,6 +4,7 @@ import com.salus.healthytable.domain.HealthProfile;
 import com.salus.healthytable.dto.HealthProfileDto;
 import com.salus.healthytable.repository.HealthProfileRepository;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
+import com.salus.healthytable.service.ConsentService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -25,8 +26,10 @@ class HealthProfileControllerTest {
 
     private final AuthenticatedUserProvider authenticatedUserProvider = mock(AuthenticatedUserProvider.class);
     private final HealthProfileRepository healthProfileRepository = mock(HealthProfileRepository.class);
+    private final ConsentService consentService = mock(ConsentService.class);
     private final HealthProfileController controller = new HealthProfileController(
             authenticatedUserProvider,
+            consentService,
             healthProfileRepository);
 
     // 저장된 프로필이 없으면 모든 항목이 빈 목록인 응답을 반환해야 합니다.
@@ -136,5 +139,17 @@ class HealthProfileControllerTest {
                 .hasMessage("알레르기는 30개 이하로 입력해 주세요.");
 
         verify(healthProfileRepository, never()).save(any(HealthProfile.class));
+    }
+
+    // 건강정보 수집 동의가 없으면 저장하지 않습니다.
+    @Test
+    void rejectsSaveWithoutConsent() {
+        when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
+        org.mockito.Mockito.doThrow(new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.FORBIDDEN, "동의 필요")).when(consentService).requireConsent(1L);
+
+        assertThatThrownBy(() -> controller.saveMyHealthProfile(new HealthProfileDto()))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        verify(healthProfileRepository, never()).save(any());
     }
 }

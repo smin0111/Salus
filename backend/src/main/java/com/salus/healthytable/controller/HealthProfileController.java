@@ -4,6 +4,7 @@ import com.salus.healthytable.domain.HealthProfile;
 import com.salus.healthytable.dto.HealthProfileDto;
 import com.salus.healthytable.repository.HealthProfileRepository;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
+import com.salus.healthytable.service.ConsentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -27,6 +28,7 @@ public class HealthProfileController {
     private static final int MAX_PROFILE_ITEM_LENGTH = 80;
 
     private final AuthenticatedUserProvider authenticatedUserProvider;
+    private final ConsentService consentService;
     private final HealthProfileRepository healthProfileRepository;
 
     /**
@@ -46,6 +48,8 @@ public class HealthProfileController {
     @PutMapping
     public HealthProfileDto saveMyHealthProfile(@RequestBody HealthProfileDto request) {
         Long userId = authenticatedUserProvider.requireUserId();
+        // 건강정보(민감정보) 수집 동의 없이는 저장하지 않습니다.
+        consentService.requireConsent(userId);
         HealthProfile profile = healthProfileRepository.findByUserId(userId)
                 .orElseGet(() -> {
                     HealthProfile created = new HealthProfile();

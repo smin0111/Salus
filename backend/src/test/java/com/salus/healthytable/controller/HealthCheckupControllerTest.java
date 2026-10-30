@@ -5,6 +5,7 @@ import com.salus.healthytable.dto.HealthCheckupAnalysisDTO;
 import com.salus.healthytable.dto.HealthCheckupDTO;
 import com.salus.healthytable.repository.HealthCheckupRepository;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
+import com.salus.healthytable.service.ConsentService;
 import com.salus.healthytable.service.HealthCheckupAnalysisService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -32,11 +33,13 @@ class HealthCheckupControllerTest {
     private final HealthCheckupRepository healthCheckupRepository = mock(HealthCheckupRepository.class);
     private final HealthCheckupAnalysisService analysisService = mock(HealthCheckupAnalysisService.class);
     private final AuthenticatedUserProvider authenticatedUserProvider = mock(AuthenticatedUserProvider.class);
+    private final ConsentService consentService = mock(ConsentService.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-07-05T15:30:00Z"), ZoneId.of("Asia/Seoul"));
     private final HealthCheckupController controller = new HealthCheckupController(
             healthCheckupRepository,
             analysisService,
             authenticatedUserProvider,
+            consentService,
             clock);
 
     // 검진 저장 시 현재 사용자로 저장하고, BMI가 없으면 키/몸무게로 계산해야 합니다.
@@ -171,5 +174,17 @@ class HealthCheckupControllerTest {
         dto.setDiastolicBp(80);
         dto.setFastingGlucose(90);
         return dto;
+    }
+
+    // 건강정보 동의가 없으면 검진 분석을 하지 않습니다.
+    @Test
+    void analysisRequiresConsent() {
+        when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
+        org.mockito.Mockito.doThrow(new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.FORBIDDEN, "동의 필요")).when(consentService).requireConsent(1L);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(controller::getLatestAnalysis)
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        org.mockito.Mockito.verifyNoInteractions(analysisService);
     }
 }
