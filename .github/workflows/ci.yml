@@ -47,6 +47,60 @@ jobs:
       - name: Maven 테스트 실행
         run: mvn test
 
+  backend-mysql-it:
+    name: 백엔드 MySQL 통합 테스트
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    # 빈 MySQL 8.0에 Flyway V1부터 전부 적용하고 엔티티 매핑(ddl-auto=validate)을 확인합니다.
+    # 비밀번호는 CI 전용 임시 컨테이너에만 쓰는 값이라 저장소 비밀값이 아닙니다.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: salus-ci-only
+          MYSQL_DATABASE: salus_it
+          TZ: Asia/Seoul
+        ports:
+          - 13306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -psalus-ci-only --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      SALUS_IT_MYSQL_URL: jdbc:mysql://127.0.0.1:13306/salus_it
+      SALUS_IT_MYSQL_PASSWORD: salus-ci-only
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Java 설정
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: MySQL 통합 테스트 실행
+        run: mvn -Dtest='*MySqlIT' -Dsurefire.failIfNoSpecifiedTests=false test
+
+      # 환경변수가 없으면 통합 테스트가 모두 건너뛰고도 성공하므로, 실제로 실행됐는지 확인합니다.
+      - name: 건너뛴 통합 테스트가 없는지 확인
+        run: |
+          python3 - <<'EOF'
+          import glob, re, sys
+          total = skipped = 0
+          for path in glob.glob('target/surefire-reports/TEST-*MySqlIT.xml'):
+              head = open(path, encoding='utf-8').read(800)
+              m = re.search(r'tests="(\d+)" errors="\d+" skipped="(\d+)"', head)
+              if m:
+                  total += int(m.group(1)); skipped += int(m.group(2))
+          print(f"MySQL IT tests={total} skipped={skipped}")
+          sys.exit(0 if total > 0 and skipped == 0 else 1)
+          EOF
+
   admin-build:
     name: 어드민 빌드와 보안 검사
     runs-on: ubuntu-latest
