@@ -17,4 +17,5 @@ export {
   Tabs,
 } from './primitives';
 export { EmptyState, ErrorState, OfflineState, Skeleton, Toast } from './states';
+export { default as MedicalNotice, MEDICAL_NOTICE_TEXT } from './MedicalNotice';
 export { BottomNavigation, PRIMARY_NAV_ITEMS, WebSidebar } from './navigation';

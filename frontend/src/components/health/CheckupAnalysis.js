@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Card, Chip, EmptyState, SectionHeader } from '../common';
+import { Button, Card, Chip, EmptyState, MedicalNotice, SectionHeader } from '../common';
 import { SNAPSHOT_GROUPS } from '../../features/health/checkupModel';
 import { color, radius, spacing, typography } from '../../theme/tokens';
 
@@ -18,7 +18,7 @@ export function CheckupSnapshot({ latest, wide = false }) {
         return (
           <Card key={group.id} style={[styles.snapshotCard, wide && styles.snapshotCardWide]}>
             <View style={styles.snapshotTop}>
-              <View style={styles.snapshotIcon}><Ionicons name={group.icon} size={17} color={color.brand} /></View>
+              <View style={styles.snapshotIcon}><Ionicons name={group.icon} size={17} color={color.brandText} /></View>
               <Text style={styles.snapshotLabel}>{group.label}</Text>
             </View>
             {values.length ? values.map(value => (
@@ -96,7 +96,7 @@ export default function CheckupAnalysis({ latest, analysis, onStartInput, onAskA
         <Card style={styles.analysisCard}>
           <View style={styles.cardHeader}>
             <Text style={styles.cardNumber}>02</Text>
-            <Ionicons name="restaurant-outline" size={20} color={color.brand} />
+            <Ionicons name="restaurant-outline" size={20} color={color.brandText} />
           </View>
           <Text style={styles.cardTitle}>식재료와 조리 방향</Text>
           <Text style={styles.cardDescription}>추천을 받을 때 우선 고려할 식재료 선택 원칙입니다.</Text>
@@ -120,10 +120,7 @@ export default function CheckupAnalysis({ latest, analysis, onStartInput, onAskA
         <Button variant="soft" label="AI에게 식단 추천 받기" icon="arrow-forward" onPress={onAskAi} />
       </Card>
 
-      <View style={styles.disclaimer}>
-        <Ionicons name="medical-outline" size={16} color={color.textMuted} />
-        <Text style={styles.disclaimerText}>이 분석은 음식 선택을 돕기 위한 안내이며 의료 진단이나 치료 지침이 아닙니다. 수치 해석과 치료는 의료진과 상의하세요.</Text>
-      </View>
+      <MedicalNotice kind="health" lead="이 분석은 음식 선택을 돕기 위한 안내예요." style={styles.disclaimer} />
     </View>
   );
 }
@@ -171,6 +168,5 @@ const styles = StyleSheet.create({
   nextCopy: { flex: 1 },
   nextTitle: { ...typography.label, color: color.text },
   nextText: { ...typography.bodySmall, color: color.textMuted, marginTop: 3 },
-  disclaimer: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, paddingHorizontal: spacing.xs },
-  disclaimerText: { ...typography.caption, color: color.textMuted, flex: 1 },
+  disclaimer: { paddingHorizontal: spacing.xs },
 });

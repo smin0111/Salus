@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Platform, TouchableOpacity, ScrollView, Text, useWindowDimensions } from 'react-native';
+import { StyleSheet, View, Platform, useWindowDimensions } from 'react-native';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import config from '../config';
 import { debugLog } from '../utils/logger';
@@ -19,11 +18,15 @@ import LoadingScreen from '../screens/LoadingScreen';
 import UpgradeScreen from '../screens/UpgradeScreen';
 import PaymentResultScreen from '../screens/PaymentResultScreen';
 import AccountSettingsScreen from '../screens/AccountSettingsScreen';
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
+import TermsScreen from '../screens/TermsScreen';
+import ConsentScreen from '../screens/ConsentScreen';
+import { getConsents } from '../api/consents';
+import NotFoundScreen from '../screens/NotFoundScreen';
 
-import Sidebar from '../components/Sidebar';
-import SalusLogo, { SalusLogoMark } from '../components/SalusLogo';
+import AppShell from '../components/AppShell';
 import { useAuth } from '../context/AuthContext';
-import { colors, radii, typography, controlStyles } from '../theme/colors';
+import { colors } from '../theme/colors';
 
 /*
  * 앱 전체의 화면 전환을 담당하는 내비게이터입니다.
@@ -37,32 +40,54 @@ const WEB_SHELL_EXCLUDED_SCREENS = [
   'about',
   'payment-result',
   'upgrade',
+  'privacy',
+  'terms',
+  'not-found',
 ];
+
+// 넓은 화면에서 채팅 목록을 접어 두었는지 기억합니다(웹 브라우저 저장소). 읽지 못하면 펼친 상태로 시작합니다.
+const HISTORY_OPEN_KEY = 'salus.chatHistoryOpen';
+const readHistoryOpen = () => {
+  try {
+    return Platform.OS !== 'web' || window.localStorage.getItem(HISTORY_OPEN_KEY) !== 'false';
+  } catch (e) {
+    return true;
+  }
+};
 
 // 보호 화면 목록은 화면 이동 직전에 한 번 더 확인합니다.
 // 라우팅만 숨기는 것으로는 부족하고, 사용자가 URL을 직접 입력하는 web 환경도 고려해야 합니다.
 const PROTECTED_SCREENS = ['my-recipes', 'feed', 'nickname', 'calendar', 'health', 'health-checkup', 'account-settings'];
 
-// 웹 사이드바 메뉴 항목(화면 id, 이름, 설명, 아이콘, URL 경로)
-const WEB_NAV_ITEMS = [
-  { id: 'chat', label: 'AI 셰프', caption: '맞춤 레시피 상담', icon: 'sparkles', path: '/chat' },
-  { id: 'my-recipes', label: '내 레시피', caption: '저장하고 고친 레시피', icon: 'bookmark', path: '/my-recipes' },
-  { id: 'calendar', label: '식단 캘린더', caption: '식사 기록', icon: 'calendar', path: '/calendar' },
-  { id: 'health', label: '건강 프로필', caption: '알레르기와 식이조건', icon: 'heart', path: '/health' },
-  { id: 'health-checkup', label: '검진 분석', caption: '수치 기반 추천', icon: 'document-text', path: '/health-checkup' },
-];
-
 // 웹 상단바에 표시할 화면별 [제목, 부제목]
 const WEB_SCREEN_TITLES = {
   about: ['서비스 소개', 'Salus 개인 맞춤형 AI 요리 서비스 플랫폼'],
-  chat: ['AI 셰프 스튜디오', '건강정보를 반영해 출처가 있는 레시피를 찾는 요리 상담'],
+  chat: ['채팅', '식사와 재료에 대해 물어보세요'],
   'my-recipes': ['내 레시피', '저장하고 내 입맛대로 고친 레시피를 모아 봅니다'],
   feed: ['레시피 피드', '다른 사용자가 공유한 레시피를 봅니다'],
   nickname: ['닉네임', '커뮤니티 활동에 보이는 이름을 정합니다'],
-  calendar: ['식단 캘린더', 'AI가 추천한 식사와 직접 기록한 식단을 관리합니다'],
-  health: ['건강 프로필', '알레르기, 질환, 식이 제한을 안전하게 반영합니다'],
+  calendar: ['식사 기록', 'AI가 추천한 식사와 직접 기록한 식단을 관리합니다'],
+  health: ['건강 정보', '알레르기, 질환, 식이 제한을 안전하게 반영합니다'],
   'health-checkup': ['건강검진 분석', '검진 수치를 식단 추천으로 연결합니다'],
   'account-settings': ['계정과 개인정보', '계정, 구독, 개인정보 설정을 관리합니다'],
+};
+
+// 브라우저 탭 제목. 화면마다 달라야 탭·방문 기록·공유할 때 어느 화면인지 구분됩니다.
+const WEB_DOCUMENT_TITLES = {
+  about: 'SALUS — 내 건강을 이해하는 나만의 레시피',
+  login: '로그인 | SALUS',
+  upgrade: 'SALUS Plus | SALUS',
+  'payment-result': '결제 결과 | SALUS',
+  privacy: '개인정보 처리방침 | SALUS',
+  terms: '서비스 이용약관 | SALUS',
+  consent: '가입 동의 | SALUS',
+  'not-found': '페이지를 찾을 수 없음 | SALUS',
+};
+
+const getDocumentTitle = (screen) => {
+  if (WEB_DOCUMENT_TITLES[screen]) return WEB_DOCUMENT_TITLES[screen];
+  const titles = WEB_SCREEN_TITLES[screen];
+  return titles ? `${titles[0]} | SALUS` : 'SALUS';
 };
 
 // 웹 URL 경로 → 화면 id. 새로고침하거나 주소를 직접 입력했을 때 어떤 화면을 열지 결정합니다.
@@ -80,6 +105,8 @@ const WEB_PATH_TO_SCREEN = {
   '/about': 'about',
   '/payment-result': 'payment-result',
   '/upgrade': 'upgrade',
+  '/privacy': 'privacy',
+  '/terms': 'terms',
 };
 
 // 예전 커뮤니티(레시피 허브) 주소는 화면을 없앴으므로 내 레시피 주소로 바꿔 엽니다. 로그인 확인은 내 레시피의 보호 흐름을 그대로 따릅니다.
@@ -89,15 +116,14 @@ const LEGACY_WEB_PATH_REDIRECTS = {
 
 // 화면 id → 웹 URL 경로(WEB_PATH_TO_SCREEN의 반대 방향). 목록에 없으면 "/화면id"를 사용합니다.
 const getWebPathForScreen = (screen) => {
-  const navItem = WEB_NAV_ITEMS.find(item => item.id === screen);
-  if (navItem) return navItem.path;
-
   const map = {
     'account-settings': '/account',
     login: '/login',
     about: '/about',
     'payment-result': '/payment-result',
     upgrade: '/upgrade',
+    privacy: '/privacy',
+    terms: '/terms',
   };
 
   return map[screen] || `/${screen}`;
@@ -116,103 +142,33 @@ const createEmptyHealthProfile = () => ({
 });
 
 /**
- * 넓은 웹 화면용 레이아웃입니다.
- * 왼쪽 아이콘 사이드바(메뉴, 서비스 소개, 계정, 로그아웃) + 상단바(화면 제목, 검색, 로그인) + 가운데 화면 내용(children)
- */
-function WebAppShell({ children, currentScreen, onNavigate, isLoggedIn, user, onLogout }) {
-  const [title, subtitle] = WEB_SCREEN_TITLES[currentScreen] || WEB_SCREEN_TITLES.chat;
-  const userName = isLoggedIn && user?.name ? user.name : '게스트';
-
-  return (
-    <View style={styles.webShell}>
-      <View style={styles.webSidebar}>
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel="SALUS 홈" style={styles.webBrand} onPress={() => onNavigate('chat')} activeOpacity={0.85}>
-          <SalusLogoMark size={42} accessible={false} />
-        </TouchableOpacity>
-
-        <ScrollView style={styles.webNav} showsVerticalScrollIndicator={false}>
-          {WEB_NAV_ITEMS.map(item => {
-            const isActive = currentScreen === item.id;
-            return (
-              <TouchableOpacity
-                key={item.id}
-                accessibilityRole="button"
-                accessibilityLabel={item.label}
-                accessibilityState={{ selected: isActive }}
-                style={[styles.webNavItem, isActive && styles.webNavItemActive]}
-                onPress={() => onNavigate(item.id)}
-                activeOpacity={0.85}
-              >
-                <Ionicons name={item.icon} size={21} color={isActive ? colors.primary : colors.textTertiary} />
-                {isActive && <View style={styles.webNavDot} />}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        <View style={styles.webSidebarFooter}>
-          <TouchableOpacity 
-            accessibilityRole="button"
-            accessibilityLabel="서비스 소개"
-            accessibilityState={{ selected: currentScreen === 'about' }}
-            style={[styles.webNavItem, currentScreen === 'about' && styles.webNavItemActive]} 
-            onPress={() => onNavigate('about')}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="information-circle-outline" size={22} color={currentScreen === 'about' ? colors.primary : colors.textTertiary} />
-            {currentScreen === 'about' && <View style={styles.webNavDot} />}
-          </TouchableOpacity>
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel="계정과 개인정보" accessibilityState={{ selected: currentScreen === 'account-settings' }} style={[styles.webNavItem, currentScreen === 'account-settings' && styles.webNavItemActive]} onPress={() => onNavigate('account-settings')}>
-            <Ionicons name="shield-checkmark-outline" size={21} color={currentScreen === 'account-settings' ? colors.primary : colors.textTertiary} />
-            {currentScreen === 'account-settings' && <View style={styles.webNavDot} />}
-          </TouchableOpacity>
-          {isLoggedIn && (
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="로그아웃" style={styles.webNavItem} onPress={onLogout}>
-              <Ionicons name="log-out-outline" size={21} color={colors.textTertiary} />
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel={isLoggedIn ? '계정 설정' : '로그인'} style={styles.webAvatarButton} onPress={() => onNavigate(isLoggedIn ? 'account-settings' : 'login')}>
-            <Text style={styles.webAvatarText}>{userName.slice(0, 1).toUpperCase()}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.webMain}>
-        <View style={styles.webTopbar}>
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel="SALUS 홈" style={styles.webTopBrand} onPress={() => onNavigate('chat')} activeOpacity={0.85}>
-            <SalusLogo size={30} wordmarkStyle={styles.webTopBrandText} accessible={false} />
-          </TouchableOpacity>
-          <View style={styles.webTopTitleBlock}>
-            <Text style={styles.webPageTitle}>{title}</Text>
-            <Text style={styles.webPageSubtitle}>{subtitle}</Text>
-          </View>
-          <View style={styles.webTopActions}>
-            {!isLoggedIn && (
-              <TouchableOpacity style={styles.webPrimaryAction} onPress={() => onNavigate('login')}>
-                <Text style={styles.webPrimaryActionText}>로그인</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        <View style={styles.webContentFrame}>
-          {children}
-        </View>
-      </View>
-    </View>
-  );
-}
-
-/**
  * 최상위 화면 컴포넌트입니다.
  * - 여러 화면이 함께 쓰는 상태(채팅 메시지, 건강 프로필, 식단)를 여기서 보관하고 props로 내려 줍니다.
- * - desktopWebMode: 웹이면서 화면 너비가 768px 이상일 때 WebAppShell 레이아웃을 사용합니다.
+ * - 서비스 화면은 화면 크기에 맞춰 공통 상단 메뉴를 사용합니다.
  */
 export default function AppNavigator() {
-  const { width: windowWidth } = useWindowDimensions();
-  const desktopWebMode = Platform.OS === 'web' && windowWidth >= 768;
+  const { width } = useWindowDimensions();
   const [currentScreen, setCurrentScreen] = useState('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [desktopHistoryOpen, setDesktopHistoryOpen] = useState(readHistoryOpen);
+  const [newChatRequested, setNewChatRequested] = useState(false);
+  // 다른 화면이 채팅으로 넘긴 질문(예: 식사 기록의 "채팅으로 추천받기"). 채팅 화면이 입력창에 채운 뒤 비웁니다.
+  const [chatPrompt, setChatPrompt] = useState(null);
+  const dockedHistory = width >= 768;
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    try {
+      window.localStorage.setItem(HISTORY_OPEN_KEY, desktopHistoryOpen ? 'true' : 'false');
+    } catch (e) {
+      // 저장하지 못해도 이번 화면에서는 그대로 동작합니다.
+    }
+  }, [desktopHistoryOpen]);
+
+  // 좁은 화면에서 연 채팅 목록 창은 넓은 화면이 되면 닫습니다. 다시 좁아졌을 때 저절로 열리지 않게 합니다.
+  useEffect(() => {
+    if (dockedHistory) setIsSidebarOpen(false);
+  }, [dockedHistory]);
   const [isAppReady, setIsAppReady] = useState(false);
   const { isLoggedIn, user, token, logout, refreshUser, loading: authLoading } = useAuth();
   // 닉네임 안내: 저장해 둔 사용자 정보에는 닉네임이 빠져 있을 수 있어, 로그인할 때 서버 정보를 새로 받는 데 성공한 뒤에만 판단합니다.
@@ -222,6 +178,21 @@ export default function AppNavigator() {
   const [nicknamePromptSkipped, setNicknamePromptSkipped] = useState(false);
   // 닉네임 화면을 떠날 곳. 저장하면 screen, 취소하면 cancelScreen(없으면 screen)으로 갑니다. null이면 계정 화면.
   const [nicknameReturn, setNicknameReturn] = useState(null); // { screen, data, cancelScreen, cancelData } | null
+
+  // 가입 동의: 로그인하면 서버에 현재 문서 버전에 동의했는지 묻습니다. 동의 전에는 닉네임보다 먼저 동의 화면을 보여 줍니다.
+  // 묻지 못하면(네트워크 오류 등) 화면을 막지 않습니다. 서버가 건강 저장·대화를 403으로 막으므로 동의 없이 저장되지는 않습니다.
+  const [consentState, setConsentState] = useState(null); // { required, versions } | null
+  useEffect(() => {
+    if (!isLoggedIn || !token) {
+      setConsentState(null);
+      return undefined;
+    }
+    let cancelled = false;
+    getConsents(token)
+      .then((response) => { if (!cancelled) setConsentState(response.data); })
+      .catch((e) => { debugLog('Consent status failed', e); });
+    return () => { cancelled = true; };
+  }, [isLoggedIn, token]);
 
   useEffect(() => {
     if (!isLoggedIn || !token) {
@@ -256,12 +227,14 @@ export default function AppNavigator() {
   useEffect(() => {
     if (Platform.OS === 'web') {
       const syncPath = () => {
-        let path = window.location.pathname;
+        // 끝 슬래시만 다른 주소(/chat/)는 같은 화면으로 봅니다.
+        let path = window.location.pathname.replace(/\/+$/, '') || '/';
         if (LEGACY_WEB_PATH_REDIRECTS[path]) {
           path = LEGACY_WEB_PATH_REDIRECTS[path];
           window.history.replaceState({}, '', path);
         }
-        const nextScreen = WEB_PATH_TO_SCREEN[path] || 'chat';
+        // 모르는 주소는 404 화면을 보여 주고 주소는 그대로 둡니다(잘못 입력한 주소를 확인할 수 있게).
+        const nextScreen = WEB_PATH_TO_SCREEN[path] || 'not-found';
         setCurrentScreen(nextScreen);
         if (nextScreen === 'payment-result') {
           setIsAppReady(true);
@@ -273,6 +246,12 @@ export default function AppNavigator() {
       return () => window.removeEventListener('popstate', syncPath);
     }
   }, []);
+
+  // 웹: 화면이 바뀔 때마다 브라우저 탭 제목을 맞춥니다.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    document.title = getDocumentTitle(currentScreen);
+  }, [currentScreen]);
 
   // 로그인이 필요한 화면에 세션 없이 들어온 경우 로그인 화면으로 보냅니다.
   useEffect(() => {
@@ -306,12 +285,14 @@ export default function AppNavigator() {
 
   // 로그인 상태가 변동될 때(로그인 완료 또는 로그아웃 실행) 대화방 세션과 건강 정보를 상호 분리합니다.
   // 알레르기 정보가 이전 사용자나 게스트 채팅으로 섞이면 추천 결과와 개인정보 보호가 동시에 깨질 수 있습니다.
+  // 토큰은 조건에 넣지 않습니다. 같은 사용자의 토큰 자동 갱신만으로 보던 대화 화면이 비워지면 채팅 화면이 기억하는 대화방과 어긋납니다(ChatScreen과 같은 기준).
   useEffect(() => {
     setMessages([
       { id: 1, text: '안녕하세요! 건강한 식탁을 위한 Salus입니다.\n알레르기나 건강 정보를 알려주시면 더 안전한 레시피를 추천해드려요.', sender: 'ai' }
     ]);
     setHealthProfile(createEmptyHealthProfile());
-  }, [isLoggedIn, token, user?.id]);
+    setChatPrompt(null);
+  }, [isLoggedIn, user?.id]);
 
   /**
    * 화면 이동 함수입니다. 모든 화면에 onNavigate로 전달됩니다.
@@ -339,6 +320,13 @@ export default function AppNavigator() {
         cancelData: data.cancelTo ? data.cancelData : data.returnData,
       } : null);
     }
+    // 숨겨 두는 화면(채팅)의 버튼이 포커스를 쥔 채 가려지면 포커스 테두리가 남으므로 이동 전에 포커스를 놓습니다.
+    if (Platform.OS === 'web' && screen !== currentScreen) {
+      document.activeElement?.blur?.();
+    }
+    if (screen === 'chat' && typeof data?.prompt === 'string' && data.prompt.trim()) {
+      setChatPrompt(data.prompt);
+    }
     setCurrentScreen(screen);
     if (Platform.OS === 'web') {
       window.history.pushState({}, '', getWebPathForScreen(screen));
@@ -356,12 +344,50 @@ export default function AppNavigator() {
   };
 
   // 로그인했는데 서버 기준으로 닉네임이 없으면(첫 가입·기존 회원) 닉네임 화면을 먼저 보여 줍니다. 건너뛸 수 있습니다.
-  const NICKNAME_PROMPT_EXCLUDED = ['login', 'payment-result', 'upgrade', 'about', 'nickname'];
-  const shouldPromptNickname = isLoggedIn && nicknameChecked && !!user && !user.nickname
+  const NICKNAME_PROMPT_EXCLUDED = ['login', 'payment-result', 'upgrade', 'about', 'nickname', 'privacy', 'terms', 'not-found', 'account-settings'];
+  // 동의 화면은 건너뛸 수 없습니다. 약관·처리방침을 읽는 화면과 소개·결제 결과 화면에서만 잠시 비켜 줍니다.
+  // 계정과 개인정보 화면도 비켜 줍니다: 동의하지 않는 기존 회원도 저장된 데이터를 보고 탈퇴할 수 있어야 합니다.
+  const CONSENT_PROMPT_EXCLUDED = ['login', 'payment-result', 'about', 'privacy', 'terms', 'not-found', 'account-settings'];
+  const shouldPromptConsent = isLoggedIn && !!consentState?.required && !CONSENT_PROMPT_EXCLUDED.includes(currentScreen);
+  const shouldPromptNickname = isLoggedIn && nicknameChecked && !!user && !user.nickname && !shouldPromptConsent
     && !nicknamePromptSkipped && !NICKNAME_PROMPT_EXCLUDED.includes(currentScreen);
+
+  // 채팅 화면. 공통 상단 메뉴 안에서는 다른 탭을 보는 동안에도 숨겨 둔 채 유지해 대화·입력·기다리는 답을 잃지 않습니다.
+  const renderChat = (active) => (
+    <ChatScreen
+      messages={messages}
+      setMessages={setMessages}
+      healthProfile={healthProfile}
+      setMealData={setMealData}
+      isSidebarOpen={isSidebarOpen}
+      desktopHistoryOpen={desktopHistoryOpen}
+      onCollapseDesktopHistory={() => setDesktopHistoryOpen(false)}
+      onToggleSidebar={() => setIsSidebarOpen(true)}
+      onLoginPress={() => handleNavigate('login')}
+      onNavigate={handleNavigate}
+      onCloseSidebar={() => setIsSidebarOpen(false)}
+      newChatRequested={newChatRequested}
+      onNewChatHandled={() => setNewChatRequested(false)}
+      pendingPrompt={chatPrompt}
+      onPromptHandled={() => setChatPrompt(null)}
+      active={active}
+      webMode={true}
+    />
+  );
 
   // currentScreen 값에 맞는 화면 컴포넌트를 반환합니다.
   const renderScreen = () => {
+    if (shouldPromptConsent) {
+      return (
+        <ConsentScreen
+          versions={consentState.versions}
+          onAgreed={() => setConsentState({ ...consentState, required: false })}
+          onOpenDocument={(screen) => handleNavigate(screen)}
+          onOpenAccount={() => handleNavigate('account-settings')}
+          onLogout={handleLogout}
+        />
+      );
+    }
     if (shouldPromptNickname) {
       return <NicknameScreen mode="onboarding" onDone={() => setNicknamePromptSkipped(true)} onSkip={() => setNicknamePromptSkipped(true)} />;
     }
@@ -380,36 +406,32 @@ export default function AppNavigator() {
         return <PaymentResultScreen onNavigate={handleNavigate} />;
       case 'about':
         return <LandingPageScreen onNavigate={handleNavigate} />;
+      case 'privacy':
+        return <PrivacyPolicyScreen onNavigate={handleNavigate} />;
+      case 'terms':
+        return <TermsScreen onNavigate={handleNavigate} />;
+      case 'not-found':
+        return <NotFoundScreen onNavigate={handleNavigate} />;
       case 'chat':
-        return (
-          <ChatScreen
-            messages={messages}
-            setMessages={setMessages}
-            healthProfile={healthProfile}
-            setMealData={setMealData}
-            isSidebarOpen={isSidebarOpen}
-            onToggleSidebar={() => setIsSidebarOpen(true)}
-            onLoginPress={() => handleNavigate('login')}
-            webMode={desktopWebMode}
-          />
-        );
+        return renderChat(true);
       case 'my-recipes':
-        return <MyRecipesScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
+        return <MyRecipesScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={true} />;
       case 'feed':
-        return <FeedScreen onBack={() => handleNavigate('my-recipes')} webMode={desktopWebMode} />;
+        return <FeedScreen onBack={() => handleNavigate('my-recipes')} webMode={true} />;
       case 'calendar':
-        return <CalendarScreen mealData={mealData} setMealData={setMealData} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
+        return <CalendarScreen mealData={mealData} setMealData={setMealData} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={true} />;
       case 'health':
-        return <HealthScreen healthProfile={healthProfile} setHealthProfile={setHealthProfile} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
+        return <HealthScreen healthProfile={healthProfile} setHealthProfile={setHealthProfile} isSidebarOpen={isSidebarOpen} onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={true} />;
       case 'health-checkup':
-        return <HealthCheckupScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
+        return <HealthCheckupScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={true} />;
       case 'account-settings':
-        return <AccountSettingsScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={desktopWebMode} />;
+        return <AccountSettingsScreen onToggleSidebar={() => setIsSidebarOpen(true)} onNavigate={handleNavigate} webMode={true} />;
       case 'login':
-        return <LoginScreen onLogin={() => handleNavigate('chat')} onGuest={() => handleNavigate('chat')} />;
+        return <LoginScreen onLogin={() => handleNavigate('chat')} onGuest={() => handleNavigate('chat')} onOpenPrivacy={() => handleNavigate('privacy')} onOpenTerms={() => handleNavigate('terms')} />;
       case 'upgrade':
         return (
           <UpgradeScreen
+            onNavigate={handleNavigate}
             onBack={() => handleNavigate('chat')}
             onSuccess={() => handleNavigate('chat')}
           />
@@ -427,169 +449,52 @@ export default function AppNavigator() {
   }
 
   // 넓은 웹 화면이고 제외 목록에 없는 화면이면 WebAppShell로 감쌉니다.
-  const shouldUseWebShell = desktopWebMode && !WEB_SHELL_EXCLUDED_SCREENS.includes(currentScreen);
-  const screenContent = renderScreen();
+  const shouldUseWebShell = !WEB_SHELL_EXCLUDED_SCREENS.includes(currentScreen);
+  // 동의·닉네임 안내가 화면을 가리는 동안에는 채팅을 유지하지 않습니다(안내를 마치면 새로 엽니다).
+  const keepChatMounted = shouldUseWebShell && !shouldPromptConsent && !shouldPromptNickname;
+  const chatVisible = keepChatMounted && currentScreen === 'chat';
+  const screenContent = chatVisible ? null : renderScreen();
 
   return (
     <View style={styles.container}>
       <ExpoStatusBar style="auto" />
 
       {shouldUseWebShell ? (
-        <WebAppShell
+        <AppShell
           currentScreen={currentScreen}
           onNavigate={handleNavigate}
           isLoggedIn={isLoggedIn}
           user={user}
           onLogout={handleLogout}
+          historyExpanded={dockedHistory ? desktopHistoryOpen : isSidebarOpen}
+          onOpenHistory={() => {
+            handleNavigate('chat');
+            if (dockedHistory) setDesktopHistoryOpen(open => currentScreen === 'chat' ? !open : true);
+            else setIsSidebarOpen(true);
+          }}
+          onNewChat={() => { handleNavigate('chat'); setIsSidebarOpen(false); setNewChatRequested(true); }}
         >
-          {screenContent}
-        </WebAppShell>
+          {keepChatMounted ? (
+            <View style={styles.screens}>
+              <View style={[styles.screenLayer, !chatVisible && styles.hiddenLayer]} aria-hidden={!chatVisible}>
+                {renderChat(chatVisible)}
+              </View>
+              {!chatVisible && <View style={styles.screenLayer}>{screenContent}</View>}
+            </View>
+          ) : screenContent}
+        </AppShell>
       ) : (
         screenContent
       )}
 
-      {/* 모바일/좁은 웹 화면에서만 슬라이드 사이드바 메뉴를 사용합니다. */}
-      {(Platform.OS !== 'web' || !desktopWebMode) && (
-        <Sidebar
-          isOpen={isSidebarOpen}
-          onClose={() => setIsSidebarOpen(false)}
-          currentScreen={currentScreen}
-          onNavigate={handleNavigate}
-        />
-      )}
+
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-    ...Platform.select({
-      web: {
-        width: '100%',
-        alignSelf: 'center',
-      }
-    })
-  },
-  webShell: {
-    flex: 1,
-    width: '100%',
-    minHeight: '100vh',
-    flexDirection: 'row',
-    backgroundColor: colors.background,
-  },
-  webSidebar: {
-    width: 76,
-    backgroundColor: colors.surface,
-    borderRightWidth: 1,
-    borderRightColor: colors.border,
-    paddingHorizontal: 12,
-    paddingTop: 16,
-    paddingBottom: 16,
-    alignItems: 'center',
-  },
-  webBrand: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 18,
-  },
-  webNav: {
-    flex: 1,
-    width: '100%',
-  },
-  webNavItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 44,
-    height: 44,
-    borderRadius: radii.md,
-    marginBottom: 8,
-    position: 'relative',
-  },
-  webNavItemActive: {
-    backgroundColor: colors.primaryLight,
-  },
-  webNavDot: {
-    position: 'absolute',
-    left: -12,
-    width: 3,
-    height: 22,
-    borderRadius: 2,
-    backgroundColor: colors.primary,
-  },
-  webSidebarFooter: {
-    width: '100%',
-    alignItems: 'center',
-    gap: 8,
-  },
-  webAvatarButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  webAvatarText: {
-    color: colors.onPrimary,
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  webMain: {
-    flex: 1,
-    minWidth: 0,
-    backgroundColor: colors.background,
-  },
-  webTopbar: {
-    height: 64,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  webTopBrand: {
-    width: 160,
-  },
-  webTopBrandText: {
-    color: colors.text,
-    fontSize: 19,
-    fontWeight: '900',
-    letterSpacing: 1.4,
-  },
-  webTopTitleBlock: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  webPageTitle: {
-    ...typography.cardTitle,
-  },
-  webPageSubtitle: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  webTopActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    width: 160,
-    gap: 8,
-  },
-  webPrimaryAction: {
-    ...controlStyles.primaryButton,
-    paddingHorizontal: 14,
-  },
-  webPrimaryActionText: {
-    ...typography.button,
-    color: colors.onPrimary,
-  },
-  webContentFrame: {
-    flex: 1,
-    minHeight: 0,
-    overflow: 'hidden',
-    backgroundColor: colors.background,
-  },
+  container: { flex: 1, width: '100%', backgroundColor: colors.background },
+  screens: { flex: 1, minHeight: 0 },
+  screenLayer: { flex: 1, minHeight: 0 },
+  hiddenLayer: { display: 'none' },
 });

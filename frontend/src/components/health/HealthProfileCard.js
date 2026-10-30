@@ -28,13 +28,6 @@ export default function HealthProfileCard({ section, items, editing, onAdd, onRe
 
   return (
     <Card style={styles.card}>
-      <View style={styles.topline}>
-        <Text style={[styles.number, { color: tone.foreground }]}>{section.number}</Text>
-        <View style={[styles.icon, { backgroundColor: tone.background }]}>
-          <Ionicons name={section.icon} size={19} color={tone.foreground} />
-        </View>
-      </View>
-
       <Text style={styles.title} accessibilityRole="header">{section.title}</Text>
       <Text style={styles.description}>{section.description}</Text>
 
@@ -90,7 +83,6 @@ export default function HealthProfileCard({ section, items, editing, onAdd, onRe
       ) : null}
 
       <View style={styles.helperRow}>
-        <Ionicons name="shield-checkmark-outline" size={15} color={color.textMuted} />
         <Text style={styles.helper}>{section.helper}</Text>
       </View>
     </Card>
@@ -98,17 +90,17 @@ export default function HealthProfileCard({ section, items, editing, onAdd, onRe
 }
 
 const styles = StyleSheet.create({
-  card: { flex: 1, minWidth: 280, padding: spacing.xl },
+  card: { flex: 1, minWidth: 0, padding: spacing.lg, borderWidth: 0, borderTopWidth: 1, borderRadius: 0 },
   topline: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   number: { ...typography.caption, fontWeight: '900', letterSpacing: 1.2 },
   icon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  title: { ...typography.h3, color: color.text, marginTop: spacing.md },
+  title: { ...typography.h3, color: color.text },
   description: { ...typography.bodySmall, color: color.textMuted, marginTop: spacing.xs, minHeight: 38 },
   divider: { height: 1, backgroundColor: color.borderSubtle, marginVertical: spacing.md },
   items: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, minHeight: 36 },
-  tag: { minHeight: 34, borderRadius: radius.pill, flexDirection: 'row', alignItems: 'center', paddingLeft: spacing.sm, paddingRight: 4 },
+  tag: { minHeight: 36, borderRadius: 6, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.sm },
   tagText: { ...typography.caption },
-  remove: { width: 30, height: 30 },
+  remove: { width: 44, height: 44 },
   emptyRow: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 7 },
   emptyText: { ...typography.bodySmall, color: color.textSubtle },
   editor: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.md },

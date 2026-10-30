@@ -26,7 +26,7 @@ export function LandingButton({ label, icon, variant = 'primary', onPress, compa
             <Text style={[styles.buttonText, primary ? styles.buttonPrimaryText : styles.buttonSecondaryText]}>
                 {label}
             </Text>
-            {icon ? <Ionicons name={icon} size={17} color={primary ? landingColors.white : landingColors.ink} /> : null}
+            {icon ? <Ionicons name={icon} size={17} color={primary ? landingColors.white : landingColors.inkText} /> : null}
         </Pressable>
     );
 }
@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
         alignSelf: 'center',
     },
     headerCompact: { minHeight: 72 },
-    brandText: { color: landingColors.ink, fontSize: 17, fontWeight: '900', letterSpacing: 1.8 },
+    brandText: { color: landingColors.inkText, fontSize: 17, fontWeight: '900', letterSpacing: 1.8 },
     headerActions: { flexDirection: 'row', alignItems: 'center', gap: 20 },
     button: {
         minHeight: 52,
@@ -72,10 +72,10 @@ const styles = StyleSheet.create({
         ...webPointer,
     },
     buttonCompact: { minHeight: 42, paddingHorizontal: 15 },
-    buttonPrimary: { backgroundColor: landingColors.ink, borderColor: landingColors.ink },
+    buttonPrimary: { backgroundColor: landingColors.ink, borderColor: landingColors.inkText },
     buttonPrimaryActive: { backgroundColor: landingColors.herb, borderColor: landingColors.herb },
     buttonSecondary: { backgroundColor: 'rgba(243,240,231,0.68)', borderColor: landingColors.lineStrong },
-    buttonSecondaryActive: { borderColor: landingColors.ink, backgroundColor: landingColors.paper },
+    buttonSecondaryActive: { borderColor: landingColors.inkText, backgroundColor: landingColors.paper },
     buttonFocused: Platform.select({
         web: { outlineStyle: 'solid', outlineWidth: 1, outlineColor: landingColors.accent, outlineOffset: 2 },
         default: {},
@@ -83,5 +83,5 @@ const styles = StyleSheet.create({
     buttonPressed: { opacity: 0.78 },
     buttonText: { fontSize: 14, fontWeight: '800', letterSpacing: -0.2 },
     buttonPrimaryText: { color: landingColors.white },
-    buttonSecondaryText: { color: landingColors.ink },
+    buttonSecondaryText: { color: landingColors.inkText },
 });

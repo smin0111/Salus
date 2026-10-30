@@ -101,7 +101,7 @@ export default function NicknameScreen({ mode = 'onboarding', onDone, onSkip }) 
         </Card>
         {!isEdit && (
           <Text style={styles.footnote}>
-            나중에 하셔도 AI 셰프와 내 레시피는 그대로 쓸 수 있어요. 커뮤니티 활동을 할 때 다시 여쭤볼게요.
+            나중에 하셔도 채팅와 내 레시피는 그대로 쓸 수 있어요. 커뮤니티 활동을 할 때 다시 여쭤볼게요.
           </Text>
         )}
       </ScrollView>
@@ -112,9 +112,9 @@ export default function NicknameScreen({ mode = 'onboarding', onDone, onSkip }) 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 24, paddingTop: 48, width: '100%', maxWidth: 520, alignSelf: 'center' },
-  title: { fontSize: 22, fontWeight: '800', color: colors.text, marginBottom: 8 },
+  title: { fontSize: 26, fontWeight: '600', color: colors.text, marginBottom: 8 },
   lead: { fontSize: 14, color: colors.textSecondary, lineHeight: 21, marginBottom: 16 },
-  card: { marginBottom: 12 },
+  card: { marginBottom: 12, borderWidth: 0, borderRadius: 0, paddingHorizontal: 0 },
   hint: { fontSize: 13, marginTop: 6, marginBottom: 4 },
   ok: { color: colors.success },
   bad: { color: colors.error },

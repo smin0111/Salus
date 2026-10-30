@@ -169,8 +169,124 @@ export function ExperienceSection({ width }) {
     );
 }
 
+// 05 섹션의 활용 예시. 실제 사용자 후기가 아니라 기능을 설명하는 예시 상황이라는 점을 화면에도 밝힙니다.
+const USE_CASES = [
+    {
+        icon: 'nutrition-outline',
+        tag: '알레르기',
+        title: '땅콩 알레르기가 있는 아이의 간식',
+        body: '건강 프로필에 땅콩을 등록해 두면, 간식 레시피를 물을 때마다 따로 말하지 않아도 땅콩이 들어간 후보를 빼고 찾습니다.',
+    },
+    {
+        icon: 'water-outline',
+        tag: '건강 목표',
+        title: '나트륨을 줄이고 싶은 날의 국물 요리',
+        body: '건강 목표에 나트륨 관리를 적어 두면, 국물 요리를 찾을 때 그 목표를 고려해 간을 줄이는 방향으로 조정한 조리 설명을 받을 수 있습니다.',
+    },
+    {
+        icon: 'search-outline',
+        tag: '출처 확인',
+        title: '이름만 아는 유행 요리 따라 하기',
+        body: '요리 이름만 말하면 웹에서 레시피 근거를 찾아 재료와 순서로 정리하고, 확인할 수 있는 출처를 함께 보여 줍니다.',
+    },
+];
+
+// 05 섹션: 어떤 상황에서 쓰는지 예시로 보여 줍니다.
+export function UseCaseSection({ width }) {
+    const gutter = getLandingGutter(width);
+    const sectionType = getSectionType(width);
+    const stacked = width < 940;
+
+    return (
+        <View style={styles.useCaseSection}>
+            <View style={[styles.inner, { paddingHorizontal: gutter }]}>
+                <SectionLabel number="05">USE CASES</SectionLabel>
+                <Text style={[styles.useCaseTitle, sectionType]} accessibilityRole="header">이럴 때 SALUS를 씁니다</Text>
+                <Text style={styles.useCaseNote}>실제 사용자 후기가 아니라, 기능을 설명하기 위한 예시 상황입니다.</Text>
+                <View style={[styles.useCaseGrid, stacked && styles.useCaseGridStacked]}>
+                    {USE_CASES.map(item => (
+                        <View key={item.title} style={styles.useCaseCard}>
+                            <View style={styles.useCaseTop}>
+                                <Ionicons name={item.icon} size={20} color={landingColors.herb} />
+                                <Text style={styles.useCaseTag}>{item.tag}</Text>
+                            </View>
+                            <Text style={styles.useCaseCardTitle}>{item.title}</Text>
+                            <Text style={styles.useCaseBody}>{item.body}</Text>
+                        </View>
+                    ))}
+                </View>
+            </View>
+        </View>
+    );
+}
+
+// 06 섹션의 자주 묻는 질문. 답은 현재 코드와 베타 설정으로 확인한 내용만 씁니다.
+const FAQ_ITEMS = [
+    {
+        question: 'SALUS의 답을 의료 조언으로 믿어도 되나요?',
+        answer: '아니요. SALUS는 등록한 정보와 요청을 바탕으로 식사 선택을 돕는 서비스이며, 의료 진단이나 치료를 제공하지 않습니다. 질환이나 복용 중인 약과 관련된 식사는 의료진과 상의해 주세요.',
+    },
+    {
+        question: '알레르기는 어떻게 반영되나요?',
+        answer: '건강 프로필에 등록한 알레르기는 대화에서 “빼 줘”라고 하지 않아도 항상 먼저 반영합니다. 재료를 확인하지 못한 경우에는 안전하다고 단정하지 않으니, 가공식품의 원재료 표시는 직접 확인해 주세요.',
+    },
+    {
+        question: '레시피는 어디에서 가져오나요?',
+        answer: '검토된 레시피와 웹에서 찾은 레시피를 근거로 재료와 순서를 정리합니다. 확인할 수 있는 출처가 있으면 레시피와 함께 보여 줍니다.',
+    },
+    {
+        question: '로그인하지 않아도 쓸 수 있나요?',
+        answer: 'AI 셰프와의 대화는 로그인 없이 둘러볼 수 있습니다. 레시피 저장, 건강 프로필, 식단 기록은 로그인해야 쓸 수 있습니다.',
+    },
+    {
+        question: '내 건강 정보를 지울 수 있나요?',
+        answer: '계정과 개인정보 화면에서 회원 탈퇴를 하면 건강 프로필, 검진 수치, 식단 기록, 대화가 바로 지워집니다. 자세한 내용은 개인정보 처리방침에 적어 두었습니다.',
+    },
+];
+
+// FAQ 한 줄. 누르면 답이 펼쳐집니다(처음에는 접힘).
+function FaqItem({ item }) {
+    const [open, setOpen] = React.useState(false);
+    return (
+        <View style={styles.faqItem}>
+            <Pressable
+                accessibilityRole="button"
+                aria-expanded={open}
+                accessibilityLabel={item.question}
+                onPress={() => setOpen(value => !value)}
+                style={({ hovered, focused }) => [styles.faqQuestionRow, (hovered || focused) && styles.faqQuestionRowActive]}
+            >
+                <Text style={styles.faqQuestion}>{item.question}</Text>
+                <Ionicons name={open ? 'remove' : 'add'} size={20} color={landingColors.inkText} />
+            </Pressable>
+            {open ? <Text style={styles.faqAnswer}>{item.answer}</Text> : null}
+        </View>
+    );
+}
+
+// 06 섹션: 자주 묻는 질문 5가지
+export function FaqSection({ width }) {
+    const gutter = getLandingGutter(width);
+    const sectionType = getSectionType(width);
+    const stacked = width < 940;
+
+    return (
+        <View style={styles.faqSection}>
+            <View style={[styles.inner, { paddingHorizontal: gutter }]}>
+                <SectionLabel number="06">FAQ</SectionLabel>
+                <View style={[styles.faqLayout, stacked && styles.faqLayoutStacked]}>
+                    <Text style={[styles.faqTitle, sectionType]} accessibilityRole="header">자주 묻는 질문</Text>
+                    <View style={styles.faqList}>
+                        {FAQ_ITEMS.map(item => <FaqItem key={item.question} item={item} />)}
+                    </View>
+                </View>
+            </View>
+        </View>
+    );
+}
+
 // 마지막 행동 유도(CTA) 섹션과 푸터. 로그인 여부에 따라 버튼 문구와 로그인 링크 표시가 달라집니다.
-export function FinalCtaSection({ width, isLoggedIn, userName, onStart, onLogin, onAccountSettings }) {
+export function FinalCtaSection({ width, isLoggedIn, userName, onStart, onLogin, onAccountSettings, onPrivacy, onTerms }) {
     const gutter = getLandingGutter(width);
     const compact = width < 768;
     const sectionType = getSectionType(width);
@@ -233,6 +349,32 @@ export function FinalCtaSection({ width, isLoggedIn, userName, onStart, onLogin,
                     <Ionicons name="shield-checkmark-outline" size={14} color={landingColors.inkMuted} />
                     <Text style={styles.footerTrustLinkText}>계정 및 데이터 관리</Text>
                 </Pressable>
+                <Pressable
+                    accessibilityRole="link"
+                    accessibilityLabel="서비스 이용약관 보기"
+                    onPress={onTerms}
+                    style={({ hovered, focused, pressed }) => [
+                        styles.footerTrustLink,
+                        (hovered || focused) && styles.footerTrustLinkActive,
+                        pressed && styles.footerTrustLinkPressed,
+                    ]}
+                >
+                    <Ionicons name="reader-outline" size={14} color={landingColors.inkMuted} />
+                    <Text style={styles.footerTrustLinkText}>이용약관</Text>
+                </Pressable>
+                <Pressable
+                    accessibilityRole="link"
+                    accessibilityLabel="개인정보 처리방침 보기"
+                    onPress={onPrivacy}
+                    style={({ hovered, focused, pressed }) => [
+                        styles.footerTrustLink,
+                        (hovered || focused) && styles.footerTrustLinkActive,
+                        pressed && styles.footerTrustLinkPressed,
+                    ]}
+                >
+                    <Ionicons name="document-text-outline" size={14} color={landingColors.inkMuted} />
+                    <Text style={styles.footerTrustLinkText}>개인정보 처리방침</Text>
+                </Pressable>
                 <Text style={styles.footerCopy}>© 2026 SALUS</Text>
             </View>
         </View>
@@ -266,7 +408,7 @@ const styles = StyleSheet.create({
     experienceSection: { backgroundColor: landingColors.paper, paddingTop: 120, paddingBottom: 136 },
     experienceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: 56, marginTop: 39 },
     experienceHeaderStacked: { flexDirection: 'column', alignItems: 'flex-start', gap: 25 },
-    experienceTitle: { color: landingColors.ink, fontWeight: '800', maxWidth: 700, ...landingType.keepKorean },
+    experienceTitle: { color: landingColors.inkText, fontWeight: '800', maxWidth: 700, ...landingType.keepKorean },
     experienceLead: { color: landingColors.inkSecondary, fontSize: 16, lineHeight: 28, maxWidth: 390, ...landingType.keepKorean },
     experienceBody: { flexDirection: 'row', alignItems: 'stretch', gap: 70, marginTop: 78 },
     experienceBodyStacked: { flexDirection: 'column', gap: 60 },
@@ -285,7 +427,7 @@ const styles = StyleSheet.create({
     experienceCardEyebrow: { color: landingColors.accentText, fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
     experienceVerified: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     experienceVerifiedText: { color: landingColors.herb, fontSize: 10, fontWeight: '800' },
-    experienceRecipeTitle: { color: landingColors.ink, fontSize: 25, fontWeight: '900', letterSpacing: -1, marginTop: 20 },
+    experienceRecipeTitle: { color: landingColors.inkText, fontSize: 25, fontWeight: '900', letterSpacing: -1, marginTop: 20 },
     experienceRecipeBody: { color: landingColors.inkSecondary, fontSize: 12, lineHeight: 20, marginTop: 8, ...landingType.keepKorean },
     experienceTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 17 },
     experienceTag: { borderWidth: 1, borderColor: landingColors.line, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 3 },
@@ -296,12 +438,32 @@ const styles = StyleSheet.create({
     requestNoteText: { color: landingColors.paper, fontSize: 14, lineHeight: 21, fontWeight: '700', marginTop: 9 },
     requestNoteReply: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 13 },
     requestNoteReplyText: { color: '#C2CCC5', fontSize: 11, fontWeight: '700' },
-    experienceList: { flex: 0.9, borderTopWidth: 1, borderTopColor: landingColors.ink },
+    experienceList: { flex: 0.9, borderTopWidth: 1, borderTopColor: landingColors.inkText },
     experienceItem: { paddingVertical: 28, borderBottomWidth: 1, borderBottomColor: landingColors.line },
     experienceItemTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     experienceItemNumber: { color: landingColors.inkMuted, fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
-    experienceItemTitle: { color: landingColors.ink, fontSize: 21, fontWeight: '850', letterSpacing: -0.7, marginTop: 17 },
+    experienceItemTitle: { color: landingColors.inkText, fontSize: 21, fontWeight: '850', letterSpacing: -0.7, marginTop: 17 },
     experienceItemBody: { color: landingColors.inkSecondary, fontSize: 14, lineHeight: 24, marginTop: 9, maxWidth: 430, ...landingType.keepKorean },
+    useCaseSection: { backgroundColor: landingColors.canvas, paddingTop: 116, paddingBottom: 110 },
+    useCaseTitle: { color: landingColors.inkText, fontWeight: '800', marginTop: 39, ...landingType.keepKorean },
+    useCaseNote: { color: landingColors.inkMuted, fontSize: 13, lineHeight: 20, marginTop: 14 },
+    useCaseGrid: { flexDirection: 'row', gap: 20, marginTop: 48 },
+    useCaseGridStacked: { flexDirection: 'column' },
+    useCaseCard: { flex: 1, backgroundColor: landingColors.paper, borderWidth: 1, borderColor: landingColors.line, borderRadius: 6, padding: 24 },
+    useCaseTop: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+    useCaseTag: { color: landingColors.accentText, fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
+    useCaseCardTitle: { color: landingColors.inkText, fontSize: 19, lineHeight: 27, fontWeight: '850', letterSpacing: -0.6, marginTop: 18, ...landingType.keepKorean },
+    useCaseBody: { color: landingColors.inkSecondary, fontSize: 14, lineHeight: 24, marginTop: 10, ...landingType.keepKorean },
+    faqSection: { backgroundColor: landingColors.paper, paddingTop: 116, paddingBottom: 116 },
+    faqLayout: { flexDirection: 'row', gap: 56, marginTop: 39 },
+    faqLayoutStacked: { flexDirection: 'column', gap: 30 },
+    faqTitle: { width: 320, color: landingColors.inkText, fontWeight: '800', ...landingType.keepKorean },
+    faqList: { flex: 1, borderTopWidth: 1, borderTopColor: landingColors.inkText },
+    faqItem: { borderBottomWidth: 1, borderBottomColor: landingColors.line },
+    faqQuestionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16, paddingVertical: 22, ...webPointer },
+    faqQuestionRowActive: { opacity: 0.78 },
+    faqQuestion: { flex: 1, color: landingColors.inkText, fontSize: 17, lineHeight: 25, fontWeight: '800', letterSpacing: -0.4, ...landingType.keepKorean },
+    faqAnswer: { color: landingColors.inkSecondary, fontSize: 15, lineHeight: 26, paddingBottom: 24, paddingRight: 36, ...landingType.keepKorean },
     ctaOuter: { backgroundColor: landingColors.canvas, paddingTop: 28 },
     cta: { width: '100%', maxWidth: landingLayout.maxWidth, alignSelf: 'center', minHeight: 570, backgroundColor: landingColors.herb, borderRadius: 7, paddingHorizontal: 56, paddingVertical: 64, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' },
     ctaCompact: { minHeight: 620, paddingHorizontal: 22, paddingTop: 48, paddingBottom: 108 },
@@ -320,9 +482,9 @@ const styles = StyleSheet.create({
     ctaFineLine: { width: 24, height: 1, backgroundColor: '#6B8C76' },
     ctaFineText: { color: landingColors.onHerbMuted, fontSize: 11, lineHeight: 17, flex: 1, textAlign: 'center' },
     footer: { width: '100%', maxWidth: landingLayout.maxWidth, alignSelf: 'center', minHeight: 126, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    footerCompact: { minHeight: 150, flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 18 },
+    footerCompact: { minHeight: 150, paddingVertical: 28, flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 18 },
     footerBrandRow: { flexDirection: 'row', alignItems: 'center', gap: 15 },
-    footerBrand: { color: landingColors.ink, fontSize: 15, fontWeight: '900', letterSpacing: 1.7 },
+    footerBrand: { color: landingColors.inkText, fontSize: 15, fontWeight: '900', letterSpacing: 1.7 },
     footerTagline: { color: landingColors.inkMuted, fontSize: 11, fontStyle: 'italic' },
     footerTrustLink: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 4, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: 'transparent', ...webPointer },
     footerTrustLinkActive: { borderBottomColor: landingColors.inkMuted },

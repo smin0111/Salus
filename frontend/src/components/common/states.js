@@ -32,7 +32,7 @@ function StateCard({ icon, title, description, actionLabel, onAction, tone = 'ne
   return (
     <Card style={[styles.state, compact && styles.stateCompact]}>
       <View style={[styles.stateIcon, tone === 'error' && styles.stateIconError, tone === 'offline' && styles.stateIconOffline]}>
-        <Ionicons name={icon} size={24} color={tone === 'error' ? color.error : tone === 'offline' ? color.info : color.brand} />
+        <Ionicons name={icon} size={24} color={tone === 'error' ? color.error : tone === 'offline' ? color.info : color.brandText} />
       </View>
       <Text style={styles.stateTitle} accessibilityRole="header">{title}</Text>
       {!!description && <Text style={styles.stateDescription}>{description}</Text>}
@@ -61,7 +61,7 @@ export function Toast({ visible, message, tone = 'neutral', actionLabel, onActio
   if (!visible) return null;
   return (
     <View style={styles.toast} accessibilityRole="alert" accessibilityLiveRegion="polite">
-      <Ionicons name={tone === 'success' ? 'checkmark-circle' : tone === 'error' ? 'alert-circle' : 'information-circle'} size={19} color={color.inverse} />
+      <Ionicons name={tone === 'success' ? 'checkmark-circle' : tone === 'error' ? 'alert-circle' : 'information-circle'} size={19} color={color.onInk} />
       <Text style={styles.toastText}>{message}</Text>
       {!!actionLabel && <Text onPress={onAction} style={styles.toastAction} accessibilityRole="button">{actionLabel}</Text>}
     </View>
@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
   stateTitle: { ...typography.h3, color: color.text, textAlign: 'center' },
   stateDescription: { ...typography.body, color: color.textMuted, textAlign: 'center', maxWidth: 420, marginTop: spacing.xs },
   stateAction: { marginTop: spacing.lg },
-  toast: { position: 'absolute', left: spacing.md, right: spacing.md, bottom: 88, minHeight: 52, borderRadius: radius.lg, backgroundColor: color.brandStrong, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, zIndex: 120 },
-  toastText: { ...typography.bodySmall, color: color.inverse, flex: 1 },
+  toast: { position: 'absolute', left: spacing.md, right: spacing.md, bottom: 88, minHeight: 52, borderRadius: radius.lg, backgroundColor: color.inkSurface, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.md, zIndex: 120 },
+  toastText: { ...typography.bodySmall, color: color.onInk, flex: 1 },
   toastAction: { ...typography.label, color: color.accentSoft, paddingVertical: spacing.sm },
 });

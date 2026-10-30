@@ -7,17 +7,19 @@ import { SalusLogoMark } from './SalusLogo';
 
 // 사이드바 메뉴 목록(id는 AppNavigator의 화면 이름과 같음)
 const MENU_ITEMS = [
-    { id: 'chat', label: 'AI 채팅', icon: 'chatbubbles' },
+    // 메뉴 이름은 데스크톱 메뉴(AppNavigator WEB_NAV_ITEMS)·화면 제목과 같게 맞춥니다.
+    { id: 'chat', label: 'AI 셰프', icon: 'chatbubbles' },
     { id: 'my-recipes', label: '내 레시피', icon: 'bookmark' },
     { id: 'calendar', label: '식단 캘린더', icon: 'calendar' },
-    { id: 'health', label: '나의 건강정보', icon: 'heart' },
-    { id: 'health-checkup', label: '건강검진', icon: 'document-text' },
+    { id: 'health', label: '건강 프로필', icon: 'heart' },
+    { id: 'health-checkup', label: '검진 분석', icon: 'document-text' },
     { id: 'account-settings', label: '계정과 개인정보', icon: 'shield-checkmark' },
 ];
 
 import { useAuth } from '../context/AuthContext';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ThemeCycleButton from './ThemeCycleButton';
 
 /**
  * 모바일에서 햄버거 메뉴로 여는 슬라이드형 사이드바입니다.
@@ -101,18 +103,19 @@ export default function Sidebar({ isOpen, onClose, currentScreen, onNavigate }) 
                                 accessibilityLabel="플러스로 업그레이드"
                             >
                                 <View style={styles.premiumBannerContent}>
-                                    <Ionicons name="sparkles" size={18} color="white" />
+                                    <Ionicons name="sparkles" size={18} color={colors.onPrimary} />
                                     <Text style={styles.premiumBannerText}>플러스로 업그레이드</Text>
                                 </View>
-                                <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.7)" />
+                                <Ionicons name="chevron-forward" size={16} color={colors.onPrimary} />
                             </TouchableOpacity>
                         )}
                     </View>
 
                     <View style={styles.footer}>
+                        <ThemeCycleButton style={[styles.accountButton, { marginBottom: 8 }]} labelStyle={styles.accountText} iconColor={colors.textSecondary} iconSize={24} showLabel />
                         <TouchableOpacity accessibilityRole="button" style={[styles.accountButton, { marginBottom: 8 }]} onPress={() => { onNavigate('about'); onClose(); }}>
                             <Ionicons name="information-circle-outline" size={24} color={colors.textSecondary} />
-                            <Text style={styles.accountText}>Salus 정보</Text>
+                            <Text style={styles.accountText}>서비스 소개</Text>
                             <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} style={{ marginLeft: 'auto' }} />
                         </TouchableOpacity>
                         {isLoggedIn ? (

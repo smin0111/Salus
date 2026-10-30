@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { getActivities, getMealLogs, getMonthlyMealAnalysis } from '../api/meals';
@@ -56,21 +56,39 @@ export default function CalendarScreen({ mealData, setMealData, onToggleSidebar,
   const [activityData, setActivityData] = useState({});
   const [monthlyAnalysis, setMonthlyAnalysis] = useState('');
   const [loading, setLoading] = useState(true);
+  // 월간 AI 코멘트는 LLM을 불러 오래 걸릴 수 있어 식단 기록과 따로 기다립니다(기록 화면을 먼저 보여 줌).
+  const [analysisState, setAnalysisState] = useState('idle'); // 'idle' | 'loading' | 'error'
+  const loadSeqRef = useRef(0);
   const [errors, setErrors] = useState([]);
   const [expandedMeal, setExpandedMeal] = useState(null);
 
-  // 식단 기록, 활동 기록, 월간 분석을 동시에 불러와 화면에서 쓰기 쉬운 "날짜 → 기록" 형태로 변환합니다.
+  // 식단 기록과 활동 기록을 불러와 화면에서 쓰기 쉬운 "날짜 → 기록" 형태로 바꿉니다.
+  // 월간 분석은 LLM을 부르는 느린 요청이라 기다리지 않고 따로 받습니다. 늦게 온 다른 달의 결과는 버립니다.
   const loadData = async () => {
     if (!token) return;
+    const seq = loadSeqRef.current + 1;
+    loadSeqRef.current = seq;
     setLoading(true);
     setErrors([]);
     const year = displayMonth.getFullYear();
     const month = displayMonth.getMonth() + 1;
-    const [mealsResult, activitiesResult, analysisResult] = await Promise.allSettled([
+    setMonthlyAnalysis('');
+    setAnalysisState('loading');
+    getMonthlyMealAnalysis(year, month, token)
+      .then(response => {
+        if (seq !== loadSeqRef.current) return;
+        setMonthlyAnalysis(response.data || '');
+        setAnalysisState('idle');
+      })
+      .catch(error => {
+        if (seq !== loadSeqRef.current) return;
+        setAnalysisState(isAuthError(error) ? 'idle' : 'error');
+      });
+    const [mealsResult, activitiesResult] = await Promise.allSettled([
       getMealLogs(token),
       getActivities(token),
-      getMonthlyMealAnalysis(year, month, token),
     ]);
+    if (seq !== loadSeqRef.current) return;
 
     if (mealsResult.status === 'fulfilled') {
       const transformed = {};
@@ -97,9 +115,6 @@ export default function CalendarScreen({ mealData, setMealData, onToggleSidebar,
       (activitiesResult.value.data || []).forEach(log => { transformed[log.activityDate] = log; });
       setActivityData(transformed);
     } else if (!isAuthError(activitiesResult.reason)) setErrors(previous => [...previous, activitiesResult.reason]);
-
-    if (analysisResult.status === 'fulfilled') setMonthlyAnalysis(analysisResult.value.data || '');
-    else if (!isAuthError(analysisResult.reason)) setErrors(previous => [...previous, analysisResult.reason]);
     setLoading(false);
   };
 
@@ -150,7 +165,7 @@ export default function CalendarScreen({ mealData, setMealData, onToggleSidebar,
       <Card key={slot.id} style={styles.mealCard}>
         <View style={styles.mealTop}>
           <View style={[styles.mealIcon, { backgroundColor: `${slot.tone}18` }]}><Ionicons name={slot.icon} size={20} color={slot.tone} /></View>
-          <View style={styles.mealCopy}><View style={styles.mealTitleRow}><Text style={styles.mealTitle}>{slot.label}</Text>{selectedMeal[aiField] && <Chip label="AI 추천" icon="sparkles-outline" tone="brand" />}</View><Text style={[styles.mealValue, !content && styles.mealEmpty]} numberOfLines={expanded ? undefined : 2}>{content || '기록 없음'}</Text></View>
+          <View style={styles.mealCopy}><View style={styles.mealTitleRow}><Text style={styles.mealTitle}>{slot.label}</Text>{selectedMeal[aiField] && <Chip label="AI 추천" icon="chatbubble-outline" tone="brand" />}</View><Text style={[styles.mealValue, !content && styles.mealEmpty]} numberOfLines={expanded ? undefined : 2}>{content || '기록 없음'}</Text></View>
           {!!calorie && <Text style={styles.calorie}>{calorie} kcal</Text>}
         </View>
         <View style={styles.mealActions}>
@@ -165,7 +180,7 @@ export default function CalendarScreen({ mealData, setMealData, onToggleSidebar,
   // 선택한 날짜의 요약(칼로리)과 끼니 목록 패널
   const TodayPanel = () => (
     <View style={styles.todayPanel}>
-      <View style={styles.dateHeading}><View><Text style={styles.dateEyebrow}>{sameDate(selectedDate, new Date()) ? 'TODAY' : 'SELECTED DAY'}</Text><Text style={styles.dateTitle}>{dateLabel(selectedDate)}</Text></View><Button variant="secondary" icon="sparkles-outline" label="AI 추천" onPress={() => askAi(`${dateLabel(selectedDate)} 식단을 내 조건에 맞게 추천해줘`)} /></View>
+      <View style={styles.dateHeading}><View><Text style={styles.dateTitle}>{dateLabel(selectedDate)}</Text></View><Button variant="secondary" icon="chatbubble-outline" label="채팅으로 추천받기" onPress={() => askAi(`${dateLabel(selectedDate)} 식단을 내 조건에 맞게 추천해줘`)} /></View>
       <Card style={styles.calorieCard}><View><Text style={styles.calorieLabel}>하루 칼로리 요약</Text><Text style={styles.calorieValue}>{calorieTotal ? `${calorieTotal.toLocaleString()} kcal` : '기록 전'}</Text></View><View style={styles.recordRing}><Text style={styles.recordValue}>{recordedSlots}/4</Text><Text style={styles.recordLabel}>끼니 기록</Text></View></Card>
       <View style={styles.mealList}>{MEAL_SLOTS.map(renderMealSlot)}</View>
     </View>
@@ -173,13 +188,13 @@ export default function CalendarScreen({ mealData, setMealData, onToggleSidebar,
 
   return (
     <View style={styles.container}>
-      {!webMode && <View style={styles.mobileHeader}><IconButton icon="menu" label="보조 메뉴 열기" onPress={onToggleSidebar} /><View style={styles.headerCopy}><Text style={styles.headerTitle}>식단</Text><Text style={styles.headerSubtitle}>오늘의 식사를 가볍게 기록하세요</Text></View><IconButton icon="sparkles-outline" label="AI 식단 상담" onPress={() => askAi('오늘 식단을 상담하고 싶어')} /></View>}
+      {!webMode && <View style={styles.mobileHeader}><IconButton icon="menu" label="보조 메뉴 열기" onPress={onToggleSidebar} /><View style={styles.headerCopy}><Text style={styles.headerTitle}>식단 캘린더</Text><Text style={styles.headerSubtitle}>오늘의 식사를 가볍게 기록하세요</Text></View><IconButton icon="chatbubble-outline" label="AI 식단 상담" onPress={() => askAi('오늘 식단을 상담하고 싶어')} /></View>}
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.titleRow}><SectionHeader eyebrow="MEAL RHYTHM" title="식단 기록" description="모바일에서는 오늘을 먼저 보고, 필요할 때 주간과 월간 흐름으로 확장합니다." /><Tabs items={VIEW_ITEMS} value={view} onChange={setView} style={styles.viewTabs} /></View>
+        <View style={styles.titleRow}><SectionHeader eyebrow="MEAL RHYTHM" title="식사 기록" description="오늘 먹은 식사를 기록하고, 주간·월간 보기로 흐름을 돌아봐요." style={styles.titleCopy} /><Tabs items={VIEW_ITEMS} value={view} onChange={setView} style={styles.viewTabs} /></View>
 
         {errors.length > 0 && Object.keys(mealData).length > 0 && <View style={styles.partialNotice}><Ionicons name="cloud-offline-outline" size={18} color={color.info} /><Text style={styles.partialText}>일부 정보를 불러오지 못했습니다. 불러온 식단은 계속 표시합니다.</Text><Text style={styles.retry} onPress={loadData}>재시도</Text></View>}
 
-        {loading ? <View style={styles.loading}><Skeleton width="42%" height={28} /><Skeleton height={110} style={{ marginTop: spacing.lg }} /><Skeleton height={160} style={{ marginTop: spacing.sm }} /><Skeleton height={160} style={{ marginTop: spacing.sm }} /></View> : errors.length >= 3 && !Object.keys(mealData).length ? (errors.some(error => !error?.response) ? <OfflineState onAction={loadData} /> : <ErrorState description="식단 기록을 불러오지 못했습니다." onAction={loadData} />) : (
+        {loading ? <View style={styles.loading}><Skeleton width="42%" height={28} /><Skeleton height={110} style={{ marginTop: spacing.lg }} /><Skeleton height={160} style={{ marginTop: spacing.sm }} /><Skeleton height={160} style={{ marginTop: spacing.sm }} /></View> : errors.length >= 2 && !Object.keys(mealData).length ? (errors.some(error => !error?.response) ? <OfflineState onAction={loadData} /> : <ErrorState description="식단 기록을 불러오지 못했습니다." onAction={loadData} />) : (
           <>
             {view === 'week' && <Card style={styles.weekCard}><View style={styles.weekHeader}><IconButton icon="chevron-back" label="이전 주" onPress={() => chooseDate(addDays(selectedDate, -7))} /><Text style={styles.weekTitle}>{weekDates[0].getMonth() + 1}월 {weekDates[0].getDate()}일 – {weekDates[6].getMonth() + 1}월 {weekDates[6].getDate()}일</Text><IconButton icon="chevron-forward" label="다음 주" onPress={() => chooseDate(addDays(selectedDate, 7))} /></View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weekStrip}>{weekDates.map(date => { const key = formatDate(date); const meal = mealData[key] || {}; const count = ['breakfast', 'lunch', 'dinner'].filter(slot => meal[slot]).length; const selected = sameDate(date, selectedDate); return <TouchableOpacity key={key} style={[styles.dayPill, selected && styles.dayPillSelected]} onPress={() => chooseDate(date)} accessibilityRole="button" accessibilityState={{ selected }} accessibilityLabel={`${dateLabel(date)}, ${count}끼 기록`}><Text style={[styles.dayName, selected && styles.dayTextSelected]}>{WEEK_DAYS[date.getDay()]}</Text><Text style={[styles.dayNumber, selected && styles.dayTextSelected]}>{date.getDate()}</Text><View style={styles.recordDots}>{[0, 1, 2].map(index => <View key={index} style={[styles.recordDot, index < count && styles.recordDotOn, selected && index < count && styles.recordDotSelected]} />)}</View></TouchableOpacity>; })}</ScrollView></Card>}
 
@@ -187,7 +202,7 @@ export default function CalendarScreen({ mealData, setMealData, onToggleSidebar,
 
             {view !== 'month' && <TodayPanel />}
 
-            <View style={styles.analysisSection}><SectionHeader eyebrow="GENTLE REVIEW" title="식단 흐름 돌아보기" description="기록을 바탕으로 생활 습관을 돌아보는 안내이며 의료 진단이 아닙니다." /><View style={[styles.analysisGrid, isDesktop && styles.analysisGridDesktop]}><Card style={styles.analysisCard}><Text style={styles.analysisKicker}>잘한 점</Text><Text style={styles.analysisValue}>이번 달 {Object.values(mealData).filter(meal => meal.breakfast || meal.lunch || meal.dinner).length}일 기록</Text><Text style={styles.analysisText}>꾸준히 남긴 기록은 다음 식단을 고르는 좋은 단서가 됩니다.</Text></Card><Card style={styles.analysisCard}><Text style={styles.analysisKicker}>확인할 점</Text><Text style={styles.analysisValue}>{recordedSlots < 4 ? '아직 비어 있는 끼니가 있어요' : '오늘 네 끼니를 모두 기록했어요'}</Text><Text style={styles.analysisText}>정확한 판단보다 빠뜨린 기록을 가볍게 보완해 보세요.</Text></Card><Card style={styles.analysisCard}><Text style={styles.analysisKicker}>다음 추천</Text><Text style={styles.analysisValue}>기록이 적은 끼니부터 한 가지씩</Text><Button variant="soft" size="sm" label="AI에게 식단 상담하기" onPress={() => askAi(`최근 식단 기록을 바탕으로 다음 식사를 상담해줘${monthlyAnalysis ? `. 월간 코멘트: ${monthlyAnalysis}` : ''}`)} style={styles.analysisButton} /></Card></View>{monthlyAnalysis ? <Card style={styles.monthlyComment}><Ionicons name="sparkles-outline" size={20} color={color.accent} /><View style={styles.monthlyCopy}><Text style={styles.monthlyTitle}>이번 달 AI 코멘트</Text><Text style={styles.monthlyText}>{String(monthlyAnalysis)}</Text></View></Card> : <EmptyState compact title="아직 월간 AI 코멘트가 없어요" description="식단 기록이 쌓이면 기존 분석 API의 코멘트를 여기에 표시합니다." />}</View>
+            <View style={styles.analysisSection}><SectionHeader eyebrow="GENTLE REVIEW" title="식단 흐름 돌아보기" description="기록을 바탕으로 생활 습관을 돌아보는 안내이며 의료 진단이 아닙니다." /><View style={[styles.analysisGrid, isDesktop && styles.analysisGridDesktop]}><Card style={styles.analysisCard}><Text style={styles.analysisKicker}>잘한 점</Text><Text style={styles.analysisValue}>이번 달 {Object.values(mealData).filter(meal => meal.breakfast || meal.lunch || meal.dinner).length}일 기록</Text><Text style={styles.analysisText}>꾸준히 남긴 기록은 다음 식단을 고르는 좋은 단서가 됩니다.</Text></Card><Card style={styles.analysisCard}><Text style={styles.analysisKicker}>확인할 점</Text><Text style={styles.analysisValue}>{recordedSlots < 4 ? '아직 비어 있는 끼니가 있어요' : '오늘 네 끼니를 모두 기록했어요'}</Text><Text style={styles.analysisText}>정확한 판단보다 빠뜨린 기록을 가볍게 보완해 보세요.</Text></Card><Card style={styles.analysisCard}><Text style={styles.analysisKicker}>다음 추천</Text><Text style={styles.analysisValue}>기록이 적은 끼니부터 한 가지씩</Text><Button variant="soft" size="sm" label="AI에게 식단 상담하기" onPress={() => askAi(`최근 식단 기록을 바탕으로 다음 식사를 상담해줘${monthlyAnalysis ? `. 월간 코멘트: ${monthlyAnalysis}` : ''}`)} style={styles.analysisButton} /></Card></View>{monthlyAnalysis ? <Card style={styles.monthlyComment}><Ionicons name="chatbubble-outline" size={20} color={color.accent} /><View style={styles.monthlyCopy}><Text style={styles.monthlyTitle}>이번 달 AI 코멘트</Text><Text style={styles.monthlyText}>{String(monthlyAnalysis)}</Text></View></Card> : analysisState === 'loading' ? <Card style={styles.monthlyComment}><ActivityIndicator size="small" color={color.accent} /><View style={styles.monthlyCopy}><Text style={styles.monthlyTitle}>이번 달 AI 코멘트</Text><Text style={styles.monthlyText}>기록을 돌아보는 코멘트를 만들고 있어요. 조금 걸릴 수 있어요.</Text></View></Card> : analysisState === 'error' ? <EmptyState compact title="월간 AI 코멘트를 불러오지 못했어요" description="식단 기록은 그대로 볼 수 있어요. 잠시 뒤 다시 열어 주세요." /> : <EmptyState compact title="아직 월간 AI 코멘트가 없어요" description="식단 기록이 쌓이면 한 달 흐름을 돌아보는 AI 코멘트가 여기에 나와요." />}</View>
           </>
         )}
       </ScrollView>
@@ -202,8 +217,10 @@ const styles = StyleSheet.create({
   headerTitle: { ...typography.h3, color: color.text },
   headerSubtitle: { ...typography.caption, color: color.textMuted },
   scroll: { flex: 1 },
-  content: { width: '100%', maxWidth: 1180, alignSelf: 'center', padding: spacing.xl, paddingBottom: 120 },
+  content: { width: '100%', maxWidth: 1000, alignSelf: 'center', padding: spacing.xl, paddingBottom: 48 },
   titleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: spacing.lg },
+  // 좁은 화면에서 설명 글이 줄바꿈되지 않고 넘치지 않도록 줄어들 수 있게 합니다.
+  titleCopy: { flexGrow: 1, flexShrink: 1, flexBasis: 280 },
   viewTabs: { width: '100%', maxWidth: 360 },
   partialNotice: { minHeight: 48, marginTop: spacing.lg, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: color.safety.partialBg, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   partialText: { ...typography.bodySmall, color: color.textSecondary, flex: 1 },
@@ -213,14 +230,14 @@ const styles = StyleSheet.create({
   dateHeading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   dateEyebrow: { ...typography.caption, color: color.accent, letterSpacing: 1 },
   dateTitle: { ...typography.h2, color: color.text, marginTop: 3 },
-  calorieCard: { marginTop: spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: color.brandStrong },
-  calorieLabel: { ...typography.bodySmall, color: color.brandSoft },
-  calorieValue: { ...typography.h2, color: color.inverse, marginTop: 4 },
-  recordRing: { width: 70, height: 70, borderRadius: 35, borderWidth: 5, borderColor: color.accent, alignItems: 'center', justifyContent: 'center' },
-  recordValue: { ...typography.label, color: color.inverse },
-  recordLabel: { fontSize: 9, color: color.brandSoft },
+  calorieCard: { marginTop: spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: color.inkSurface },
+  calorieLabel: { ...typography.bodySmall, color: color.onInkMuted },
+  calorieValue: { ...typography.h2, color: color.onInk, marginTop: 4 },
+  recordRing: { minWidth: 70, padding: 8, alignItems: 'center', justifyContent: 'center' },
+  recordValue: { ...typography.label, color: color.onInk },
+  recordLabel: { fontSize: 9, color: color.onInkMuted },
   mealList: { marginTop: spacing.sm, gap: spacing.sm },
-  mealCard: { padding: spacing.md },
+  mealCard: { padding: spacing.lg, borderWidth: 0, borderBottomWidth: 1, borderRadius: 0, borderBottomColor: color.borderSubtle },
   mealTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   mealIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   mealCopy: { flex: 1 },
@@ -259,14 +276,14 @@ const styles = StyleSheet.create({
   monthCellSelected: { backgroundColor: color.brand },
   todayCell: { borderWidth: 2, borderColor: color.accent },
   monthDay: { ...typography.bodySmall, color: color.text },
-  monthDaySelected: { color: color.inverse, fontWeight: '800' },
+  monthDaySelected: { color: color.inverse, fontWeight: '600' },
   monthMarkers: { flexDirection: 'row', gap: 3, marginTop: 3 },
   mealMarker: { width: 5, height: 5, borderRadius: 3, backgroundColor: color.success },
   aiMarker: { width: 5, height: 5, borderRadius: 3, backgroundColor: color.accent },
   analysisSection: { marginTop: spacing.canvas },
   analysisGrid: { gap: spacing.sm, marginTop: spacing.xl },
-  analysisGridDesktop: { flexDirection: 'row' },
-  analysisCard: { flex: 1, minWidth: 220 },
+  analysisGridDesktop: { flexWrap: 'wrap', flexDirection: 'row' },
+  analysisCard: { flex: 1, minWidth: 0 },
   analysisKicker: { ...typography.caption, color: color.accent },
   analysisValue: { ...typography.h3, color: color.text, marginTop: spacing.xs },
   analysisText: { ...typography.bodySmall, color: color.textMuted, marginTop: spacing.xs },

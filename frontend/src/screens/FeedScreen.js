@@ -9,7 +9,7 @@ import {
   unlikeFeedPost, updateFeedComment,
 } from '../api/feed';
 import { getApiErrorMessage, isAuthError } from '../utils/apiError';
-import { Button, Card, EmptyState, ErrorState, Input, Toast } from '../components/common';
+import { Button, Card, EmptyState, ErrorState, Input, MedicalNotice, Toast } from '../components/common';
 import { colors } from '../theme/colors';
 import { SOURCE_ROLE_LABELS, originLabel } from './MyRecipesScreen';
 
@@ -582,7 +582,7 @@ export default function FeedScreen({ onBack, webMode = false }) {
 
   const renderList = () => (
     <>
-      {header('레시피 피드', onBack, enabled ? (
+      {header('피드', webMode ? null : onBack, enabled ? (
         <TouchableOpacity onPress={openBlockList} style={styles.headerButton} accessibilityRole="button" accessibilityLabel="차단 목록">
           <Ionicons name="ban-outline" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
@@ -717,9 +717,7 @@ export default function FeedScreen({ onBack, webMode = false }) {
             <Text style={styles.body}>{detail.allergen.message}</Text>
           </Card>
         ) : null}
-        <Text style={styles.notice}>
-          다른 사용자가 공유한 레시피로 검증되지 않았어요. 의료 조언이 아니며, 알레르기 성분과 원재료는 직접 확인해 주세요.
-        </Text>
+        <MedicalNotice kind="recipe" lead="다른 사용자가 공유한 레시피로 검증되지 않았어요." style={styles.notice} />
         {!!detail.description && <Text style={styles.body}>{detail.description}</Text>}
 
         <Text style={styles.sectionTitle}>재료</Text>
@@ -797,31 +795,31 @@ export default function FeedScreen({ onBack, webMode = false }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 24, paddingBottom: 12, backgroundColor: colors.background },
   headerButton: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '800', color: colors.text },
-  content: { padding: 16, paddingBottom: 48, width: '100%', maxWidth: 760, alignSelf: 'center' },
+  headerTitle: { flex: 1, fontSize: 26, fontWeight: '600', color: colors.text },
+  content: { padding: 16, paddingBottom: 48, width: '100%', maxWidth: 900, alignSelf: 'center' },
   tabs: { flexDirection: 'row', marginBottom: 12 },
-  tab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999, marginRight: 8, backgroundColor: colors.surfaceAlt },
+  tab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, marginRight: 8, backgroundColor: colors.surfaceAlt },
   tabActive: { backgroundColor: colors.secondaryLight },
   tabText: { fontSize: 14, color: colors.textSecondary, fontWeight: '700' },
   tabTextActive: { color: colors.secondary },
   hint: { fontSize: 13, color: colors.textSecondary, marginBottom: 8 },
   loader: { marginTop: 24 },
-  listItem: { marginBottom: 10 },
+  listItem: { marginBottom: 0, borderWidth: 0, borderBottomWidth: 1, borderBottomColor: colors.divider, borderRadius: 0, paddingVertical: 24, paddingHorizontal: 4 },
   itemTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
   itemMeta: { fontSize: 12, color: colors.textTertiary, marginTop: 4, marginBottom: 6 },
   row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   spacer: { flex: 1 },
   likeButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4 },
   likeCount: { fontSize: 13, color: colors.textSecondary, marginLeft: 4 },
-  badge: { alignSelf: 'flex-start', fontSize: 12, fontWeight: '700', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, overflow: 'hidden', marginTop: 4 },
-  originBadge: { alignSelf: 'flex-start', fontSize: 12, fontWeight: '700', color: colors.secondary, backgroundColor: colors.secondaryLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, overflow: 'hidden', marginBottom: 6 },
+  badge: { alignSelf: 'flex-start', fontSize: 12, fontWeight: '700', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, overflow: 'hidden', marginTop: 4 },
+  originBadge: { alignSelf: 'flex-start', fontSize: 12, fontWeight: '700', color: colors.secondary, backgroundColor: colors.secondaryLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, overflow: 'hidden', marginBottom: 6 },
   allergenCard: { marginTop: 8, marginBottom: 12 },
   notice: { fontSize: 13, color: colors.warning, backgroundColor: colors.warningLight, padding: 10, borderRadius: 10, lineHeight: 19, marginBottom: 12 },
   body: { fontSize: 15, color: colors.text, lineHeight: 22, marginTop: 6, marginBottom: 8 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginTop: 16, marginBottom: 8 },
-  sectionTitleInCard: { fontSize: 15, fontWeight: '800', color: colors.text },
+  sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.text, marginTop: 16, marginBottom: 8 },
+  sectionTitleInCard: { fontSize: 15, fontWeight: '600', color: colors.text },
   listLine: { fontSize: 15, color: colors.text, lineHeight: 23, marginBottom: 4 },
   hiddenSteps: { fontSize: 14, color: colors.textSecondary, lineHeight: 21 },
   noteCard: { marginTop: 16 },

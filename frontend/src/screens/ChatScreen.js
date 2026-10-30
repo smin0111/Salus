@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Modal, Alert, Switch, Animated, Dimensions, Linking } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Modal, ScrollView, Pressable, Alert, Switch, Animated, Dimensions, Linking, Share, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import * as Speech from 'expo-speech'; // 음성 읽기 기능
@@ -9,9 +9,11 @@ import { useAuth } from '../context/AuthContext';
 import { debugLog } from '../utils/logger';
 import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 import { saveMyRecipeFromCard } from '../api/myRecipes';
+import MedicalNotice, { MEDICAL_NOTICE_TEXT } from '../components/common/MedicalNotice';
+import ChatHistorySidebar from '../components/ChatHistorySidebar';
 
 /*
- * AI 셰프 채팅 화면입니다.
+ * 채팅 화면입니다.
  * 사용자가 메시지를 보내면 백엔드(POST /api/chat/message)가 건강 프로필을 반영해 답변하고,
  * 레시피가 포함되면 레시피 카드로 보여 줍니다. 로그인 사용자는 대화 세션 관리, 음성 읽기(TTS), 식단 저장을 쓸 수 있습니다.
  */
@@ -260,6 +262,8 @@ const RecipeMessageCard = ({ recipe }) => {
                     )}
                 </View>
             )}
+
+            <MedicalNotice kind="recipe" />
         </View>
     );
 };
@@ -301,7 +305,44 @@ const pendingInterruptedTexts = (messages, justInterruptedId) => {
     return pending;
 };
 
+// 복사·공유용 레시피 글. 레시피 카드가 있으면 답변 글(한 줄 소개)이 아니라 화면에 보이는 카드 내용을 옮깁니다.
+// 알레르기 등 건강 주의는 빠지면 안 되므로 재료보다 먼저 넣습니다.
+const recipeToPlainText = (recipe) => {
+    const lines = [recipe.title || '레시피'];
+    if (recipe.description) lines.push(recipe.description);
+    const servings = recipe.servings || recipe.baseServings || null;
+    const caloriesPerServing = recipe.caloriesPerServing ?? null;
+    const meta = [
+        recipe.cookingTime ? `${recipe.cookingTime}분` : null,
+        servings ? `${servings}인분` : null,
+        caloriesPerServing ? `1인분 약 ${caloriesPerServing}kcal` : null,
+        !caloriesPerServing && recipe.calories ? `열량 약 ${recipe.calories}kcal · 기준 미확인` : null,
+        recipe.difficulty ? `난이도 ${recipe.difficulty}` : null,
+    ].filter(Boolean).join(' · ');
+    if (meta) lines.push(meta);
+    if (recipe.notices?.length) lines.push('', '[안내]', ...recipe.notices.map(note => `- ${note}`));
+    if (recipe.safetyNotes?.length) lines.push('', '[건강 주의]', ...recipe.safetyNotes.map(note => `- ${note}`));
+    if (recipe.ingredients?.length) lines.push('', '[재료]', ...recipe.ingredients.map(ingredient => `- ${ingredient}`));
+    if (recipe.steps?.length) lines.push('', '[조리 순서]', ...recipe.steps.map((step, index) =>
+        `${index + 1}. ${step}${recipe.stepTips?.[index] ? `\n   초보 팁: ${recipe.stepTips[index]}` : ''}`));
+    if (recipe.sources?.length) {
+        const hasPrimary = recipe.sources.some(source => source.primary);
+        lines.push('', '[출처]', ...recipe.sources.map(source => {
+            const label = [source.primary ? '이 레시피의 출처' : (hasPrimary ? '비교한 출처' : null),
+                source.reviewed ? '검토된 출처' : '웹 출처 · 검토 전'].filter(Boolean).join(' · ');
+            return `- ${[source.title, source.url].filter(Boolean).join(' ')} (${label})`;
+        }));
+        if (recipe.sources.some(source => !source.reviewed)) {
+            lines.push('웹 출처는 사람이 검토하지 않은 근거입니다. 자세한 내용과 사진은 원문에서 확인해 주세요.');
+        }
+    }
+    // 복사해 다른 곳에 붙여도 의료 면책 안내가 함께 가도록 끝에 붙입니다.
+    lines.push('', MEDICAL_NOTICE_TEXT.recipe);
+    return lines.join('\n');
+};
+
 const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, openPlanModal, handleStreamingComplete, copiedMessageId, setCopiedMessageId, saveToMyRecipes, savingRecipeId }) => {
+    const [detailOpen, setDetailOpen] = useState(false);
     const scaleAnim = useRef(new Animated.Value(0.95)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
     const isHovered = useRef(new Animated.Value(1)).current;
@@ -347,67 +388,38 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
     const recipe = item.sender === 'ai' && !item.isPreparingRecipe ? (item.recipe || parseRecipeFromText(item.text)) : null;
     const isAiRecipeLayout = item.sender === 'ai' && (recipe || item.isPreparingRecipe);
 
-    return (
-        <Animated.View
-            style={[
-                styles.messageBubble,
-                item.sender === 'user' ? styles.userBubble : styles.aiBubble,
-                { opacity: opacityAnim, transform: [{ scale: scaleAnim }, { scale: isHovered }] }
-            ]}
-            {...(Platform.OS === 'web' ? { onMouseEnter: handleMouseEnter, onMouseLeave: handleMouseLeave } : {})}
-        >
-            {item.sender === 'ai' && (
-                <View style={styles.aiAvatar}>
-                    <Ionicons name="sparkles-outline" size={16} color={colors.text} />
-                </View>
-            )}
-            <View style={[
-                styles.messageContent,
-                item.sender === 'ai' && styles.aiMessageContent,
-                isAiRecipeLayout && styles.aiRecipeMessageContent,
-            ]}>
-                {item.isPreparingRecipe ? (
-                    <RecipePreparing />
-                ) : recipe ? (
-                    <RecipeMessageCard recipe={recipe} />
-                ) : item.sender === 'ai' && item.isTyping ? (
-                    <Typewriter
-                        text={item.text}
-                        onComplete={() => handleStreamingComplete(item.id)}
-                    />
-                ) : (
-                    <Text style={[
-                        styles.messageText,
-                        item.sender === 'user' ? styles.userText : styles.aiText
-                    ]}
-                        selectable={true}
-                    >
-                        {item.text}
-                    </Text>
-                )}
-                {item.sender === 'user' && item.interrupted && (
-                    <Text style={styles.interruptedLabel}>멈춤 · 다음 메시지와 함께 답해요</Text>
-                )}
-
-                {/* AI 답변에는 복사, 음성 읽기, 식단 추가처럼 후속 행동을 붙입니다. */}
-                {item.sender === 'ai' && !item.isTyping && (
-                    <View style={styles.messageActions}>
+    const renderActions = () => item.sender === 'ai' && !item.isTyping ? (
+<View style={styles.messageActions}>
                         {/* 복사 버튼은 긴 레시피 답변을 다른 곳에 옮기기 쉽게 해줍니다. */}
                         <TouchableOpacity
                             style={styles.actionIconButton}
                             onPress={() => {
-                                const textToCopy = item.text || '';
+                                const textToCopy = recipe ? recipeToPlainText(recipe) : (item.text || '');
                                 if (Platform.OS === 'web') {
-                                    navigator.clipboard.writeText(textToCopy).then(() => {
-                                        setCopiedMessageId(item.id);
-                                        setTimeout(() => setCopiedMessageId(null), 2000);
-                                    }).catch(() => {});
+                                    // 브라우저가 복사를 막거나 Clipboard API가 없으면 조용히 끝내지 않고 직접 복사하도록 안내합니다.
+                                    const writeText = navigator.clipboard?.writeText?.bind(navigator.clipboard);
+                                    Promise.resolve()
+                                        .then(() => {
+                                            if (!writeText) throw new Error('clipboard unavailable');
+                                            return writeText(textToCopy);
+                                        })
+                                        .then(() => {
+                                            setCopiedMessageId(item.id);
+                                            setTimeout(() => setCopiedMessageId(null), 2000);
+                                        })
+                                        .catch(() => {
+                                            window.alert('복사하지 못했어요\n\n브라우저가 복사를 허용하지 않았어요. 답변을 드래그해 직접 복사해 주세요.');
+                                        });
                                 } else {
-                                    Alert.alert('복사 완료', '답변이 클립보드에 복사되었습니다.');
+                                    // 앱에는 클립보드 모듈이 없어 예전에는 복사하지 않고 "복사 완료"만 띄웠습니다.
+                                    // 대신 시스템 공유 창을 엽니다(공유 창의 "복사"로 클립보드에 넣을 수 있음).
+                                    Share.share({ message: textToCopy }).catch(() => {
+                                        Alert.alert('공유하지 못했어요', '잠시 후 다시 시도해 주세요.');
+                                    });
                                 }
                             }}
                             accessibilityRole="button"
-                            accessibilityLabel={copiedMessageId === item.id ? '답변 복사됨' : '답변 복사'}
+                            accessibilityLabel={copiedMessageId === item.id ? '답변 복사됨' : Platform.OS === 'web' ? '답변 복사' : '답변 공유·복사'}
                         >
                             <Ionicons
                                 name={copiedMessageId === item.id ? "checkmark-circle" : "copy-outline"}
@@ -434,7 +446,9 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
                         {isLoggedIn && (
                             <TouchableOpacity
                                 style={[styles.addToPlanButton, item.isMealSaved && styles.addToPlanButtonSaved]}
-                                onPress={() => openPlanModal(item)}
+                                accessibilityRole="button"
+                                accessibilityLabel={item.isMealSaved ? '식사 기록에 저장됨' : '식사 기록에 추가'}
+                                onPress={() => { setDetailOpen(false); openPlanModal(item); }}
                                 disabled={item.isMealSaved}
                             >
                                 <Ionicons
@@ -443,7 +457,7 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
                                     color={item.isMealSaved ? colors.success : colors.secondary}
                                 />
                                 <Text style={[styles.addToPlanText, item.isMealSaved && styles.addToPlanTextSaved]}>
-                                    {item.isMealSaved ? '저장됨' : '식단에 추가'}
+                                    {item.isMealSaved ? '저장됨' : '식사 기록에 추가'}
                                 </Text>
                             </TouchableOpacity>
                         )}
@@ -478,6 +492,66 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
                             </View>
                         ))}
                     </View>
+    ) : null;
+
+    return (
+        <Animated.View
+            style={[
+                styles.messageBubble,
+                item.sender === 'user' ? styles.userBubble : styles.aiBubble,
+                { opacity: opacityAnim, transform: [{ scale: scaleAnim }, { scale: isHovered }] }
+            ]}
+            {...(Platform.OS === 'web' ? { onMouseEnter: handleMouseEnter, onMouseLeave: handleMouseLeave } : {})}
+        >
+
+            <View style={[
+                styles.messageContent,
+                item.sender === 'ai' && styles.aiMessageContent,
+                isAiRecipeLayout && styles.aiRecipeMessageContent,
+            ]}>
+                {item.isPreparingRecipe ? (
+                    <RecipePreparing />
+                ) : recipe ? (
+                    <View style={styles.recipeSummary}>
+                        <Text style={styles.recipeCardTitle}>{recipe.title || '레시피'}</Text>
+                        <View style={styles.summaryMeta}>
+                            {!!recipe.cookingTime && <Text style={styles.summaryMetaText}>조리 시간 {recipe.cookingTime}분</Text>}
+                            {!!recipe.servings && <Text style={styles.summaryMetaText}>분량 {recipe.servings}인분</Text>}
+                        </View>
+                        {!!recipe.safetyNotes?.length && <View style={styles.summaryCaution}>{recipe.safetyNotes.map((note, index) => <Text key={index} style={styles.summaryCautionText}>{note}</Text>)}</View>}
+                        {recipe.sources?.some(source => !source.reviewed) && <Text style={styles.summaryCautionText}>검토 전 웹 출처가 포함돼 있어요. 원문을 확인해 주세요.</Text>}
+                        <TouchableOpacity onPress={() => setDetailOpen(true)} accessibilityRole="button" accessibilityLabel={`${recipe.title || '레시피'} 상세 보기`} style={styles.recipeOpen}><Text style={styles.recipeOpenText}>레시피 보기</Text><Ionicons name="chevron-forward" size={17} color={colors.primary} /></TouchableOpacity>
+                    </View>
+                ) : item.sender === 'ai' && item.isTyping ? (
+                    <Typewriter
+                        text={item.text}
+                        onComplete={() => handleStreamingComplete(item.id)}
+                    />
+                ) : (
+                    <Text style={[
+                        styles.messageText,
+                        item.sender === 'user' ? styles.userText : styles.aiText
+                    ]}
+                        selectable={true}
+                    >
+                        {item.text}
+                    </Text>
+                )}
+                {item.sender === 'user' && item.interrupted && (
+                    <Text style={styles.interruptedLabel}>멈춤 · 다음 메시지와 함께 답해요</Text>
+                )}
+
+                {!recipe && renderActions()}
+                {detailOpen && recipe && (
+                    <Modal visible animationType="slide" onRequestClose={() => setDetailOpen(false)}>
+                        <SafeAreaView style={styles.detailScreen}>
+                            <View style={styles.detailHeader}><TouchableOpacity accessibilityRole="button" accessibilityLabel="대화로 돌아가기" onPress={() => setDetailOpen(false)} style={styles.detailBack}><Ionicons name="chevron-back" size={20} color={colors.text} /><Text style={styles.detailBackText}>대화로 돌아가기</Text></TouchableOpacity></View>
+                            <ScrollView contentContainerStyle={styles.detailContent} keyboardShouldPersistTaps="handled">
+                                <RecipeMessageCard recipe={recipe} />
+                                {renderActions()}
+                            </ScrollView>
+                        </SafeAreaView>
+                    </Modal>
                 )}
             </View>
         </Animated.View>
@@ -488,9 +562,15 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
  * 채팅 화면 본체입니다.
  * messages/healthProfile은 부모(AppNavigator)가 가진 상태이며, 식단 저장 결과는 setMealData로 캘린더 상태에 반영합니다.
  */
-export default function ChatScreen({ messages, setMessages, healthProfile, setMealData, isSidebarOpen, onToggleSidebar, onLoginPress, webMode = false }) {
+// active: 다른 탭을 보는 동안에도 대화·입력·기다리는 답을 잃지 않도록 부모가 이 화면을 숨겨 둔 채 유지합니다. 숨겨진 동안에는 덮는 창을 띄우지 않습니다.
+// pendingPrompt: 다른 화면(식사 기록 등)이 넘긴 질문. 보내지는 않고 새 대화 입력창에 채워 사용자가 고쳐 보낼 수 있게 합니다.
+export default function ChatScreen({ messages, setMessages, healthProfile, setMealData, isSidebarOpen, desktopHistoryOpen = true, onCollapseDesktopHistory, onToggleSidebar, onLoginPress, onNavigate, onCloseSidebar, newChatRequested = false, onNewChatHandled, pendingPrompt = null, onPromptHandled, active = true, webMode = false }) {
+    const { width } = useWindowDimensions();
+    const wide = width >= 768;
+    const compactChat = width - (wide && desktopHistoryOpen ? 260 : 0) < 600;
     const { isLoggedIn, user, token } = useAuth();
     const [inputText, setInputText] = useState('');
+    const [composerFocused, setComposerFocused] = useState(false);
     const [inputHeight, setInputHeight] = useState(Platform.OS === 'web' ? 26 : 36);
 
     useEffect(() => {
@@ -506,6 +586,12 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     const progressTimerRef = useRef(null);
     const [chatSessionId, setChatSessionId] = useState(null);
     const [chatSessions, setChatSessions] = useState([]);
+    // 대화 목록 상태: 불러오지 못한 목록을 "저장된 대화 없음"으로 보여 주지 않기 위해 구분합니다.
+    const [sessionsStatus, setSessionsStatus] = useState('loading'); // 'loading' | 'ready' | 'error'
+    const [loadingSessionId, setLoadingSessionId] = useState(null);
+    // 대화 불러오기 요청 번호. 메시지 전송 등으로 requestSeq가 바뀌어도 가장 최근 불러오기가 끝나면 로딩 표시를 지웁니다.
+    const loadSessionSeqRef = useRef(0);
+    const inputRef = useRef(null);
     const [renameModalVisible, setRenameModalVisible] = useState(false);
     const [editingSession, setEditingSession] = useState(null);
     const [editingSessionTitle, setEditingSessionTitle] = useState('');
@@ -587,6 +673,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         setSelectedRecipeToAdd(null);
         setRecipeDetails({ title: '', fullText: '' });
         setSpeakingMessageId(null);
+        setLoadingSessionId(null);
         Speech.stop();
 
         if (isLoggedIn) {
@@ -596,6 +683,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             }
         } else {
             setChatSessions([]);
+            setSessionsStatus('loading');
             setMessages([initialGreeting]);
         }
     }, [isLoggedIn, user?.id]);
@@ -607,16 +695,22 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         }
     }, [isLoggedIn, token]);
 
-    // 내 대화 세션 목록을 불러옵니다(실패해도 채팅은 계속 쓸 수 있으므로 로그만 남깁니다).
+    // 내 대화 세션 목록을 불러옵니다. 실패해도 채팅은 계속 쓸 수 있고, 사이드바에 다시 시도를 보여 줍니다.
+    // 다른 사용자로 바뀐 뒤 늦게 온 응답은 버립니다.
     const fetchChatSessions = async () => {
         if (!token) return;
+        const fetchEpoch = authEpochRef.current;
         try {
             const response = await axios.get(`${config.API_BASE_URL}/chat/sessions`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setChatSessions(response.data || []);
+            if (fetchEpoch !== authEpochRef.current) return;
+            setChatSessions(Array.isArray(response.data) ? response.data : []);
+            setSessionsStatus('ready');
         } catch (error) {
+            if (fetchEpoch !== authEpochRef.current) return;
             debugLog('Failed to fetch chat sessions:', error.message);
+            setSessionsStatus('error');
         }
     };
 
@@ -644,6 +738,9 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         const loadSeq = requestSeqRef.current + 1;
         requestSeqRef.current = loadSeq;
         const loadEpoch = authEpochRef.current;
+        const loadToken = loadSessionSeqRef.current + 1;
+        loadSessionSeqRef.current = loadToken;
+        setLoadingSessionId(sessionId);
         try {
             const response = await axios.get(`${config.API_BASE_URL}/chat/sessions/${sessionId}/messages`, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -666,6 +763,8 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             if (loadSeq !== requestSeqRef.current) return;
             debugLog('Failed to load chat session:', error.message);
             Alert.alert('오류', '대화를 불러오지 못했습니다.');
+        } finally {
+            if (loadToken === loadSessionSeqRef.current) setLoadingSessionId(null);
         }
     };
 
@@ -673,6 +772,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     const startNewChat = () => {
         abandonActiveRequest();
         requestSeqRef.current += 1;
+        setLoadingSessionId(null);
         setChatSessionId(null);
         setMessages([initialGreeting]);
         setInputText('');
@@ -757,11 +857,6 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             if (isAuthError(error)) return;
             Alert.alert('오류', getErrorMessage(error, '대화를 삭제하지 못했습니다.'));
         }
-    };
-
-    // 요리 모드 버튼은 아직 준비 중이라 안내만 띄웁니다.
-    const showCookingModeUnavailable = () => {
-        Alert.alert("준비 중", "요리 모드는 안정적인 음성 인식으로 교체한 뒤 제공할 예정입니다.");
     };
 
 
@@ -1071,8 +1166,9 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             return;
         }
 
-        // "YYYY-MM-DD" 날짜 키. 참고: toISOString()은 UTC 기준이라 한국 시간 오전 9시 이전에는 전날 날짜가 될 수 있습니다.
-        const dateKey = targetDate.toISOString().split('T')[0];
+        // "YYYY-MM-DD" 날짜 키는 기기 현지 날짜로 만듭니다(식사 기록 화면과 같은 기준).
+        // toISOString()은 UTC라 한국 시간 오전 9시 이전에 저장하면 전날로 기록됐습니다(2026-10-31 로컬 확인).
+        const dateKey = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
 
         // "120kcal", "120 kcal", "120 칼로리" 형식 탐색
         const calorieMatch = recipeDetails.fullText.match(/(\d+)\s*(kcal|칼로리)/i);
@@ -1177,193 +1273,64 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
     );
 
 
+    const isEmptyChat = messages.every(message => message.id === initialGreeting.id);
+    useEffect(() => {
+        if (newChatRequested) {
+            startNewChat();
+            onNewChatHandled?.();
+        }
+    }, [newChatRequested]);
+
+    // 다른 화면이 넘긴 질문은 새 대화 입력창에 채웁니다. 답을 기다리는 중이면 그 답을 버리지 않고 입력창에만 채웁니다.
+    useEffect(() => {
+        if (!pendingPrompt) return;
+        if (!loading) startNewChat();
+        setInputText(pendingPrompt);
+        onPromptHandled?.();
+        if (Platform.OS === 'web') setTimeout(() => inputRef.current?.focus?.(), 0);
+    }, [pendingPrompt]);
+
+    const renderHistory = (overlay = false) => (
+        <ChatHistorySidebar
+            sessions={chatSessions}
+            status={sessionsStatus}
+            activeSessionId={chatSessionId}
+            loadingSessionId={loadingSessionId}
+            onRetry={fetchChatSessions}
+            isLoggedIn={isLoggedIn}
+            overlay={overlay}
+            onClose={overlay ? onCloseSidebar : onCollapseDesktopHistory}
+            onNewChat={() => { startNewChat(); if (overlay) onCloseSidebar?.(); }}
+            onSelect={id => { loadChatSession(id); if (overlay) onCloseSidebar?.(); }}
+            onRename={session => { if (overlay) onCloseSidebar?.(); openRenameSession(session); }}
+            onDelete={session => { if (overlay) onCloseSidebar?.(); confirmDeleteSession(session); }}
+            onLogin={() => { if (overlay) onCloseSidebar?.(); onLoginPress(); }}
+        />
+    );
+
     return (
         <SafeAreaView style={styles.container}>
-            {/* 상단 영역은 현재 사용자 등급과 주요 채팅 도구를 한눈에 보여줍니다. */}
-            {!webMode && <View style={styles.header}>
-                <View style={styles.headerLeft}>
-                    <TouchableOpacity
-                        onPress={onToggleSidebar}
-                        style={styles.menuButton}
-                        accessibilityRole="button"
-                        accessibilityLabel="메뉴 열기"
-                        hitSlop={8}
-                    >
-                        <Ionicons name="menu" size={24} color={colors.text} />
-                    </TouchableOpacity>
-                    <View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Text style={styles.headerTitle}>AI 셰프</Text>
-                            {isLoggedIn && user && (
-                                <View style={[
-                                    styles.gradeBadge,
-                                    user.grade === 'PLUS' ? styles.gradeBadgePlus : styles.gradeBadgeBasic
-                                ]}>
-                                    <Text style={[
-                                        styles.gradeBadgeText,
-                                        user.grade === 'PLUS' ? styles.gradeBadgeTextPlus : styles.gradeBadgeTextBasic
-                                    ]}>
-                                        {user.grade === 'PLUS' ? 'PLUS' : 'BASIC'}
-                                    </Text>
-                                </View>
-                            )}
-                        </View>
-                        <Text style={styles.headerSubtitle}>무엇이든 물어보세요</Text>
-                    </View>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    {/* 조리 모드 버튼은 향후 음성 중심 조리 흐름으로 확장되는 진입점입니다. */}
-                    {isLoggedIn && (
-                        <TouchableOpacity
-                            style={styles.cookingModeButton}
-                            onPress={showCookingModeUnavailable}
-                            accessibilityRole="button"
-                            accessibilityLabel="조리 모드"
-                        >
-                            <Ionicons
-                                name="mic-outline"
-                                size={20}
-                                color={colors.primary}
-                            />
-                        </TouchableOpacity>
-                    )}
-                    {!isLoggedIn && (
-                        <TouchableOpacity style={styles.loginButton} onPress={onLoginPress}>
-                            <Text style={styles.loginButtonText}>로그인</Text>
-                        </TouchableOpacity>
-                    )}
-                </View>
-            </View>}
-
-            {/* 대화 세션 바: 새 대화 버튼 + 이전 대화 목록(열기, 이름 변경, 삭제) */}
-            {isLoggedIn && (
-                <View style={[styles.sessionBar, webMode && styles.webSessionBar]}>
-                    <TouchableOpacity
-                        style={[styles.sessionChip, !chatSessionId && styles.sessionChipActive]}
-                        onPress={startNewChat}
-                        accessibilityRole="button"
-                        accessibilityLabel="새 대화 시작"
-                    >
-                        <Ionicons name="add" size={14} color={!chatSessionId ? colors.onPrimary : colors.textSecondary} />
-                        <Text style={[styles.sessionChipText, !chatSessionId && styles.sessionChipTextActive]}>새 대화</Text>
-                    </TouchableOpacity>
-                    <FlatList
-                        horizontal
-                        style={{ flex: 1 }}
-                        data={chatSessions}
-                        keyExtractor={(item) => item.id.toString()}
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ gap: 8, paddingRight: 16 }}
-                        renderItem={({ item }) => (
-                            <View
-                                style={[styles.sessionChip, chatSessionId === item.id && styles.sessionChipActive]}
-                            >
-                                <TouchableOpacity
-                                    style={styles.sessionTitleButton}
-                                    onPress={() => loadChatSession(item.id)}
-                                    accessibilityRole="button"
-                                    accessibilityLabel={`${item.title || '대화'} 열기`}
-                                >
-                                    <Text
-                                        numberOfLines={1}
-                                        style={[styles.sessionChipText, chatSessionId === item.id && styles.sessionChipTextActive]}
-                                    >
-                                        {item.title || '대화'}
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.sessionIconButton}
-                                    onPress={() => openRenameSession(item)}
-                                    accessibilityRole="button"
-                                    accessibilityLabel={`${item.title || '대화'} 이름 변경`}
-                                >
-                                    <Ionicons
-                                        name="pencil"
-                                        size={12}
-                                        color={chatSessionId === item.id ? colors.onPrimary : colors.textSecondary}
-                                    />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.sessionIconButton}
-                                    onPress={() => confirmDeleteSession(item)}
-                                    accessibilityRole="button"
-                                    accessibilityLabel={`${item.title || '대화'} 삭제`}
-                                >
-                                    <Ionicons
-                                        name="trash-outline"
-                                        size={12}
-                                        color={chatSessionId === item.id ? colors.onPrimary : colors.textSecondary}
-                                    />
-                                </TouchableOpacity>
-                            </View>
-                        )}
-                    />
-                </View>
-            )}
-
-            {/* 메인 콘텐츠 영역: 대화가 없으면 중앙 환영 UI를 띄우고, 대화가 있으면 리스트를 띄움 */}
-            <View style={{ flex: 1 }}>
-                {messages.length <= 1 ? (
-                    <View style={[styles.centeredInputContainer, webMode && styles.webCenteredInputContainer]}>
-                        <View style={styles.emptyStateContent}>
-                            <Text style={[styles.emptyTitle, webMode && styles.webEmptyTitle]}>무엇을 도와드릴까요?</Text>
-                            {webMode && (
-                                <Text style={styles.webEmptySubtitle}>
-                                    가진 재료, 피하고 싶은 성분, 원하는 조리시간을 자연스럽게 말해보세요.
-                                </Text>
-                            )}
-                            {/* 예시 버튼은 실제로 잘 동작하는 요청으로 둡니다. "간단한 10분 컷 아침 식사"는 일반 대화로 가서
-                                자기소개만 답했습니다(2026-10-15 베타). */}
-                            <View style={styles.suggestionChips}>
-                                <TouchableOpacity
-                                    style={styles.suggestionChip}
-                                    onPress={() => { setInputText('양파 빼고 제육볶음 레시피 알려줘'); }}
-                                >
-                                    <Text style={styles.suggestionText}>양파 빼고 제육볶음 레시피</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.suggestionChip}
-                                    onPress={() => { setInputText('10분 안에 만드는 아침 메뉴 추천해줘'); }}
-                                >
-                                    <Text style={styles.suggestionText}>10분 컷 아침 메뉴 추천</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </View>
-                ) : (
+            <View style={styles.chatLayout}>
+                {wide && desktopHistoryOpen && <View key="history" style={styles.desktopHistory}>{renderHistory()}</View>}
+                <View key="chat-main" style={styles.chatMain}>
+            <View style={[styles.chatWorkspace, isEmptyChat && styles.emptyWorkspace]}>
+                {isEmptyChat ? <Text accessibilityRole="header" style={styles.chatWelcome}>{compactChat ? '식사에 대해\n무엇이 궁금하세요?' : '식사에 대해 무엇이 궁금하세요?'}</Text> : (
                     <>
-                        <FlatList
-                            ref={flatListRef}
-                            data={messages}
-                            renderItem={renderItem}
-                            keyExtractor={item => item.id.toString()}
-                            contentContainerStyle={[styles.listContent, webMode && styles.webListContent]}
-                            style={styles.list}
-                        />
-
-                        {loading && (
-                            <View style={styles.loadingContainer}>
-                                <ActivityIndicator size="small" color={colors.secondary} />
-                                <Text style={styles.loadingText}>
-                                    {progressStage || '답변을 생각하고 있어요'}...
-                                    {elapsedSeconds > 0 ? ` (${elapsedSeconds}초)` : ''}
-                                </Text>
-                            </View>
-                        )}
+                        <Text accessibilityRole="header" style={styles.conversationTitle}>{chatSessions.find(session => session.id === chatSessionId)?.title || '채팅'}</Text>
+                        <FlatList ref={flatListRef} data={messages.filter(message => message.id !== initialGreeting.id)} renderItem={renderItem} keyExtractor={item => item.id.toString()} contentContainerStyle={styles.listContent} style={styles.list} keyboardShouldPersistTaps="handled" />
+                        {loading && <View style={styles.loadingContainer}><ActivityIndicator size="small" color={colors.primary} /><Text style={styles.loadingText}>{progressStage || '답변을 생각하고 있어요'}{elapsedSeconds > 0 ? ` (${elapsedSeconds}초)` : ''}</Text></View>}
                     </>
                 )}
-            </View>
-
-            {/* 입력창 및 옵션 바: 단일 마운트 인스턴스로 유지하여 키보드 튕김 및 입력 포커스 유실 버그 완벽 방지 */}
             <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
                 keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
-                style={styles.inputContainerWrapper}
+                style={[styles.inputContainerWrapper, isEmptyChat && styles.emptyInputContainer]}
             >
                 {/* 입력창, 음성 입력(준비 중), 전송 버튼 */}
-                <View style={styles.inputFloatingContainer}>
-                    <View style={styles.inputWrapper}>
+                <View style={[styles.inputFloatingContainer, composerFocused && styles.composerFocused]}>
+                    <View style={[styles.inputWrapper, isEmptyChat && styles.emptyInputWrapper]}>
                         <TextInput
+                            ref={inputRef}
                             style={[
                                 styles.input,
                                 Platform.OS === 'web' ? {
@@ -1377,11 +1344,14 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                                     height: inputHeight,
                                 }
                             ]}
-                            placeholder="무엇이든 물어보세요"
+                            placeholder={isEmptyChat ? "식단, 재료, 먹은 음식에 대해 물어보세요." : "추가로 물어보세요."}
+                            accessibilityLabel="채팅 메시지"
                             placeholderTextColor={colors.textTertiary}
                             value={inputText}
                             onChangeText={setInputText}
                             onKeyPress={handleKeyPress}
+                            onFocus={() => setComposerFocused(true)}
+                            onBlur={() => setComposerFocused(false)}
                             multiline={true}
                             numberOfLines={1}
                             // 입력 내용 높이에 맞춰 입력창 높이를 늘립니다(최대 120).
@@ -1392,14 +1362,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                                 setInputHeight(targetHeight);
                             }}
                         />
-                        <TouchableOpacity
-                            style={styles.micButton}
-                            onPress={() => Alert.alert("준비 중", "음성 인식 기능은 준비 중입니다.")}
-                            accessibilityRole="button"
-                            accessibilityLabel="음성 입력"
-                        >
-                            <Ionicons name="mic-outline" size={22} color={colors.textTertiary} />
-                        </TouchableOpacity>
+                        {/* 음성 입력은 서버 음성 인식이 아직 없어(/api/chat/stt는 안내 문구만 돌려줌) 버튼을 숨깁니다. */}
                         {loading && !inputText.trim() ? (
                             // 답을 기다리는 동안은 멈춤 버튼을 보여 줍니다. 글을 쓰면 다시 보내기 버튼이 되고,
                             // 보내면 지금 답을 멈추고 새 메시지와 합쳐 다시 묻습니다.
@@ -1409,7 +1372,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                                 accessibilityRole="button"
                                 accessibilityLabel="답변 멈추기"
                             >
-                                <Ionicons name="stop" size={14} color="white" />
+                                <Ionicons name="stop" size={14} color={colors.surface} />
                             </TouchableOpacity>
                         ) : (
                             <TouchableOpacity
@@ -1419,18 +1382,34 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                                 accessibilityRole="button"
                                 accessibilityLabel="메시지 보내기"
                             >
-                                <Ionicons name="arrow-up" size={18} color="white" />
+                                <Ionicons name="arrow-up" size={18} color={colors.onPrimary} />
                             </TouchableOpacity>
                         )}
                     </View>
                 </View>
             </KeyboardAvoidingView>
+                {isEmptyChat && <View style={styles.chatSuggestions}>
+                    <TouchableOpacity onPress={() => onNavigate?.('health')} accessibilityRole="link" style={styles.healthLink}><Text style={styles.healthLinkText}>건강 정보 입력</Text></TouchableOpacity>
+                    {['냉장고 재료로 저녁 추천해줘', '오늘 먹은 식사를 정리하고 싶어'].map(prompt => <TouchableOpacity key={prompt} onPress={() => setInputText(prompt)} style={styles.suggestionPrompt} accessibilityRole="button"><Text style={styles.suggestionPromptText}>{prompt}</Text></TouchableOpacity>)}
+                </View>}
+                <Text style={styles.chatMedicalNotice}>생성된 정보는 확인이 필요하며 의료 조언이 아니에요.</Text>
+            </View>
+                </View>
+            </View>
+            <Modal visible={active && !wide && !!isSidebarOpen} transparent animationType="fade" onRequestClose={onCloseSidebar}>
+                <View style={styles.historyOverlay}>
+                    <Pressable style={StyleSheet.absoluteFill} onPress={onCloseSidebar} accessibilityRole="button" accessibilityLabel="채팅 기록 닫기" />
+                    <SafeAreaView style={styles.historyDrawer}>
+                        {active && !wide && isSidebarOpen && renderHistory(true)}
+                    </SafeAreaView>
+                </View>
+            </Modal>
 
             {/* 대화 제목 수정 모달 */}
             <Modal
                 animationType="slide"
                 transparent={true}
-                visible={renameModalVisible}
+                visible={active && renameModalVisible}
                 onRequestClose={() => setRenameModalVisible(false)}
             >
                 <View style={styles.modalOverlay}>
@@ -1469,7 +1448,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             <Modal
                 animationType="slide"
                 transparent={true}
-                visible={modalVisible}
+                visible={active && modalVisible}
                 onRequestClose={() => setModalVisible(false)}
             >
                 <View style={styles.modalOverlay}>
@@ -1541,6 +1520,36 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
+    chatLayout: { flex: 1, minHeight: 0, flexDirection: 'row' },
+    desktopHistory: { width: 260, borderRightWidth: 1, borderRightColor: colors.divider },
+    chatMain: { flex: 1, minWidth: 0, minHeight: 0 },
+    chatWorkspace: { flex: 1, minHeight: 0, width: '100%', maxWidth: 768, alignSelf: 'center', paddingHorizontal: 20 },
+    emptyWorkspace: { justifyContent: 'center', paddingBottom: 40 },
+    chatWelcome: { color: colors.text, fontSize: 27, lineHeight: 38, fontWeight: '600', textAlign: 'center', marginBottom: 28 },
+    conversationTitle: { color: colors.text, fontSize: 23, lineHeight: 31, fontWeight: '600', paddingTop: 24, paddingBottom: 12 },
+    chatSuggestions: { alignItems: 'center', marginTop: 8 },
+    healthLink: { paddingVertical: 12, minHeight: 44 },
+    healthLinkText: { color: colors.primary, fontSize: 14, textDecorationLine: 'underline' },
+    suggestionPrompt: { minHeight: 44, paddingHorizontal: 12, paddingVertical: 10 },
+    suggestionPromptText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center' },
+    chatMedicalNotice: { color: colors.textTertiary, fontSize: 11, lineHeight: 18, textAlign: 'center', paddingVertical: 10 },
+    emptyInputContainer: { paddingBottom: 0 },
+    emptyInputWrapper: { minHeight: 64, alignItems: 'center' },
+    composerFocused: { borderColor: colors.primary, borderWidth: 2 },
+    recipeSummary: { width: '100%', maxWidth: 540, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 20 },
+    summaryMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 24, marginTop: 12 },
+    summaryMetaText: { color: colors.textSecondary, fontSize: 14 },
+    summaryCaution: { gap: 6, marginTop: 12 },
+    summaryCautionText: { color: colors.warning, fontSize: 13, lineHeight: 21, marginTop: 6 },
+    recipeOpen: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', marginTop: 12 },
+    recipeOpenText: { color: colors.primary, fontSize: 15, fontWeight: '600' },
+    detailScreen: { flex: 1, backgroundColor: colors.background },
+    detailHeader: { borderBottomWidth: 1, borderBottomColor: colors.divider, paddingHorizontal: 20, minHeight: 64, justifyContent: 'center' },
+    detailBack: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start' },
+    detailBackText: { color: colors.text, fontSize: 15 },
+    detailContent: { width: '100%', maxWidth: 800, alignSelf: 'center', padding: 20, paddingBottom: 48 },
+    historyOverlay: { flex: 1, backgroundColor: colors.overlay },
+    historyDrawer: { height: '100%', width: 300, maxWidth: '88%', backgroundColor: colors.surfaceAlt },
     header: { padding: 16, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'android' ? 40 : 16, borderBottomWidth: 1, borderBottomColor: colors.border },
     headerLeft: { flexDirection: 'row', alignItems: 'center' },
     menuButton: { padding: 8, marginRight: 8 },
@@ -1584,7 +1593,7 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
     sessionChipTextActive: {
-        color: 'white',
+        color: colors.onPrimary,
     },
     sessionTitleButton: {
         minWidth: 48,
@@ -1598,11 +1607,11 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     loginButton: { backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 },
-    loginButtonText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
+    loginButtonText: { color: colors.onPrimary, fontWeight: 'bold', fontSize: 14 },
     list: { flex: 1 },
     listContent: {
-        paddingHorizontal: 18,
-        paddingTop: 20,
+        paddingHorizontal: 0,
+        paddingTop: 16,
         paddingBottom: 40,
         ...Platform.select({
             web: {
@@ -1659,7 +1668,7 @@ const styles = StyleSheet.create({
     messageText: { fontSize: 15, lineHeight: 25 },
     userText: { color: colors.text },
     aiText: { color: colors.text },
-    messageActions: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
+    messageActions: { flexWrap: 'wrap', flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
     addToPlanButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8 },
     addToPlanButtonSaved: { backgroundColor: colors.successLight },
     addToPlanText: { color: colors.textTertiary, fontSize: 12, fontWeight: '600', marginLeft: 4 },
@@ -1697,11 +1706,7 @@ const styles = StyleSheet.create({
         borderColor: colors.border,
         borderRadius: 8,
         padding: 16,
-        shadowColor: colors.text,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.06,
-        shadowRadius: 3,
-        elevation: 1,
+        elevation: 0,
     },
     recipeCardHeader: {
         flexDirection: 'row',
@@ -1716,7 +1721,7 @@ const styles = StyleSheet.create({
     recipeCardTitle: {
         color: colors.text,
         fontSize: 18,
-        fontWeight: '800',
+        fontWeight: '600',
         lineHeight: 24,
     },
     recipeCardDescription: {
@@ -1761,7 +1766,7 @@ const styles = StyleSheet.create({
     recipeSafetyTitle: {
         color: colors.warning,
         fontSize: 13,
-        fontWeight: '800',
+        fontWeight: '600',
     },
     recipeSafetyText: {
         color: colors.text,
@@ -1782,7 +1787,7 @@ const styles = StyleSheet.create({
     recipeNoticeTitle: {
         color: colors.primary,
         fontSize: 13,
-        fontWeight: '800',
+        fontWeight: '600',
     },
     recipeSourceRow: {
         flexDirection: 'row',
@@ -1817,7 +1822,7 @@ const styles = StyleSheet.create({
     recipeSectionTitle: {
         color: colors.text,
         fontSize: 14,
-        fontWeight: '800',
+        fontWeight: '600',
         marginBottom: 8,
     },
     ingredientGrid: {
@@ -1852,7 +1857,7 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 24,
         fontSize: 12,
-        fontWeight: '800',
+        fontWeight: '600',
         overflow: 'hidden',
     },
     recipeStepText: {
@@ -1914,24 +1919,20 @@ const styles = StyleSheet.create({
     },
     inputFloatingContainer: {
         backgroundColor: colors.surface,
-        borderRadius: 26,
+        borderRadius: 18,
         borderWidth: 1,
         borderColor: colors.borderHighlight,
-        shadowColor: colors.text,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.06,
-        shadowRadius: 3,
-        elevation: 1,
-        marginHorizontal: 16,
+        elevation: 0,
+        marginHorizontal: 0,
         marginTop: 4,
-        ...Platform.select({ web: { maxWidth: 800, width: '100%', alignSelf: 'center', marginHorizontal: 0 } })
+        ...Platform.select({ web: { maxWidth: 728, width: '100%', alignSelf: 'center', marginHorizontal: 0 } })
     },
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 12,
         paddingVertical: 6,
-        minHeight: Platform.OS === 'web' ? 44 : 48,
+        minHeight: 64,
     },
     micButton: { padding: 6, marginLeft: 2 },
     input: {
@@ -1961,8 +1962,8 @@ const styles = StyleSheet.create({
     },
     sendButton: {
         borderRadius: 16,
-        width: 32,
-        height: 32,
+        width: 44,
+        height: 44,
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: colors.primaryLight,
@@ -1998,7 +1999,7 @@ const styles = StyleSheet.create({
         gap: 6,
         paddingHorizontal: 12,
         paddingVertical: 7,
-        borderRadius: 999,
+        borderRadius: 8,
         backgroundColor: colors.primaryLight,
         borderWidth: 1,
         borderColor: colors.primary,
@@ -2007,7 +2008,7 @@ const styles = StyleSheet.create({
     webHeroBadgeText: {
         color: colors.primary,
         fontSize: 12,
-        fontWeight: '900',
+        fontWeight: '600',
     },
     webEmptySubtitle: {
         maxWidth: 560,
@@ -2018,7 +2019,7 @@ const styles = StyleSheet.create({
         marginBottom: 28,
     },
     suggestionChips: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', justifyContent: 'center' },
-    suggestionChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+    suggestionChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
     suggestionText: { color: colors.textSecondary, fontSize: 14, fontWeight: '500' },
 
     // 모달 스타일
@@ -2041,7 +2042,7 @@ const styles = StyleSheet.create({
     cancelButton: { flex: 1, padding: 16, backgroundColor: colors.surfaceAlt, borderRadius: 12, alignItems: 'center' },
     confirmButton: { flex: 2, padding: 16, backgroundColor: colors.primary, borderRadius: 12, alignItems: 'center' },
     cancelButtonText: { color: colors.textSecondary, fontWeight: '600' },
-    confirmButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+    confirmButtonText: { color: colors.onPrimary, fontWeight: 'bold', fontSize: 16 },
 
     // 요리 모드 스타일
     cookingModeButton: {
@@ -2063,9 +2064,9 @@ const styles = StyleSheet.create({
         marginLeft: 8,
     },
     activeBadgeText: {
-        color: 'white',
+        color: colors.onPrimary,
         fontSize: 11,
-        fontWeight: '900',
+        fontWeight: '600',
     },
     toggleDotOn: {
         backgroundColor: colors.primary

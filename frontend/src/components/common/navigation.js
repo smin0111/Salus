@@ -56,7 +56,7 @@ export function WebSidebar({ currentScreen, onNavigate, isLoggedIn, user, onLogo
   return (
     <View style={[styles.sidebar, compact && styles.sidebarCompact]}>
       <Pressable style={styles.brand} onPress={() => onNavigate('chat')} accessibilityRole="link" accessibilityLabel="Salus AI 셰프 홈">
-        <View style={styles.brandMark}><Ionicons name="leaf" size={20} color={color.inverse} /></View>
+        <View style={styles.brandMark}><Ionicons name="leaf" size={20} color={color.onInk} /></View>
         {!compact && <View><Text style={styles.brandName}>Salus</Text><Text style={styles.brandCaption}>Organic Intelligence</Text></View>}
       </Pressable>
 
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
   sidebar: { width: size.sidebar, backgroundColor: color.surfaceRaised, borderRightWidth: 1, borderRightColor: color.borderSubtle, paddingHorizontal: spacing.md, paddingTop: spacing.lg, paddingBottom: spacing.md },
   sidebarCompact: { width: size.sidebarCompact, paddingHorizontal: spacing.sm, alignItems: 'center' },
   brand: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xl, paddingHorizontal: 4 },
-  brandMark: { width: 40, height: 40, borderRadius: radius.md, backgroundColor: color.brandStrong, alignItems: 'center', justifyContent: 'center' },
+  brandMark: { width: 40, height: 40, borderRadius: radius.md, backgroundColor: color.inkSurface, alignItems: 'center', justifyContent: 'center' },
   brandName: { ...typography.h3, color: color.brandStrong, lineHeight: 21 },
   brandCaption: { fontSize: 9, color: color.textSubtle, letterSpacing: 0.5, marginTop: 1 },
   navScroll: { flex: 1, width: '100%' },
