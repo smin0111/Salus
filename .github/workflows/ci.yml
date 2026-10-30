@@ -72,6 +72,9 @@ jobs:
     env:
       SALUS_IT_MYSQL_URL: jdbc:mysql://127.0.0.1:13306/salus_it
       SALUS_IT_MYSQL_PASSWORD: salus-ci-only
+      # 운영(docker-compose.prod.yml TZ)과 같이 JVM 시간대를 DB 연결(serverTimezone=Asia/Seoul)과 맞춥니다.
+      # 러너 기본값(UTC)이면 JDBC로 직접 넣은 시각과 Hibernate가 읽는 시각이 9시간 어긋납니다.
+      TZ: Asia/Seoul
     steps:
       - name: 저장소 체크아웃
         uses: actions/checkout@v4
