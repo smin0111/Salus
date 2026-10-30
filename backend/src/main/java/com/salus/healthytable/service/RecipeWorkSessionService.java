@@ -3,15 +3,23 @@ package com.salus.healthytable.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.salus.healthytable.dto.RecipeWorkSessionDTO;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -24,6 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Redis 장애에 대비해 서버 메모리(fallbackStore)에도 같은 내용을 저장합니다.
  * Redis가 응답하지 않아도 같은 서버 안에서는 작업 세션을 계속 이어갈 수 있습니다.
  */
+@Slf4j
 @Service
 public class RecipeWorkSessionService {
 
@@ -160,6 +169,52 @@ public class RecipeWorkSessionService {
     }
 
     /**
+     * 회원 탈퇴 때 그 사용자의 작업 세션을 메모리와 Redis에서 모두 지웁니다.
+     * 메모리 사본은 사용자 키 접두어로 모두 지웁니다(만료돼 다시 조회되지 않던 사본 포함).
+     * Redis는 넘겨받은 채팅방 키를 먼저 지우고, 예전에 지우지 못한 키가 남았을 수 있어 접두어 SCAN으로 한 번 더 찾습니다.
+     * Redis 호출이 실패하면 남은 키는 6시간 TTL로 사라집니다. 실패해도 탈퇴는 되돌리지 않습니다.
+     */
+    public void clearAllForUser(Long userId, Collection<Long> chatSessionIds) {
+        if (userId == null) {
+            return;
+        }
+        String prefix = userKeyPrefix(userId);
+        fallbackStore.keySet().removeIf(key -> key.startsWith(prefix));
+
+        List<String> knownKeys = chatSessionIds == null ? List.of() : chatSessionIds.stream()
+                .filter(Objects::nonNull)
+                .map(chatSessionId -> key(userId, chatSessionId))
+                .toList();
+        try {
+            if (!knownKeys.isEmpty()) {
+                redisTemplate.delete(knownKeys);
+            }
+        } catch (Exception e) {
+            log.warn("탈퇴 사용자 작업 세션 Redis 삭제 실패(TTL로 만료됨): userId={}", userId);
+        }
+        try (Cursor<String> cursor = redisTemplate.scan(ScanOptions.scanOptions().match(prefix + "*").count(100).build())) {
+            List<String> leftovers = new ArrayList<>();
+            while (cursor.hasNext()) {
+                leftovers.add(cursor.next());
+            }
+            if (!leftovers.isEmpty()) {
+                redisTemplate.delete(leftovers);
+            }
+        } catch (Exception e) {
+            log.warn("탈퇴 사용자 작업 세션 Redis 검색 실패(TTL로 만료됨): userId={}", userId);
+        }
+    }
+
+    /**
+     * 만료된 메모리 사본을 10분마다 지웁니다. 메모리 사본은 같은 키를 다시 조회할 때만 지워지므로,
+     * 다시 조회되지 않는 사본(탈퇴 직후 진행 중이던 요청이 다시 저장한 경우 등)이 TTL을 넘겨 남지 않게 합니다.
+     */
+    @Scheduled(fixedDelayString = "PT10M", initialDelayString = "PT10M")
+    public void purgeExpiredFallbackSessions() {
+        fallbackStore.entrySet().removeIf(entry -> entry.getValue().isExpired(clock));
+    }
+
+    /**
      * 메모리 저장소에 먼저 저장한 뒤 Redis에도 저장합니다.
      * Redis 저장이 실패해도 요청 자체는 실패시키지 않습니다(메모리 사본으로 계속 동작).
      */
@@ -193,7 +248,12 @@ public class RecipeWorkSessionService {
 
     // Redis 키 형식: salus:recipe-session:{userId}:{chatSessionId}
     private String key(Long userId, Long chatSessionId) {
-        return "salus:recipe-session:" + userId + ":" + chatSessionId;
+        return userKeyPrefix(userId) + chatSessionId;
+    }
+
+    // 사용자 한 명의 키 접두어. 끝의 ":" 때문에 사용자 1의 접두어가 사용자 10의 키와 겹치지 않습니다.
+    private String userKeyPrefix(Long userId) {
+        return "salus:recipe-session:" + userId + ":";
     }
 
     // 메모리 저장소에 보관하는 값(세션 상태 + 만료 시각)

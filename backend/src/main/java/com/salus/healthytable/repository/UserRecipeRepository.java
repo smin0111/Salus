@@ -18,6 +18,9 @@ import java.util.Optional;
 public interface UserRecipeRepository extends JpaRepository<UserRecipe, Long> {
     Optional<UserRecipe> findByIdAndUserId(Long id, Long userId);
 
+    // 계정 화면 "저장된 내 데이터"의 내 레시피 개수입니다.
+    long countByUserId(Long userId);
+
     Optional<UserRecipe> findByUserIdAndSourceCardId(Long userId, Long sourceCardId);
 
     // 최근 수정순 첫 페이지입니다(같은 시각이면 ID 큰 것부터).

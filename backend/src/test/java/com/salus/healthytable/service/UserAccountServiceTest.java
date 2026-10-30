@@ -1,5 +1,6 @@
 package com.salus.healthytable.service;
 
+import com.salus.healthytable.domain.ChatSession;
 import com.salus.healthytable.domain.CommunityPost;
 import com.salus.healthytable.domain.User;
 import com.salus.healthytable.dto.UserDataSummaryDTO;
@@ -19,6 +20,8 @@ import com.salus.healthytable.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -28,6 +31,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -53,6 +58,9 @@ class UserAccountServiceTest {
 
     private final com.salus.healthytable.repository.FeedCommentRepository feedCommentRepository =
             mock(com.salus.healthytable.repository.FeedCommentRepository.class);
+    private final com.salus.healthytable.repository.UserRecipeRepository userRecipeRepository =
+            mock(com.salus.healthytable.repository.UserRecipeRepository.class);
+    private final RecipeWorkSessionService recipeWorkSessionService = mock(RecipeWorkSessionService.class);
     private final UserAccountService service = new UserAccountService(
             userRepository,
             healthProfileRepository,
@@ -68,6 +76,8 @@ class UserAccountServiceTest {
             chatMessageRepository,
             chatSessionRepository,
             feedCommentRepository,
+            userRecipeRepository,
+            recipeWorkSessionService,
             java.time.Clock.fixed(java.time.Instant.parse("2026-10-26T01:00:00Z"), java.time.ZoneId.of("Asia/Seoul")));
 
     // 데이터 요약에 채팅방과 채팅 메시지 수가 포함되어야 합니다.
@@ -87,6 +97,7 @@ class UserAccountServiceTest {
         when(paymentRepository.countByUser(user)).thenReturn(11L);
         when(chatSessionRepository.countByUserId(1L)).thenReturn(12L);
         when(chatMessageRepository.countBySession_UserId(1L)).thenReturn(13L);
+        when(userRecipeRepository.countByUserId(1L)).thenReturn(14L);
 
         UserDataSummaryDTO summary = service.summarizeUserData(1L);
 
@@ -102,6 +113,7 @@ class UserAccountServiceTest {
         assertThat(summary.getPayments()).isEqualTo(11L);
         assertThat(summary.getChatSessions()).isEqualTo(12L);
         assertThat(summary.getChatMessages()).isEqualTo(13L);
+        assertThat(summary.getUserRecipes()).isEqualTo(14L);
     }
 
     // 회원 탈퇴 시 자식 데이터를 올바른 순서(게시글 댓글/좋아요 → ... → 채팅 메시지 → 채팅방 → 사용자)로 삭제해야 합니다.
@@ -177,7 +189,50 @@ class UserAccountServiceTest {
                     assertThat(ex.getReason()).isEqualTo("사용자를 찾을 수 없습니다.");
                 });
 
-        verifyNoInteractions(chatMessageRepository, chatSessionRepository, paymentRepository);
+        verifyNoInteractions(chatMessageRepository, chatSessionRepository, paymentRepository, recipeWorkSessionService);
+    }
+
+    // 탈퇴하면 만들던 레시피의 작업 세션도 지워야 합니다. 키에 채팅방 ID가 들어가므로 지우기 전 채팅방 ID를 넘깁니다.
+    @Test
+    void deleteAccountClearsRecipeWorkSessionsForAllChatSessions() {
+        User user = user(1L);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(communityPostRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(List.of());
+        when(chatSessionRepository.findByUserIdOrderByUpdatedAtDesc(1L)).thenReturn(List.of(chatSession(9L), chatSession(10L)));
+
+        service.deleteAccount(1L);
+
+        verify(recipeWorkSessionService).clearAllForUser(1L, List.of(9L, 10L));
+    }
+
+    // 트랜잭션 안에서는 커밋된 뒤에만 지웁니다. 롤백되면 계정이 남으므로 작업 세션도 남겨 둡니다.
+    @Test
+    void deleteAccountClearsWorkSessionsOnlyAfterCommit() {
+        User user = user(1L);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(communityPostRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(List.of());
+        when(chatSessionRepository.findByUserIdOrderByUpdatedAtDesc(1L)).thenReturn(List.of(chatSession(9L)));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.deleteAccount(1L);
+            verify(recipeWorkSessionService, never()).clearAllForUser(any(), any());
+
+            List<TransactionSynchronization> synchronizations = TransactionSynchronizationManager.getSynchronizations();
+            synchronizations.forEach(sync -> sync.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+            verify(recipeWorkSessionService, never()).clearAllForUser(any(), any());
+
+            synchronizations.forEach(TransactionSynchronization::afterCommit);
+            verify(recipeWorkSessionService).clearAllForUser(1L, List.of(9L));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    private ChatSession chatSession(Long id) {
+        ChatSession chatSession = new ChatSession();
+        chatSession.setId(id);
+        return chatSession;
     }
 
     private User user(Long id) {

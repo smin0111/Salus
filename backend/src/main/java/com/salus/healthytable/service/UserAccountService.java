@@ -1,5 +1,6 @@
 package com.salus.healthytable.service;
 
+import com.salus.healthytable.domain.ChatSession;
 import com.salus.healthytable.domain.CommunityPost;
 import com.salus.healthytable.domain.User;
 import com.salus.healthytable.dto.UserDataSummaryDTO;
@@ -9,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
@@ -36,6 +39,8 @@ public class UserAccountService {
     private final ChatMessageRepository chatMessageRepository;
     private final ChatSessionRepository chatSessionRepository;
     private final FeedCommentRepository feedCommentRepository;
+    private final UserRecipeRepository userRecipeRepository;
+    private final RecipeWorkSessionService recipeWorkSessionService;
     private final Clock clock;
 
     /**
@@ -59,6 +64,7 @@ public class UserAccountService {
                 .payments(paymentRepository.countByUser(user))
                 .chatSessions(chatSessionRepository.countByUserId(userId))
                 .chatMessages(chatMessageRepository.countBySession_UserId(userId))
+                .userRecipes(userRecipeRepository.countByUserId(userId))
                 .build();
     }
 
@@ -90,6 +96,10 @@ public class UserAccountService {
         healthProfileRepository.deleteByUserId(userId);
         mealLogRepository.deleteByUser(user);
         activityLogRepository.deleteByUser(user);
+        // 작업 세션(Redis·메모리) 키에 채팅방 ID가 들어가므로 채팅방을 지우기 전에 ID를 모아 둡니다.
+        List<Long> chatSessionIds = chatSessionRepository.findByUserIdOrderByUpdatedAtDesc(userId).stream()
+                .map(ChatSession::getId)
+                .toList();
         chatMessageRepository.deleteBySession_UserId(userId);
         chatSessionRepository.deleteByUserId(userId);
         paymentRepository.anonymizeByUser(user);
@@ -97,6 +107,24 @@ public class UserAccountService {
         // 작성자 연결은 회원 행을 지울 때 FK(SET NULL)가 끊습니다. 내 공유본·좋아요는 FK(CASCADE)로 함께 지워집니다.
         feedCommentRepository.deleteAllByAuthor(userId, LocalDateTime.now(clock));
         userRepository.delete(user);
+        clearWorkSessionsAfterCommit(userId, chatSessionIds);
+    }
+
+    /**
+     * 만들던 레시피의 임시 작업 상태(Redis·메모리)를 탈퇴가 커밋된 뒤에 지웁니다.
+     * 탈퇴가 롤백되면 지우지 않아 계정이 남은 사용자의 작업이 끊기지 않습니다. 트랜잭션 밖에서 호출되면 바로 지웁니다.
+     */
+    private void clearWorkSessionsAfterCommit(Long userId, List<Long> chatSessionIds) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            recipeWorkSessionService.clearAllForUser(userId, chatSessionIds);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                recipeWorkSessionService.clearAllForUser(userId, chatSessionIds);
+            }
+        });
     }
 
     private User getUser(Long userId) {
