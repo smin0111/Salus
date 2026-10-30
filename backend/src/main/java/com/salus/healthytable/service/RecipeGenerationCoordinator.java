@@ -200,7 +200,7 @@ public class RecipeGenerationCoordinator {
             // 최초 시도면 "복구 대기", 복구본까지 실패했으면 "거절"로 감사 기록을 남깁니다.
             String finalStatus = attempt >= 1 ? "REJECTED" : "REPAIR_PENDING";
             log.warn("[RECIPE_DRAFT_VALIDATION_FAILED] recipeName={}, attempt={}, failures={}, generationMs={}, repair={}",
-                    generationRequest.requestedTitle(), attempt + 1, draftValidation.codes(), generationMs, attempt < 1);
+                    ExternalSearchQueryPolicy.forLog(generationRequest.requestedTitle()), attempt + 1, draftValidation.codes(), generationMs, attempt < 1);
             generatedRecipeLifecycleService.saveDraftValidationAudit(
                     generationRequest.requestedTitle(),
                     candidate,
@@ -291,7 +291,7 @@ public class RecipeGenerationCoordinator {
         }
         long fallbackStartedNanos = System.nanoTime();
         log.info("[RECIPE_FALLBACK_MODEL] recipeName={}, fallbackModel={}, previousFailures={}",
-                generationRequest.requestedTitle(), fallbackModel, reasons);
+                ExternalSearchQueryPolicy.forLog(generationRequest.requestedTitle()), fallbackModel, reasons);
         return withinStageBudget(
                 ChatProgress.stage("다른 모델로 다시 작성하고 있어요",
                         recipeGenerationClient.generateWith(generationRequest, fallbackModel)),
@@ -313,7 +313,7 @@ public class RecipeGenerationCoordinator {
                         return Mono.error(error);
                     }
                     log.warn("[RECIPE_FALLBACK_MODEL_FAILED] recipeName={}, fallbackModel={}, category={}",
-                            generationRequest.requestedTitle(), fallbackModel, error.getClass().getSimpleName());
+                            ExternalSearchQueryPolicy.forLog(generationRequest.requestedTitle()), fallbackModel, error.getClass().getSimpleName());
                     return Mono.just(StructuredRecipeOutcome.failure(reasons));
                 });
     }

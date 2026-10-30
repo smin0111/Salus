@@ -344,6 +344,12 @@ record RecipeResearchPlan(
                 maxSearchAttempts, maxSources, avoid, excludedSourceUrls);
     }
 
+    // 검색어만 바꾼 계획입니다(외부로 보내기 전에 민감한 검색어를 거를 때 씁니다).
+    RecipeResearchPlan withSearchQueries(List<String> queries) {
+        return new RecipeResearchPlan(dishName, creatorName, mode, latestSourceRequested,
+                personalizationRequired, queries, maxSearchAttempts, maxSources, avoidIngredients, excludedSourceUrls);
+    }
+
     /**
      * "다른 두쫀쿠 레시피"처럼 이미 보여 준 출처를 빼고 같은 요리를 다시 찾는 계획입니다.
      */

@@ -180,6 +180,18 @@ class RecipeWebSourceAdapterTest {
                 .containsExactly("https://m.blog.naver.com/a/1", "https://www.10000recipe.com/recipe/2");
     }
 
+    // 건강 상태가 섞인 검색어는 다른 경로로 들어와도 외부 검색 엔진을 호출하지 않습니다.
+    @Test
+    void webSearchSkipsQueriesBlockedByExternalSearchPolicy() {
+        com.salus.healthytable.service.SearchEngine engine = mock(com.salus.healthytable.service.SearchEngine.class);
+        SearchEngineWebRecipeSearchAdapter adapter = new SearchEngineWebRecipeSearchAdapter(engine);
+
+        List<WebRecipeSearchResult> results = adapter.search(List.of("고혈압 환자 반찬 레시피"), 2);
+
+        assertThat(results).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(engine);
+    }
+
     // "백종원김치찌개"처럼 붙여 쓴 크리에이터 접두어도 구조화 데이터의 작성자와 일치해야 합니다.
     @Test
     void implicitKoreanCreatorPrefixStillRequiresMatchingStructuredAuthor() {

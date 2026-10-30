@@ -45,7 +45,7 @@ public class DuckDuckGoSearchEngine implements SearchEngine {
         }
 
         return Mono.fromCallable(() -> {
-            log.info("[DuckDuckGoSearch] Initiating web search for query: {}", query);
+            log.info("[DuckDuckGoSearch] Initiating web search. queryLength={}", query == null ? 0 : query.length());
 
             // "레시피" 키워드를 검색어에 붙여 검색 정밀도를 높임
             String searchUrl = "https://html.duckduckgo.com/html/?q=" + URLEncoder.encode(query + " 레시피", StandardCharsets.UTF_8);

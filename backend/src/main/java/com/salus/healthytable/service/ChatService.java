@@ -332,7 +332,9 @@ public class ChatService {
                 ? recipeEvidenceService.resolve(
                         normalizedTitle,
                         trustedRecipes,
-                        intent.name())
+                        intent.name(),
+                        safetyContext == null ? List.of()
+                                : ExternalSearchQueryPolicy.privateTerms(safetyContext.chronicConditions(), safetyContext.medications()))
                 : Mono.just(new RecipeEvidenceService.RagData(
                         SearchEngine.SearchStatus.SUCCESS,
                         "",

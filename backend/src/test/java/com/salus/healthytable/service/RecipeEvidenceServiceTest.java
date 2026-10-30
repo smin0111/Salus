@@ -83,6 +83,30 @@ class RecipeEvidenceServiceTest {
         verify(searchCacheRepository, never()).save(any(SearchCache.class));
     }
 
+    // 건강 상태가 섞인 요청 제목은 식약처·웹 검색에 보내지 않고 근거 없음으로 처리하며, 근거 없음 캐시도 남기지 않습니다.
+    @Test
+    void sensitiveTitleIsNotSentToExternalSearch() {
+        RecipeEvidenceService.RagData result = service.resolve(
+                "당뇨 있는데 먹을 국", List.of(), "RECIPE_REQUEST").block();
+
+        assertThat(result).isNotNull();
+        assertThat(result.status()).isEqualTo(SearchEngine.SearchStatus.EMPTY);
+        assertThat(result.source()).isEqualTo("query-blocked");
+        org.mockito.Mockito.verifyNoInteractions(searchEngine, mfdsRecipeSearchClient);
+        verify(searchCacheRepository, never()).save(any(SearchCache.class));
+    }
+
+    // 등록한 복용 약 이름이 섞인 제목도 레거시 경로에서 식약처·웹 검색으로 나가지 않습니다.
+    @Test
+    void registeredMedicationInTitleIsNotSentToExternalSearch() {
+        RecipeEvidenceService.RagData result = service.resolve(
+                "와파린 나물무침", List.of(), "RECIPE_REQUEST", List.of("와파린")).block();
+
+        assertThat(result).isNotNull();
+        assertThat(result.source()).isEqualTo("query-blocked");
+        org.mockito.Mockito.verifyNoInteractions(searchEngine, mfdsRecipeSearchClient);
+    }
+
     private SearchEngine.SearchResponse response(SearchEngine.SearchStatus status, String source) {
         return new SearchEngine.SearchResponse(status, List.of(), source);
     }
