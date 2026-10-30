@@ -58,3 +58,9 @@ Code is the source of truth. This file and `docs/ai/*` are maps verified against
 ## Conventions
 - Commit messages (only when asked): Korean text with an English Conventional Commits prefix (`fix:`, `feat:`, `chore:`, `refactor:`, `test:`, `build:`). Branches merge into `main` with merge commits.
 - Reply in the user's language (Korean by default for this repo). Keep final reports short: result, evidence, what was verified, open risks.
+
+## 개발 자동화 시작·중지 규칙
+- 사용자가 "자동화프로젝트 시작해"라고 하면 마지막 승인 작업의 현재 코드·로컬 인계 기록·리뷰 상태를 확인하고, 그 범위에서 구현 → 검증 → 독립 Codex 검토 → 수정·재검토를 이어갑니다. 일반적인 다음 단계마다 허락을 다시 묻지 않습니다. 재개가 새 기능·새 설계·배포 권한을 뜻하지는 않습니다.
+- 커밋·푸시·PR은 사용자가 해당 행위를 명시적으로 지시할 때만 합니다. 개발 완료 보고를 커밋·푸시·PR 권유나 승인 질문으로 끝내지 않습니다. 병합·배포·기능 활성화·접근 모드 변경도 기존 권한 경계를 유지합니다.
+- "멈춰", "중지"는 구현과 예약된 재시도를 함께 멈추라는 뜻입니다. 진행 중인 호출의 안전한 종료 상태를 확인하고, 코드 변경·실제 검증·미완료 항목·job ID·다음 명령을 `.codex-review/handoff.md`에 남깁니다. 파일에 비밀값은 쓰지 않습니다. 프로세스를 끝내지 못했으면 끝났다고 보고하지 않습니다.
+- 시작 명령은 실제로 수신한 대화에서만 처리할 수 있습니다. 현재 연결은 기존 Claude Code 대화가 로컬 Codex 검토기를 호출하는 구조이며, 다른 데스크톱 앱의 대화를 자동으로 깨우거나 한도를 해제하지 않습니다. 두 구현자가 동시에 같은 파일을 수정하지 않습니다.
