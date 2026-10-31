@@ -43,6 +43,14 @@ public class UserAccountService {
     private final RecipeWorkSessionService recipeWorkSessionService;
     private final Clock clock;
 
+    // 이메일 인증 코드 기록(가입 전 이메일이라 회원과 FK로 묶이지 않음). 없으면(테스트 구성 등) 지우지 않습니다.
+    private com.salus.healthytable.repository.EmailVerificationRepository emailVerificationRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setEmailVerificationRepository(com.salus.healthytable.repository.EmailVerificationRepository repository) {
+        this.emailVerificationRepository = repository;
+    }
+
     /**
      * 사용자가 남긴 데이터의 종류별 건수를 집계합니다.
      * readOnly = true는 조회 전용 트랜잭션으로, 불필요한 변경 감지를 생략해 성능에 유리합니다.
@@ -106,6 +114,11 @@ public class UserAccountService {
         // 피드 댓글: 다른 사람의 답글 구조를 유지하려고 행은 남기고 본문을 지운 삭제 상태로 바꿉니다(부모·root 연결 유지).
         // 작성자 연결은 회원 행을 지울 때 FK(SET NULL)가 끊습니다. 내 공유본·좋아요는 FK(CASCADE)로 함께 지워집니다.
         feedCommentRepository.deleteAllByAuthor(userId, LocalDateTime.now(clock));
+        // 이메일 로그인 정보(password_credentials)는 회원 행을 지울 때 FK(CASCADE)로 함께 지워집니다.
+        // 그 이메일로 받은 인증 코드 기록은 회원과 묶이지 않아 여기서 지웁니다.
+        if (emailVerificationRepository != null && user.getEmail() != null && !user.getEmail().isBlank()) {
+            emailVerificationRepository.deleteByEmail(user.getEmail().trim().toLowerCase(java.util.Locale.ROOT));
+        }
         userRepository.delete(user);
         clearWorkSessionsAfterCommit(userId, chatSessionIds);
     }
