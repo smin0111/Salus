@@ -219,6 +219,27 @@ export const AuthProvider = ({ children }) => {
         return userData;
     };
 
+    // --- 살루스 자체 이메일·비밀번호 로그인 ---
+    // 실패하면 서버 오류(error.response.data.message)를 그대로 던지고, 화면이 getApiErrorMessage로 보여 줍니다.
+    // 로그인·가입 응답은 소셜 로그인과 같은 모양({ token, refreshToken, user })이라 applySession을 함께 씁니다.
+
+    // purpose: 'SIGNUP'(가입 인증 코드) | 'PASSWORD_RESET'(비밀번호 재설정 코드)
+    const requestEmailCode = (email, purpose) =>
+        axios.post(`${config.API_BASE_URL}/auth/email/code`, { email, purpose });
+
+    const emailSignup = async ({ email, code, password, name }, keepLoggedIn = true) => {
+        const response = await axios.post(`${config.API_BASE_URL}/auth/email/signup`, { email, code, password, name });
+        return applySession(response.data, keepLoggedIn);
+    };
+
+    const emailLogin = async (email, password, keepLoggedIn = true) => {
+        const response = await axios.post(`${config.API_BASE_URL}/auth/email/login`, { email, password });
+        return applySession(response.data, keepLoggedIn);
+    };
+
+    const resetPassword = ({ email, code, newPassword }) =>
+        axios.post(`${config.API_BASE_URL}/auth/email/password-reset`, { email, code, newPassword });
+
     // refresh token으로 새 access token을 받습니다. 실패하면 null을 돌려주고 호출한 쪽이 로그아웃 처리합니다.
     // 서버는 쓴 refresh token을 폐기하고 새 토큰을 주므로, 응답의 refreshToken으로 반드시 교체합니다.
     const refreshAccessToken = () => {
@@ -811,6 +832,7 @@ export const AuthProvider = ({ children }) => {
         <AuthContext.Provider value={{
             isLoggedIn, user, token, login, logout, refreshUser, applyUser, loading,
             getLoginMethods, addLoginMethod, reauthenticate, hasRecentIdentityConfirmation,
+            requestEmailCode, emailSignup, emailLogin, resetPassword,
         }}>
             {children}
         </AuthContext.Provider>

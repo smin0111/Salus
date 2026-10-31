@@ -117,6 +117,12 @@ services:
       # 베타 서버는 결제를 받지 않습니다(결제 화면은 안내만). 실제 판매 때 PAYMENT_ENABLED=true와 포트원 V2 값을 넣습니다.
       # 포트원 값이 비어 있으면 PAYMENT_ENABLED=true여도 결제를 받지 않습니다.
       PAYMENT_ENABLED: ${PAYMENT_ENABLED:-false}
+      # 이메일 가입 인증·비밀번호 재설정 메일(SMTP). 비어 있으면 메일 기능이 꺼집니다.
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_APP_PASSWORD: ${MAIL_APP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
       PAYMENT_PORTONE_STORE_ID: ${PAYMENT_PORTONE_STORE_ID:-}
       PAYMENT_PORTONE_CHANNEL_KEY: ${PAYMENT_PORTONE_CHANNEL_KEY:-}
       PAYMENT_PORTONE_PAY_METHOD: ${PAYMENT_PORTONE_PAY_METHOD:-EASY_PAY}

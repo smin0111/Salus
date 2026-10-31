@@ -139,10 +139,10 @@ class PaymentServiceTest {
         verify(orderRepository, never()).save(any());
     }
 
-    // 결제를 켰어도 포트원 설정이 비어 있으면 결제를 받지 않고, 화면에도 결제 불가로 알립니다.
+    // 결제를 켰어도 포트원 설정(웹훅 시크릿 포함)이 비어 있으면 결제를 받지 않고, 화면에도 결제 불가로 알립니다.
     @Test
     void missingPortoneSettingsDisablePayment() {
-        for (String field : List.of("portoneApiSecret", "portoneStoreId", "portoneChannelKey")) {
+        for (String field : List.of("portoneApiSecret", "portoneStoreId", "portoneChannelKey", "portoneWebhookSecret")) {
             Object original = ReflectionTestUtils.getField(paymentService, field);
             ReflectionTestUtils.setField(paymentService, field, "");
             assertThat(paymentService.productInfo().paymentEnabled()).isFalse();
