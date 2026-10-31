@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Platform, useWindowDimensions } from 'react-native';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import axios from 'axios';
@@ -181,18 +181,64 @@ export default function AppNavigator() {
 
   // 가입 동의: 로그인하면 서버에 현재 문서 버전에 동의했는지 묻습니다. 동의 전에는 닉네임보다 먼저 동의 화면을 보여 줍니다.
   // 묻지 못하면(네트워크 오류 등) 화면을 막지 않습니다. 서버가 건강 저장·대화를 403으로 막으므로 동의 없이 저장되지는 않습니다.
+  // 대신 동의 화면이 영영 안 뜨지 않도록 다시 묻습니다: 잠시 뒤 최대 2번, 화면을 옮길 때, 서버가 요청을 403으로 막을 때.
   const [consentState, setConsentState] = useState(null); // { required, versions } | null
+  const [consentFetchSeq, setConsentFetchSeq] = useState(0);
+  const [consentFailed, setConsentFailed] = useState(false);
+  const consentStateRef = useRef(null);
+  const consentRetryCountRef = useRef(0);
+  consentStateRef.current = consentState;
   useEffect(() => {
     if (!isLoggedIn || !token) {
       setConsentState(null);
+      setConsentFailed(false);
+      consentRetryCountRef.current = 0;
       return undefined;
     }
     let cancelled = false;
+    let retryTimer = null;
     getConsents(token)
-      .then((response) => { if (!cancelled) setConsentState(response.data); })
-      .catch((e) => { debugLog('Consent status failed', e); });
-    return () => { cancelled = true; };
-  }, [isLoggedIn, token]);
+      .then((response) => {
+        if (cancelled) return;
+        setConsentState(response.data);
+        setConsentFailed(false);
+        consentRetryCountRef.current = 0;
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        debugLog('Consent status failed', e);
+        setConsentFailed(true);
+        if (consentRetryCountRef.current < 2) {
+          consentRetryCountRef.current += 1;
+          retryTimer = setTimeout(() => setConsentFetchSeq(seq => seq + 1), 5000 * consentRetryCountRef.current);
+        }
+      });
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [isLoggedIn, token, consentFetchSeq]);
+
+  // 동의 여부를 모르는 동안 서버가 403으로 막으면(동의 필요 등) 동의 상태를 다시 묻습니다.
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      response => response,
+      error => {
+        // 동의 조회 자체의 403은 제외합니다(다시 물어도 같은 응답이라 계속 반복됨).
+        const url = String(error?.config?.url || '');
+        if (error?.response?.status === 403 && consentStateRef.current === null && !url.includes('/consents')) {
+          setConsentFetchSeq(seq => seq + 1);
+        }
+        return Promise.reject(error);
+      }
+    );
+    return () => axios.interceptors.response.eject(interceptor);
+  }, []);
+
+  // 묻지 못한 채로 화면을 옮기면 다시 묻습니다.
+  useEffect(() => {
+    if (consentFailed && consentStateRef.current === null) setConsentFetchSeq(seq => seq + 1);
+  }, [currentScreen]);
 
   useEffect(() => {
     if (!isLoggedIn || !token) {

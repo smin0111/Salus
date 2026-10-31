@@ -341,7 +341,8 @@ const recipeToPlainText = (recipe) => {
     return lines.join('\n');
 };
 
-const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, openPlanModal, handleStreamingComplete, copiedMessageId, setCopiedMessageId, saveToMyRecipes, savingRecipeId }) => {
+// chatActive: 채팅 화면이 숨겨지면(다른 탭) 레시피 상세 창도 가립니다. 다시 채팅으로 오면 열려 있던 상세가 그대로 보입니다.
+const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, openPlanModal, handleStreamingComplete, copiedMessageId, setCopiedMessageId, saveToMyRecipes, savingRecipeId, chatActive = true }) => {
     const [detailOpen, setDetailOpen] = useState(false);
     const scaleAnim = useRef(new Animated.Value(0.95)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -543,7 +544,7 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
 
                 {!recipe && renderActions()}
                 {detailOpen && recipe && (
-                    <Modal visible animationType="slide" onRequestClose={() => setDetailOpen(false)}>
+                    <Modal visible={chatActive} animationType="slide" onRequestClose={() => setDetailOpen(false)}>
                         <SafeAreaView style={styles.detailScreen}>
                             <View style={styles.detailHeader}><TouchableOpacity accessibilityRole="button" accessibilityLabel="대화로 돌아가기" onPress={() => setDetailOpen(false)} style={styles.detailBack}><Ionicons name="chevron-back" size={20} color={colors.text} /><Text style={styles.detailBackText}>대화로 돌아가기</Text></TouchableOpacity></View>
                             <ScrollView contentContainerStyle={styles.detailContent} keyboardShouldPersistTaps="handled">
@@ -1269,6 +1270,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             setCopiedMessageId={setCopiedMessageId}
             saveToMyRecipes={saveToMyRecipes}
             savingRecipeId={savingRecipeId}
+            chatActive={active}
         />
     );
 
