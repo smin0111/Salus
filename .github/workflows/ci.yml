@@ -12,15 +12,10 @@ on:
       - main
       - develop
 
-# 같은 PR·브랜치에 새 커밋을 올리면 이전 커밋의 검사를 취소합니다(이미 고친 커밋의 실패 메일 방지).
-# main·develop 푸시는 병합마다 끝까지 검사합니다.
-concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 permissions:
   contents: read
 
+# 같은 PR(refs/pull/N/merge)·브랜치에 새 커밋이 오면 진행 중인 이전 검사를 취소합니다(이미 고친 커밋의 실패 메일 방지).
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
