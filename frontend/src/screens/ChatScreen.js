@@ -1301,6 +1301,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             onRetry={fetchChatSessions}
             isLoggedIn={isLoggedIn}
             overlay={overlay}
+            active={active}
             onClose={overlay ? onCloseSidebar : onCollapseDesktopHistory}
             onNewChat={() => { startNewChat(); if (overlay) onCloseSidebar?.(); }}
             onSelect={id => { loadChatSession(id); if (overlay) onCloseSidebar?.(); }}

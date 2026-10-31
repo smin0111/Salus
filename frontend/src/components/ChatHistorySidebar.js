@@ -35,11 +35,12 @@ const groupSessions = (sessions, now = new Date()) => {
  * status: 'loading'(처음 불러오는 중) | 'error'(불러오지 못함) | 'ready'
  * 불러오지 못한 목록을 "저장된 대화 없음"으로 보여 주지 않습니다.
  */
-export default function ChatHistorySidebar({ sessions, status = 'ready', activeSessionId, loadingSessionId, isLoggedIn, overlay = false, onClose, onNewChat, onSelect, onRename, onDelete, onLogin, onRetry }) {
+// active: 채팅 화면이 숨겨지면(다른 탭·뒤로 가기) false. 대화 옵션 메뉴는 화면 위에 따로 뜨므로 이때 닫습니다.
+export default function ChatHistorySidebar({ sessions, status = 'ready', activeSessionId, loadingSessionId, isLoggedIn, overlay = false, active = true, onClose, onNewChat, onSelect, onRename, onDelete, onLogin, onRetry }) {
     const { width, height } = useWindowDimensions();
     const [menu, setMenu] = useState(null);
     const [query, setQuery] = useState('');
-    useEffect(() => { setMenu(null); }, [width, height, sessions, isLoggedIn]);
+    useEffect(() => { setMenu(null); }, [width, height, sessions, isLoggedIn, active]);
     useEffect(() => { if (!isLoggedIn) setQuery(''); }, [isLoggedIn]);
 
     const keyword = query.trim().toLowerCase();
@@ -120,7 +121,7 @@ export default function ChatHistorySidebar({ sessions, status = 'ready', activeS
                 <Text style={styles.empty}>로그인하면 지난 대화를 이어서 볼 수 있어요.</Text>
                 <Pressable onPress={onLogin} accessibilityRole="button" style={({ pressed, focused }) => [styles.newChat, styles.guestLogin, pressed && styles.pressed, focused && styles.focused]}><Text style={styles.newChatText}>로그인</Text></Pressable>
             </View>}
-            <Modal visible={!!menu} transparent animationType="fade" onRequestClose={() => setMenu(null)}>
+            <Modal visible={active && !!menu} transparent animationType="fade" onRequestClose={() => setMenu(null)}>
                 <View style={styles.menuLayer}>
                     <Pressable style={StyleSheet.absoluteFill} onPress={() => setMenu(null)} accessibilityRole="button" accessibilityLabel="대화 옵션 닫기" />
                     {menu && <View style={[styles.menu, { top: menu.top, left: menu.left }]}>
