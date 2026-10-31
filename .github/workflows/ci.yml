@@ -35,7 +35,7 @@ jobs:
         working-directory: backend
     steps:
       - name: 저장소 체크아웃
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Java 설정
         uses: actions/setup-java@v4
@@ -112,7 +112,7 @@ jobs:
         working-directory: admin
     steps:
       - name: 저장소 체크아웃
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Node 설정
         uses: actions/setup-node@v4
@@ -139,7 +139,7 @@ jobs:
         working-directory: frontend
     steps:
       - name: 저장소 체크아웃
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Node 설정
         uses: actions/setup-node@v4
@@ -201,7 +201,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 저장소 체크아웃
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 운영 Docker Compose 설정 검증
         if: ${{ hashFiles('.env.example') != '' && hashFiles('docker-compose.prod.yml') != '' }}
