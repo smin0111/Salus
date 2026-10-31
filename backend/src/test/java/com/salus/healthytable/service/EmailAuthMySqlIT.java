@@ -38,6 +38,8 @@ class EmailAuthMySqlIT {
 
     private static final String EMAIL = "email-it@example.test";
     private static final String PASSWORD = "salus-pass-123";
+    // EMAIL과 악센트만 다른 주소(MySQL 기본 비교 utf8mb4_0900_ai_ci는 같다고 봄)
+    private static final String LOOKALIKE = "emaìl-it@example.test";
     private static final java.time.Instant NOW = java.time.Instant.now();
 
     @DynamicPropertySource
@@ -59,8 +61,8 @@ class EmailAuthMySqlIT {
     @BeforeEach
     @AfterEach
     void cleanUp() {
-        jdbc.update("DELETE FROM email_verifications WHERE email = ?", EMAIL);
-        jdbc.update("DELETE FROM users WHERE email = ?", EMAIL);
+        jdbc.update("DELETE FROM email_verifications WHERE email IN (?, ?)", EMAIL, LOOKALIKE);
+        jdbc.update("DELETE FROM users WHERE email IN (?, ?)", EMAIL, LOOKALIKE);
     }
 
     // 코드를 확인하면 회원과 비밀번호 정보가 생기고, 같은 코드는 다시 쓸 수 없습니다. 탈퇴하면 비밀번호 정보도 지워집니다.
@@ -171,6 +173,24 @@ class EmailAuthMySqlIT {
 
         assertThat(txHelper.login(EMAIL, PASSWORD, NOW).result()).isEqualTo(EmailAuthTxHelper.LoginResult.INVALID);
         assertThat(txHelper.login(EMAIL, "new-salus-pass-9", NOW).result()).isEqualTo(EmailAuthTxHelper.LoginResult.OK);
+    }
+
+    // 악센트만 다른 주소로는 남의 비밀번호 정보를 찾거나 재설정·로그인할 수 없습니다(V29 utf8mb4_bin + 코드의 정확 일치).
+    @Test
+    void lookalikeEmailCannotReachAnotherCredential() {
+        txHelper.saveCode(EMAIL, EmailVerificationPurpose.SIGNUP, "123456");
+        txHelper.signup(EMAIL, "123456", PASSWORD, "이메일 회원");
+
+        assertThat(txHelper.hasPasswordCredential(EMAIL)).isTrue();
+        assertThat(txHelper.hasPasswordCredential(LOOKALIKE)).isFalse();
+        assertThat(txHelper.login(LOOKALIKE, PASSWORD, NOW).result()).isEqualTo(EmailAuthTxHelper.LoginResult.INVALID);
+
+        txHelper.saveCode(LOOKALIKE, EmailVerificationPurpose.PASSWORD_RESET, "777777");
+        assertThat(txHelper.resetPassword(LOOKALIKE, "777777", "attacker-pass-1"))
+                .isEqualTo(EmailAuthTxHelper.ResetResult.INVALID_CODE);
+        assertThat(txHelper.resetPassword(EMAIL, "777777", "attacker-pass-1"))
+                .isEqualTo(EmailAuthTxHelper.ResetResult.INVALID_CODE);
+        assertThat(txHelper.login(EMAIL, PASSWORD, NOW).result()).isEqualTo(EmailAuthTxHelper.LoginResult.OK);
     }
 
     // 정리 작업은 만료된 지 하루 지난 코드만 지웁니다.

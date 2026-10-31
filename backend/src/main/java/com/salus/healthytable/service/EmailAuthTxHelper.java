@@ -70,7 +70,12 @@ public class EmailAuthTxHelper {
 
     @Transactional(readOnly = true)
     public boolean hasPasswordCredential(String email) {
-        return credentialRepository.existsByEmail(email);
+        return credentialRepository.findByEmail(email).filter(c -> email.equals(c.getEmail())).isPresent();
+    }
+
+    // DB 비교 규칙과 상관없이 정확히 같은 이메일의 자격 증명만 씁니다(V29 utf8mb4_bin과 같은 기준을 코드에서도 지킴).
+    private Optional<PasswordCredential> lockExact(String email) {
+        return credentialRepository.findForUpdateByEmail(email).filter(c -> email.equals(c.getEmail()));
     }
 
     @Transactional(readOnly = true)
@@ -142,7 +147,7 @@ public class EmailAuthTxHelper {
      */
     @Transactional
     public LoginOutcome login(String email, String rawPassword, java.time.Instant confirmedAt) {
-        Optional<PasswordCredential> found = credentialRepository.findForUpdateByEmail(email);
+        Optional<PasswordCredential> found = lockExact(email);
         if (found.isEmpty()) {
             passwordEncoder.matches(rawPassword, dummyHash);
             return new LoginOutcome(LoginResult.INVALID, null, null);
@@ -186,7 +191,7 @@ public class EmailAuthTxHelper {
                 default -> ResetResult.INVALID_CODE;
             };
         }
-        Optional<PasswordCredential> found = credentialRepository.findForUpdateByEmail(email);
+        Optional<PasswordCredential> found = lockExact(email);
         if (found.isEmpty()) {
             return ResetResult.INVALID_CODE;
         }
@@ -214,7 +219,7 @@ public class EmailAuthTxHelper {
         }
         EmailVerification verification = found.get();
         LocalDateTime now = LocalDateTime.now(clock);
-        if (verification.getConsumedAt() != null) {
+        if (!email.equals(verification.getEmail()) || verification.getConsumedAt() != null) {
             return CodeResult.INVALID;
         }
         if (!now.isBefore(verification.getExpiresAt())) {
