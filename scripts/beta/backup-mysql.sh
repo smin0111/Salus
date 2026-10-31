@@ -18,7 +18,14 @@ BACKUP_KEY_FILE="${BACKUP_KEY_FILE:-}"
 fail() { echo "[중단] $*" >&2; exit 1; }
 
 [ -n "$BACKUP_KEY_FILE" ] && [ -f "$BACKUP_KEY_FILE" ] || fail "BACKUP_KEY_FILE(암호화 키 파일)을 지정하세요."
-[ "$(stat -f '%Lp' "$BACKUP_KEY_FILE" 2>/dev/null || stat -c '%a' "$BACKUP_KEY_FILE")" = "600" ] \
+# 맥(BSD stat)과 리눅스(GNU stat)의 권한 조회 옵션이 다릅니다. GNU stat -f는 파일 시스템 정보를 출력한 뒤 실패해
+# 두 결과를 이어 붙이면 600과 같지 않으므로, 운영체제별로 한 명령만 씁니다.
+if [ "$(uname -s)" = "Darwin" ]; then
+    KEY_MODE="$(stat -f '%Lp' "$BACKUP_KEY_FILE")"
+else
+    KEY_MODE="$(stat -c '%a' "$BACKUP_KEY_FILE")"
+fi
+[ "$KEY_MODE" = "600" ] \
     || fail "키 파일 권한은 600이어야 합니다: chmod 600 $BACKUP_KEY_FILE"
 [[ "$BACKUP_RETENTION_DAYS" =~ ^[0-9]+$ ]] && [ "$BACKUP_RETENTION_DAYS" -ge 1 ] || fail "BACKUP_RETENTION_DAYS는 1 이상의 숫자여야 합니다."
 docker inspect "$MYSQL_CONTAINER" >/dev/null 2>&1 || fail "$MYSQL_CONTAINER 컨테이너가 없습니다."
