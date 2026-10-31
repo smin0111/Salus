@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { themed } from './webTheme';
 
 /**
  * 디자인 토큰 모음입니다(주로 랜딩 페이지와 공통 컴포넌트에서 사용).
@@ -36,53 +37,59 @@ export const palette = {
   blue100: '#E3EEF0',
 };
 
-// 용도별 색상. 화면 코드는 palette 대신 이 이름을 사용합니다.
+// 용도별 색상. 화면 코드는 palette 대신 이 이름을 사용합니다. 웹에서는 CSS 변수가 되어 다크모드 값(두 번째)으로 바뀝니다.
 export const color = {
-  canvas: palette.cream,
-  canvasMuted: '#EEE8DC',
-  surface: palette.paper,
-  surfaceRaised: palette.white,
-  surfaceTint: palette.leaf50,
-  brand: palette.forest800,
-  brandStrong: palette.forest950,
-  brandSoft: palette.leaf100,
-  accent: palette.citrus600,
-  accentSoft: palette.citrus100,
-  text: palette.ink,
-  textSecondary: palette.slate700,
-  textMuted: palette.slate600,
-  textSubtle: palette.slate500,
-  inverse: palette.white,
-  border: palette.slate200,
-  borderSubtle: palette.slate100,
-  focus: palette.citrus500,
-  success: palette.leaf600,
-  warning: palette.amber700,
-  error: palette.red700,
-  info: palette.blue700,
-  overlay: 'rgba(16, 37, 28, 0.46)',
-  glass: 'rgba(255, 255, 255, 0.78)',
+  canvas: themed('t-canvas', palette.white, '#121212'),
+  canvasMuted: themed('t-canvasMuted', '#F4F5F4', '#1C1C1C'),
+  surface: themed('t-surface', palette.white, '#1C1C1C'),
+  surfaceRaised: themed('t-surfaceRaised', palette.white, '#242424'),
+  surfaceTint: themed('t-surfaceTint', '#F4F5F4', '#1F1F1F'),
+  brand: themed('t-brand', '#30543D', '#9BCEAB'),
+  // 글자·아이콘용 브랜드 색. 다크에서 brand(버튼 배경용)는 글자로 쓰기에 대비가 낮아(약 4:1) 더 밝은 값을 씁니다.
+  brandText: themed('t-brandText', '#30543D', '#7CC496'),
+  brandStrong: themed('t-brandStrong', palette.forest950, '#E6EFE9'),
+  brandSoft: themed('t-brandSoft', palette.leaf100, '#1F3328'),
+  accent: themed('t-accent', palette.citrus600, '#E07A5C'),
+  accentSoft: themed('t-accentSoft', palette.citrus100, '#2E1D18'),
+  text: themed('t-text', '#252927', '#ECEFEC'),
+  textSecondary: themed('t-textSecondary', '#626862', '#C2C2C2'),
+  textMuted: themed('t-textMuted', palette.slate600, '#A8A8A8'),
+  textSubtle: themed('t-textSubtle', palette.slate500, '#8E8E8E'),
+  inverse: themed('t-inverse', palette.white, '#111111'),
+  // 진한 잉크 카드(건강 프로필·검진 상단, 칼로리 요약, 토스트)는 다크모드에서도 진한 배경과 밝은 글자를 유지합니다.
+  inkSurface: themed('t-inkSurface', '#F4F5F4', '#262626'),
+  onInk: themed('t-onInk', '#252927', '#ECEFEC'),
+  onInkMuted: themed('t-onInkMuted', '#626862', '#C4C4C4'),
+  border: themed('t-border', '#DDE1DD', '#363636'),
+  borderSubtle: themed('t-borderSubtle', '#E9ECE9', '#2C2C2C'),
+  focus: themed('t-focus', '#30543D', '#F08A6B'),
+  success: themed('t-success', palette.leaf600, '#7CC496'),
+  warning: themed('t-warning', palette.amber700, '#E2B25C'),
+  error: themed('t-error', palette.red700, '#F08A7C'),
+  info: themed('t-info', palette.blue700, '#8CC0D0'),
+  overlay: themed('t-overlay', 'rgba(16, 37, 28, 0.46)', 'rgba(0, 0, 0, 0.62)'),
+  glass: themed('t-glass', 'rgba(255, 255, 255, 0.78)', 'rgba(28, 28, 28, 0.82)'),
   // 안전 판정 상태 표시용 색(안전/주의/알 수 없음/부분 확인/검토 필요)
   safety: {
-    clear: palette.leaf600,
-    clearBg: palette.leaf50,
-    caution: palette.amber700,
-    cautionBg: palette.amber100,
-    unknown: palette.slate700,
-    unknownBg: palette.slate100,
-    partial: palette.blue700,
-    partialBg: palette.blue100,
-    review: palette.red700,
-    reviewBg: palette.red100,
+    clear: themed('t-safety-clear', palette.leaf600, '#7CC496'),
+    clearBg: themed('t-safety-clearBg', palette.leaf50, '#1C2E22'),
+    caution: themed('t-safety-caution', palette.amber700, '#E2B25C'),
+    cautionBg: themed('t-safety-cautionBg', palette.amber100, '#33291A'),
+    unknown: themed('t-safety-unknown', palette.slate700, '#C2C2C2'),
+    unknownBg: themed('t-safety-unknownBg', palette.slate100, '#2C2C2C'),
+    partial: themed('t-safety-partial', palette.blue700, '#8CC0D0'),
+    partialBg: themed('t-safety-partialBg', palette.blue100, '#1B2C31'),
+    review: themed('t-safety-review', palette.red700, '#F08A7C'),
+    reviewBg: themed('t-safety-reviewBg', palette.red100, '#3A1F1B'),
   },
 };
 
 export const typography = {
   display: { fontSize: 52, lineHeight: 60, fontWeight: '800', letterSpacing: -1.5 },
   displayMobile: { fontSize: 36, lineHeight: 44, fontWeight: '800', letterSpacing: -0.8 },
-  h1: { fontSize: 32, lineHeight: 40, fontWeight: '800', letterSpacing: -0.6 },
-  h2: { fontSize: 24, lineHeight: 32, fontWeight: '800', letterSpacing: -0.3 },
-  h3: { fontSize: 19, lineHeight: 26, fontWeight: '700' },
+  h1: { fontSize: 28, lineHeight: 36, fontWeight: '600', letterSpacing: -0.6 },
+  h2: { fontSize: 23, lineHeight: 31, fontWeight: '600', letterSpacing: -0.3 },
+  h3: { fontSize: 18, lineHeight: 26, fontWeight: '600' },
   bodyLarge: { fontSize: 17, lineHeight: 26, fontWeight: '400' },
   body: { fontSize: 15, lineHeight: 23, fontWeight: '400' },
   bodySmall: { fontSize: 13, lineHeight: 19, fontWeight: '400' },
@@ -135,8 +142,8 @@ export const opacity = { disabled: 0.42, muted: 0.68, scrim: 0.46, glass: 0.78 }
 // 그림자. 웹은 CSS boxShadow, 앱은 React Native 그림자 속성으로 플랫폼별로 다르게 지정합니다.
 export const shadow = {
   soft: Platform.select({
-    web: { boxShadow: '0 6px 24px rgba(24, 49, 36, 0.07)' },
-    default: { shadowColor: palette.forest950, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: 12, elevation: 2 },
+    web: { boxShadow: 'none' },
+    default: { shadowColor: palette.forest950, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0, shadowRadius: 12, elevation: 0 },
   }),
   raised: Platform.select({
     web: { boxShadow: '0 14px 42px rgba(24, 49, 36, 0.12)' },

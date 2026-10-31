@@ -299,6 +299,21 @@ class FeedServiceTest {
         assertThat(status.message()).doesNotContain("안전합니다");
     }
 
+    // 건강정보 수집 동의가 없으면 건강정보를 읽지 않고 "확인 불가"로 둡니다(안전하다고 하지 않음).
+    @Test
+    void allergenUnknownWithoutConsentAndHealthProfileIsNotRead() throws Exception {
+        stored(true, content("샐러드", List.of("양상추"), List.of("섞는다")));
+        ConsentService consentService = org.mockito.Mockito.mock(ConsentService.class);
+        when(consentService.hasConsent(2L)).thenReturn(false);
+        service.setConsentService(consentService);
+
+        FeedDto.AllergenStatus status = service.get(2L, 7L).allergen();
+
+        assertThat(status.state()).isEqualTo("UNKNOWN");
+        assertThat(status.message()).contains("동의");
+        org.mockito.Mockito.verify(safetyContextService, org.mockito.Mockito.never()).build(Optional.of(2L), null);
+    }
+
     // 알레르기 확인 불가: 건강정보 조회 실패, 재료 없음, 사전에 없는 알레르기. 등록 알레르기가 없으면 NOT_REGISTERED.
     @Test
     void allergenUnknownCases() throws Exception {
@@ -307,11 +322,12 @@ class FeedServiceTest {
         viewerHas(false, List.of());
         assertThat(service.get(2L, 7L).allergen().state()).isEqualTo("UNKNOWN");
 
-        assertThat(DICTIONARY.isKnown("사과")).as("사과는 아직 사전에 없음(사전 보강 시 이 테스트의 예시를 바꿈)").isFalse();
-        viewerHas(true, List.of("사과"));
+        // 사과는 2026-10-29 사전에 추가되어 예시를 사전에 없는 "리치"로 바꿨습니다.
+        assertThat(DICTIONARY.isKnown("리치")).as("리치는 아직 사전에 없음(사전 보강 시 이 테스트의 예시를 바꿈)").isFalse();
+        viewerHas(true, List.of("리치"));
         FeedDto.AllergenStatus unknownAllergy = service.get(2L, 7L).allergen();
         assertThat(unknownAllergy.state()).isEqualTo("UNKNOWN");
-        assertThat(unknownAllergy.unchecked()).containsExactly("사과");
+        assertThat(unknownAllergy.unchecked()).containsExactly("리치");
 
         viewerHas(true, List.of());
         assertThat(service.get(2L, 7L).allergen().state()).isEqualTo("NOT_REGISTERED");

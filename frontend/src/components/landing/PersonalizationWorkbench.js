@@ -89,7 +89,7 @@ export default function PersonalizationWorkbench({ compact, reducedMotion }) {
                             <View style={styles.controlTop}>
                                 <Text style={[styles.controlNumber, selected && styles.controlNumberActive]}>{item.number}</Text>
                                 <View style={[styles.controlIcon, selected && styles.controlIconActive]}>
-                                    <Ionicons name={item.icon} size={17} color={selected ? landingColors.ink : '#8D9990'} />
+                                    <Ionicons name={item.icon} size={17} color={selected ? landingColors.inkText : '#8D9990'} />
                                 </View>
                             </View>
                             <Text style={[styles.controlTitle, selected && styles.controlTitleActive]}>{item.title}</Text>
@@ -267,9 +267,9 @@ const styles = StyleSheet.create({
     appliedText: { color: landingColors.herb, fontSize: 9, fontWeight: '900', letterSpacing: 0.1 },
     recipeRevision: { borderWidth: 1, borderColor: landingColors.line, borderRadius: 15, paddingHorizontal: 8, paddingVertical: 5 },
     recipeRevisionText: { color: landingColors.accentText, fontSize: 9, fontWeight: '900' },
-    recipeTitle: { color: landingColors.ink, fontSize: 29, lineHeight: 37, fontWeight: '900', letterSpacing: -1.4, marginTop: 27 },
+    recipeTitle: { color: landingColors.inkText, fontSize: 29, lineHeight: 37, fontWeight: '900', letterSpacing: -1.4, marginTop: 27 },
     recipeSubtitle: { color: landingColors.inkSecondary, fontSize: 12, lineHeight: 19, marginTop: 7 },
-    recipeRule: { height: 1, backgroundColor: landingColors.ink, marginVertical: 24 },
+    recipeRule: { height: 1, backgroundColor: landingColors.inkText, marginVertical: 24 },
     recipeSectionLabel: { color: landingColors.accentText, fontSize: 10, fontWeight: '900', letterSpacing: 0.2, marginBottom: 10 },
     ingredientRevision: { minHeight: 94, flexDirection: 'row', alignItems: 'stretch', gap: 10, borderBottomWidth: 1, borderBottomColor: landingColors.line, marginBottom: 20, paddingBottom: 17 },
     changeBefore: { flex: 1, justifyContent: 'center', padding: 11, borderWidth: 1, borderColor: landingColors.line, borderRadius: 4 },
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
     changeStateLabel: { color: landingColors.inkMuted, fontSize: 9, fontWeight: '900', letterSpacing: 0.1 },
     changeStateLabelAfter: { color: landingColors.herb, fontSize: 9, fontWeight: '900', letterSpacing: 0.1, position: 'relative' },
     ingredientBefore: { color: landingColors.inkMuted, fontSize: 12, fontWeight: '750', textDecorationLine: 'line-through', textDecorationColor: landingColors.accent, marginTop: 6 },
-    ingredientAfter: { color: landingColors.ink, fontSize: 13, lineHeight: 18, fontWeight: '850', marginTop: 6, position: 'relative' },
+    ingredientAfter: { color: landingColors.inkText, fontSize: 13, lineHeight: 18, fontWeight: '850', marginTop: 6, position: 'relative' },
     changeAction: { color: landingColors.accentText, fontSize: 9, fontWeight: '850', marginTop: 5, position: 'relative' },
     cookingDiff: { marginBottom: 2 },
     cookingBeforeRow: { flexDirection: 'row', gap: 11, alignItems: 'flex-start', paddingHorizontal: 13, paddingBottom: 9 },
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
     cookingNote: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', backgroundColor: landingColors.oatSoft, borderRadius: 4, padding: 13, position: 'relative' },
     cookingChangeMark: { width: 20, height: 20, borderRadius: 10, backgroundColor: landingColors.accentSoft, alignItems: 'center', justifyContent: 'center' },
     cookingNoteNumber: { color: landingColors.accentText, fontSize: 10, fontWeight: '900', marginTop: 2 },
-    cookingNoteText: { flex: 1, color: landingColors.ink, fontSize: 11, lineHeight: 19, fontWeight: '750', paddingRight: 58, ...landingType.keepKorean },
+    cookingNoteText: { flex: 1, color: landingColors.inkText, fontSize: 11, lineHeight: 19, fontWeight: '750', paddingRight: 58, ...landingType.keepKorean },
     requestAppliedTag: { position: 'absolute', right: 10, bottom: 10, backgroundColor: landingColors.paper, borderWidth: 1, borderColor: landingColors.line, borderRadius: 3, paddingHorizontal: 7, paddingVertical: 5 },
     requestAppliedText: { color: landingColors.accentText, fontSize: 9, fontWeight: '900' },
     annotation: { position: 'absolute', left: 26, bottom: 58, width: 205 },

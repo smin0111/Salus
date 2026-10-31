@@ -2,11 +2,13 @@ import { Platform } from 'react-native';
 
 // 랜딩 페이지 전용 색상, 레이아웃, 글꼴 규칙 모음입니다.
 
-// 랜딩 페이지 색상
+// 랜딩 페이지 색상. 소개 페이지는 사진·일러스트 카드에 고정 색이 많아 다크모드에서도 라이트로 보여 줍니다(theme/webTheme.js 대상 아님).
+// inkText는 글자·선 색, ink는 진한 섹션 배경입니다. 지금은 값이 같지만 용도를 나눠 두어 나중에 다크 랜딩을 만들 때 따로 바꿀 수 있습니다.
 export const landingColors = {
     canvas: '#F3F0E7',
     paper: '#FFFDF7',
     ink: '#17231D',
+    inkText: '#17231D',
     inkSecondary: '#566158',
     inkMuted: '#626D65',
     inkDecorative: '#7B837C',

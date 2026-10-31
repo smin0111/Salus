@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { getHealthProfile, updateHealthProfile as saveHealthProfile } from '../api/health';
 import { getApiErrorMessage, isAuthError } from '../utils/apiError';
-import { Button, Card, ErrorState, IconButton, SectionHeader, Skeleton, Toast } from '../components/common';
+import { Button, Card, ErrorState, IconButton, MEDICAL_NOTICE_TEXT, SectionHeader, Skeleton, Toast } from '../components/common';
 import HealthProfileCard from '../components/health/HealthProfileCard';
 import useResponsive from '../hooks/useResponsive';
 import {
@@ -161,22 +161,18 @@ export default function HealthScreen({ healthProfile, setHealthProfile, onToggle
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
           <View style={[styles.hero, isDesktop && styles.heroDesktop]}>
             <View style={styles.heroCopy}>
-              <Text style={styles.eyebrow}>HEALTH CONTEXT · 01</Text>
-              <Text style={[styles.heroTitle, !isTablet && styles.heroTitleMobile]}>내 건강 정보가{isTablet ? ' ' : '\n'}한 끼의 기준이 됩니다.</Text>
-              <Text style={styles.heroBody}>알레르기와 복용약은 안전 조건으로, 식단 제한과 목표는 추천 방향으로 구분해 AI 셰프가 참고합니다.</Text>
+              <Text style={[styles.heroTitle, !isTablet && styles.heroTitleMobile]}>건강 정보</Text>
+              <Text style={styles.heroBody}>알레르기와 복용약, 식단 제한과 목표를 등록하면 채팅에서 식사를 추천할 때 참고해요.</Text>
               <View style={styles.heroNote}>
                 <Ionicons name="information-circle-outline" size={17} color={color.accent} />
-                <Text style={styles.heroNoteText}>등록한 정보는 의료 진단을 대신하지 않으며, 음식 선택을 돕는 개인화 정보로만 사용됩니다.</Text>
+                <Text style={styles.heroNoteText}>{`등록한 정보는 음식 선택을 돕는 개인화 정보로만 써요. ${MEDICAL_NOTICE_TEXT.health}`}</Text>
               </View>
             </View>
 
             <Card style={styles.progressCard}>
               <View style={styles.progressTop}>
-                <Text style={styles.progressLabel}>프로필 준비도</Text>
+                <Text style={styles.progressLabel}>등록한 항목</Text>
                 <Text style={styles.progressValue}>{stats.completedSections} / {stats.totalSections}</Text>
-              </View>
-              <View style={styles.progressTrack}>
-                <View style={[styles.progressFill, { width: `${stats.progress * 100}%` }]} />
               </View>
               <Text style={styles.progressDescription}>{stats.totalItems ? `${stats.totalItems}개 정보가 추천에 연결되어 있어요.` : '한 항목만 등록해도 추천에 바로 활용할 수 있어요.'}</Text>
               <View style={styles.progressList}>
@@ -196,7 +192,7 @@ export default function HealthScreen({ healthProfile, setHealthProfile, onToggle
           <View style={styles.sectionIntro}>
             <SectionHeader
               eyebrow={editing ? 'EDITING DRAFT' : 'PERSONALIZATION INPUTS'}
-              title={editing ? '저장하기 전까지 자유롭게 정리하세요' : '현재 추천에 반영 중인 정보'}
+              title={editing ? '건강 정보 수정' : '등록한 건강 정보'}
               description={editing ? '항목을 추가하거나 삭제한 뒤 변경 저장을 눌러 한 번에 반영합니다.' : completedSections.length ? `${completedSections.map(section => section.shortTitle).join(' · ')} 항목이 활성화되어 있습니다.` : '아직 등록된 정보가 없습니다. 필요한 항목부터 시작해 보세요.'}
               action={isTablet ? action : null}
             />
@@ -231,9 +227,8 @@ export default function HealthScreen({ healthProfile, setHealthProfile, onToggle
           <Card style={[styles.checkupCta, isTablet && styles.checkupCtaWide]}>
             <View style={styles.checkupIcon}><Ionicons name="document-text-outline" size={22} color={color.accent} /></View>
             <View style={styles.checkupCopy}>
-              <Text style={styles.checkupEyebrow}>HEALTH CHECKUP · 02</Text>
-              <Text style={styles.checkupTitle}>검진 수치를 식단 기준으로 연결하세요</Text>
-              <Text style={styles.checkupText}>최근 검진의 혈압·혈당·지질 수치를 등록하면 서버 분석 결과가 AI 추천 정책에 반영됩니다.</Text>
+              <Text style={styles.checkupTitle}>검진 분석</Text>
+              <Text style={styles.checkupText}>검진 수치를 입력하고 식사에서 고려할 내용을 확인해요.</Text>
             </View>
             <Button variant="soft" label="건강검진 분석 보기" icon="arrow-forward" onPress={() => onNavigate?.('health-checkup')} />
           </Card>
@@ -252,27 +247,27 @@ const styles = StyleSheet.create({
   mobileHeaderCopy: { flex: 1, paddingHorizontal: spacing.xs },
   mobileTitle: { ...typography.label, fontSize: 16, color: color.text },
   mobileSubtitle: { ...typography.caption, color: color.textMuted, marginTop: 1 },
-  content: { width: '100%', maxWidth: 1180, alignSelf: 'center', padding: spacing.md, paddingBottom: spacing.canvas },
-  hero: { backgroundColor: color.brandStrong, borderRadius: radius.xxl, padding: spacing.xl, gap: spacing.xl, overflow: 'hidden' },
-  heroDesktop: { flexDirection: 'row', alignItems: 'stretch', padding: spacing.xxl, gap: spacing.xxl },
+  content: { width: '100%', maxWidth: 1000, alignSelf: 'center', padding: spacing.xl, paddingBottom: spacing.canvas },
+  hero: { backgroundColor: color.canvas, borderRadius: 0, padding: 0, gap: spacing.xl, overflow: 'hidden' },
+  heroDesktop: { flexDirection: 'row', alignItems: 'stretch', padding: 0, gap: spacing.xxl },
   heroCopy: { flex: 1, justifyContent: 'center' },
-  eyebrow: { ...typography.caption, color: '#F0A18A', letterSpacing: 1.4, fontWeight: '900' },
-  heroTitle: { ...typography.h1, color: color.inverse, marginTop: spacing.md, maxWidth: 620 },
+  eyebrow: { ...typography.caption, color: '#F0A18A', letterSpacing: 1.4, fontWeight: '600' },
+  heroTitle: { ...typography.h1, color: color.onInk, marginTop: spacing.md, maxWidth: 620 },
   heroTitleMobile: { ...typography.h2 },
-  heroBody: { ...typography.body, color: '#CAD5CE', marginTop: spacing.md, maxWidth: 650 },
-  heroNote: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, marginTop: spacing.xl, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: '#405148' },
-  heroNoteText: { ...typography.caption, color: '#B9C6BE', flex: 1 },
-  progressCard: { flex: 0.72, backgroundColor: '#24372D', borderColor: '#43564B', shadowOpacity: 0 },
+  heroBody: { ...typography.body, color: color.textMuted, marginTop: spacing.md, maxWidth: 650 },
+  heroNote: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, marginTop: spacing.xl, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: color.borderSubtle },
+  heroNoteText: { ...typography.caption, color: color.textMuted, flex: 1 },
+  progressCard: { flex: 0.72, backgroundColor: color.surface, borderColor: color.border, shadowOpacity: 0 },
   progressTop: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
-  progressLabel: { ...typography.caption, color: '#B9C6BE', letterSpacing: 0.5 },
-  progressValue: { ...typography.h2, color: color.inverse },
-  progressTrack: { height: 7, borderRadius: radius.pill, backgroundColor: '#43564B', overflow: 'hidden', marginTop: spacing.md },
+  progressLabel: { ...typography.caption, color: color.textMuted, letterSpacing: 0.5 },
+  progressValue: { ...typography.h2, color: color.onInk },
+  progressTrack: { height: 7, borderRadius: radius.pill, backgroundColor: color.border, overflow: 'hidden', marginTop: spacing.md },
   progressFill: { height: '100%', borderRadius: radius.pill, backgroundColor: color.accent },
-  progressDescription: { ...typography.bodySmall, color: '#D5DED8', marginTop: spacing.md },
+  progressDescription: { ...typography.bodySmall, color: color.textMuted, marginTop: spacing.md },
   progressList: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg },
   progressItem: { flexDirection: 'row', alignItems: 'center', gap: 5, minWidth: 92 },
-  progressItemText: { ...typography.caption, color: '#96A59C' },
-  progressItemTextComplete: { color: '#E5ECE7' },
+  progressItemText: { ...typography.caption, color: color.textMuted },
+  progressItemTextComplete: { color: color.textMuted },
   sectionIntro: { marginTop: spacing.section, marginBottom: spacing.lg },
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   grid: { gap: spacing.md },
@@ -285,7 +280,7 @@ const styles = StyleSheet.create({
   mobileActions: { marginTop: spacing.lg },
   checkupCta: { marginTop: spacing.section, gap: spacing.md, borderColor: color.border },
   checkupCtaWide: { flexDirection: 'row', alignItems: 'center' },
-  checkupIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: color.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  checkupIcon: { width: 48, height: 48, borderRadius: 12, backgroundColor: color.accentSoft, alignItems: 'center', justifyContent: 'center' },
   checkupCopy: { flex: 1 },
   checkupEyebrow: { ...typography.caption, color: color.accent, letterSpacing: 1 },
   checkupTitle: { ...typography.h3, color: color.text, marginTop: spacing.xs },

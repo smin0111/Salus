@@ -10,6 +10,7 @@ import com.salus.healthytable.security.AuthenticatedUserProvider;
 import com.salus.healthytable.service.ChatRateLimitService;
 import com.salus.healthytable.service.ChatRecipeCardService;
 import com.salus.healthytable.service.ChatService;
+import com.salus.healthytable.service.ConsentService;
 import com.salus.healthytable.service.InterruptedRequestMerger;
 import com.salus.healthytable.service.RecipeWorkSessionService;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,7 @@ import static org.mockito.Mockito.when;
 class ChatControllerTest {
 
     private final AuthenticatedUserProvider authenticatedUserProvider = mock(AuthenticatedUserProvider.class);
+    private final ConsentService consentService = mock(ConsentService.class);
     private final ChatSessionRepository chatSessionRepository = mock(ChatSessionRepository.class);
     private final ChatMessageRepository chatMessageRepository = mock(ChatMessageRepository.class);
     private final RecipeWorkSessionService recipeWorkSessionService = mock(RecipeWorkSessionService.class);
@@ -49,6 +51,7 @@ class ChatControllerTest {
     private final ChatRecipeCardService chatRecipeCardService = mock(ChatRecipeCardService.class);
     private final ChatController controller = new ChatController(
             authenticatedUserProvider,
+            consentService,
             chatSessionRepository,
             chatMessageRepository,
             recipeWorkSessionService,
@@ -110,6 +113,20 @@ class ChatControllerTest {
         com.salus.healthytable.service.ChatProgress.start("chat-with-session", "답변을 준비하고 있어요");
         com.salus.healthytable.service.ChatProgress.attachSession("chat-with-session", 41L);
         assertThat(controller.cancel("chat-with-session")).containsEntry("sessionId", 41L);
+    }
+
+    // 가입 동의가 없는 로그인 사용자는 대화를 처리하지 않습니다. 게스트는 확인하지 않습니다.
+    @Test
+    void chatRequiresConsentForLoggedInUserOnly() {
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("김치찌개 레시피");
+        when(authenticatedUserProvider.getCurrentUserId()).thenReturn(Optional.of(7L));
+        org.mockito.Mockito.doThrow(new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.FORBIDDEN, "동의 필요")).when(consentService).requireConsent(7L);
+
+        assertThatThrownBy(() -> controller.chat(request, new MockHttpServletRequest()))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        verifyNoInteractions(chatService, chatRateLimitService);
     }
 
     // 메시지가 없으면 서비스 호출 전에 거부해야 합니다.

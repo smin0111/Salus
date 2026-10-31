@@ -81,9 +81,9 @@ export function Button({ children, label, icon, variant = 'primary', size: butto
       ]}
       {...props}
     >
-      {loading ? <ActivityIndicator size="small" color={variant === 'primary' ? color.inverse : color.brand} /> : (
+      {loading ? <ActivityIndicator size="small" color={variant === 'primary' ? color.inverse : color.brandText} /> : (
         <>
-          {!!icon && <Ionicons name={icon} size={18} color={variant === 'primary' ? color.inverse : color.brand} />}
+          {!!icon && <Ionicons name={icon} size={18} color={variant === 'primary' ? color.inverse : color.brandText} />}
           <Text style={[styles.buttonText, styles[`buttonText_${variant}`], textStyle]}>{label || children}</Text>
         </>
       )}
@@ -102,7 +102,7 @@ export function IconButton({ icon, label, selected = false, badge, style, iconCo
       style={({ pressed, focused }) => [styles.iconButton, selected && styles.iconButtonSelected, pressed && styles.pressed, focused && styles.focused, style]}
       {...props}
     >
-      <Ionicons name={icon} size={21} color={iconColor || (selected ? color.brand : color.textSecondary)} />
+      <Ionicons name={icon} size={21} color={iconColor || (selected ? color.brandText : color.textSecondary)} />
       {badge != null && <View style={styles.iconBadge}><Text style={styles.iconBadgeText}>{badge}</Text></View>}
     </Pressable>
   );
@@ -250,7 +250,6 @@ export function SectionHeader({ eyebrow, title, description, action, style }) {
   return (
     <View style={[styles.sectionHeader, style]}>
       <View style={styles.sectionCopy}>
-        {!!eyebrow && <Text style={styles.eyebrow}>{eyebrow}</Text>}
         <Text style={styles.sectionTitle} accessibilityRole="header">{title}</Text>
         {!!description && <Text style={styles.sectionDescription}>{description}</Text>}
       </View>
@@ -272,7 +271,7 @@ const styles = StyleSheet.create({
   headerCopy: { flex: 1, alignItems: 'center' },
   headerTitle: { ...typography.label, fontSize: 16, color: color.text },
   headerSubtitle: { ...typography.caption, color: color.textMuted, marginTop: 1, maxWidth: '100%' },
-  button: { minHeight: size.touch, paddingHorizontal: spacing.lg, borderRadius: radius.pill, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderWidth: 1 },
+  button: { minHeight: size.touch, paddingHorizontal: spacing.lg, borderRadius: radius.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderWidth: 1 },
   button_primary: { backgroundColor: color.brand, borderColor: color.brand },
   button_secondary: { backgroundColor: color.surface, borderColor: color.border },
   button_soft: { backgroundColor: color.brandSoft, borderColor: color.brandSoft },
@@ -283,29 +282,29 @@ const styles = StyleSheet.create({
   buttonSize_lg: { minHeight: 52, paddingHorizontal: spacing.xl },
   buttonText: { ...typography.label },
   buttonText_primary: { color: color.inverse },
-  buttonText_secondary: { color: color.brand },
+  buttonText_secondary: { color: color.brandText },
   buttonText_soft: { color: color.brandStrong },
-  buttonText_ghost: { color: color.brand },
+  buttonText_ghost: { color: color.brandText },
   buttonText_danger: { color: color.inverse },
-  iconButton: { width: size.iconButton, height: size.iconButton, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  iconButton: { width: size.iconButton, height: size.iconButton, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   iconButtonSelected: { backgroundColor: color.brandSoft },
   iconBadge: { position: 'absolute', top: 2, right: 1, minWidth: 17, height: 17, borderRadius: 9, backgroundColor: color.accent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   iconBadgeText: { color: color.inverse, fontSize: 9, fontWeight: '800' },
   pressed: { opacity: 0.76 },
   focused: Platform.select({ web: { outlineStyle: 'solid', outlineWidth: 3, outlineColor: color.focus, outlineOffset: 2 }, default: {} }),
   disabled: { opacity: opacity.disabled },
-  card: { backgroundColor: color.surface, borderRadius: radius.xl, borderWidth: 1, borderColor: color.borderSubtle, padding: spacing.lg, ...shadow.soft },
+  card: { backgroundColor: color.surface, borderRadius: radius.md, borderWidth: 1, borderColor: color.borderSubtle, padding: spacing.lg },
   glassCard: { backgroundColor: color.glass, borderRadius: radius.xxl, borderWidth: 1, borderColor: 'rgba(255,255,255,0.88)', padding: spacing.xl, ...shadow.raised, ...(Platform.OS === 'web' ? { backdropFilter: 'blur(18px)' } : {}) },
-  chip: { minHeight: 36, paddingHorizontal: spacing.sm, borderRadius: radius.pill, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: color.surface, borderWidth: 1, borderColor: color.border },
+  chip: { minHeight: 36, paddingHorizontal: spacing.sm, borderRadius: radius.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: color.surface, borderWidth: 1, borderColor: color.border },
   chip_neutral: {},
   chip_brand: { backgroundColor: color.brandSoft, borderColor: color.brandSoft },
   chip_warning: { backgroundColor: color.safety.cautionBg, borderColor: color.safety.cautionBg },
   chipSelected: { backgroundColor: color.brand, borderColor: color.brand },
   chipText: { ...typography.caption, color: color.textSecondary },
   chipTextSelected: { color: color.inverse },
-  statusBadge: { minHeight: 30, paddingHorizontal: 10, borderRadius: radius.pill, flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' },
+  statusBadge: { minHeight: 30, paddingHorizontal: 10, borderRadius: radius.sm, flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' },
   statusText: { ...typography.caption },
-  sourceBadge: { minHeight: 30, paddingHorizontal: 10, borderRadius: radius.pill, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: color.surfaceTint, alignSelf: 'flex-start' },
+  sourceBadge: { minHeight: 30, paddingHorizontal: 10, borderRadius: radius.sm, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: color.surfaceTint, alignSelf: 'flex-start' },
   sourceBadgeVerified: { backgroundColor: color.safety.partialBg },
   sourceText: { ...typography.caption, color: color.textMuted },
   sourceTextVerified: { color: color.info },
@@ -318,9 +317,9 @@ const styles = StyleSheet.create({
   search: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingLeft: spacing.md, paddingRight: 2, borderRadius: radius.pill, backgroundColor: color.surface, borderWidth: 1, borderColor: color.border },
   searchInput: { flex: 1, minHeight: 46, color: color.text, ...typography.body },
   searchClear: { width: 40, height: 40 },
-  tabs: { flexDirection: 'row', alignItems: 'center', backgroundColor: color.canvasMuted, padding: 4, borderRadius: radius.pill, gap: 4 },
-  tab: { flex: 1, minHeight: size.touch, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.sm },
-  tabSelected: { backgroundColor: color.surface, ...shadow.soft },
+  tabs: { flexDirection: 'row', alignItems: 'center', backgroundColor: color.canvasMuted, padding: 4, borderRadius: radius.sm, gap: 4 },
+  tab: { flex: 1, minHeight: size.touch, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.sm },
+  tabSelected: { backgroundColor: color.surface },
   tabText: { ...typography.label, color: color.textMuted },
   tabTextSelected: { color: color.brandStrong },
   modalBackdrop: { flex: 1, backgroundColor: color.overlay, alignItems: 'center', justifyContent: 'center', padding: spacing.md, zIndex: zIndex.modal },

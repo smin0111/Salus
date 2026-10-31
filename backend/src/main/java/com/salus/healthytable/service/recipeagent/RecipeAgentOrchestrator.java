@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.salus.healthytable.dto.ChatDto;
 import com.salus.healthytable.dto.RecipeWorkSessionDTO;
 import com.salus.healthytable.service.ChatSafetyContextService.SafetyContext;
+import com.salus.healthytable.service.ExternalSearchQueryPolicy;
 import com.salus.healthytable.service.IngredientEdits;
 import com.salus.healthytable.service.RecipeWorkSessionService;
 import lombok.RequiredArgsConstructor;
@@ -227,7 +228,7 @@ public class RecipeAgentOrchestrator {
         }
         // 구조화 출처가 없으면 여기서 멈춥니다. 호출자가 더 낮은 등급의 근거 경로로 내려갑니다.
         if (requireReliableSource && discovery.status() != RecipeResearchStatus.VERIFIED_SOURCE_FOUND) {
-            log.info("[RecipeAgent] No verified source. Deferring to lower evidence tier. dish={}", plan.dishName());
+            log.info("[RecipeAgent] No verified source. Deferring to lower evidence tier. dish={}", ExternalSearchQueryPolicy.forLog(plan.dishName()));
             return null;
         }
         RecipeCandidate originalRecipe = discovery.recipe();
@@ -248,7 +249,7 @@ public class RecipeAgentOrchestrator {
             if (alternative.status() == RecipeResearchStatus.VERIFIED_SOURCE_FOUND) {
                 Evaluation alternativeEvaluation = evaluate(alternative.recipe(), context, safetyContext, contextLoadResult);
                 if (!alternativeEvaluation.blocked() && !alternativeEvaluation.excludedCoreIngredient()) {
-                    log.info("[RecipeAgent] Found alternative without excluded core ingredient. dish={}", plan.dishName());
+                    log.info("[RecipeAgent] Found alternative without excluded core ingredient. dish={}", ExternalSearchQueryPolicy.forLog(plan.dishName()));
                     isFollowUp = false;
                     alternativeUsed = true;
                     discovery = alternative;

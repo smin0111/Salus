@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ScrollView, Alert, Platform, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ScrollView, Alert, Platform, ActivityIndicator, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import axios from 'axios';
 import config from '../config';
 import { useAuth } from '../context/AuthContext';
+import ServiceBrand from '../components/ServiceBrand';
 import { debugLog } from '../utils/logger';
 import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
@@ -23,7 +24,7 @@ const formatWon = (amount) => `${Number(amount || 0).toLocaleString('ko-KR')}원
  * 웹에서는 Alert.alert가 아무것도 띄우지 않으므로 안내·오류는 화면의 알림 상자(notice)로 보여 줍니다.
  * 앱(iOS/Android) 결제는 아직 지원하지 않습니다(스토어 인앱결제 필요).
  */
-export default function UpgradeScreen({ onBack, onSuccess }) {
+export default function UpgradeScreen({ onBack, onSuccess, onNavigate }) {
     const { user, token, isLoggedIn, refreshUser } = useAuth();
     const [status, setStatus] = useState(null);
     const [statusError, setStatusError] = useState('');
@@ -39,6 +40,7 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
     const preparingRef = useRef(false);
     // 화면에 보여 줄 안내·오류 { tone: 'error' | 'info' | 'success', text }
     const [notice, setNotice] = useState(null);
+    const [purchaseConfirmed, setPurchaseConfirmed] = useState(false);
 
     // 웹은 화면 알림 상자로, 앱은 Alert로 알립니다.
     const notify = (tone, title, text) => {
@@ -173,6 +175,7 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
 
     // 결제 버튼: 미리 만든 주문으로 바로 결제창을 엽니다(서버를 기다리지 않아야 팝업이 막히지 않음).
     const handlePayment = async () => {
+        if (!purchaseConfirmed || paying || loading || !canPay) return;
         setNotice(null);
         const { PortOne } = window;
         if (!PortOne) {
@@ -221,6 +224,7 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
         setPaying(false);
     };
 
+
     const renderAction = () => {
         if (!isLoggedIn) {
             return <Text style={styles.footerNote}>로그인 후 결제할 수 있어요.</Text>;
@@ -233,7 +237,7 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
         if (status.plusActive) {
             return (
                 <View style={styles.activeBox}>
-                    <Ionicons name="sparkles" size={18} color={colors.primary} />
+                    <Ionicons name="checkmark-circle-outline" size={18} color={colors.primary} />
                     <Text style={styles.activeText}>PLUS 이용 중 · {formatDate(status.plusExpiresAt)}까지</Text>
                 </View>
             );
@@ -247,13 +251,13 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
         return (
             <>
                 <TouchableOpacity
-                    style={[styles.payButton, (loading || !sdkReady || !order) && { opacity: 0.7 }]}
+                    style={[styles.payButton, (loading || paying || !sdkReady || !order || !purchaseConfirmed) && { opacity: 0.7 }]}
                     onPress={handlePayment}
-                    disabled={loading || !sdkReady}
+                    disabled={loading || paying || !sdkReady || !order || !purchaseConfirmed}
                     accessibilityRole="button"
                 >
                     <Text style={styles.payButtonText}>
-                        {loading ? '처리 중...' : !sdkReady ? '결제 모듈 준비 중...' : !order ? '주문 준비 중...' : 'PLUS 시작하기'}
+                        {loading ? '처리 중...' : !sdkReady ? '결제 모듈 준비 중...' : !order ? '주문 준비 중...' : `${formatWon(status.amount)} 결제하기`}
                     </Text>
                 </TouchableOpacity>
                 {needsRecheck && (
@@ -271,54 +275,26 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={onBack} style={styles.backButton} accessibilityLabel="뒤로 가기">
-                    <Ionicons name="arrow-back" size={24} color={colors.text} />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Salus PLUS</Text>
+                <ServiceBrand />
+                <TouchableOpacity onPress={onBack} style={styles.backButton} accessibilityRole="button" accessibilityLabel="뒤로 가기"><Text style={styles.backText}>돌아가기</Text></TouchableOpacity>
             </View>
-
-            <ScrollView contentContainerStyle={styles.content}>
-                <View style={styles.badgeContainer}>
-                    <View style={styles.plusBadge}>
-                        <Text style={styles.plusBadgeText}>PLUS</Text>
+            <ScrollView contentContainerStyle={styles.scrollContent}>
+                <View style={styles.content}>
+                    <Text style={styles.title}>PLUS {plusDays}일 이용권</Text>
+                    <Text style={styles.subtitle}>새로운 요리 웹 검색을 횟수 제한 없이 이용해요.</Text>
+                    <View style={styles.priceRow}><Text style={styles.priceLabel}>결제할 금액</Text><Text style={styles.priceValue}>{status ? formatWon(status.amount) : '확인 중'}</Text></View>
+                    <View style={styles.termsList}>
+                        {[['결제 방식', '1회 결제'], ['이용 기간', `결제 완료 후 ${plusDays}일`], ['자동 재결제', '없음']].map(([label, value]) => <View key={label} style={styles.termRow}><Text style={styles.termLabel}>{label}</Text><Text style={styles.termValue}>{value}</Text></View>)}
                     </View>
-                </View>
-
-                <Text style={styles.title}>처음 보는 요리도{"\n"}횟수 걱정 없이 찾아보세요</Text>
-                <Text style={styles.subtitle}>{plusDays}일 이용권 · 자동으로 다시 결제되지 않아요</Text>
-
-                <View style={styles.benefitList}>
-                    <View style={styles.benefitItem}>
-                        <View style={[styles.iconBox, { backgroundColor: colors.primaryLight }]}>
-                            <Ionicons name="search" size={24} color={colors.primary} />
-                        </View>
-                        <View style={styles.benefitText}>
-                            <Text style={styles.benefitTitle}>처음 보는 요리 찾기 제한 없음</Text>
-                            <Text style={styles.benefitDesc}>
-                                DB에 없는 요리를 웹에서 찾아 정리하는 기능은 무료 회원에게 하루 횟수가 정해져 있어요. PLUS는 제한이 없어요.
-                            </Text>
-                        </View>
+                    <Text style={styles.footerNote}>기간이 끝나면 무료 회원으로 돌아가요.</Text>
+                    <View style={styles.benefitList}>
+                        <Text style={styles.benefitTitle}>무료와 PLUS는 무엇이 다른가요?</Text>
+                        <Text style={styles.benefitDesc}>PLUS는 새로운 요리 웹 검색의 횟수 제한이 없어요. 알레르기 확인과 안내는 무료에서도 제공돼요.</Text>
                     </View>
-
-                    <View style={styles.benefitItem}>
-                        <View style={[styles.iconBox, { backgroundColor: colors.successLight }]}>
-                            <Ionicons name="shield-checkmark" size={24} color={colors.success} />
-                        </View>
-                        <View style={styles.benefitText}>
-                            <Text style={styles.benefitTitle}>안전 확인은 모두에게 똑같이</Text>
-                            <Text style={styles.benefitDesc}>
-                                알레르기 확인과 안전 안내는 무료 회원도 똑같이 받을 수 있어요.
-                            </Text>
-                        </View>
-                    </View>
-                </View>
-
-                <View style={styles.priceCard}>
-                    <Text style={styles.priceLabel}>{status?.productName || 'Salus PLUS 이용권'}</Text>
-                    <View style={styles.priceRow}>
-                        <Text style={styles.priceValue}>{status ? formatWon(status.amount) : '-'}</Text>
-                        <Text style={styles.priceUnit}> / {plusDays}일</Text>
-                    </View>
+                    {onNavigate && <TouchableOpacity accessibilityRole="link" onPress={() => onNavigate('terms')} style={styles.policyButton}><Text style={styles.policyText}>이용 조건 확인</Text></TouchableOpacity>}
+                    <Pressable onPress={() => setPurchaseConfirmed(value => !value)} accessibilityRole="checkbox" accessibilityState={{ checked: purchaseConfirmed }} accessibilityLabel="상품과 이용 조건을 확인했어요" style={styles.consentRow}>
+                        <Ionicons name={purchaseConfirmed ? 'checkbox' : 'square-outline'} size={25} color={purchaseConfirmed ? colors.primary : colors.textSecondary} /><Text style={styles.consentText}>상품과 이용 조건을 확인했어요.</Text>
+                    </Pressable>
                     {notice && (
                         <View style={[styles.notice, styles[`notice_${notice.tone}`]]}>
                             <Text style={styles.noticeText}>{notice.text}</Text>
@@ -336,36 +312,37 @@ export default function UpgradeScreen({ onBack, onSuccess }) {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { padding: 16, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border, paddingTop: Platform.OS === 'android' ? 40 : 16 },
-    backButton: { padding: 4, marginRight: 12 },
-    headerTitle: { fontSize: 18, fontWeight: 'bold', color: colors.text },
-    content: { padding: 24, alignItems: 'center' },
-    badgeContainer: { marginBottom: 16 },
-    plusBadge: { backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 },
-    plusBadgeText: { color: 'white', fontWeight: '900', fontSize: 14 },
-    title: { fontSize: 28, fontWeight: 'bold', color: colors.text, textAlign: 'center', marginBottom: 16 },
-    subtitle: { fontSize: 16, color: colors.textSecondary, textAlign: 'center', marginBottom: 40 },
-    benefitList: { width: '100%', marginBottom: 40 },
-    benefitItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
-    iconBox: { width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
-    benefitText: { flex: 1 },
-    benefitTitle: { fontSize: 17, fontWeight: 'bold', color: colors.text, marginBottom: 4 },
-    benefitDesc: { fontSize: 14, color: colors.textSecondary },
-    priceCard: { width: '100%', backgroundColor: colors.surface, padding: 24, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
-    priceLabel: { fontSize: 14, color: colors.textSecondary, marginBottom: 8 },
-    priceRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 24 },
-    priceValue: { fontSize: 32, fontWeight: 'bold', color: colors.text },
-    priceUnit: { fontSize: 16, color: colors.textSecondary },
-    payButton: { backgroundColor: colors.primary, paddingVertical: 16, borderRadius: 16, alignItems: 'center' },
-    payButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
-    recheckButton: { marginTop: 12, paddingVertical: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: colors.primary },
-    recheckButtonText: { color: colors.primary, fontSize: 15, fontWeight: '600' },
-    notice: { borderRadius: 10, padding: 12, marginBottom: 12 },
-    notice_error: { backgroundColor: colors.errorLight || '#FDECEC' },
-    notice_info: { backgroundColor: colors.infoLight || '#EAF2FD' },
-    notice_success: { backgroundColor: colors.successLight || '#E8F6EE' },
-    noticeText: { fontSize: 14, color: colors.text, lineHeight: 20 },
-    activeBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12 },
-    activeText: { marginLeft: 8, fontSize: 16, fontWeight: '600', color: colors.text },
-    footerNote: { fontSize: 12, color: colors.textTertiary, textAlign: 'center', marginTop: 12 }
+    header: { minHeight: 72, paddingHorizontal: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    backButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
+    backText: { fontSize: 14, color: colors.textSecondary },
+    scrollContent: { padding: 24, paddingTop: 40, paddingBottom: 56, alignItems: 'center' },
+    content: { width: '100%', maxWidth: 520 },
+    title: { fontSize: 27, lineHeight: 36, fontWeight: '600', color: colors.text, marginBottom: 12 },
+    subtitle: { fontSize: 15, lineHeight: 24, color: colors.textSecondary, marginBottom: 32 },
+    priceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, paddingBottom: 24, borderBottomWidth: 1, borderBottomColor: colors.divider },
+    priceLabel: { fontSize: 16, color: colors.text, fontWeight: '600' },
+    priceValue: { fontSize: 29, fontWeight: '600', color: colors.text },
+    termsList: { paddingTop: 16 },
+    termRow: { flexDirection: 'row', paddingVertical: 10, gap: 16 },
+    termLabel: { width: 110, color: colors.textSecondary, fontSize: 14 },
+    termValue: { flex: 1, color: colors.text, fontSize: 14 },
+    benefitList: { borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.divider, paddingVertical: 24, marginTop: 24 },
+    benefitTitle: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: 10 },
+    benefitDesc: { fontSize: 14, lineHeight: 23, color: colors.textSecondary },
+    policyButton: { minHeight: 48, justifyContent: 'center', alignSelf: 'flex-start' },
+    policyText: { fontSize: 14, color: colors.textSecondary, textDecorationLine: 'underline' },
+    consentRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 },
+    consentText: { flex: 1, fontSize: 14, lineHeight: 22, color: colors.text },
+    payButton: { backgroundColor: colors.primary, minHeight: 52, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+    payButtonText: { color: colors.onPrimary, fontSize: 16, fontWeight: '600' },
+    recheckButton: { marginTop: 12, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 8, borderWidth: 1, borderColor: colors.border },
+    recheckButtonText: { color: colors.primary, fontSize: 14 },
+    notice: { borderRadius: 8, padding: 12, marginBottom: 12 },
+    notice_error: { backgroundColor: colors.errorLight },
+    notice_info: { backgroundColor: colors.infoLight },
+    notice_success: { backgroundColor: colors.successLight },
+    noticeText: { fontSize: 14, color: colors.text, lineHeight: 22 },
+    activeBox: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16 },
+    activeText: { marginLeft: 8, fontSize: 15, color: colors.text },
+    footerNote: { fontSize: 13, lineHeight: 21, color: colors.textSecondary, marginTop: 12 },
 });

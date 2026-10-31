@@ -2,6 +2,7 @@ package com.salus.healthytable.service.recipeagent;
 
 import com.salus.healthytable.domain.Recipe;
 import com.salus.healthytable.repository.RecipeRepository;
+import com.salus.healthytable.service.ExternalSearchQueryPolicy;
 import com.salus.healthytable.service.RecipeNormalizer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -189,7 +190,7 @@ class DefaultRecipeRequestPlanner {
         boolean latest = normalizedMessage.contains("최신") || normalizedMessage.toLowerCase().contains("latest");
         List<String> searchQueries = searchQueries(dishName,
                 creatorDish.creatorName().isBlank() ? showPrefix : creatorDish.creatorName(),
-                normalizedMessage);
+                privateSearchTerms(context));
         return new RecipeResearchPlan(
                 dishName,
                 creatorDish.creatorName(),
@@ -270,20 +271,26 @@ class DefaultRecipeRequestPlanner {
         return RecipeRequestMode.CREATE;
     }
 
-    // "요리 레시피", "요리 만드는 법" 검색어를 만듭니다.
+    // "요리 레시피", "요리 만드는 법" 검색어를 만듭니다. 요리 이름을 못 찾으면 원문 문장을 대신 보내지 않고,
+    // 건강 상태·등록한 질환·복용 약이 섞인 검색어는 외부로 보내지 않습니다(ExternalSearchQueryPolicy).
     private List<String> searchQueries(
             String dishName,
             String creatorName,
-            String originalMessage) {
+            List<String> privateTerms) {
         LinkedHashSet<String> queries = new LinkedHashSet<>();
         String prefix = creatorName == null || creatorName.isBlank() ? "" : creatorName.trim() + " ";
         if (dishName != null && !dishName.isBlank()) {
             queries.add(prefix + dishName + " 레시피");
             queries.add(prefix + dishName + " 만드는 법");
-        } else if (originalMessage != null && !originalMessage.isBlank()) {
-            queries.add(originalMessage);
         }
+        queries.removeIf(query -> !ExternalSearchQueryPolicy.isAllowed(query, privateTerms));
         return List.copyOf(queries);
+    }
+
+    // 사용자가 등록한 질환과 복용 약은 검색어에 들어가면 안 되는 말입니다.
+    static List<String> privateSearchTerms(UserRecipeContext context) {
+        return context == null ? List.of()
+                : ExternalSearchQueryPolicy.privateTerms(context.chronicConditions(), context.medications());
     }
 
     /**

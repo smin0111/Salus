@@ -3,6 +3,9 @@ package com.salus.healthytable.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.salus.healthytable.dto.RecipeWorkSessionDTO;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.ArrayList;
@@ -15,12 +18,83 @@ import java.time.Instant;
 import java.time.ZoneId;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * {@link RecipeWorkSessionService} 테스트입니다. Redis가 없는 상황(메모리 대체 저장소)을 중심으로 확인합니다.
  */
 class RecipeWorkSessionServiceTest {
+
+    // 탈퇴한 사용자의 작업 세션은 메모리에서 모두(넘겨받지 않은 채팅방 포함) 지우고, Redis는 알려진 키와 SCAN으로 찾은 키를 지웁니다.
+    // 다른 사용자(접두어가 겹치는 사용자 10 포함)의 작업 세션은 남아야 합니다.
+    @SuppressWarnings("unchecked")
+    @Test
+    void clearAllForUserRemovesOnlyThatUsersSessionsFromMemoryAndRedis() {
+        StringRedisTemplate redis = mock(StringRedisTemplate.class);
+        Cursor<String> cursor = mock(Cursor.class);
+        when(cursor.hasNext()).thenReturn(true, false);
+        when(cursor.next()).thenReturn("salus:recipe-session:1:77");
+        when(redis.scan(any(ScanOptions.class))).thenReturn(cursor);
+        RecipeWorkSessionService service = new RecipeWorkSessionService(redis, new ObjectMapper().findAndRegisterModules());
+        service.saveRecommendation(1L, 9L, "사용자 1 채팅방 9");
+        service.saveRecommendation(1L, 11L, "사용자 1 채팅방 11(목록에 없음)");
+        service.saveRecommendation(10L, 9L, "사용자 10");
+        service.saveRecommendation(2L, 9L, "사용자 2");
+
+        service.clearAllForUser(1L, List.of(9L));
+
+        assertThat(service.find(1L, 9L)).isEmpty();
+        assertThat(service.find(1L, 11L)).isEmpty();
+        assertThat(service.find(10L, 9L)).isPresent();
+        assertThat(service.find(2L, 9L)).isPresent();
+        verify(redis).delete(List.of("salus:recipe-session:1:9"));
+        verify(redis).delete(List.of("salus:recipe-session:1:77"));
+        ArgumentCaptor<ScanOptions> options = ArgumentCaptor.forClass(ScanOptions.class);
+        verify(redis).scan(options.capture());
+        assertThat(options.getValue().getPattern()).isEqualTo("salus:recipe-session:1:*");
+        verify(cursor).close();
+    }
+
+    // Redis가 실패해도 메모리 사본은 지우고 예외를 던지지 않습니다(탈퇴는 이미 커밋됨, Redis 키는 TTL로 만료).
+    @Test
+    void clearAllForUserStillClearsMemoryWhenRedisFails() {
+        StringRedisTemplate redis = mock(StringRedisTemplate.class);
+        doThrow(new IllegalStateException("redis down")).when(redis).delete(anyCollection());
+        when(redis.scan(any(ScanOptions.class))).thenThrow(new IllegalStateException("redis down"));
+        RecipeWorkSessionService service = new RecipeWorkSessionService(redis, new ObjectMapper().findAndRegisterModules());
+        service.saveRecommendation(1L, 9L, "사용자 1");
+
+        assertThatCode(() -> service.clearAllForUser(1L, List.of(9L))).doesNotThrowAnyException();
+
+        assertThat(service.find(1L, 9L)).isEmpty();
+    }
+
+    // 정기 정리는 만료된 메모리 사본만 지웁니다. 다시 조회되지 않는 사본(탈퇴 직후 재저장 등)도 TTL을 넘겨 남지 않아야 합니다.
+    // 정리 후 시계를 되돌려 조회하면, 정리로 실제 지워진 사본만 비어 있게 됩니다(조회 시 지연 삭제와 구분).
+    @Test
+    void purgeExpiredFallbackSessionsRemovesOnlyExpiredCopies() {
+        MutableClock clock = new MutableClock(Instant.parse("2026-10-29T00:00:00Z"), ZoneId.of("Asia/Seoul"));
+        RecipeWorkSessionService service = new RecipeWorkSessionService(
+                mock(StringRedisTemplate.class),
+                new ObjectMapper().findAndRegisterModules(),
+                clock);
+        service.saveRecommendation(1L, 9L, "만료될 사본");
+        clock.advance(Duration.ofHours(5));
+        service.saveRecommendation(2L, 9L, "남을 사본");
+        clock.advance(Duration.ofHours(1).plusMinutes(1));
+
+        service.purgeExpiredFallbackSessions();
+
+        clock.advance(Duration.ofHours(-2));
+        assertThat(service.find(1L, 9L)).isEmpty();
+        assertThat(service.find(2L, 9L)).isPresent();
+    }
 
     // 일반 추천으로 바뀌면 이전 승인 레시피의 ID/버전/인분/맵기 값이 지워져야 합니다.
     @Test

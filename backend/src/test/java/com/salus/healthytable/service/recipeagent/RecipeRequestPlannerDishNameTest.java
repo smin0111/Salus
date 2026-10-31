@@ -3,6 +3,8 @@ package com.salus.healthytable.service.recipeagent;
 import com.salus.healthytable.service.RecipeNormalizer;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -132,5 +134,15 @@ class RecipeRequestPlannerDishNameTest {
         assertThat(planner.extractExplicitExclusions("좀 빼줘")).isEmpty();
         assertThat(planner.extractExplicitExclusions("우유 알레르기는 없어요")).isEmpty();
         assertThat(planner.extractExplicitExclusions("돼지고기는 빼줘")).containsExactly("돼지고기");
+    }
+
+    // 건강 상태가 섞인 문장이나 등록한 복용 약 이름은 검색어로 나가지 않고, 원문 문장으로 대신 검색하지도 않습니다.
+    @Test
+    void sensitiveMessagesDoNotBecomeExternalSearchQueries() {
+        assertThat(planner.plan("저 당뇨가 있는데 혈당 안 올리는 국 레시피 알려줘", false).searchQueries()).isEmpty();
+        UserRecipeContext context = new UserRecipeContext(1L, List.of(), List.of(), List.of(), List.of("와파린"), List.of(), List.of());
+        assertThat(planner.plan("와파린 나물무침 레시피 알려줘", context).searchQueries()).isEmpty();
+        assertThat(planner.plan("나물무침 레시피 알려줘", context).searchQueries())
+                .containsExactly("나물무침 레시피", "나물무침 만드는 법");
     }
 }

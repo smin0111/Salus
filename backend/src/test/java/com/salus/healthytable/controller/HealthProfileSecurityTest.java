@@ -60,6 +60,10 @@ class HealthProfileSecurityTest {
     @Autowired
     private MockMvc mockMvc;
 
+    // 동의 확인은 이 테스트의 관심사(인증 규칙)가 아니라 가짜로 둡니다(아무것도 하지 않음 = 동의함).
+    @MockBean
+    private com.salus.healthytable.service.ConsentService consentService;
+
     @MockBean
     private HealthProfileRepository healthProfileRepository;
 

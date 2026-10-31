@@ -13,7 +13,7 @@ export function SalusLogoMark({ size = 40, accessibilityLabel = 'SALUS', accessi
             accessibilityElementsHidden={!accessible}
             accessibilityRole={accessible ? 'image' : undefined}
             accessibilityLabel={accessible ? accessibilityLabel : undefined}
-            style={{ width: size, height: size }}
+            style={{ width: size, height: size, backgroundColor: colors.logoPlate, borderRadius: size * 0.28 }}
         >
             <Image
                 accessibilityElementsHidden
@@ -58,7 +58,7 @@ export default function SalusLogo({
                 accessibilityElementsHidden
                 source={logoSource}
                 resizeMode="contain"
-                style={[styles.imageContain, { width: size, height: size }]}
+                style={[styles.imageContain, { width: size, height: size, backgroundColor: colors.logoPlate, borderRadius: size * 0.28 }]}
             />
             <View accessibilityElementsHidden style={styles.wordmarkRow}>
                 {wordmark === 'SALUS' ? (

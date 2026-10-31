@@ -60,6 +60,17 @@ public class RecipeEvidenceService {
             String normalizedTitle,
             List<Recipe> trustedRecipes,
             String intent) {
+        return resolve(normalizedTitle, trustedRecipes, intent, List.of());
+    }
+
+    /**
+     * privateTerms(사용자가 등록한 질환·복용 약)가 제목에 섞이면 외부 검색을 하지 않습니다.
+     */
+    public Mono<RagData> resolve(
+            String normalizedTitle,
+            List<Recipe> trustedRecipes,
+            String intent,
+            List<String> privateTerms) {
         if (trustedRecipes != null && !trustedRecipes.isEmpty() && !normalizedTitle.isBlank()) {
             return Mono.just(new RagData(
                     SearchEngine.SearchStatus.SUCCESS,
@@ -69,6 +80,11 @@ public class RecipeEvidenceService {
         }
         if (normalizedTitle == null || normalizedTitle.isBlank()) {
             return Mono.just(RagData.empty(SearchEngine.SearchStatus.EMPTY, "none"));
+        }
+        // 건강 상태 같은 말이 섞인 검색어는 외부 검색(식약처·웹)으로 보내지 않고 근거 없음으로 처리합니다.
+        if (!ExternalSearchQueryPolicy.isAllowed(normalizedTitle, privateTerms)) {
+            logFailure(intent, "SEARCH_QUERY_BLOCKED", null);
+            return Mono.just(RagData.empty(SearchEngine.SearchStatus.EMPTY, "query-blocked"));
         }
 
         Optional<SearchCache> cache = searchCacheRepository.findByQuery(normalizedTitle);

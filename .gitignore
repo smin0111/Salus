@@ -58,6 +58,7 @@ logs/
 *.temp
 
 # Personal review/working notes
+.codex-review/
 CLAUDE.local.md
 BEGINNER_CODE_REVIEW_NOTES.md
 GITHUB_MANAGEMENT_GUIDE.md

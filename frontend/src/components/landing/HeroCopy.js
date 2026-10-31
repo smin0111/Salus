@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     heroKickerLine: { width: 36, height: 2, backgroundColor: landingColors.accent },
     heroKicker: { color: landingColors.accentText, fontSize: 11, fontWeight: '900', letterSpacing: 0.8 },
     heroTitle: {
-        color: landingColors.ink,
+        color: landingColors.inkText,
         fontWeight: '900',
         ...landingType.keepKorean,
     },

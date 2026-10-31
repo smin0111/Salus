@@ -1,5 +1,6 @@
 package com.salus.healthytable.service.recipeagent;
 
+import com.salus.healthytable.service.ExternalSearchQueryPolicy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -76,7 +77,10 @@ class CompositeRecipeSourceDiscoveryAdapter implements RecipeSourceDiscoveryPort
     private boolean webSourceEnabled;
 
     @Override
-    public List<RecipeSourceDocument> search(RecipeResearchPlan plan, UserRecipeContext context) {
+    public List<RecipeSourceDocument> search(RecipeResearchPlan originalPlan, UserRecipeContext context) {
+        // 다시 찾기(withExcludedSources·withAvoidIngredients)로 늘어난 검색어도 유튜브·웹으로 보내기 전에
+        // 건강 상태·등록한 질환·복용 약이 섞였는지 다시 거릅니다.
+        RecipeResearchPlan plan = withSendableQueries(originalPlan, context);
         List<RecipeSourceDocument> documents = new ArrayList<>(internalRecipeSourceAdapter.search(plan, context));
         // 유튜브는 저장된 레시피가 없을 때만 부릅니다(아래). 먼저 부르면 저장된 요리를 다시 물어도 매번 할당량 201단위를 쓰고
         // 1초 넘게 늦어집니다(2026-10-14 로그: 저장된 레시피로 답한 요청마다 유튜브 검색 3회).
@@ -111,6 +115,11 @@ class CompositeRecipeSourceDiscoveryAdapter implements RecipeSourceDiscoveryPort
             }
         }
 
+        // 보낼 수 있는 검색어가 없으면(모두 건강 정보·복용 약 등으로 막힘) 외부 검색을 하지 않으므로 하루 횟수도 쓰지 않고,
+        // 횟수를 다 쓴 사용자에게도 횟수 초과 대신 근거 없음으로 처리되게 여기서 멈춥니다.
+        if (plan.searchQueries().isEmpty()) {
+            return sorted(documents, plan);
+        }
         // 저장된 근거가 없어 새로 찾는 경우만 하루 횟수를 씁니다. 다 썼으면 여기서 멈춥니다(유튜브·웹 모두 부르지 않음).
         if (newDishSearchQuota != null) {
             newDishSearchQuota.consumeForCurrentRequest();
@@ -281,6 +290,17 @@ class CompositeRecipeSourceDiscoveryAdapter implements RecipeSourceDiscoveryPort
                 source.sourceId(), source.sourceType(), source.title(), source.creatorName(), source.url(),
                 content, source.publishedAt(), source.sourceReliability());
         return new RecipeSourceCandidate(summarizedSource, recipe, candidate.qualityScore(), candidate.evidence());
+    }
+
+    private static RecipeResearchPlan withSendableQueries(RecipeResearchPlan plan, UserRecipeContext context) {
+        if (plan == null) {
+            return null;
+        }
+        List<String> privateTerms = DefaultRecipeRequestPlanner.privateSearchTerms(context);
+        List<String> queries = plan.searchQueries() == null ? List.of() : plan.searchQueries();
+        return plan.withSearchQueries(queries.stream()
+                .filter(query -> ExternalSearchQueryPolicy.isAllowed(query, privateTerms))
+                .toList());
     }
 
     // YouTube 검색 실패는 전체 검색을 실패시키지 않고 빈 결과로 처리합니다.

@@ -4,24 +4,27 @@ import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import config from '../config';
 import { colors } from '../theme/colors';
+import { getThemePreference, isThemeSelectable, setThemePreference, subscribeThemePreference } from '../theme/webTheme';
 import { useAuth } from '../context/AuthContext';
 import { getApiErrorMessage as getErrorMessage, isAuthError } from '../utils/apiError';
 
-// "저장된 내 데이터" 목록: [서버 응답 필드 이름, 화면에 표시할 이름]
+// "저장된 내 데이터" 목록: [서버 응답 필드 이름, 화면에 표시할 이름, 0이면 숨김]
 // 서버 응답 예: { healthProfiles: 1, mealLogs: 12, ... } (GET /api/users/me/data-summary)
+// 예전 커뮤니티 항목은 화면과 API를 없앴으므로 남은 기록이 있을 때만 보여 줍니다(탈퇴하면 함께 지워짐).
 const SUMMARY_LABELS = [
     ['healthProfiles', '건강정보'],
     ['healthCheckups', '건강검진'],
     ['mealLogs', '식단 기록'],
+    ['userRecipes', '내 레시피'],
     ['recommendations', '추천 기록'],
-    ['activityLogs', '활동 기록'],
-    ['communityPosts', '커뮤니티 글'],
-    ['comments', '댓글'],
-    ['likes', '좋아요'],
-    ['recipeShares', '공유 레시피'],
-    ['payments', '결제 기록'],
-    ['chatSessions', '대화 세션'],
+    ['activityLogs', '이용 기록'],
+    ['chatSessions', '대화방'],
     ['chatMessages', '대화 메시지'],
+    ['payments', '결제 기록', true],
+    ['communityPosts', '예전 커뮤니티 글', true],
+    ['comments', '예전 커뮤니티 댓글', true],
+    ['likes', '예전 커뮤니티 좋아요', true],
+    ['recipeShares', '예전 공유 레시피', true],
 ];
 
 /**
@@ -112,15 +115,14 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
         }
     };
 
-    const confirmDeleteAccount = () => {
-        Alert.alert(
+    // 웹에서는 Alert 버튼이 동작하지 않아 askConfirm(웹은 브라우저 확인 창)으로 묻습니다.
+    const confirmDeleteAccount = async () => {
+        const confirmed = await askConfirm(
             '계정 삭제',
-            '계정과 건강정보, 검진 결과, 식단 기록, 대화 기록 등 개인 데이터가 삭제됩니다. 계속할까요?',
-            [
-                { text: '취소', style: 'cancel' },
-                { text: '삭제', style: 'destructive', onPress: deleteAccount },
-            ]
+            '계정과 건강정보, 검진 결과, 식단 기록, 대화 기록, 저장한 레시피가 삭제되며 되돌릴 수 없어요. 계속할까요?',
+            '삭제'
         );
+        if (confirmed) deleteAccount();
     };
 
     // 서버에서 계정과 개인 데이터를 삭제한 뒤, 앱의 로그인 정보도 지우고 채팅 화면으로 이동합니다.
@@ -132,12 +134,12 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
                 headers: { Authorization: `Bearer ${token}` }
             });
             await logout();
-            Alert.alert('삭제 완료', '계정과 개인 데이터가 삭제되었습니다.');
+            showMessage('삭제 완료', '계정과 개인 데이터가 삭제되었습니다.');
             onNavigate('chat');
         } catch (error) {
             if (isAuthError(error)) return;
             console.error('계정 삭제 실패:', error);
-            Alert.alert('삭제 실패', getErrorMessage(error, '계정 삭제 중 문제가 발생했습니다.'));
+            showMessage('삭제 실패', getErrorMessage(error, '계정 삭제 중 문제가 발생했습니다.'));
         } finally {
             setDeleting(false);
         }
@@ -164,6 +166,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
             </View>}
 
             <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+                <Text accessibilityRole="header" style={styles.pageTitle}>계정과 개인정보</Text>
                 {/* 닉네임: 커뮤니티 활동에 보이는 이름(소셜 실명은 공개하지 않음) */}
                 <View style={styles.nicknameRow}>
                     <View style={{ flex: 1 }}>
@@ -218,7 +221,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
                                 style={styles.upgradeButton} 
                                 onPress={() => onNavigate('upgrade')}
                             >
-                                <Ionicons name="sparkles-outline" size={16} color="white" style={{ marginRight: 6 }} />
+                                <Ionicons name="chatbubble-outline" size={16} color={colors.onPrimary} style={{ marginRight: 6 }} />
                                 <Text style={styles.upgradeButtonText}>PLUS 이용권 보기</Text>
                             </TouchableOpacity>
                         </View>
@@ -233,7 +236,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
 
                 <View style={styles.noticeBand}>
                     <View style={styles.noticeIcon}>
-                        <Ionicons name="shield-checkmark-outline" size={22} color="white" />
+                        <Ionicons name="shield-checkmark-outline" size={22} color={colors.onPrimary} />
                     </View>
                     <View style={{ flex: 1 }}>
                         <Text style={styles.noticeTitle}>건강 데이터는 민감정보입니다</Text>
@@ -273,6 +276,8 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
                     </Text>
                 </View>
 
+                {isThemeSelectable() && <ThemeSelector />}
+
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>저장된 내 데이터</Text>
                     {loading ? (
@@ -282,7 +287,7 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
                         </View>
                     ) : (
                         <View style={styles.summaryGrid}>
-                            {SUMMARY_LABELS.map(([key, label]) => (
+                            {SUMMARY_LABELS.filter(([key, , hideWhenZero]) => !hideWhenZero || (summary?.[key] ?? 0) > 0).map(([key, label]) => (
                                 <View key={key} style={styles.summaryItem}>
                                     <Text style={styles.summaryLabel}>{label}</Text>
                                     <Text style={styles.summaryValue}>{summary?.[key] ?? 0}</Text>
@@ -293,25 +298,29 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
                 </View>
 
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>개인정보 처리 원칙</Text>
-                    <PolicyRow icon="lock-closed-outline" text="API 통신은 운영 환경에서 HTTPS 사용을 전제로 합니다." />
-                    <PolicyRow icon="key-outline" text="AI, 결제, 인증 키는 앱에 넣지 않고 서버 환경변수로 관리합니다." />
-                    <PolicyRow icon="trash-outline" text="사용자는 계정 삭제를 통해 개인 데이터를 삭제할 수 있습니다." />
+                    <Text style={styles.sectionTitle}>개인정보와 이용 안내</Text>
+                    <PolicyRow icon="trash-outline" text="아래 계정 삭제로 계정과 개인 데이터를 지울 수 있습니다." />
                     <PolicyRow icon="medkit-outline" text="건강검진 기반 추천은 참고용이며 의료 전문가의 판단을 대체하지 않습니다." />
-                </View>
-
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>출시 전 고지 문구</Text>
                     <Text style={styles.paragraph}>
-                        이 앱은 건강한 식단 선택을 돕기 위한 정보 서비스를 제공합니다. 질병의 진단, 치료, 예방을 목적으로 하지 않으며,
-                        건강 상태에 대한 의학적 판단은 의사 등 전문가와 상담해야 합니다.
+                        SALUS는 건강한 식단 선택을 돕는 정보 서비스입니다. 질병의 진단, 치료, 예방을 목적으로 하지 않으며,
+                        건강 상태에 대한 의학적 판단은 의사 등 전문가와 상담해 주세요.
                     </Text>
+                    <TouchableOpacity
+                        style={styles.policyLink}
+                        onPress={() => onNavigate('privacy')}
+                        accessibilityRole="link"
+                    >
+                        <Ionicons name="document-text-outline" size={16} color={colors.primary} />
+                        <Text style={styles.policyLinkText}>개인정보 처리방침 보기</Text>
+                        <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+                    </TouchableOpacity>
                 </View>
 
                 <TouchableOpacity
                     style={[styles.deleteButton, deleting && styles.disabledButton]}
                     onPress={confirmDeleteAccount}
                     disabled={deleting}
+                    accessibilityRole="button"
                 >
                     <Ionicons name="person-remove-outline" size={18} color={colors.error} />
                     <Text style={styles.deleteButtonText}>{deleting ? '삭제 중...' : '계정 및 개인 데이터 삭제'}</Text>
@@ -354,6 +363,43 @@ function askConfirm(title, message, confirmText) {
 }
 
 // 개인정보 처리 원칙 한 줄(아이콘 + 설명)
+// 화면 테마 선택(웹 전용). 선택은 이 브라우저에만 저장되고, "시스템 설정"이면 기기의 다크모드 설정을 따릅니다.
+const THEME_OPTIONS = [
+    { value: 'system', label: '시스템 설정', icon: 'phone-portrait-outline' },
+    { value: 'light', label: '라이트', icon: 'sunny-outline' },
+    { value: 'dark', label: '다크', icon: 'moon-outline' },
+];
+
+function ThemeSelector() {
+    const [preference, setPreference] = useState(getThemePreference);
+    useEffect(() => subscribeThemePreference(setPreference), []);
+
+    return (
+        <View style={styles.section}>
+            <Text style={styles.sectionTitle}>화면 테마</Text>
+            <View style={styles.themeOptions} accessibilityRole="radiogroup">
+                {THEME_OPTIONS.map(option => {
+                    const selected = preference === option.value;
+                    return (
+                        <TouchableOpacity
+                            key={option.value}
+                            style={[styles.themeOption, selected && styles.themeOptionSelected]}
+                            onPress={() => setThemePreference(option.value)}
+                            accessibilityRole="radio"
+                            accessibilityState={{ checked: selected }}
+                            aria-checked={selected}
+                        >
+                            <Ionicons name={option.icon} size={16} color={selected ? colors.primary : colors.textTertiary} />
+                            <Text style={[styles.themeOptionText, selected && styles.themeOptionTextSelected]}>{option.label}</Text>
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+            <Text style={styles.loginMethodHint}>이 브라우저에만 저장돼요. 시스템 설정을 고르면 기기의 다크모드 설정을 따라요.</Text>
+        </View>
+    );
+}
+
 function PolicyRow({ icon, text }) {
     return (
         <View style={styles.policyRow}>
@@ -364,7 +410,15 @@ function PolicyRow({ icon, text }) {
 }
 
 const styles = StyleSheet.create({
+    pageTitle: { fontSize: 26, lineHeight: 35, color: colors.text, fontWeight: '600', marginBottom: 28 },
     container: { flex: 1, backgroundColor: colors.background },
+    themeOptions: { flexDirection: 'row', gap: 8 },
+    themeOption: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+    themeOptionSelected: { borderColor: colors.primary, backgroundColor: colors.primaryLight },
+    themeOptionText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
+    themeOptionTextSelected: { color: colors.primary },
+    policyLink: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 12, paddingVertical: 6 },
+    policyLinkText: { color: colors.primary, fontSize: 14, fontWeight: '700' },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -382,7 +436,7 @@ const styles = StyleSheet.create({
     nicknameButton: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt },
     nicknameButtonText: { fontSize: 14, fontWeight: '700', color: colors.primary },
     menuButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', marginRight: 12, borderWidth: 1, borderColor: colors.border },
-    headerTitle: { fontSize: 20, fontWeight: '800', color: colors.text },
+    headerTitle: { fontSize: 20, fontWeight: '600', color: colors.text },
     headerSubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
     content: { flex: 1 },
     contentContainer: { padding: 16, paddingBottom: 32 },
@@ -405,7 +459,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginRight: 12,
     },
-    noticeTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 4 },
+    noticeTitle: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 4 },
     noticeText: { fontSize: 13, color: colors.textSecondary, lineHeight: 19 },
     section: {
         backgroundColor: colors.surface,
@@ -415,7 +469,7 @@ const styles = StyleSheet.create({
         padding: 16,
         marginBottom: 14,
     },
-    sectionTitle: { fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 12 },
+    sectionTitle: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: 12 },
     loadingRow: { flexDirection: 'row', alignItems: 'center' },
     loadingText: { color: colors.textSecondary, marginLeft: 10 },
     summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -428,7 +482,7 @@ const styles = StyleSheet.create({
         borderColor: colors.border,
     },
     summaryLabel: { fontSize: 12, color: colors.textSecondary, marginBottom: 6 },
-    summaryValue: { fontSize: 20, fontWeight: '800', color: colors.text },
+    summaryValue: { fontSize: 20, fontWeight: '600', color: colors.text },
     policyRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
     policyText: { flex: 1, marginLeft: 8, color: colors.text, lineHeight: 20 },
     paragraph: { color: colors.textSecondary, lineHeight: 21 },
@@ -463,7 +517,7 @@ const styles = StyleSheet.create({
     },
     loginMethodButtonText: { fontSize: 14, fontWeight: '700', color: colors.primary },
     loginMethodHint: { marginTop: 10, fontSize: 13, lineHeight: 19, color: colors.textSecondary },
-    deleteButtonText: { color: colors.error, fontSize: 15, fontWeight: '800' },
+    deleteButtonText: { color: colors.error, fontSize: 15, fontWeight: '600' },
     membershipCard: {
         backgroundColor: colors.surface,
         borderRadius: 12,
@@ -495,7 +549,7 @@ const styles = StyleSheet.create({
     },
     membershipGrade: {
         fontSize: 18,
-        fontWeight: '800',
+        fontWeight: '600',
         color: colors.text,
     },
     gradeBadge: {
@@ -505,7 +559,7 @@ const styles = StyleSheet.create({
     },
     gradeBadgeText: {
         fontSize: 11,
-        fontWeight: '900',
+        fontWeight: '600',
     },
     upgradeSection: {
         backgroundColor: colors.primaryLight,
@@ -535,7 +589,7 @@ const styles = StyleSheet.create({
         elevation: 3,
     },
     upgradeButtonText: {
-        color: 'white',
+        color: colors.onPrimary,
         fontSize: 14,
         fontWeight: '700',
     },

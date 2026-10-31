@@ -64,6 +64,15 @@ public class AllergenDictionary {
                     labelCheckById.put(String.valueOf(entry.get("id")), labelCheck);
                 }
             }
+            // 법정 표시 대상이 아닌 알레르기(과일·견과류 등)는 프로필 매칭에만 씁니다. 라벨 Registry·함유 표시 Parser에는 넣지 않습니다.
+            for (Map<String, Object> entry : (List<Map<String, Object>>) root.getOrDefault("profileOnlyAllergens", List.of())) {
+                allergens.add(new Allergen(
+                        String.valueOf(entry.get("id")),
+                        String.valueOf(entry.get("name")),
+                        normalizeAll((List<String>) entry.getOrDefault("aliases", List.of())),
+                        normalizeAll((List<String>) entry.getOrDefault("derived", List.of())),
+                        normalizeAll((List<String>) entry.getOrDefault("members", List.of()))));
+            }
             // 라벨 전용 ID/별칭/계층은 기존 프로필 Matcher의 탐지 범위를 바꾸지 않는다.
             List<Map<String, Object>> registryDefinitions = new ArrayList<>(entries);
             registryDefinitions.addAll((List<Map<String, Object>>)
@@ -100,6 +109,16 @@ public class AllergenDictionary {
             if (allergen.matchesDeclaration(normalized)) {
                 terms.addAll(allergen.aliases());
                 terms.addAll(allergen.derived());
+                terms.addAll(allergen.members());
+                // 묶음 구성원("호두", "잣")이 사전 항목이면 그 별칭·파생어(walnut, 잣가루 등)도 함께 탐지합니다. 한 단계만 펼칩니다.
+                for (String member : allergen.members()) {
+                    for (Allergen memberAllergen : allergens) {
+                        if (memberAllergen != allergen && memberAllergen.matchesDeclaration(member)) {
+                            terms.addAll(memberAllergen.aliases());
+                            terms.addAll(memberAllergen.derived());
+                        }
+                    }
+                }
             }
         }
         if (terms.isEmpty()) {
@@ -188,7 +207,13 @@ public class AllergenDictionary {
     }
 
     // 사전의 알레르겐 한 항목 (ID, 대표 이름, 별칭들, 파생 재료들)
-    record Allergen(String id, String name, Set<String> aliases, Set<String> derived) {
+    // members: 묶음 알레르기("견과류")에 속한 재료입니다. 탐지 용어에는 넣지만, "호두"만 등록한 사람을
+    // 묶음 전체(아몬드 등)로 넓히지 않도록 선언 일치(matchesDeclaration)에는 쓰지 않습니다.
+    record Allergen(String id, String name, Set<String> aliases, Set<String> derived, Set<String> members) {
+
+        Allergen(String id, String name, Set<String> aliases, Set<String> derived) {
+            this(id, name, aliases, derived, Set.of());
+        }
 
         // 사용자가 적은 알레르기 표기가 이 알레르겐을 가리키는지 확인합니다.
         boolean matchesDeclaration(String normalizedDeclaration) {

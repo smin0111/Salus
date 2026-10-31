@@ -54,6 +54,7 @@ Source: `docs/allergen-declaration-parser.md` and `service/allergen/AllergenDecl
 ## 5. Health, medication and external evidence
 - Recipe Agent, YouTube, MFDS medication, RxNorm and openFDA integrations are off by default (`recipe.agent.*`). Do not enable live calls in tests or defaults.
 - External evidence can be stale or wrong; treat missing or failed lookups as unknown and never present results as clinical advice.
+- Outbound search queries (web and MFDS recipe search) pass `service/ExternalSearchQueryPolicy` first: dish-name-length only, no health terms, measurements, contacts or the user's registered conditions/medications, and never the raw message as a fallback. Blocked queries mean "no web evidence", not "safe". The Recipe Agent re-filters expanded queries (withExcludedSources, withAvoidIngredients) in `CompositeRecipeSourceDiscoveryAdapter` before YouTube/web, and the legacy `RecipeEvidenceService.resolve` receives the registered terms. Request titles and dish names are logged as length only (`ExternalSearchQueryPolicy.forLog`).
 
 ## 6. Change checklist
 Before: read the relevant section above; locate guard tests with `rg -n "<ClassName>" backend/src/test`; note existing WIP in the files.

@@ -22,4 +22,6 @@ public class UserDataSummaryDTO {
     private long payments;
     private long chatSessions;
     private long chatMessages;
+    // 내 레시피(저장하거나 직접 쓴 레시피). 탈퇴하면 FK CASCADE로 함께 지워집니다.
+    private long userRecipes;
 }

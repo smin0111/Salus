@@ -103,7 +103,8 @@ class AllergenHierarchyTest {
 
     @Test
     void labelRegistryExtensionsDoNotChangeLegacyProfileMatchingTerms() {
-        assertThat(dictionary.size()).isEqualTo(19);
+        // 법정 표시 기반 19종 + 프로필 전용 16종(profileOnlyAllergens, 2026-10-29 의도적 추가). 라벨 전용 항목은 여전히 0개.
+        assertThat(dictionary.size()).isEqualTo(19 + 16);
         assertThat(dictionary.matchTermsFor("알류")).contains("계란", "달걀", "알류", "난류")
                 .doesNotContain("메추리알");
         assertThat(dictionary.matchTermsFor("대두")).contains("콩", "콩기름", "대두유")

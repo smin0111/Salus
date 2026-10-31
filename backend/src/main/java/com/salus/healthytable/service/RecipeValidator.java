@@ -244,7 +244,7 @@ public class RecipeValidator {
                 && reasons.isEmpty();
 
         log.info("[RecipeValidator] Title: {}, Valid: {}, Confidence: {} ({}/{}), EvidenceCoverage: {}/{}, Reasons: {}",
-                recipe.getTitle(), valid, confidenceScore, matchedGeneratedIngredients, totalGeneratedIngredients,
+                ExternalSearchQueryPolicy.forLog(recipe.getTitle()), valid, confidenceScore, matchedGeneratedIngredients, totalGeneratedIngredients,
                 matchedEvidenceIngredients, totalEvidenceIngredients, reasons);
 
         return new ValidationResult(

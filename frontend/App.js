@@ -3,6 +3,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { openExternalBrowserIfInApp } from './src/utils/inAppBrowser';
+import { installWebAlert } from './src/utils/webAlert';
+import { installWebTheme } from './src/theme/webTheme';
+
+// 웹: Alert.alert가 빈 함수라 확인 창·안내가 사라지므로 브라우저 대화상자로 바꿉니다.
+installWebAlert();
+
+// 웹: 다크모드 색 변수를 넣고 저장된 테마 선택(시스템·라이트·다크)을 적용합니다. 화면 모듈을 모두 불러온 뒤라 색 토큰이 다 등록돼 있습니다.
+installWebTheme();
 
 // 웹: 카카오톡 인앱 브라우저로 열렸으면 기본 브라우저로 다시 엽니다(인앱에서는 소셜 로그인이 끝나지 않음).
 openExternalBrowserIfInApp();

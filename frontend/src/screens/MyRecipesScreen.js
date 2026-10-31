@@ -6,7 +6,7 @@ import * as Crypto from 'expo-crypto';
 import { createMyRecipe, deleteMyRecipe, getMyRecipe, getMyRecipes, updateMyRecipe } from '../api/myRecipes';
 import { getFeedStatus, shareToFeed } from '../api/feed';
 import { getApiErrorMessage, isAuthError } from '../utils/apiError';
-import { Button, Card, EmptyState, ErrorState, Input, Toast } from '../components/common';
+import { Button, Card, EmptyState, ErrorState, Input, MedicalNotice, Toast } from '../components/common';
 import { colors } from '../theme/colors';
 
 // 레시피가 어디서 왔는지 보여 주는 문구입니다(AI가 만든 레시피는 검증되지 않았다는 점을 알립니다).
@@ -318,7 +318,7 @@ export default function MyRecipesScreen({ onToggleSidebar, onNavigate, webMode =
     <>
       {header('내 레시피')}
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.lead}>AI 셰프 대화에서 저장했거나 직접 쓴 레시피예요. 나만 볼 수 있어요.</Text>
+        <Text style={styles.lead}>채팅 대화에서 저장했거나 직접 쓴 레시피예요. 나만 볼 수 있어요.</Text>
         <Button label="직접 작성하기" icon="create-outline" variant="secondary" onPress={() => { setForm(emptyForm()); setMode('create'); }} style={styles.topAction} />
         {feedEnabled && onNavigate ? (
           <Button label="레시피 피드 보기" icon="people-outline" variant="ghost" onPress={() => onNavigate('feed')} style={styles.topAction} />
@@ -348,9 +348,7 @@ export default function MyRecipesScreen({ onToggleSidebar, onNavigate, webMode =
         {header(current.title || '레시피', () => setMode('list'))}
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.originBadge}>{originLabel(detail)}</Text>
-          <Text style={styles.notice}>
-            AI가 만들었거나 직접 고친 레시피는 검증되지 않았어요. 의료 조언이 아니며, 알레르기 성분과 원재료는 직접 확인해 주세요.
-          </Text>
+          <MedicalNotice kind="recipe" lead="AI가 만들었거나 직접 고친 레시피는 검증되지 않았어요." style={styles.notice} />
           {!!current.description && <Text style={styles.body}>{current.description}</Text>}
           <Text style={styles.meta}>
             {[current.servings && `${current.servings}인분`, current.cookingTime != null && `${current.cookingTime}분`,
@@ -464,22 +462,22 @@ export default function MyRecipesScreen({ onToggleSidebar, onNavigate, webMode =
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 24, paddingBottom: 12, backgroundColor: colors.background },
   headerButton: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '800', color: colors.text },
-  content: { padding: 16, paddingBottom: 48, width: '100%', maxWidth: 760, alignSelf: 'center' },
+  headerTitle: { flex: 1, fontSize: 26, fontWeight: '600', color: colors.text },
+  content: { padding: 16, paddingBottom: 48, width: '100%', maxWidth: 900, alignSelf: 'center' },
   lead: { fontSize: 14, color: colors.textSecondary, marginBottom: 12, lineHeight: 20 },
   topAction: { marginBottom: 16 },
   loader: { marginTop: 24 },
-  listItem: { marginBottom: 10 },
+  listItem: { marginBottom: 0, borderWidth: 0, borderBottomWidth: 1, borderBottomColor: colors.divider, borderRadius: 0, paddingVertical: 24, paddingHorizontal: 4 },
   itemTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
   itemMeta: { fontSize: 12, color: colors.textTertiary, marginTop: 4 },
-  originBadge: { alignSelf: 'flex-start', fontSize: 12, fontWeight: '700', color: colors.secondary, backgroundColor: colors.secondaryLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, overflow: 'hidden', marginBottom: 10 },
+  originBadge: { alignSelf: 'flex-start', fontSize: 12, fontWeight: '700', color: colors.secondary, backgroundColor: colors.secondaryLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, overflow: 'hidden', marginBottom: 10 },
   notice: { fontSize: 13, color: colors.warning, backgroundColor: colors.warningLight, padding: 10, borderRadius: 10, lineHeight: 19, marginBottom: 12 },
   body: { fontSize: 15, color: colors.text, lineHeight: 22, marginBottom: 8 },
   meta: { fontSize: 13, color: colors.textSecondary, marginBottom: 8 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginTop: 16, marginBottom: 8 },
-  sectionTitleInCard: { fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 6 },
+  sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.text, marginTop: 16, marginBottom: 8 },
+  sectionTitleInCard: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: 6 },
   listLine: { fontSize: 15, color: colors.text, lineHeight: 23, marginBottom: 4 },
   link: { color: colors.info, textDecorationLine: 'underline' },
   changeCard: { marginTop: 16 },

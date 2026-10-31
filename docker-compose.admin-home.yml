@@ -1,0 +1,9 @@
+# 관리자 home 모드: 집 LAN 주소 하나에만 HTTPS 포트를 엽니다(docker-compose.prod.yml 위에 겹쳐 씁니다).
+# 직접 쓰지 말고 scripts/beta/admin-access.sh home 으로 적용하세요(설정 검사·외부 경로 닫기·접근 검사를 함께 합니다).
+services:
+  admin:
+    ports:
+      - "${ADMIN_LAN_BIND_ADDRESS:?ADMIN_LAN_BIND_ADDRESS is required}:${ADMIN_LAN_HTTPS_PORT:-8444}:8443"
+    volumes:
+      - ./admin/nginx-lan-tls.conf:/etc/nginx/admin-tls/lan-tls.conf:ro
+      - ${ADMIN_LAN_TLS_DIR:?ADMIN_LAN_TLS_DIR is required}:/etc/nginx/admin-certs:ro

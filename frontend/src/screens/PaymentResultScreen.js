@@ -81,7 +81,7 @@ export default function PaymentResultScreen({ onNavigate }) {
                 {status === 'success' && (
                     <>
                         <View style={styles.iconCircleSuccess}>
-                            <Ionicons name="checkmark" size={48} color="white" />
+                            <Ionicons name="checkmark" size={48} color={colors.onPrimary} />
                         </View>
                         <Text style={styles.title}>결제 완료!</Text>
                         <Text style={styles.subtitle}>{message}</Text>
@@ -96,7 +96,7 @@ export default function PaymentResultScreen({ onNavigate }) {
                             style={styles.button}
                             onPress={() => onNavigate && onNavigate('chat')}
                         >
-                            <Text style={styles.buttonText}>AI 셰프 시작하기 →</Text>
+                            <Text style={styles.buttonText}>채팅 시작하기 →</Text>
                         </TouchableOpacity>
                     </>
                 )}
@@ -104,7 +104,7 @@ export default function PaymentResultScreen({ onNavigate }) {
                 {status === 'fail' && (
                     <>
                         <View style={styles.iconCircleFail}>
-                            <Ionicons name="close" size={48} color="white" />
+                            <Ionicons name="close" size={48} color={colors.onPrimary} />
                         </View>
                         <Text style={styles.title}>결제 실패</Text>
                         <Text style={styles.subtitle}>{message}</Text>
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     },
     card: {
         backgroundColor: colors.surface,
-        borderRadius: 20,
+        borderRadius: 10,
         padding: 40,
         alignItems: 'center',
         maxWidth: 420,
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     buttonText: {
-        color: 'white',
+        color: colors.onPrimary,
         fontWeight: 'bold',
         fontSize: 16,
     },

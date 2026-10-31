@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, StatusBar, ActivityIndicator, Platform, useWindowDimensions } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator, Platform, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
 import config from '../config';
-import SalusLogo, { SalusLogoMark } from '../components/SalusLogo';
+import ServiceBrand from '../components/ServiceBrand';
 
 // --- 로그인 화면에서 쓰는 작은 컴포넌트 ---
 
@@ -19,6 +19,9 @@ const SocialButton = ({ icon, text, bgColor, iconColor, textColor, onPress, load
         ]}
         onPress={onPress}
         disabled={loading}
+        accessibilityRole="button"
+        accessibilityLabel={text}
+        accessibilityState={{ disabled: loading, busy: loading }}
     >
         {loading ? <ActivityIndicator color={textColor} /> : (
             <>
@@ -33,20 +36,17 @@ const SocialButton = ({ icon, text, bgColor, iconColor, textColor, onPress, load
 );
 
 // 로고, 소셜 로그인 버튼(iOS에서는 Apple 포함), "로그인 없이 둘러보기" 링크로 구성된 로그인 폼
-const LoginForm = ({ onLogin, onGuest, loading, handleSocialLogin, appleAvailable }) => {
+const LoginForm = ({ onLogin, onGuest, onOpenPrivacy, onOpenTerms, loading, handleSocialLogin, appleAvailable }) => {
     return (
         <View style={styles.formContainer}>
             <View style={styles.header}>
-                <View style={styles.logoBadge}>
-                    <SalusLogoMark size={64} />
-                </View>
-                <Text style={styles.title}>환영합니다!</Text>
-                <Text style={styles.subtitle}>로그인하고 SALUS를 시작하세요</Text>
+                <Text style={styles.title}>로그인</Text>
+                <Text style={styles.subtitle}>저장한 레시피와 식사 기록을 이어서 볼 수 있어요.</Text>
             </View>
 
             <View style={styles.buttonStack}>
                 <SocialButton
-                    text="카카오로 3초만에 시작하기"
+                    text="카카오로 계속하기"
                     bgColor="#FEE500"
                     textColor="#3C1E1E"
                     icon={<Ionicons name="chatbubble" size={20} color="#3C1E1E" />}
@@ -54,10 +54,11 @@ const LoginForm = ({ onLogin, onGuest, loading, handleSocialLogin, appleAvailabl
                     loading={loading}
                 />
                 <SocialButton
-                    text="네이버로 시작하기"
-                    bgColor="#03C75A"
-                    textColor="#FFFFFF"
-                    icon={<Text style={{ color: '#FFF', fontWeight: '900', fontSize: 16 }}>N</Text>}
+                    text="네이버로 계속하기"
+                    bgColor={colors.surface}
+                    textColor={colors.text}
+                    border
+                    icon={<Text style={{ color: '#03C75A', fontWeight: '900', fontSize: 16 }}>N</Text>}
                     onPress={() => handleSocialLogin('naver')}
                     loading={loading}
                 />
@@ -83,14 +84,21 @@ const LoginForm = ({ onLogin, onGuest, loading, handleSocialLogin, appleAvailabl
             </View>
 
             <View style={styles.footer}>
-                <View style={styles.divider}>
-                    <View style={styles.line} />
-                    <Text style={styles.orText}>또는</Text>
-                    <View style={styles.line} />
-                </View>
                 <TouchableOpacity onPress={onGuest}>
                     <Text style={styles.guestLink}>로그인 없이 둘러보기</Text>
                 </TouchableOpacity>
+                {/* 건강 정보를 다루므로 로그인 전에 처리방침을 볼 수 있게 합니다. */}
+                {onOpenTerms ? (
+                    <TouchableOpacity onPress={onOpenTerms} accessibilityRole="link" style={styles.privacyLinkButton}>
+                        <Text style={styles.privacyLink}>서비스 이용약관</Text>
+                    </TouchableOpacity>
+                ) : null}
+                {onOpenPrivacy ? (
+                    <TouchableOpacity onPress={onOpenPrivacy} accessibilityRole="link" style={styles.privacyLinkButton}>
+                        <Text style={styles.privacyLink}>개인정보 처리방침</Text>
+                    </TouchableOpacity>
+                ) : null}
+                <Text style={styles.privacyHelp}>건강 정보는 로그인 후 선택해서 입력해요.</Text>
             </View>
         </View>
     );
@@ -100,15 +108,12 @@ const LoginForm = ({ onLogin, onGuest, loading, handleSocialLogin, appleAvailabl
  * 로그인 화면입니다.
  * 넓은 웹 화면에서는 왼쪽 브랜드 영역 + 오른쪽 로그인 폼의 2단 레이아웃, 모바일에서는 폼만 보여 줍니다.
  */
-export default function LoginScreen({ onLogin, onGuest }) {
+export default function LoginScreen({ onLogin, onGuest, onOpenPrivacy, onOpenTerms }) {
     const { login, isLoggedIn } = useAuth();
     const [loading, setLoading] = useState(false);
     // 로그인 유지 여부(현재는 항상 true로 전달)
     const [keepLoggedIn, setKeepLoggedIn] = useState(true);
 
-    const { width, height } = useWindowDimensions();
-    const isWeb = Platform.OS === 'web';
-    const isSplitLayout = width > 700;
     // Apple 로그인은 기능 스위치가 켜져 있고 iOS 13 이상일 때만 버튼을 보여 줍니다.
     const [appleAvailable, setAppleAvailable] = useState(false);
 
@@ -141,167 +146,36 @@ export default function LoginScreen({ onLogin, onGuest }) {
         }
     }, [isLoggedIn]);
 
-    if (isWeb && isSplitLayout) {
-        return (
-            <View style={[styles.container, { flexDirection: 'row', minHeight: height }]}>
-                {/* 왼쪽: 브랜드 영역 */}
-                <View style={styles.leftPane}>
-                    <View style={styles.brandContainer}>
-                        <SalusLogo size={72} wordmarkColor={colors.onPrimary} wordmarkStyle={styles.brandWordmark} />
-                        <Text style={styles.brandSlogan}>당신을 위한 스마트 인공지능 셰프</Text>
-                    </View>
-                    {/* 장식용 원형 도형 */}
-                    <View style={styles.circleDecoration} />
-                </View>
-
-                {/* 오른쪽: 로그인 폼 */}
-                <View style={styles.rightPane}>
-                    <LoginForm
-                        onLogin={onLogin}
-                        onGuest={onGuest}
-                        loading={loading}
-                        handleSocialLogin={handleSocialLogin}
-                        appleAvailable={appleAvailable}
-                    />
-                </View>
-            </View>
-        );
-    }
-
-    // 모바일 레이아웃
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-            <View style={{ flex: 1, justifyContent: 'center', padding: 24 }}>
-                <LoginForm
-                    onLogin={onLogin}
-                    onGuest={onGuest}
-                    loading={loading}
-                    handleSocialLogin={handleSocialLogin}
-                        appleAvailable={appleAvailable}
-                />
+            <View style={styles.pageHeader}>
+                <ServiceBrand />
+                <TouchableOpacity onPress={onGuest} accessibilityRole="button" accessibilityLabel="채팅으로 돌아가기" style={styles.backButton}><Text style={styles.backText}>돌아가기</Text></TouchableOpacity>
             </View>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.pageContent}>
+                <LoginForm onLogin={onLogin} onGuest={onGuest} onOpenPrivacy={onOpenPrivacy} onOpenTerms={onOpenTerms} loading={loading} handleSocialLogin={handleSocialLogin} appleAvailable={appleAvailable} />
+            </ScrollView>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.background,
-    },
-    // 2단 레이아웃(넓은 웹 화면) 스타일
-    leftPane: {
-        flex: 1,
-        backgroundColor: colors.secondary,
-        justifyContent: 'center',
-        padding: 60,
-        position: 'relative',
-        overflow: 'hidden',
-    },
-    rightPane: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: colors.background,
-    },
-    brandContainer: {
-        zIndex: 10,
-    },
-    brandWordmark: {
-        fontSize: 48,
-        fontWeight: '900',
-        color: colors.onPrimary,
-        letterSpacing: 3.2,
-    },
-    brandSlogan: {
-        fontSize: 20,
-        color: 'rgba(255,255,255,0.8)',
-        fontWeight: '500',
-        maxWidth: 400,
-        lineHeight: 30,
-        marginTop: 24,
-    },
-    circleDecoration: {
-        position: 'absolute',
-        top: -100,
-        right: -100,
-        width: 400,
-        height: 400,
-        borderRadius: 200,
-        backgroundColor: 'rgba(255,255,255,0.1)',
-    },
-
-    // 로그인 폼 스타일
-    formContainer: {
-        width: '100%',
-        maxWidth: 400,
-        padding: 24,
-    },
-    header: {
-        alignItems: 'center',
-        marginBottom: 40,
-    },
-    logoBadge: {
-        width: 64,
-        height: 64,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 24,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: colors.text,
-        marginBottom: 8,
-    },
-    subtitle: {
-        fontSize: 16,
-        color: colors.textSecondary,
-    },
-    buttonStack: {
-        gap: 12,
-        marginBottom: 32,
-    },
-    socialButton: {
-        height: 52,
-        borderRadius: 12, // 모서리 둥글기
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        elevation: 0,
-    },
-    appleButton: {
-        height: 52,
-        width: '100%',
-    },
-    buttonText: {
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    footer: {
-        marginTop: 0,
-    },
-    divider: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 24,
-    },
-    line: {
-        flex: 1,
-        height: 1,
-        backgroundColor: colors.border,
-    },
-    orText: {
-        marginHorizontal: 16,
-        color: colors.textTertiary,
-        fontSize: 14,
-        fontWeight: '500',
-    },
-    guestLink: {
-        textAlign: 'center',
-        color: colors.primary,
-        fontSize: 15,
-        fontWeight: '600',
-    }
+    container: { flex: 1, backgroundColor: colors.background },
+    pageHeader: { minHeight: 72, paddingHorizontal: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    backButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
+    backText: { fontSize: 14, color: colors.textSecondary },
+    pageContent: { flexGrow: 1, paddingTop: 72, paddingBottom: 48, paddingHorizontal: 24, alignItems: 'center' },
+    formContainer: { width: '100%', maxWidth: 360 },
+    header: { marginBottom: 32 },
+    title: { fontSize: 28, lineHeight: 36, fontWeight: '600', color: colors.text, marginBottom: 12 },
+    subtitle: { fontSize: 15, lineHeight: 24, color: colors.textSecondary },
+    buttonStack: { gap: 12, marginBottom: 32 },
+    socialButton: { minHeight: 50, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+    appleButton: { height: 50, width: '100%' },
+    buttonText: { fontSize: 15, fontWeight: '600' },
+    footer: { marginTop: 0 },
+    guestLink: { color: colors.primary, fontSize: 15, lineHeight: 22, textDecorationLine: 'underline', paddingVertical: 12 },
+    privacyLinkButton: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
+    privacyLink: { color: colors.textSecondary, fontSize: 13, textDecorationLine: 'underline' },
+    privacyHelp: { fontSize: 13, lineHeight: 21, color: colors.textTertiary, marginTop: 12 },
 });

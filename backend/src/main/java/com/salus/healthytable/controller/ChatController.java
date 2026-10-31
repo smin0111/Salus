@@ -12,6 +12,7 @@ import com.salus.healthytable.service.ChatProgress;
 import com.salus.healthytable.service.ChatRecipeCardService;
 import com.salus.healthytable.service.ChatRateLimitService;
 import com.salus.healthytable.service.ChatService;
+import com.salus.healthytable.service.ConsentService;
 import com.salus.healthytable.service.InterruptedRequestMerger;
 import com.salus.healthytable.service.RecipeWorkSessionService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -55,6 +56,7 @@ public class ChatController {
     private static final Set<String> ALLOWED_HISTORY_ROLES = Set.of("user", "model");
 
     private final AuthenticatedUserProvider authenticatedUserProvider;
+    private final ConsentService consentService;
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final RecipeWorkSessionService recipeWorkSessionService;
@@ -156,6 +158,8 @@ public class ChatController {
         // 그 다음 Rate Limit을 적용해 AI 호출 비용과 공개 API 남용을 줄입니다.
         validateChatRequest(request);
         Optional<Long> authenticatedUserId = authenticatedUserProvider.getCurrentUserId();
+        // 로그인 사용자의 대화는 저장되고 건강 프로필을 쓰므로 가입 동의가 있어야 합니다(게스트는 저장하지 않음).
+        authenticatedUserId.ifPresent(consentService::requireConsent);
         chatRateLimitService.checkAllowed(authenticatedUserId, servletRequest);
         // 처음 보는 요리 찾기 하루 횟수는 같은 기준(로그인 사용자 ID, 게스트 IP)으로 셉니다.
         request.setQuotaSubject(chatRateLimitService.resolveClientKey(authenticatedUserId, servletRequest));

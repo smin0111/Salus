@@ -1,5 +1,6 @@
 package com.salus.healthytable.service.recipeagent;
 
+import com.salus.healthytable.service.ExternalSearchQueryPolicy;
 import com.salus.healthytable.service.SearchEngine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +40,11 @@ class SearchEngineWebRecipeSearchAdapter implements WebRecipeSearchPort {
         int rank = 1;
         for (String query : queries) {
             if (query == null || query.isBlank() || resultsByUrl.size() >= maxResults) {
+                continue;
+            }
+            // 계획 단계에서 거르지만, 다른 경로로 만든 검색어도 외부로 나가기 전에 한 번 더 확인합니다. 검색어 내용은 로그에 남기지 않습니다.
+            if (!ExternalSearchQueryPolicy.isAllowed(query)) {
+                log.info("[RecipeAgentWebSearch] Query blocked by external search policy. length={}", query.length());
                 continue;
             }
             try {

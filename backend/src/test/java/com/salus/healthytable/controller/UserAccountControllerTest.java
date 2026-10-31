@@ -112,6 +112,7 @@ class UserAccountControllerTest {
                 .payments(11)
                 .chatSessions(12)
                 .chatMessages(13)
+                .userRecipes(14)
                 .build());
 
         mockMvc.perform(get("/api/users/me/data-summary").with(authentication(userAuthentication())))
@@ -127,7 +128,8 @@ class UserAccountControllerTest {
                 .andExpect(jsonPath("$.recipeShares").value(10))
                 .andExpect(jsonPath("$.payments").value(11))
                 .andExpect(jsonPath("$.chatSessions").value(12))
-                .andExpect(jsonPath("$.chatMessages").value(13));
+                .andExpect(jsonPath("$.chatMessages").value(13))
+                .andExpect(jsonPath("$.userRecipes").value(14));
 
         verify(userAccountService).summarizeUserData(1L);
     }

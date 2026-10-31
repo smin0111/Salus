@@ -77,6 +77,10 @@ class FeedSocialMySqlIT {
     @MockBean
     private ChatSafetyContextService safetyContextService;
 
+    // 탈퇴 시 레시피 작업 세션(Redis) 정리는 이 테스트 범위가 아니라 가짜로 둡니다.
+    @MockBean
+    private RecipeWorkSessionService recipeWorkSessionService;
+
     @Autowired
     private FeedService feedService;
 

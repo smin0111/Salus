@@ -9,6 +9,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -47,6 +48,10 @@ class LegacyCommunityAccountDeletionMySqlIT {
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
         registry.add("spring.flyway.enabled", () -> "true");
     }
+
+    // 탈퇴 시 레시피 작업 세션(Redis) 정리는 이 테스트 범위가 아니라 가짜로 둡니다.
+    @MockBean
+    private RecipeWorkSessionService recipeWorkSessionService;
 
     @Autowired
     private UserAccountService userAccountService;

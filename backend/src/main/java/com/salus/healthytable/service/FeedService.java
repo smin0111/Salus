@@ -18,6 +18,7 @@ import com.salus.healthytable.service.allergen.AllergenDictionary;
 import com.salus.healthytable.service.allergen.AllergenMatcher;
 import com.salus.healthytable.util.PublicUserName;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
@@ -395,11 +396,28 @@ public class FeedService {
         };
     }
 
-    /** 보는 사람의 등록 알레르기. 불러오지 못하면 available=false입니다(빈 목록으로 바꾸지 않음). */
-    record ViewerAllergies(boolean available, List<String> allergies) {
+    /**
+     * 보는 사람의 등록 알레르기. 불러오지 못하면 available=false입니다(빈 목록으로 바꾸지 않음).
+     * 건강정보 수집 동의가 없으면 건강정보를 읽지 않고 consented=false입니다.
+     */
+    record ViewerAllergies(boolean available, List<String> allergies, boolean consented) {
+        ViewerAllergies(boolean available, List<String> allergies) {
+            this(available, allergies, true);
+        }
+    }
+
+    // 동의 확인은 선택 의존성입니다(동의 기능이 없는 테스트 구성에서도 피드가 뜨도록).
+    private ConsentService consentService;
+
+    @Autowired(required = false)
+    void setConsentService(ConsentService consentService) {
+        this.consentService = consentService;
     }
 
     ViewerAllergies viewerAllergies(Long viewerId) {
+        if (consentService != null && !consentService.hasConsent(viewerId)) {
+            return new ViewerAllergies(false, List.of(), false);
+        }
         ChatSafetyContextService.SafetyContext context = safetyContextService.build(Optional.of(viewerId), null);
         return new ViewerAllergies(context.healthContextAvailable(), context.allergies());
     }
@@ -409,6 +427,10 @@ public class FeedService {
      * 재료 정보·건강정보가 없으면 "확인 불가"입니다. 일치 없음도 안전을 뜻하지 않습니다.
      */
     FeedDto.AllergenStatus allergenStatus(ViewerAllergies viewer, FeedPost post) {
+        if (!viewer.consented()) {
+            return new FeedDto.AllergenStatus("UNKNOWN", List.of(), List.of(),
+                    "건강정보 수집에 동의하면 알레르기를 확인할 수 있어요.");
+        }
         if (!viewer.available()) {
             return new FeedDto.AllergenStatus("UNKNOWN", List.of(), List.of(),
                     "건강정보를 불러오지 못해 알레르기를 확인할 수 없어요.");

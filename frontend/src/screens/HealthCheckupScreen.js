@@ -159,9 +159,8 @@ export default function HealthCheckupScreen({ onToggleSidebar, onNavigate, webMo
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
           <View style={[styles.hero, isDesktop && styles.heroDesktop]}>
             <View style={styles.heroCopy}>
-              <Text style={styles.eyebrow}>CHECKUP TO TABLE · 02</Text>
-              <Text style={[styles.heroTitle, !isTablet && styles.heroTitleMobile]}>검진 결과를{isTablet ? ' ' : '\n'}오늘의 식사 기준으로.</Text>
-              <Text style={styles.heroBody}>수치를 다시 판정하는 대신, 서버가 분석한 고려 항목을 레시피의 재료·조리법·추천 우선순위에 연결합니다.</Text>
+              <Text style={[styles.heroTitle, !isTablet && styles.heroTitleMobile]}>검진 분석</Text>
+              <Text style={styles.heroBody}>수치로 진단하지 않고, 입력한 수치에서 정리한 고려 항목을 레시피의 재료·조리법·추천 우선순위에 연결합니다.</Text>
               <View style={styles.heroActions}>
                 <Button label={latest ? '새 검진 결과 입력' : '검진 수치 입력'} icon="create-outline" onPress={() => setView('input')} />
                 <Button variant="ghost" label="예시로 체험" icon="flask-outline" onPress={fillDemo} textStyle={styles.heroGhostText} />
@@ -170,14 +169,14 @@ export default function HealthCheckupScreen({ onToggleSidebar, onNavigate, webMo
 
             <Card style={styles.statusCard}>
               <View style={styles.statusTop}>
-                <Text style={styles.statusLabel}>LATEST CONNECTION</Text>
+                <Text style={styles.statusLabel}>최근 검진</Text>
                 <View style={[styles.statusDot, latest && styles.statusDotActive]} />
               </View>
               <Text style={styles.statusDate}>{latest?.checkupDate || '연결 전'}</Text>
               <Text style={styles.statusDescription}>{latest ? (risks.length ? `${risks.length}개 고려 항목이 현재 추천 정책에 연결되어 있습니다.` : '균형 유지 중심의 기본 추천 정책이 연결되어 있습니다.') : '최근 결과를 입력하면 분석 흐름을 시작합니다.'}</Text>
               <View style={styles.statusRule} />
               <View style={styles.statusMeta}>
-                <View><Text style={styles.statusMetaValue}>{latest ? 'ON' : 'OFF'}</Text><Text style={styles.statusMetaLabel}>추천 반영</Text></View>
+                <View><Text style={styles.statusMetaValue}>{latest ? '반영 중' : '꺼짐'}</Text><Text style={styles.statusMetaLabel}>추천 반영</Text></View>
                 <View><Text style={styles.statusMetaValue}>{risks.length}</Text><Text style={styles.statusMetaLabel}>고려 항목</Text></View>
                 <View><Text style={styles.statusMetaValue}>{analysis?.recommendationPolicies?.length || 0}</Text><Text style={styles.statusMetaLabel}>추천 정책</Text></View>
               </View>
@@ -224,7 +223,7 @@ export default function HealthCheckupScreen({ onToggleSidebar, onNavigate, webMo
               />
 
               <Card style={styles.inputNotice}>
-                <Ionicons name="lock-closed-outline" size={19} color={color.brand} />
+                <Ionicons name="lock-closed-outline" size={19} color={color.brandText} />
                 <View style={styles.inputNoticeCopy}>
                   <Text style={styles.inputNoticeTitle}>입력한 검진 정보는 내 계정에 저장됩니다</Text>
                   <Text style={styles.inputNoticeText}>수치 자체를 피드에 공개하지 않으며, 개인화된 식단 추천을 만드는 데 사용합니다.</Text>
@@ -235,7 +234,6 @@ export default function HealthCheckupScreen({ onToggleSidebar, onNavigate, webMo
                 {CHECKUP_GROUPS.map(group => (
                   <Card key={group.id} style={styles.formCard}>
                     <View style={styles.formHeader}>
-                      <Text style={styles.formNumber}>{group.number}</Text>
                       <View style={styles.formHeaderCopy}>
                         <Text style={styles.formTitle}>{group.title}</Text>
                         <Text style={styles.formDescription}>{group.description}</Text>
@@ -288,27 +286,27 @@ const styles = StyleSheet.create({
   mobileHeaderCopy: { flex: 1, paddingHorizontal: spacing.xs },
   mobileTitle: { ...typography.label, fontSize: 16, color: color.text },
   mobileSubtitle: { ...typography.caption, color: color.textMuted, marginTop: 1 },
-  content: { width: '100%', maxWidth: 1180, alignSelf: 'center', padding: spacing.md, paddingBottom: spacing.canvas },
-  hero: { backgroundColor: color.brandStrong, borderRadius: radius.xxl, padding: spacing.xl, gap: spacing.xl, overflow: 'hidden' },
-  heroDesktop: { flexDirection: 'row', padding: spacing.xxl, gap: spacing.xxl },
+  content: { width: '100%', maxWidth: 1000, alignSelf: 'center', padding: spacing.xl, paddingBottom: spacing.canvas },
+  hero: { backgroundColor: color.canvas, borderRadius: 0, padding: 0, gap: spacing.xl, overflow: 'hidden' },
+  heroDesktop: { flexDirection: 'row', padding: 0, gap: spacing.xxl },
   heroCopy: { flex: 1, justifyContent: 'center' },
-  eyebrow: { ...typography.caption, color: '#F0A18A', letterSpacing: 1.4, fontWeight: '900' },
-  heroTitle: { ...typography.h1, color: color.inverse, marginTop: spacing.md },
+  eyebrow: { ...typography.caption, color: '#F0A18A', letterSpacing: 1.4, fontWeight: '600' },
+  heroTitle: { ...typography.h1, color: color.onInk, marginTop: spacing.md },
   heroTitleMobile: { ...typography.h2 },
-  heroBody: { ...typography.body, color: '#CAD5CE', marginTop: spacing.md, maxWidth: 630 },
+  heroBody: { ...typography.body, color: color.textMuted, marginTop: spacing.md, maxWidth: 630 },
   heroActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xl },
-  heroGhostText: { color: '#EDF2EF' },
-  statusCard: { flex: 0.72, backgroundColor: '#24372D', borderColor: '#43564B', shadowOpacity: 0 },
+  heroGhostText: { color: color.brandText },
+  statusCard: { flex: 0.72, backgroundColor: color.surface, borderColor: color.border, shadowOpacity: 0 },
   statusTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  statusLabel: { ...typography.caption, color: '#9EADA4', letterSpacing: 1 },
+  statusLabel: { ...typography.caption, color: color.textMuted, letterSpacing: 1 },
   statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: color.textSubtle },
   statusDotActive: { backgroundColor: color.success },
-  statusDate: { ...typography.h2, color: color.inverse, marginTop: spacing.lg },
-  statusDescription: { ...typography.bodySmall, color: '#C7D2CB', marginTop: spacing.xs },
-  statusRule: { height: 1, backgroundColor: '#43564B', marginVertical: spacing.lg },
+  statusDate: { ...typography.h2, color: color.onInk, marginTop: spacing.lg },
+  statusDescription: { ...typography.bodySmall, color: color.textMuted, marginTop: spacing.xs },
+  statusRule: { height: 1, backgroundColor: color.border, marginVertical: spacing.lg },
   statusMeta: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
-  statusMetaValue: { ...typography.h3, color: color.inverse },
-  statusMetaLabel: { ...typography.caption, color: '#93A198', marginTop: 2 },
+  statusMetaValue: { ...typography.h3, color: color.onInk },
+  statusMetaLabel: { ...typography.caption, color: color.textMuted, marginTop: 2 },
   viewBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.lg, marginVertical: spacing.xl },
   tabs: { width: '100%', maxWidth: 430 },
   viewHint: { ...typography.caption, color: color.textMuted, flex: 1, textAlign: 'right' },
