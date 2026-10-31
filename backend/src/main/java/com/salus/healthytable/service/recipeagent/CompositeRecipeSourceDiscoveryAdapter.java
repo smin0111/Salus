@@ -115,6 +115,11 @@ class CompositeRecipeSourceDiscoveryAdapter implements RecipeSourceDiscoveryPort
             }
         }
 
+        // 보낼 수 있는 검색어가 없으면(모두 건강 정보·복용 약 등으로 막힘) 외부 검색을 하지 않으므로 하루 횟수도 쓰지 않고,
+        // 횟수를 다 쓴 사용자에게도 횟수 초과 대신 근거 없음으로 처리되게 여기서 멈춥니다.
+        if (plan.searchQueries().isEmpty()) {
+            return sorted(documents, plan);
+        }
         // 저장된 근거가 없어 새로 찾는 경우만 하루 횟수를 씁니다. 다 썼으면 여기서 멈춥니다(유튜브·웹 모두 부르지 않음).
         if (newDishSearchQuota != null) {
             newDishSearchQuota.consumeForCurrentRequest();
