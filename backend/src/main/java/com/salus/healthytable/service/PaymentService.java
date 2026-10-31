@@ -193,6 +193,12 @@ public class PaymentService {
      * 우리 주문이 아니거나 모르는 알림이면 무시합니다.
      */
     public void handleWebhook(byte[] body, String webhookId, String webhookTimestamp, String webhookSignature) {
+        // 결제를 켰는데 웹훅 시크릿만 없으면 확인할 수 없으므로 400으로 거부합니다(포트원이 나중에 다시 보냄).
+        // 조용히 무시하면 설정을 고친 뒤에도 그동안의 완료·취소 알림을 다시 받을 수 없습니다.
+        if (paymentEnabled && isBlank(portoneWebhookSecret)) {
+            log.error("Payment webhook rejected. reason=webhook_secret_missing");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "웹훅 서명이 올바르지 않습니다.");
+        }
         if (!paymentAvailable()) {
             return;
         }
@@ -254,9 +260,11 @@ public class PaymentService {
         }
     }
 
-    // 결제를 켰어도 포트원 설정(API 시크릿·상점 ID·채널 키)이 비어 있으면 결제를 받을 수 없습니다.
+    // 결제를 켰어도 포트원 설정(API 시크릿·상점 ID·채널 키·웹훅 시크릿)이 비어 있으면 결제를 받을 수 없습니다.
+    // 웹훅 시크릿이 없으면 모든 웹훅을 거부하므로, 결제 후 취소(PLUS 회수)를 반영할 수 없어 결제도 받지 않습니다.
     private boolean paymentAvailable() {
-        return paymentEnabled && !isBlank(portoneApiSecret) && !isBlank(portoneStoreId) && !isBlank(portoneChannelKey);
+        return paymentEnabled && !isBlank(portoneApiSecret) && !isBlank(portoneStoreId) && !isBlank(portoneChannelKey)
+                && !isBlank(portoneWebhookSecret);
     }
 
     private void requirePaymentEnabled() {
