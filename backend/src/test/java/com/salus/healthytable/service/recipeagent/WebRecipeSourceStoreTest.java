@@ -413,6 +413,31 @@ class WebRecipeSourceStoreTest {
                 List.of("고추장과 참기름을 섞어 양념장을 만든다.", "소면에 양념장을 넣어 비빈다."), "비빔국수")).isEmpty();
     }
 
+    // 분량이 끼거나("참기름 1스푼을 넣어") 꾸밈말이 낀("통깨를 솔솔 뿌려") 문장도 보고, "부재료"는 재료로 치지 않습니다
+    // (2026-11-03 삼겹살 제육볶음: 안내에 "부재료"만 나오고 참기름·후추는 빠짐).
+    @Test
+    void stepOnlyIngredientsSkipAmountsAndMannerWords() {
+        List<String> ingredients = List.of("삼겹살 600g", "설탕 2스푼", "양배추 1/6개", "대파 1대", "양파 1/2개", "당근 약간",
+                "표고버섯 2개", "청양고추 2개", "홍고추 1/2개", "통깨 약간", "고춧가루 2스푼", "고추장 1.5스푼", "맛술 2스푼",
+                "진간장 2스푼", "멸치액젓 2스푼", "올리고당 1스푼", "다진 마늘 2스푼", "생강가루 1/4스푼");
+        List<String> steps = List.of(
+                "고기는 먹기 좋은 크기로 썰어줍니다. 고춧가루 2스푼, 고추장 1.5스푼, 맛술 2스푼, 진간장 2스푼, 멸치 액젓 2스푼, 올리고당 1스푼, 다진 마늘 2스푼, 생강가루 1/4스푼을 섞어 양념장을 만듭니다.",
+                "마른 팬에 삼겹살을 넣고 설탕 2스푼을 골고루 뿌려 중불에서 구워줍니다. 돼지고기가 80% 정도 익으면 양념장을 넣고 볶아줍니다.",
+                "양념이 돼지고기에 골고루 스며들면 양배추를 먼저 넣고 2~3분간 볶습니다. 양배추 숨이 죽으면 나머지 부재료를 넣어줍니다.",
+                "재료가 충분히 익고 숨이 죽으면 불을 끄고 참기름 1스푼을 넣어 풍미를 더합니다. 기호에 따라 후추와 통깨를 솔솔 뿌려 마무리합니다.");
+
+        assertThat(RecipeStepSummarizer.stepOnlyIngredients(ingredients, steps, "삼겹살 제육볶음"))
+                .containsExactly("참기름", "후추");
+        // 분량 앞 낱말이 동사면 재료로 보지 않습니다.
+        assertThat(RecipeStepSummarizer.stepOnlyIngredients(List.of("소금 약간"),
+                List.of("불을 끄고 1스푼을 넣어 섞는다."), "국")).isEmpty();
+        // 한글 분량("약간을")도 분량으로 보고 그 앞 재료를 돌려줍니다. 분량 자체는 안내에 나오지 않습니다.
+        assertThat(RecipeStepSummarizer.stepOnlyIngredients(List.of("배추 1통"),
+                List.of("소금 약간을 뿌려 마무리한다."), "배추무침")).containsExactly("소금");
+        assertThat(RecipeStepSummarizer.stepOnlyIngredients(List.of("배추 1통"),
+                List.of("마지막에 약간을 뿌려 마무리한다."), "배추무침")).isEmpty();
+    }
+
     @Test
     void reviewOnlyStepsAreDropped() {
         assertThat(RecipeStepSummarizer.isReviewOnlyStep("완성된 북어국은 아이들과 신랑 모두 좋아하며, 개운한 맛으로 만족감을 얻습니다.")).isTrue();

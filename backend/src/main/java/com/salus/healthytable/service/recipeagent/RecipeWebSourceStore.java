@@ -306,9 +306,15 @@ class RecipeStepSummarizer {
     private static final java.util.regex.Pattern ADD_VERB = java.util.regex.Pattern.compile("^(?:넣|섞|뿌|올|곁들|두르|더하|버무)");
     private static final java.util.regex.Pattern GARNISH_WORD = java.util.regex.Pattern.compile("^(?:고명|장식)");
     private static final java.util.regex.Pattern AMOUNT_WORD = java.util.regex.Pattern.compile("^[0-9½⅓¼]");
+    // 재료 이름과 "을/를" 사이에 낀 분량입니다("참기름 1스푼을 넣어", "소금 약간을 뿌려"). 이때는 그 앞 낱말이 재료입니다.
+    private static final java.util.regex.Pattern AMOUNT_OBJECT = java.util.regex.Pattern.compile(
+            "^(?:[0-9½⅓¼][0-9./~]*[가-힣]{0,3}|약간|조금|소량|적당량)(?:을|를)$");
+    // 재료와 동사 사이에 끼는 꾸밈말입니다("통깨를 솔솔 뿌려", "설탕을 골고루 뿌려"). 하나까지만 건너뜁니다.
+    private static final java.util.Set<String> MANNER_WORDS = java.util.Set.of(
+            "솔솔", "살짝", "듬뿍", "골고루", "조금", "약간", "적당히", "충분히", "넉넉히", "가볍게", "고루", "함께", "마지막에");
     // 재료 목록과 비교하지 않을 말(조리 도구·중간 결과물·일반어)입니다.
     private static final java.util.Set<String> NOT_INGREDIENT_WORDS = java.util.Set.of(
-            "양념장", "양념", "소스", "재료", "고명", "반죽", "육수", "국물", "냄비", "프라이팬", "팬", "그릇", "접시", "볼",
+            "양념장", "양념", "소스", "재료", "부재료", "주재료", "속재료", "고명", "반죽", "육수", "국물", "냄비", "프라이팬", "팬", "그릇", "접시", "볼",
             "고기", "채소", "야채", "완성", "나머지", "모든", "준비한", "준비된", "썰어둔", "썰어", "다진", "손질한", "기름",
             "물기", "윗면", "가장자리", "바닥", "뚜껑", "새콤달콤", "골고루", "충분히", "한번", "다시", "함께", "위에", "모두");
 
@@ -332,8 +338,22 @@ class RecipeStepSummarizer {
             for (int i = 0; i + 1 < words.length; i++) {
                 String word = words[i];
                 String next = words[i + 1];
+                if (MANNER_WORDS.contains(next) && i + 2 < words.length) {
+                    next = words[i + 2];
+                }
                 String item;
-                if (word.matches("[가-힣]{2,6}(?:을|를)") && ADD_VERB.matcher(next).find()) {
+                int itemIndex = i;
+                // 분량("약간을")은 한글이라 일반 목적어 꼴에도 맞으므로 먼저 봅니다. 분량 자체는 재료로 치지 않고,
+                // 앞 낱말이 동사·부사어("끄고", "마지막에")면 재료가 아닙니다.
+                if (AMOUNT_OBJECT.matcher(word).find()) {
+                    if (i == 0 || !ADD_VERB.matcher(next).find() || !words[i - 1].matches("[가-힣]{2,6}")
+                            || words[i - 1].matches(".*(?:고|며|서|어|아|여|게|에|로|은|는|만)$")
+                            || MANNER_WORDS.contains(words[i - 1])) {
+                        continue;
+                    }
+                    item = words[i - 1];
+                    itemIndex = i - 1;
+                } else if (word.matches("[가-힣]{2,6}(?:을|를)") && ADD_VERB.matcher(next).find()) {
                     item = word.substring(0, word.length() - 1);
                 } else if (word.matches("[가-힣]{2,6}(?:으로|로)") && GARNISH_WORD.matcher(next).find()) {
                     item = word.replaceFirst("(?:으로|로)$", "");
@@ -342,7 +362,7 @@ class RecipeStepSummarizer {
                 }
                 List<String> items = new ArrayList<>(List.of(item));
                 // 쉼표나 "와/과"로 앞에 이어진 재료도 봅니다. "1큰술," 같은 분량 낱말은 건너뜁니다.
-                for (int j = i - 1; j >= 0; j--) {
+                for (int j = itemIndex - 1; j >= 0; j--) {
                     String previous = words[j];
                     boolean listed = previous.endsWith(",") || previous.matches("[가-힣]{2,6}(?:와|과)");
                     if (!listed) {

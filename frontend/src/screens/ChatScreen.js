@@ -29,6 +29,46 @@ const cleanAiResponse = (text) => {
         .trim();
 };
 
+// 재료 정보 답변 본문 끝의 "출처: 위키백과 「…」 일부 발췌 (…)"와 그 아래 주소 줄을 화면 표시에서만 뺍니다.
+// 뒤에 알레르기 주의 문구가 붙어 있어도 출처 묶음만 뺍니다. 주소 줄은 http(s)로 시작하는 줄만 봅니다
+// (공백 없는 아무 줄이나 지우면 바로 아래 주의 문구가 사라질 수 있음).
+const stripIngredientSourceLines = (text) => (text || '').replace(/\n\n출처: [^\n]*(?:\n(?=https?:\/\/)[^\s]+(?=\n|$))*/, '');
+
+// 받침이 있으면 '으로', 없거나 ㄹ 받침이면 '로'를 붙입니다("광어로", "무청으로", "달로").
+const withRo = (word) => {
+    const code = (word || '').charCodeAt(word.length - 1) - 0xAC00;
+    if (code < 0 || code > 11171) return '(으)로';
+    const finalConsonant = code % 28;
+    return finalConsonant === 0 || finalConsonant === 8 ? '로' : '으로';
+};
+
+// 재료 정보 답변의 출처 목록. 답변 문장은 이 문서들의 원문을 그대로 옮긴 것입니다.
+const IngredientSourceList = ({ items, sourceLabel }) => (
+    <View style={styles.ingredientSources}>
+        {items.map((source, index) => (
+            <TouchableOpacity
+                key={`${source.url || source.title}-${index}`}
+                disabled={!source.url}
+                onPress={() => source.url && Linking.openURL(source.url).catch(() => {})}
+                style={styles.recipeSourceRow}
+                accessibilityRole="link"
+                accessibilityLabel={`출처 ${source.title} 열기`}
+            >
+                <Ionicons name="link-outline" size={14} color={colors.primary} />
+                <View style={styles.recipeSourceTextGroup}>
+                    <Text style={[styles.recipeSourceTitle, styles.recipeSourceLink]} numberOfLines={1}>
+                        위키백과 「{source.title}」
+                    </Text>
+                    {source.asked && source.asked !== source.title && (
+                        <Text style={styles.recipeSourceBadge}>‘{source.asked}’{withRo(source.asked)} 찾은 문서</Text>
+                    )}
+                </View>
+            </TouchableOpacity>
+        ))}
+        <Text style={styles.recipeSourceNote}>{sourceLabel ? `${sourceLabel} · ` : ''}원문 일부를 그대로 옮겼어요.</Text>
+    </View>
+);
+
 const parseRecipeFromText = (text) => {
     // 구조화된 RecipeCard가 없을 때만 fallback으로 텍스트를 파싱합니다.
     // 프론트 파서는 보조 수단이고, 안전 검증과 레시피 신뢰 판단은 백엔드에서 끝내는 것이 원칙입니다.
@@ -341,9 +381,7 @@ const recipeToPlainText = (recipe) => {
     return lines.join('\n');
 };
 
-// chatActive: 채팅 화면이 숨겨지면(다른 탭) 레시피 상세 창도 가립니다. 다시 채팅으로 오면 열려 있던 상세가 그대로 보입니다.
-const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, openPlanModal, handleStreamingComplete, copiedMessageId, setCopiedMessageId, saveToMyRecipes, savingRecipeId, chatActive = true }) => {
-    const [detailOpen, setDetailOpen] = useState(false);
+const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, openPlanModal, handleStreamingComplete, copiedMessageId, setCopiedMessageId, saveToMyRecipes, savingRecipeId }) => {
     const scaleAnim = useRef(new Animated.Value(0.95)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
     const isHovered = useRef(new Animated.Value(1)).current;
@@ -388,6 +426,10 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
     // 서버가 준 구조화 레시피를 우선 사용하고, 없으면 텍스트에서 파싱을 시도합니다.
     const recipe = item.sender === 'ai' && !item.isPreparingRecipe ? (item.recipe || parseRecipeFromText(item.text)) : null;
     const isAiRecipeLayout = item.sender === 'ai' && (recipe || item.isPreparingRecipe);
+    // 재료 정보 답변은 본문 끝의 "출처:" 줄을 아래 출처 목록(누르면 원문이 열림)으로 보여 줍니다.
+    // 저장·복사되는 본문(item.text)에는 출처와 라이선스 줄이 그대로 남습니다.
+    const ingredientSources = item.sender === 'ai' ? item.ingredientInfo?.items || [] : [];
+    const displayText = ingredientSources.length > 0 ? stripIngredientSourceLines(item.text) : item.text;
 
     const renderActions = () => item.sender === 'ai' && !item.isTyping ? (
 <View style={styles.messageActions}>
@@ -449,7 +491,7 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
                                 style={[styles.addToPlanButton, item.isMealSaved && styles.addToPlanButtonSaved]}
                                 accessibilityRole="button"
                                 accessibilityLabel={item.isMealSaved ? '식사 기록에 저장됨' : '식사 기록에 추가'}
-                                onPress={() => { setDetailOpen(false); openPlanModal(item); }}
+                                onPress={() => openPlanModal(item)}
                                 disabled={item.isMealSaved}
                             >
                                 <Ionicons
@@ -513,19 +555,14 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
                 {item.isPreparingRecipe ? (
                     <RecipePreparing />
                 ) : recipe ? (
-                    <View style={styles.recipeSummary}>
-                        <Text style={styles.recipeCardTitle}>{recipe.title || '레시피'}</Text>
-                        <View style={styles.summaryMeta}>
-                            {!!recipe.cookingTime && <Text style={styles.summaryMetaText}>조리 시간 {recipe.cookingTime}분</Text>}
-                            {!!recipe.servings && <Text style={styles.summaryMetaText}>분량 {recipe.servings}인분</Text>}
-                        </View>
-                        {!!recipe.safetyNotes?.length && <View style={styles.summaryCaution}>{recipe.safetyNotes.map((note, index) => <Text key={index} style={styles.summaryCautionText}>{note}</Text>)}</View>}
-                        {recipe.sources?.some(source => !source.reviewed) && <Text style={styles.summaryCautionText}>검토 전 웹 출처가 포함돼 있어요. 원문을 확인해 주세요.</Text>}
-                        <TouchableOpacity onPress={() => setDetailOpen(true)} accessibilityRole="button" accessibilityLabel={`${recipe.title || '레시피'} 상세 보기`} style={styles.recipeOpen}><Text style={styles.recipeOpenText}>레시피 보기</Text><Ionicons name="chevron-forward" size={17} color={colors.primary} /></TouchableOpacity>
-                    </View>
+                    // 레시피는 "레시피 보기"로 따로 열지 않고 대화 안에서 바로 펼쳐 보여 줍니다.
+                    <>
+                        <RecipeMessageCard recipe={recipe} />
+                        {renderActions()}
+                    </>
                 ) : item.sender === 'ai' && item.isTyping ? (
                     <Typewriter
-                        text={item.text}
+                        text={displayText}
                         onComplete={() => handleStreamingComplete(item.id)}
                     />
                 ) : (
@@ -535,25 +572,17 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
                     ]}
                         selectable={true}
                     >
-                        {item.text}
+                        {displayText}
                     </Text>
+                )}
+                {ingredientSources.length > 0 && !item.isTyping && (
+                    <IngredientSourceList items={ingredientSources} sourceLabel={item.ingredientInfo.sourceLabel} />
                 )}
                 {item.sender === 'user' && item.interrupted && (
                     <Text style={styles.interruptedLabel}>멈춤 · 다음 메시지와 함께 답해요</Text>
                 )}
 
                 {!recipe && renderActions()}
-                {detailOpen && recipe && (
-                    <Modal visible={chatActive} animationType="slide" onRequestClose={() => setDetailOpen(false)}>
-                        <SafeAreaView style={styles.detailScreen}>
-                            <View style={styles.detailHeader}><TouchableOpacity accessibilityRole="button" accessibilityLabel="대화로 돌아가기" onPress={() => setDetailOpen(false)} style={styles.detailBack}><Ionicons name="chevron-back" size={20} color={colors.text} /><Text style={styles.detailBackText}>대화로 돌아가기</Text></TouchableOpacity></View>
-                            <ScrollView contentContainerStyle={styles.detailContent} keyboardShouldPersistTaps="handled">
-                                <RecipeMessageCard recipe={recipe} />
-                                {renderActions()}
-                            </ScrollView>
-                        </SafeAreaView>
-                    </Modal>
-                )}
             </View>
         </Animated.View>
     );
@@ -955,6 +984,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
                 id: Date.now() + 1,
                 text: cleanedText,
                 recipe: response.data.recipe,
+                ingredientInfo: response.data.ingredientInfo || undefined,
                 sender: 'ai',
                 isTyping: !response.data.recipe,
                 isPreparingRecipe: Boolean(response.data.recipe),
@@ -1270,7 +1300,6 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             setCopiedMessageId={setCopiedMessageId}
             saveToMyRecipes={saveToMyRecipes}
             savingRecipeId={savingRecipeId}
-            chatActive={active}
         />
     );
 
@@ -1393,7 +1422,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
             </KeyboardAvoidingView>
                 {isEmptyChat && <View style={styles.chatSuggestions}>
                     <TouchableOpacity onPress={() => onNavigate?.('health')} accessibilityRole="link" style={styles.healthLink}><Text style={styles.healthLinkText}>건강 정보 입력</Text></TouchableOpacity>
-                    {['냉장고 재료로 저녁 추천해줘', '오늘 먹은 식사를 정리하고 싶어'].map(prompt => <TouchableOpacity key={prompt} onPress={() => setInputText(prompt)} style={styles.suggestionPrompt} accessibilityRole="button"><Text style={styles.suggestionPromptText}>{prompt}</Text></TouchableOpacity>)}
+                    {['오늘 먹은 식사를 정리하고 싶어'].map(prompt => <TouchableOpacity key={prompt} onPress={() => setInputText(prompt)} style={styles.suggestionPrompt} accessibilityRole="button"><Text style={styles.suggestionPromptText}>{prompt}</Text></TouchableOpacity>)}
                 </View>}
                 <Text style={styles.chatMedicalNotice}>생성된 정보는 확인이 필요하며 의료 조언이 아니에요.</Text>
             </View>
@@ -1539,18 +1568,6 @@ const styles = StyleSheet.create({
     emptyInputContainer: { paddingBottom: 0 },
     emptyInputWrapper: { minHeight: 64, alignItems: 'center' },
     composerFocused: { borderColor: colors.primary, borderWidth: 2 },
-    recipeSummary: { width: '100%', maxWidth: 540, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 20 },
-    summaryMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 24, marginTop: 12 },
-    summaryMetaText: { color: colors.textSecondary, fontSize: 14 },
-    summaryCaution: { gap: 6, marginTop: 12 },
-    summaryCautionText: { color: colors.warning, fontSize: 13, lineHeight: 21, marginTop: 6 },
-    recipeOpen: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', marginTop: 12 },
-    recipeOpenText: { color: colors.primary, fontSize: 15, fontWeight: '600' },
-    detailScreen: { flex: 1, backgroundColor: colors.background },
-    detailHeader: { borderBottomWidth: 1, borderBottomColor: colors.divider, paddingHorizontal: 20, minHeight: 64, justifyContent: 'center' },
-    detailBack: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start' },
-    detailBackText: { color: colors.text, fontSize: 15 },
-    detailContent: { width: '100%', maxWidth: 800, alignSelf: 'center', padding: 20, paddingBottom: 48 },
     historyOverlay: { flex: 1, backgroundColor: colors.overlay },
     historyDrawer: { height: '100%', width: 300, maxWidth: '88%', backgroundColor: colors.surfaceAlt },
     header: { padding: 16, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'android' ? 40 : 16, borderBottomWidth: 1, borderBottomColor: colors.border },
@@ -1791,6 +1808,12 @@ const styles = StyleSheet.create({
         color: colors.primary,
         fontSize: 13,
         fontWeight: '600',
+    },
+    ingredientSources: {
+        marginTop: 10,
+        paddingTop: 8,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: colors.border,
     },
     recipeSourceRow: {
         flexDirection: 'row',
