@@ -37,6 +37,22 @@ class OllamaLlmServiceTest {
         assertThat(requestedUrls).containsExactly(URI.create("http://primary.example/api/chat"));
     }
 
+    // 일반 대화 지시문에는 상세 레시피 형식이 없어야 합니다. 일반 대화에서 나온 레시피는 안내 문구로 바뀌어
+    // 사용자가 답 대신 안내만 받기 때문입니다. 레시피 형식은 레시피 추천 지시문에만 둡니다.
+    @Test
+    void conversationInstructionHasNoRecipeFormatButAsksToAdmitUncertainty() {
+        String conversation = OllamaLlmService.systemInstructionFor(LlmService.Task.CONVERSATION);
+
+        assertThat(conversation).doesNotContain("[재료]").doesNotContain("[조리 순서]").contains("확실하지 않아요");
+        assertThat(OllamaLlmService.systemInstructionFor(LlmService.Task.RECIPE_SUGGESTION))
+                .contains("[재료]").contains("[조리 순서]");
+        assertThat(OllamaLlmService.systemInstructionFor(LlmService.Task.MEAL_LOG_SUMMARY))
+                .doesNotContain("[재료]");
+        for (LlmService.Task task : LlmService.Task.values()) {
+            assertThat(OllamaLlmService.systemInstructionFor(task)).as(task.name()).isNotBlank();
+        }
+    }
+
     // 1차 주소가 실패하면 설정된 2차 주소로 다시 요청해야 합니다.
     @Test
     void getChatResponseFallsBackToConfiguredSecondaryUrl() {
