@@ -63,6 +63,48 @@ class ChatSafetyContextServiceTest {
                 .contains("굴", "김");
     }
 
+    // 등록된 알레르기는 끝 글자를 조사로 보고 떼지 않습니다. "오이"가 "오", "포도"가 "포"가 되면
+    // 한 글자 낱말 규칙 때문에 오이무침·포도 주스 충돌을 놓쳤습니다(2026-11-01 발견, bcaf136부터 있던 버그).
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void registeredAllergiesEndingLikeParticlesAreKeptWholeAndStillConflict(boolean stored) {
+        HealthProfileRepository profiles = mock(HealthProfileRepository.class);
+        ChatSafetyContextService service = service(profiles, allergenRegistry());
+        List<String> terms = List.of("오이", "포도", "송이", "고추냉이");
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("레시피 알려줘");
+        if (stored) {
+            HealthProfile profile = new HealthProfile();
+            profile.setAllergies(terms);
+            when(profiles.findByUserId(1L)).thenReturn(Optional.of(profile));
+        } else {
+            request.setHealthProfile(new ChatDto.HealthProfileContext(terms, List.of(), List.of(), List.of(), List.of()));
+        }
+
+        var context = service.build(stored ? Optional.of(1L) : Optional.empty(), request);
+
+        assertThat(context.allergies()).containsExactly("오이", "포도", "송이", "고추냉이");
+        assertThat(service.findAllergyConflicts(context, "오이무침", null, null)).containsExactly("오이");
+        assertThat(service.findAllergyConflicts(context, "포도 주스", null, null)).containsExactly("포도");
+        assertThat(service.findAllergyConflicts(context, "송이버섯 볶음", null, null)).containsExactly("송이");
+    }
+
+    // 메시지에서 읽은 알레르기는 조사를 뗀 형태와 떼지 않은 형태를 모두 후보로 둡니다("오이 알레르기" → 오이, "새우를" → 새우).
+    @Test
+    void extractedAllergiesKeepWholeNameAndParticleStrippedName() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), allergenRegistry());
+
+        ChatDto.Request cucumber = new ChatDto.Request();
+        cucumber.setMessage("오이 알레르기 있어요");
+        ChatSafetyContextService.SafetyContext context = service.build(Optional.empty(), cucumber);
+        assertThat(context.allergies()).contains("오이").doesNotContain("오");
+        assertThat(service.findAllergyConflicts(context, "오이무침", null, null)).isNotEmpty();
+
+        ChatDto.Request shrimp = new ChatDto.Request();
+        shrimp.setMessage("새우를 못 먹어요");
+        assertThat(service.findAllergyConflicts(service.build(Optional.empty(), shrimp), "새우볶음밥", null, null)).isNotEmpty();
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     void structuredProfilesDoNotApplyNaturalLanguageLengthOrStopWordHeuristics(boolean stored) {
@@ -157,6 +199,190 @@ class ChatSafetyContextServiceTest {
     private static ChatSafetyContextService.SafetyContext allergyContext(String... allergies) {
         return new ChatSafetyContextService.SafetyContext(
                 List.of(allergies), List.of(), List.of(), List.of(), List.of(), true);
+    }
+
+    // "알레르기" 뒤의 문장 나머지를 알레르기 이름으로 잡지 않습니다. 목록 형태("알레르기: 땅콩, 우유")는 그대로 읽습니다.
+    @Test
+    void allergyMentionDoesNotSwallowTheRestOfTheSentence() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), allergenRegistry());
+
+        ChatDto.Request question = new ChatDto.Request();
+        question.setMessage("나 새우 알레르기인데 새우깡 먹어도 될까?");
+        assertThat(service.build(Optional.empty(), question).allergies()).containsExactly("새우");
+
+        // 목록 형태는 이 변경과 무관하게 지금처럼 읽고, 두 알레르겐 모두 충돌로 잡혀야 합니다.
+        ChatDto.Request list = new ChatDto.Request();
+        list.setMessage("알레르기: 땅콩, 우유");
+        ChatSafetyContextService.SafetyContext listed = service.build(Optional.empty(), list);
+        assertThat(service.findAllergyConflicts(listed, "땅콩버터", null, null)).isNotEmpty();
+        assertThat(service.findAllergyConflicts(listed, "우유 푸딩", null, null)).isNotEmpty();
+
+        ChatDto.Request recipe = new ChatDto.Request();
+        recipe.setMessage("땅콩 알레르기 있는데 쿠키 레시피 알려줘");
+        assertThat(service.build(Optional.empty(), recipe).allergies()).containsExactly("땅콩");
+    }
+
+    // 절단은 낱말 단위입니다. "돼지고기"의 "돼"에서 잘라 알레르기를 잃으면 안 됩니다(Codex 검토 P1).
+    @Test
+    void allergyExtractionKeepsPorkWhetherDeclaredBeforeOrAfter() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), allergenRegistry());
+
+        for (String message : List.of("돼지고기 알레르기 있어요", "알레르기: 돼지고기", "알레르기는 돼지고기", "나 돼지고기 알레르기인데 뭐 먹지",
+                "알레르기: 먹태, 돼지고기")) {
+            ChatDto.Request request = new ChatDto.Request();
+            request.setMessage(message);
+            ChatSafetyContextService.SafetyContext context = service.build(Optional.empty(), request);
+            // 목록("A, B")은 원래부터 한 덩어리로 저장되므로, 저장 형태가 아니라 충돌 판정으로 확인합니다.
+            assertThat(service.findAllergyConflicts(context, "돼지고기 김치찌개", null, null)).as(message).isNotEmpty();
+        }
+    }
+
+    // 목적어와 부정 사이에 꾸밈말이 끼면 꾸밈말이 아니라 목적어가 피하는 음식입니다(2026-11-01).
+    @Test
+    void avoidedFoodExtractionUsesObjectWhenModifierSitsBeforeNegation() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), allergenRegistry());
+
+        for (String message : List.of("우유를 절대 안 먹어요", "저는 땅콩은 전혀 못 먹어요", "새우를 아예 못 먹어")) {
+            ChatDto.Request request = new ChatDto.Request();
+            request.setMessage(message);
+            ChatSafetyContextService.SafetyContext context = service.build(Optional.empty(), request);
+            assertThat(context.allergies()).as(message).noneMatch(term -> term.equals("절대") || term.equals("전혀") || term.equals("아예"));
+        }
+        ChatDto.Request milk = new ChatDto.Request();
+        milk.setMessage("우유를 절대 안 먹어요");
+        assertThat(service.findAllergyConflicts(service.build(Optional.empty(), milk), "우유 푸딩", null, null)).isNotEmpty();
+        ChatDto.Request peanut = new ChatDto.Request();
+        peanut.setMessage("저는 땅콩은 전혀 못 먹어요");
+        assertThat(service.findAllergyConflicts(service.build(Optional.empty(), peanut), "땅콩 쿠키", null, null)).isNotEmpty();
+    }
+
+    // "안 먹을 때", "안 먹으면"은 상황을 묻는 말이라 알레르기로 읽지 않습니다. "못 먹"과 평서문은 그대로 읽습니다(2026-11-01).
+    @Test
+    void avoidedFoodExtractionIgnoresSituationalNotEating() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), allergenRegistry());
+
+        for (String message : List.of("나물을 바로 안 먹을 때 어떻게 보관해?", "밥을 바로 안 먹으면 냉동해도 돼?",
+                "국을 바로 안 먹을 경우 냉장해?")) {
+            ChatDto.Request request = new ChatDto.Request();
+            request.setMessage(message);
+            assertThat(service.build(Optional.empty(), request).allergies()).as(message).isEmpty();
+        }
+        for (String[] pair : List.of(new String[]{"땅콩 못 먹을 때 대신 뭐 넣어?", "땅콩"},
+                new String[]{"고기 안 먹어요", "고기"}, new String[]{"새우를 못 먹어요", "새우"},
+                new String[]{"우유 먹으면 안 돼요", "우유"}, new String[]{"땅콩은 안 먹을래요", "땅콩"},
+                new String[]{"우유는 안 먹으니까 다른 재료로 추천해 줘", "우유"}, new String[]{"새우는 안 먹을 거예요", "새우"})) {
+            ChatDto.Request request = new ChatDto.Request();
+            request.setMessage(pair[0]);
+            assertThat(service.build(Optional.empty(), request).allergies()).as(pair[0]).contains(pair[1]);
+        }
+    }
+
+    // "먹"으로 시작하는 음식 이름도 서술어로 보고 지우면 안 됩니다(Codex 검토 2회차 P1).
+    @Test
+    void allergyExtractionKeepsFoodNamesThatLookLikePredicates() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), allergenRegistry());
+
+        for (String message : List.of("알레르기: 먹태", "먹태 알레르기 있어요", "알레르기는 먹태")) {
+            ChatDto.Request request = new ChatDto.Request();
+            request.setMessage(message);
+            ChatSafetyContextService.SafetyContext context = service.build(Optional.empty(), request);
+            assertThat(service.findAllergyConflicts(context, "먹태구이", null, null)).as(message).isNotEmpty();
+        }
+    }
+
+    // 쉼표 목록은 항목별로 저장합니다. 한 덩어리("먹태 땅콩")로 저장하면 사전에 없는 먹태를 놓쳤습니다(2026-11-01).
+    @Test
+    void commaListedAllergiesAreStoredPerItem() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), allergenRegistry());
+
+        for (String message : List.of("알레르기: 먹태, 땅콩", "먹태, 땅콩 알레르기 있어요", "알레르기는 먹태，땅콩이에요", "나 알레르기 있어. 먹태, 땅콩")) {
+            ChatDto.Request request = new ChatDto.Request();
+            request.setMessage(message);
+            ChatSafetyContextService.SafetyContext context = service.build(Optional.empty(), request);
+            assertThat(service.findAllergyConflicts(context, "먹태구이", null, null)).as(message).isNotEmpty();
+            assertThat(service.findAllergyConflicts(context, "땅콩조림", null, null)).as(message).isNotEmpty();
+            assertThat(context.allergies()).as(message).noneMatch(term -> term.contains("먹태 땅콩"));
+        }
+    }
+
+    // 나열한 음식은 모두 검사합니다. 알레르겐이 처음·가운데에 있어도 충돌 안내가 나와야 합니다(Codex 검토 P2).
+    @Test
+    void eatingQuestionChecksEveryListedFood() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), mock(AllergenRegistry.class));
+
+        assertThat(service.buildEatingPermissionReply(allergyContext("땅콩"), "땅콩, 우유 먹어도 돼?").orElseThrow())
+                .contains("확인된 알레르기(땅콩)").contains("드시지 않는 것을 권해요");
+        assertThat(service.buildEatingPermissionReply(allergyContext("땅콩"), "우유, 땅콩, 계란 먹어도 돼?").orElseThrow())
+                .contains("드시지 않는 것을 권해요");
+        assertThat(service.buildEatingPermissionReply(allergyContext("땅콩"), "우유랑 땅콩 먹어도 돼?").orElseThrow())
+                .contains("드시지 않는 것을 권해요");
+    }
+
+    // "X 먹어도 돼?"는 LLM 대신 규칙으로 답하고, 어떤 경우에도 괜찮다·안전하다고 말하지 않습니다.
+    @Test
+    void eatingQuestionAboutRegisteredAllergenAdvisesNotToEat() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), mock(AllergenRegistry.class));
+
+        String reply = service.buildEatingPermissionReply(allergyContext("땅콩"), "땅콩버터 먹어도 돼?").orElseThrow();
+
+        assertThat(reply).startsWith("‘땅콩버터’는 확인된 알레르기(땅콩)와 관련된 음식이에요.")
+                .contains("드시지 않는 것을 권해요").doesNotContain("괜찮아요");
+        // 파생 재료도 같은 매처로 잡습니다(우유 → 버터).
+        assertThat(service.buildEatingPermissionReply(allergyContext("우유"), "버터 먹어도 될까요?").orElseThrow())
+                .contains("확인된 알레르기(우유)");
+    }
+
+    // 이름 끝이 조사처럼 보이는 음식("오이")도 충돌을 놓치지 않습니다(Codex 검토 3회차 P2).
+    @Test
+    void eatingQuestionKeepsFoodNamesEndingLikeParticles() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), mock(AllergenRegistry.class));
+
+        for (String message : List.of("오이 먹어도 돼?", "오이는 먹어도 돼?", "오이를 먹어도 될까요?")) {
+            assertThat(service.buildEatingPermissionReply(allergyContext("오이"), message).orElseThrow()).as(message)
+                    .startsWith("‘오이’는 확인된 알레르기(오이)와 관련된 음식이에요.");
+        }
+    }
+
+    @Test
+    void eatingQuestionWithoutConflictStillDoesNotCallItSafe() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), mock(AllergenRegistry.class));
+
+        // 앞의 사정 설명("땅콩 알레르기 있는데")이 아니라 묻는 음식(우유)으로 판정합니다.
+        String reply = service.buildEatingPermissionReply(allergyContext("땅콩"), "땅콩 알레르기 있는데 우유 먹어도 돼?").orElseThrow();
+        assertThat(reply).startsWith("Salus는 먹어도 되는지 판단하지 않아요.")
+                .contains("‘우유’ 이름에서").contains("안전하다는 뜻은 아니에요").doesNotContain("괜찮아요");
+        // 한 글자 알레르겐은 낱말 전체가 같아야 합니다(밀 vs 밀크티).
+        assertThat(service.buildEatingPermissionReply(allergyContext("밀"), "밀크티 먹어도 돼?").orElseThrow())
+                .contains("안전하다는 뜻은 아니에요");
+    }
+
+    @Test
+    void eatingQuestionWithoutAllergyInformationSaysThereIsNoBasis() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), mock(AllergenRegistry.class));
+
+        assertThat(service.buildEatingPermissionReply(allergyContext(), "땅콩 먹어도 돼?").orElseThrow())
+                .contains("등록된 알레르기 정보가 없어 확인할 기준도 없어요").doesNotContain("괜찮아요");
+        // 판단 근거가 없는 상태(null)도 '알레르기 없음'으로 보지 않습니다.
+        assertThat(service.buildEatingPermissionReply(null, "땅콩 먹어도 돼?").orElseThrow())
+                .contains("확인할 기준도 없어요");
+    }
+
+    @Test
+    void eatingQuestionWithConditionsOrMedicationsRecommendsProfessionals() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), mock(AllergenRegistry.class));
+        ChatSafetyContextService.SafetyContext context = new ChatSafetyContextService.SafetyContext(
+                List.of(), List.of("고혈압"), List.of(), List.of("와파린"), List.of(), true);
+
+        assertThat(service.buildEatingPermissionReply(context, "자몽 먹어도 돼?").orElseThrow())
+                .contains("의사나 약사와 상담해 주세요");
+    }
+
+    @Test
+    void nonEatingQuestionIsNotHandled() {
+        ChatSafetyContextService service = service(mock(HealthProfileRepository.class), mock(AllergenRegistry.class));
+
+        assertThat(service.buildEatingPermissionReply(allergyContext("땅콩"), "땅콩 좋아해")).isEmpty();
+        assertThat(service.buildEatingPermissionReply(allergyContext("땅콩"), "땅콩은 뭐야?")).isEmpty();
     }
 
     // 일반 대화 답변에 등록 알레르겐이 나오면 차단하지 않고 확인 문구를 덧붙입니다.

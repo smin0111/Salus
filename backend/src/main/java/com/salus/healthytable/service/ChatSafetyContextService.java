@@ -231,6 +231,75 @@ public class ChatSafetyContextService {
         return allergenMatcher.findConflicts(safetyContext.allergies(), texts);
     }
 
+    // "땅콩 먹어도 돼?", "새우깡 먹어도 될까요", "우유 먹으면 안 돼?"처럼 먹어도 되는지 묻는 표현
+    private static final Pattern EATING_PERMISSION_QUESTION = Pattern.compile(
+            "먹어도|먹으면\\s*(?:안|돼|되|괜찮)|먹을\\s*수\\s*있(?:어|나|을까|나요)|먹여도|드셔도|섭취해도");
+    // "땅콩 알레르기인데 땅콩버터"처럼 앞에 붙은 사정 설명과 묻는 음식을 가르는 연결 표현.
+    // 쉼표는 음식 나열("땅콩, 우유")이라 나누지 않습니다(마지막 음식만 검사하면 땅콩 충돌을 놓침, Codex 검토 P2).
+    private static final Pattern CLAUSE_BREAK = Pattern.compile("(?:인데|는데|은데|지만|있고|\\.)\\s+");
+    // 표시용으로만 떼는 조사. '이/가'는 음식 이름 끝과 겹쳐("오이", "송이") 떼지 않습니다(Codex 검토 3회차 P2).
+    private static final Pattern TRAILING_PARTICLE = Pattern.compile("(?:은|는|을|를|도|만)$");
+
+    /**
+     * "X 먹어도 돼?"에 LLM 대신 정해진 규칙으로 답합니다. 일반 대화 LLM은 "대부분 괜찮아요"처럼 안전하다고 답했습니다(2026-11-01).
+     *
+     * <p>Salus는 먹어도 되는지 판단하지 않으며, 어떤 경우에도 '안전하다', '괜찮다'고 말하지 않습니다.
+     * 등록 알레르기와 겹치면 드시지 말라고 하고, 겹치지 않아도 이름만 비교했다는 한계를 밝히며,
+     * 알레르기 정보가 없으면 판단할 기준이 없다고 말합니다. 판정은 다른 경로와 같은 AllergenMatcher를 씁니다.
+     *
+     * @return 먹어도 되는지 묻는 질문이 아니면 빈 값
+     */
+    public Optional<String> buildEatingPermissionReply(SafetyContext safetyContext, String message) {
+        if (message == null) {
+            return Optional.empty();
+        }
+        Matcher question = EATING_PERMISSION_QUESTION.matcher(message);
+        if (!question.find()) {
+            return Optional.empty();
+        }
+        String phrase = askedPhrase(message.substring(0, question.start()));
+        String food = TRAILING_PARTICLE.matcher(phrase).replaceAll("").strip();
+        // "이거 식혜에 넣어"처럼 음식 이름으로 보기 어려운 긴 구절은 따옴표로 되풀이하지 않습니다(판정은 그 구절 전체로 함).
+        boolean nameLike = !food.isBlank() && food.split("\\s+").length <= 2;
+        String foodLabel = nameLike ? "‘" + food + "’" : "말씀하신 음식";
+        List<String> allergies = safetyContext == null ? List.of() : safetyContext.allergies();
+
+        StringBuilder reply = new StringBuilder();
+        List<String> conflicts = allergies.isEmpty() ? List.of()
+                // 조사를 떼기 전 구절도 함께 넘겨, 표시용 정리 때문에 원문에서 보이는 충돌을 놓치지 않게 합니다.
+                : allergenMatcher.findConflicts(allergies, phrase.isBlank() ? List.of(message) : List.of(phrase, food));
+        if (!conflicts.isEmpty()) {
+            reply.append(foodLabel).append(nameLike ? topicParticle(food) : "은").append(" 확인된 알레르기(").append(String.join(", ", conflicts))
+                    .append(")와 관련된 음식이에요. 드시지 않는 것을 권해요. 이미 드셨거나 증상이 있으면 의료진과 상담해 주세요.");
+        } else if (!allergies.isEmpty()) {
+            reply.append("Salus는 먹어도 되는지 판단하지 않아요. ").append(foodLabel)
+                    .append(nameLike ? " 이름에서" : "에서").append(" 확인된 알레르기(").append(String.join(", ", allergies))
+                    .append(")와 겹치는 것을 찾지 못했지만, 이름만 비교한 것이라 안전하다는 뜻은 아니에요. 원재료 표시를 꼭 확인해 주세요.");
+        } else {
+            reply.append("Salus는 먹어도 되는지 판단하지 않아요. 등록된 알레르기 정보가 없어 확인할 기준도 없어요. ")
+                    .append("알레르기가 있다면 건강 정보에 등록해 주시고, 원재료 표시를 확인해 주세요.");
+        }
+        if (safetyContext != null && (!safetyContext.chronicConditions().isEmpty() || !safetyContext.medications().isEmpty())) {
+            reply.append("\n\n등록하신 질환이나 복용 중인 약과의 관계도 Salus가 판단하지 않아요. 의사나 약사와 상담해 주세요.");
+        }
+        return Optional.of(reply.toString());
+    }
+
+    // 받침이 있으면 '은', 없으면 '는'
+    private static String topicParticle(String word) {
+        char last = word.charAt(word.length() - 1);
+        if (last < 0xAC00 || last > 0xD7A3) {
+            return "은(는)";
+        }
+        return (last - 0xAC00) % 28 == 0 ? "는" : "은";
+    }
+
+    // "나 땅콩 알레르기인데 땅콩버터는 " → "땅콩버터는"(조사는 표시할 때만 뗌)
+    private static String askedPhrase(String beforeQuestion) {
+        String[] clauses = CLAUSE_BREAK.split(beforeQuestion.strip());
+        return clauses.length == 0 ? "" : clauses[clauses.length - 1].strip();
+    }
+
     /**
      * 일반 대화·메뉴 추천 답변에 등록 알레르겐이 나오면 주의 문구를 덧붙입니다.
      *
@@ -301,23 +370,69 @@ public class ChatSafetyContextService {
             return;
         }
         Set<String> extractedAllergies = new LinkedHashSet<>();
+        // 쉼표는 남겨 둡니다. 공백으로 바꾸면 "알레르기: 먹태, 땅콩"이 "먹태 땅콩" 한 덩어리가 되어,
+        // 사전에 없는 먹태는 충돌 검사에서 빠졌습니다(2026-11-01). 나누기는 appendNormalizedValue가 쉼표로 합니다.
         String normalized = text.replace("알러지", "알레르기")
-                .replaceAll("[,，.?!]", " ")
+                .replace('，', ',')
+                .replaceAll("[.?!]", " ")
+                .replaceAll("\\s*,\\s*", ", ")
                 .replaceAll("\\s+", " ")
                 .trim();
         List<Pattern> patterns = List.of(
-                Pattern.compile("(?:나는|저는|제가|내가|나|저)?\\s*([가-힣a-zA-Z0-9·/+\\s]{1,30})(?:에|에대한|은|는|이|가|을|를)?\\s*알레르기"),
+                Pattern.compile("(?:나는|저는|제가|내가|나|저)?\\s*([가-힣a-zA-Z0-9·/+,\\s]{1,30})(?:에|에대한|은|는|이|가|을|를)?\\s*알레르기"),
                 Pattern.compile("알레르기\\s*(?:가|는|은)?\\s*[:：]?\\s*([가-힣a-zA-Z0-9·/+,\\s]{1,40})"),
-                Pattern.compile("(?:나는|저는|제가|내가|나|저)?\\s*([가-힣a-zA-Z0-9]{1,20})(?:을|를|은|는)?\\s*(?:못\\s*먹|먹으면\\s*안|피해야|안\\s*먹)"));
-        for (Pattern pattern : patterns) {
-            Matcher matcher = pattern.matcher(normalized);
+                AVOIDED_FOOD_PATTERN);
+        for (int index = 0; index < patterns.size(); index++) {
+            Matcher matcher = patterns.get(index).matcher(normalized);
             while (matcher.find()) {
-                appendNormalizedValue(extractedAllergies, matcher.group(1), true, true);
+                // "알레르기 뒤 목록" 패턴만 문장의 나머지까지 잡을 수 있어 그 패턴에만 절단을 적용합니다.
+                String captured = index == 1 ? beforeClauseContinuation(matcher.group(1))
+                        : index == 2 ? avoidedFood(matcher) : matcher.group(1);
+                appendNormalizedValue(extractedAllergies, captured, true, true);
             }
         }
         allergies.addAll(extractedAllergies);
         if (!extractedAllergies.isEmpty()) observeAllergyTerms(() ->
                 profileResolutionShadowObserver.observeChatMessage(List.copyOf(extractedAllergies)));
+    }
+
+    // "X 못 먹어", "X는 안 먹어요"처럼 피하는 음식을 밝힌 문장입니다.
+    // 1) 목적어와 부정 사이에 낱말이 하나 끼면("우유를 절대 안 먹어") 그 낱말이 아니라 목적어를 잡습니다.
+    //    예전에는 바로 앞 낱말만 잡아 '절대'를 알레르기로 넣고 우유를 놓쳤습니다(2026-11-01).
+    // 2) "안 먹을 때/경우/거면", "안 먹으면"은 피한다는 말이 아니라 상황을 묻는 말이라 잡지 않습니다.
+    //    "나물을 바로 안 먹을 때 보관법"에서 '바로'가 알레르기로 들어갔습니다(2026-11-01). "못 먹을 때"는 그대로 잡습니다.
+    //    "안 먹을래요", "안 먹을 거예요", "안 먹으니까"처럼 피하겠다는 말은 계속 잡습니다(Codex 검토 1회차 P2).
+    private static final Pattern AVOIDED_FOOD_PATTERN = Pattern.compile(
+            "(?:나는|저는|제가|내가|나|저)?\\s*(?:([가-힣a-zA-Z0-9]{1,20})(?:을|를|은|는)\\s+)?"
+                    + "([가-힣a-zA-Z0-9]{1,20}?)(을|를|은|는)?\\s*(?:못\\s*먹|먹으면\\s*안|피해야|안\\s*먹(?!을\\s*(?:때|땐|경우|거면|거라면)|으면|으려면))");
+
+    // 바로 앞 낱말에 조사가 없고 그 앞에 목적어(X을/를/은/는)가 있으면, 앞 낱말은 꾸밈말이고 목적어가 피하는 음식입니다.
+    private static String avoidedFood(Matcher matcher) {
+        String object = matcher.group(1);
+        boolean nearestHasParticle = matcher.group(3) != null;
+        return object != null && !nearestHasParticle ? object : matcher.group(2);
+    }
+
+    // "알레르기" 뒤 목록 패턴이 문장의 나머지까지 잡지 않게, 낱말 전체가 연결 어미인 곳에서 끊습니다.
+    // "새우 알레르기인데 새우깡 먹어도 될까"가 "인데 새우깡 먹어도 될까"라는 알레르기 이름을 만들었습니다(2026-11-01).
+    // 서술어(먹~, 돼~ 등)로는 자르지 않습니다. 음식 이름과 겹쳐("돼지고기", "먹태") 진짜 알레르기를 지웠습니다(Codex 검토 P1 두 번).
+    // 연결 어미 낱말은 음식 이름이 될 수 없습니다. 서술어가 남는 경우는 예전처럼 넓게 잡히는데, 이는 알레르기를 더 잡는 쪽입니다.
+    private static final Pattern CLAUSE_CONTINUATION_WORD = Pattern.compile(
+            "^(?:인데|는데|은데|라서|이라서|니까|이니까|있는데|있어서|있고|있으니까|이고|이라)$");
+
+    private static String beforeClauseContinuation(String captured) {
+        if (captured == null) {
+            return null;
+        }
+        String[] words = captured.strip().split("\\s+");
+        StringBuilder kept = new StringBuilder();
+        for (String word : words) {
+            if (CLAUSE_CONTINUATION_WORD.matcher(word).matches()) {
+                break;
+            }
+            kept.append(kept.length() == 0 ? "" : " ").append(word);
+        }
+        return kept.toString();
     }
 
     // Observer boundary가 예기치 않게 실패해도 DB 조회 실패나 요청 실패로 전파하지 않는다.
@@ -342,15 +457,37 @@ public class ChatSafetyContextService {
             return;
         }
         for (String token : value.split("[,/·，\\n]")) {
-            String normalized = allergyValue ? normalizeAllergyTerm(token) : normalizeHealthProfileTerm(token);
-            if (!normalized.isBlank() && (!extractedAllergy || isLikelyExtractedAllergyName(normalized))) {
-                target.add(normalized);
+            if (!allergyValue) {
+                String normalized = normalizeHealthProfileTerm(token);
+                if (!normalized.isBlank()) {
+                    target.add(normalized);
+                }
+                continue;
+            }
+            // 등록된 값은 입력 그대로 씁니다. 끝 글자를 조사로 보고 떼면 "오이"→"오", "포도"→"포"가 되어
+            // 한 글자 낱말 규칙 때문에 오이무침·포도 주스와의 충돌을 놓쳤습니다(2026-11-01 발견).
+            String term = removeAllergyFillerWords(token);
+            if (!extractedAllergy) {
+                if (!term.isBlank()) {
+                    target.add(term);
+                }
+                continue;
+            }
+            // 메시지에서 읽은 값은 조사가 붙어 있을 수 있어 뗀 형태와 떼지 않은 형태를 모두 후보로 둡니다.
+            // 한 글자 후보("오")는 아래 검사에서 사전에 정확히 있을 때만 남습니다.
+            String withoutParticle = TRAILING_ALLERGY_PARTICLE.matcher(term).replaceAll("").trim();
+            for (String candidate : new LinkedHashSet<>(List.of(withoutParticle, term))) {
+                if (!candidate.isBlank() && isLikelyExtractedAllergyName(candidate)) {
+                    target.add(candidate);
+                }
             }
         }
     }
 
-    // "알레르기", "있어요", "주의" 같은 부가 표현과 끝 조사를 제거해 재료 이름만 남깁니다.
-    private String normalizeAllergyTerm(String value) {
+    private static final Pattern TRAILING_ALLERGY_PARTICLE = Pattern.compile("(으로|로|을|를|이|가|은|는|에|의|도|만)$");
+
+    // "알레르기", "있어요", "주의" 같은 부가 표현을 제거합니다. 끝 조사는 떼지 않습니다(호출하는 쪽이 정함).
+    private String removeAllergyFillerWords(String value) {
         return normalizeHealthProfileTerm(value)
                 .replace("알레르기", " ")
                 .replace("알러지", " ")
@@ -361,7 +498,6 @@ public class ChatSafetyContextService {
                 .replace("주의", " ")
                 .replace("금지", " ")
                 .replace("못먹음", " ")
-                .replaceAll("(으로|로|을|를|이|가|은|는|에|의|도|만)$", "")
                 .replaceAll("\\s+", " ")
                 .trim();
     }
