@@ -50,6 +50,8 @@ public class PaymentService {
     private static final String PORTONE_API = "https://api.portone.io";
     private static final String KRW = "KRW";
     private static final int RECONCILE_LOOKBACK_DAYS = 2;
+    // 결제창을 연 뒤 이 시간 안의 미완료 주문은 아직 결제될 수 있다고 봅니다(탈퇴 차단 기준, UserAccountService도 씀).
+    public static final java.time.Duration PAYMENT_IN_PROGRESS_WINDOW = java.time.Duration.ofMinutes(30);
     private static final int RECONCILE_MAX_ORDERS = 5;
     // 포트원 서버 SDK와 같은 허용 시차(5분)입니다. 이보다 오래되거나 앞선 웹훅은 재전송 공격으로 보고 받지 않습니다.
     private static final long WEBHOOK_TOLERANCE_SECONDS = 5 * 60;
@@ -184,6 +186,22 @@ public class PaymentService {
             log.info("Payment reconciled. userId={}", userId);
         }
         return status(userId);
+    }
+
+    /**
+     * 회원 탈퇴 전 확인: 결제창을 연 지 얼마 안 된 미완료 주문이 있으면 true입니다.
+     * 결제는 됐는데 확인이 늦게 오는 사이 탈퇴하면, 주문의 회원 연결이 끊겨 결제만 되고 PLUS를 받을 사람이 없어집니다.
+     * 먼저 포트원에 다시 조회해 끝난 결제는 마무리하고(reconcile), 그래도 최근 30분 안의 미완료 주문이 남으면 막습니다.
+     * 조회가 실패한 주문도 미완료로 남으므로 막는 쪽입니다. 결제를 받지 않는 설정이면 막을 주문이 없어 false입니다.
+     */
+    public boolean hasPaymentInProgress(Long userId) {
+        if (!paymentAvailable()) {
+            return false;
+        }
+        reconcile(userId);
+        LocalDateTime now = LocalDateTime.now(clock);
+        return !paymentOrderRepository.findByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
+                userId, PaymentOrderStatus.PENDING, now.minus(PAYMENT_IN_PROGRESS_WINDOW)).isEmpty();
     }
 
     /**

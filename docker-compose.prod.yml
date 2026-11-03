@@ -135,6 +135,7 @@ services:
       OAUTH_APPLE_CLIENT_IDS: ${OAUTH_APPLE_CLIENT_IDS:-}
       KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
+      KAKAO_ADMIN_KEY: ${KAKAO_ADMIN_KEY:-}
       KAKAO_WEB_AUTH_CALLBACK_URI: ${KAKAO_WEB_AUTH_CALLBACK_URI:-}
     # 백엔드는 맥북 안에서만 열고, 외부 접속은 web(nginx)의 /api를 거치게 합니다.
     # 0.0.0.0으로 열면 같은 네트워크에서 nginx를 건너뛰고 바로 들어와 X-Forwarded-For를 마음대로 적을 수 있습니다.

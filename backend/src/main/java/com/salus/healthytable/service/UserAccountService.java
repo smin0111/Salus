@@ -41,7 +41,15 @@ public class UserAccountService {
     private final FeedCommentRepository feedCommentRepository;
     private final UserRecipeRepository userRecipeRepository;
     private final RecipeWorkSessionService recipeWorkSessionService;
+    private final PaymentOrderRepository paymentOrderRepository;
     private final Clock clock;
+
+    /** 결제 확인 중인 주문이 있어 탈퇴를 막았습니다(컨트롤러가 409 PAYMENT_IN_PROGRESS로 바꿈). */
+    public static class PaymentInProgressException extends RuntimeException {
+        public PaymentInProgressException() {
+            super("payment_in_progress");
+        }
+    }
 
     // 이메일 인증 코드 기록(가입 전 이메일이라 회원과 FK로 묶이지 않음). 없으면(테스트 구성 등) 지우지 않습니다.
     private com.salus.healthytable.repository.EmailVerificationRepository emailVerificationRepository;
@@ -84,7 +92,15 @@ public class UserAccountService {
      */
     @Transactional
     public void deleteAccount(Long userId) {
-        User user = getUser(userId);
+        // 첫 조회에서 회원 행을 잠급니다. 그동안 새 결제 주문은 외래 키 확인에서 기다리다 탈퇴 뒤 실패합니다.
+        // 잠근 뒤 최근 미완료 주문을 다시 보므로, 컨트롤러의 사전 확인과 이 트랜잭션 사이에 생긴 주문도 막습니다.
+        User user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+        if (!paymentOrderRepository.findByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(userId,
+                com.salus.healthytable.domain.PaymentOrderStatus.PENDING,
+                LocalDateTime.now(clock).minus(PaymentService.PAYMENT_IN_PROGRESS_WINDOW)).isEmpty()) {
+            throw new PaymentInProgressException();
+        }
         List<Long> postIds = communityPostRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
                 .map(CommunityPost::getId)
                 .toList();

@@ -129,6 +129,25 @@ class EmailAuthMySqlIT {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM password_credentials WHERE email = ?", Integer.class, EMAIL)).isZero();
     }
 
+    // 탈퇴·재인증용 비밀번호 확인도 로그인과 같은 실패 횟수·잠금을 실제 DB에 남깁니다. 다른 회원 id로는 통과하지 않습니다.
+    @Test
+    void passwordRecheckForUserSharesLoginLock() {
+        txHelper.saveCode(EMAIL, EmailVerificationPurpose.SIGNUP, "123456");
+        Long userId = txHelper.signup(EMAIL, "123456", PASSWORD, "이메일 회원").user().getId();
+
+        assertThat(txHelper.hasPasswordLogin(userId)).isTrue();
+        assertThat(txHelper.verifyPasswordForUser(userId, PASSWORD)).isTrue();
+        assertThat(txHelper.verifyPasswordForUser(userId + 100_000, PASSWORD)).isFalse();
+        for (int i = 0; i < 4; i++) {
+            assertThat(txHelper.verifyPasswordForUser(userId, "wrong-password")).isFalse();
+        }
+        assertThat(jdbc.queryForObject("SELECT failed_attempts FROM password_credentials WHERE user_id = ?", Integer.class, userId))
+                .isEqualTo(4);
+        assertThat(txHelper.verifyPasswordForUser(userId, "wrong-password")).isFalse();
+        assertThat(txHelper.verifyPasswordForUser(userId, PASSWORD)).isFalse();
+        assertThat(txHelper.login(EMAIL, PASSWORD, NOW).result()).isEqualTo(EmailAuthTxHelper.LoginResult.INVALID);
+    }
+
     // 5번 연속 틀리면 잠기고, 잠긴 동안에는 맞는 비밀번호도 실패입니다. 실패 횟수는 실패 응답에도 저장됩니다.
     @Test
     void loginLocksAfterFiveFailures() {

@@ -21,4 +21,9 @@ public interface PasswordCredentialRepository extends JpaRepository<PasswordCred
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT c FROM PasswordCredential c WHERE c.email = :email")
     Optional<PasswordCredential> findForUpdateByEmail(@Param("email") String email);
+
+    /** 로그인한 회원의 비밀번호를 다시 확인할 때 같은 이유로 잠그고 읽습니다. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM PasswordCredential c WHERE c.userId = :userId")
+    Optional<PasswordCredential> findForUpdateByUserId(@Param("userId") Long userId);
 }

@@ -153,10 +153,42 @@ public class EmailAuthTxHelper {
             return new LoginOutcome(LoginResult.INVALID, null, null);
         }
         PasswordCredential credential = found.get();
+        if (!checkPassword(credential, rawPassword)) {
+            return new LoginOutcome(LoginResult.INVALID, null, null);
+        }
+        User user = userRepository.findById(credential.getUserId()).orElse(null);
+        if (user == null) {
+            return new LoginOutcome(LoginResult.INVALID, null, null);
+        }
+        return new LoginOutcome(LoginResult.OK, user, refreshTokenService.issue(user.getId(), confirmedAt));
+    }
+
+    /**
+     * 로그인한 회원의 비밀번호를 다시 확인합니다(탈퇴·재인증용). 로그인과 같은 실패 횟수·잠금을 씁니다.
+     * 이메일 로그인 정보가 없는 회원은 false입니다.
+     */
+    @Transactional
+    public boolean verifyPasswordForUser(Long userId, String rawPassword) {
+        Optional<PasswordCredential> found = credentialRepository.findForUpdateByUserId(userId);
+        if (found.isEmpty() || rawPassword == null || rawPassword.isEmpty()
+                || rawPassword.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 72) {
+            passwordEncoder.matches("", dummyHash);
+            return false;
+        }
+        return checkPassword(found.get(), rawPassword);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasPasswordLogin(Long userId) {
+        return credentialRepository.existsById(userId);
+    }
+
+    // 잠겨 있으면 맞는 비밀번호도 받지 않습니다. 틀리면 실패 횟수를 늘리고 5번째에 15분 잠급니다. 맞으면 횟수를 지웁니다.
+    private boolean checkPassword(PasswordCredential credential, String rawPassword) {
         LocalDateTime now = LocalDateTime.now(clock);
         if (credential.getLockedUntil() != null && now.isBefore(credential.getLockedUntil())) {
             passwordEncoder.matches(rawPassword, dummyHash);
-            return new LoginOutcome(LoginResult.INVALID, null, null);
+            return false;
         }
         if (!passwordEncoder.matches(rawPassword, credential.getPasswordHash())) {
             int failures = credential.getFailedAttempts() + 1;
@@ -166,15 +198,11 @@ public class EmailAuthTxHelper {
             } else {
                 credential.setFailedAttempts(failures);
             }
-            return new LoginOutcome(LoginResult.INVALID, null, null);
+            return false;
         }
         credential.setFailedAttempts(0);
         credential.setLockedUntil(null);
-        User user = userRepository.findById(credential.getUserId()).orElse(null);
-        if (user == null) {
-            return new LoginOutcome(LoginResult.INVALID, null, null);
-        }
-        return new LoginOutcome(LoginResult.OK, user, refreshTokenService.issue(user.getId(), confirmedAt));
+        return true;
     }
 
     /**

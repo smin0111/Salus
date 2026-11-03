@@ -605,6 +605,23 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // 회원 탈퇴 본인 확인용 제공자 값입니다. 서버는 탈퇴에 한해 이 회원의 소셜 계정이면 access token도 받으므로,
+    // 앱의 카카오는 선택 설정인 서버 콜백 웹 로그인 대신 로그인 화면과 같은 카카오 SDK 로그인을 씁니다(웹 로그인 설정이 없어도 탈퇴 가능).
+    // 웹의 카카오와 다른 제공자는 계정 설정과 같은 방법입니다.
+    const acquireDeletionCredential = async (provider) => {
+        if (provider === 'kakao' && Platform.OS !== 'web') {
+            try {
+                const { login: kakaoLogin } = require('@react-native-seoul/kakao-login');
+                const tokenResult = await kakaoLogin();
+                return tokenResult?.accessToken ? { accessToken: tokenResult.accessToken } : null;
+            } catch (error) {
+                console.error('Kakao native login error:', error);
+                return null;
+            }
+        }
+        return acquireProviderCredential(provider);
+    };
+
     // 현재 access token에 담긴 계정 확인 시각(identity_confirmed_at)이 9분 이내인지 봅니다. 화면 안내용이며, 최종 판단은 서버가 합니다.
     const hasRecentIdentityConfirmation = () => {
         try {
@@ -831,7 +848,7 @@ export const AuthProvider = ({ children }) => {
     return (
         <AuthContext.Provider value={{
             isLoggedIn, user, token, login, logout, refreshUser, applyUser, loading,
-            getLoginMethods, addLoginMethod, reauthenticate, hasRecentIdentityConfirmation,
+            getLoginMethods, addLoginMethod, reauthenticate, hasRecentIdentityConfirmation, acquireDeletionCredential,
             requestEmailCode, emailSignup, emailLogin, resetPassword,
         }}>
             {children}
