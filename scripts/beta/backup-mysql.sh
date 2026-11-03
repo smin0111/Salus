@@ -52,4 +52,9 @@ echo "[완료] $OUT ($(du -h "$OUT" | cut -f1))"
 # 보관 기간이 지난 이 스크립트의 백업만 지웁니다(파일 이름 형식이 맞는 것만).
 find "$BACKUP_DIR" -maxdepth 1 -type f \( -name 'salus-mysql-*.sql.gz.enc' -o -name 'salus-mysql-*.sql.gz.enc.sha256' \) \
     -mtime +"$BACKUP_RETENTION_DAYS" -print -delete | sed 's/^/[정리] /'
+# 예전 평문 덤프가 남아 있으면 알립니다(지우지는 않음). encrypt-legacy-backups.sh로 암호화해 옮기세요.
+LEGACY_DIR="${LEGACY_BACKUP_DIR:-$HOME/salus-beta-backups}"
+if [ -d "$LEGACY_DIR" ] && ls "$LEGACY_DIR"/*.sql >/dev/null 2>&1; then
+    echo "[주의] 평문 덤프가 $LEGACY_DIR 에 남아 있습니다. scripts/beta/encrypt-legacy-backups.sh 로 옮기세요." >&2
+fi
 echo "외부 보관: 이 파일을 다른 장소(외장 디스크·클라우드)에도 복사해 두세요. 키 파일은 백업과 다른 곳에 보관하세요."
