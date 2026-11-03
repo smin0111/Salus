@@ -19,6 +19,8 @@ Code anchors verified at `7aaeefc`; `(WIP)` items come from uncommitted work and
 - Token rule (`AllergenMatcher.matches`): a one-character term (e.g. "밀", "게") must equal a whole token; longer terms may match inside a token. This prevents "밀" matching "밀크". Derived terms (밀가루, 게살) come from the dictionary, not from substring luck.
 - `matchesLiterally` distinguishes "the allergen word itself appears" from "only a derived ingredient matched": removing the word "우유" does not remove 버터/치즈 (`RecipePersonalizationPolicies`).
 - Guard tests: `AllergenMatcherTest`, `AllergenRemovabilityTest`, `AllergenGapTest`, `ChatSafetyContextServiceTest`, `ChatServiceSafetyTest`.
+- (WIP 2026-11-01) Registered/request profile allergy values keep their final syllable: no particle stripping (`오이`, `포도`, `송이` used to become `오`, `포`, `송` and miss conflicts through the one-character token rule). Message-extracted mentions keep both the stripped and unstripped candidate, filtered by `isLikelyExtractedAllergyName`. Commas survive message normalization so "알레르기: 먹태, 땅콩" is stored per item (it used to become one term "먹태 땅콩", hiding dictionary-unknown items).
+- (WIP 2026-11-01) "X 먹어도 돼?" never goes to the LLM: `ChatSafetyContextService.buildEatingPermissionReply` answers by rule and never says safe/OK (conflict → advise not to eat; no conflict → name-only check is not safety; no allergy data → no basis). The "알레르기 …" list capture is cut only at connective-ending words (인데/는데/있는데…), never at predicate prefixes that collide with food names (돼지고기, 먹태).
 
 ## 3. (WIP) Allergen declaration parser invariants
 Source: `docs/allergen-declaration-parser.md` and `service/allergen/AllergenDeclarationParser` et al. Re-check both before editing.
