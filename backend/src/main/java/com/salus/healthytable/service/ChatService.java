@@ -6,6 +6,7 @@ import com.salus.healthytable.dto.ChatDto;
 import com.salus.healthytable.service.recipeagent.KnownWebDishLookup;
 import com.salus.healthytable.service.recipeagent.RecipeAgentOrchestrator;
 import com.salus.healthytable.service.ChatSafetyContextService.SafetyContext;
+import com.salus.healthytable.service.ingredient.IngredientInfoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -66,6 +67,8 @@ public class ChatService {
     private final KnownWebDishLookup knownWebDishLookup;
     // 레시피 카드가 있는 모델 답변은 카드와 함께 저장합니다(대화 복원·내 레시피 저장의 원본).
     private final ChatRecipeCardService chatRecipeCardService;
+    // 재료 정체 질문("무청이 뭐야")을 검토된 자료로 답합니다. 기능 플래그(salus.ingredient-info.enabled)가 꺼져 있으면 항상 빈 값입니다.
+    private final IngredientInfoService ingredientInfoService;
 
     // Recipe Agent 기능 플래그(기본값 false). 켜지 않으면 기존 레시피 생성 경로만 사용합니다.
     @Value("${recipe.agent.enabled:false}")
@@ -204,6 +207,33 @@ public class ChatService {
                     saveChatMessage(chatSession, "model", recipeQuestion.get().getReply());
                 }
                 return Mono.just(recipeQuestion.get());
+            }
+        }
+
+        // "무청이 뭐야?"처럼 재료가 무엇인지 묻는 질문은 일반 대화 LLM 대신 검토된 자료의 원문으로 답합니다(지어내지 않게).
+        if (!isRecipeRequestIntent && !isDetailFollowUp && !structuredAgentFollowUp && !recipeAgentInitialRequest
+                && intent != ChatIntentClassifier.ChatIntent.MENU_RECOMMENDATION) {
+            // "땅콩 먹어도 돼?"는 LLM에 맡기지 않습니다. LLM은 "대부분 괜찮아요"처럼 안전하다고 답했습니다.
+            Optional<String> eatingReply = chatSafetyContextService.buildEatingPermissionReply(
+                    safetyContext, request.getMessage());
+            if (eatingReply.isPresent()) {
+                if (chatSession != null) {
+                    saveChatMessage(chatSession, "user", userText(request));
+                    saveChatMessage(chatSession, "model", eatingReply.get());
+                }
+                return Mono.just(new ChatDto.Response(sessionId, eatingReply.get(), false, false));
+            }
+            Optional<IngredientInfoService.Answer> ingredientAnswer = ingredientInfoService.answer(request.getMessage());
+            if (ingredientAnswer.isPresent()) {
+                String reply = chatSafetyContextService.appendAllergyCautionIfMentioned(
+                        safetyContext, ingredientAnswer.get().reply());
+                if (chatSession != null) {
+                    saveChatMessage(chatSession, "user", userText(request));
+                    saveChatMessage(chatSession, "model", reply);
+                }
+                ChatDto.Response response = new ChatDto.Response(sessionId, reply, false, false);
+                response.setIngredientInfo(ingredientAnswer.get().info());
+                return Mono.just(response);
             }
         }
 
@@ -386,7 +416,9 @@ public class ChatService {
             }
 
             // 일반 대화: LLM 답변을 그대로 쓰되, 레시피 요청이 아닌데 레시피 형태로 답했다면 검증되지 않은 레시피이므로 안내 문구로 바꿉니다.
-            return llmService.getChatResponse(finalMessage, history)
+            // 레시피 요청인데 요리 이름을 못 뽑은 경우만 검색 근거 레시피 지시문을 쓰고, 나머지는 일반 대화 지시문을 씁니다.
+            LlmService.Task task = isRecipeRequestIntent ? LlmService.Task.RECIPE_FROM_SEARCH : LlmService.Task.CONVERSATION;
+            return llmService.getChatResponse(task, finalMessage, history)
                     .map(reply -> {
                         String responseReply = reply;
                         if (!isLlmUnavailableReply(reply) && looksLikeRecipeResponse(reply)) {
