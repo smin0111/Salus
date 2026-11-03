@@ -52,9 +52,11 @@ class LoginMethodControllerTest {
     private final LoginMethodService loginMethodService = mock(LoginMethodService.class);
     private final RefreshTokenService refreshTokenService = mock(RefreshTokenService.class);
     private final Clock clock = Clock.fixed(NOW, ZoneId.of("Asia/Seoul"));
+    private final com.salus.healthytable.service.EmailAuthTxHelper emailAuthTxHelper = mock(com.salus.healthytable.service.EmailAuthTxHelper.class);
     private final SocialCredentialVerifier verifier = new SocialCredentialVerifier(oAuthService, mock(AppleIdentityTokenVerifier.class), googleIdTokenVerifier, kakaoWebAuthService, mock(AuthNonceService.class), clock);
     private final LoginMethodController controller = new LoginMethodController(
-            userProvider, jwtTokenProvider, verifier, loginMethodService, refreshTokenService, kakaoWebAuthService, clock);
+            userProvider, jwtTokenProvider, verifier, loginMethodService, refreshTokenService, kakaoWebAuthService,
+            new com.salus.healthytable.security.RecentIdentityConfirmation(jwtTokenProvider, clock), emailAuthTxHelper, clock);
 
     private final MockHttpServletRequest http = new MockHttpServletRequest("POST", "/api/users/me/login-methods/kakao");
     private final VerifiedSocialIdentity kakao = new VerifiedSocialIdentity(SocialProvider.KAKAO, "k1", null, false, "카카오");
@@ -181,5 +183,21 @@ class LoginMethodControllerTest {
     private void assertCode(ResponseEntity<?> response, int status, String code) {
         assertThat(response.getStatusCode().value()).isEqualTo(status);
         assertThat((Map<String, Object>) response.getBody()).containsEntry("error", code);
+    }
+
+    // 이메일 회원은 비밀번호로 재인증해 계정 확인 시각이 담긴 새 토큰을 받습니다. 틀리면 403이라 앱이 로그아웃하지 않습니다.
+    @Test
+    void emailReauthIssuesConfirmedTokenOnlyForRightPassword() {
+        when(emailAuthTxHelper.verifyPasswordForUser(10L, "right-password")).thenReturn(true);
+        when(jwtTokenProvider.createToken("10", NOW)).thenReturn("confirmed-access");
+        when(refreshTokenService.issue(10L, NOW)).thenReturn("confirmed-refresh");
+
+        ResponseEntity<?> ok = controller.reauthenticateWithPassword(java.util.Map.of("password", "right-password"), http);
+        assertThat(ok.getStatusCode().value()).isEqualTo(200);
+        assertThat(((java.util.Map<?, ?>) ok.getBody()).get("token")).isEqualTo("confirmed-access");
+
+        ResponseEntity<?> wrong = controller.reauthenticateWithPassword(java.util.Map.of("password", "wrong-password"), http);
+        assertThat(wrong.getStatusCode().value()).isEqualTo(403);
+        verify(refreshTokenService, org.mockito.Mockito.times(1)).issue(anyLong(), any());
     }
 }

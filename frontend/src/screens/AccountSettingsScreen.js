@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import config from '../config';
@@ -32,12 +32,16 @@ const SUMMARY_LABELS = [
  * 멤버십 등급 안내, 저장된 개인 데이터 개수 요약, 개인정보 처리 원칙/고지 문구, 계정 삭제 기능을 제공합니다.
  */
 export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, webMode = false }) {
-    const { user, token, logout, getLoginMethods, addLoginMethod, reauthenticate, hasRecentIdentityConfirmation } = useAuth();
+    const { user, token, logout, getLoginMethods, addLoginMethod, reauthenticate, hasRecentIdentityConfirmation,
+        acquireDeletionCredential } = useAuth();
     const [loginMethods, setLoginMethods] = useState([]);
     const [linkingProvider, setLinkingProvider] = useState(null);
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    // 탈퇴 본인 확인: 서버가 알려 준 확인 수단(EMAIL=비밀번호, 소셜 제공자)과 비밀번호 입력 칸 상태
+    const [deletionMethods, setDeletionMethods] = useState(null);
+    const [deletionPassword, setDeletionPassword] = useState('');
 
     useEffect(() => {
         if (token) {
@@ -116,33 +120,80 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
     };
 
     // 웹에서는 Alert 버튼이 동작하지 않아 askConfirm(웹은 브라우저 확인 창)으로 묻습니다.
+    // PLUS 기간이 남아 있으면 탈퇴와 함께 사라지고 환불되지 않는다는 점을 같이 알립니다.
     const confirmDeleteAccount = async () => {
+        const plusNotice = user?.grade === 'PLUS'
+            ? `\n\nPLUS 이용 기간${user?.plusExpiresAt ? `(${String(user.plusExpiresAt).slice(0, 10)}까지)` : ''}이 남아 있어요. 탈퇴하면 남은 기간도 함께 사라지고 자동으로 환불되지 않아요.`
+            : '';
         const confirmed = await askConfirm(
             '계정 삭제',
-            '계정과 건강정보, 검진 결과, 식단 기록, 대화 기록, 저장한 레시피가 삭제되며 되돌릴 수 없어요. 계속할까요?',
+            `계정과 건강정보, 검진 결과, 식단 기록, 대화 기록, 저장한 레시피가 삭제되며 되돌릴 수 없어요.${plusNotice}\n\n계속할까요?`,
             '삭제'
         );
         if (confirmed) deleteAccount();
     };
 
     // 서버에서 계정과 개인 데이터를 삭제한 뒤, 앱의 로그인 정보도 지우고 채팅 화면으로 이동합니다.
-    const deleteAccount = async () => {
+    // 최근 10분 안에 로그인하지 않았으면 서버가 403 REAUTH_REQUIRED와 확인 수단을 돌려주므로 본인 확인을 받습니다.
+    const deleteAccount = async (proof = null) => {
         if (!token) return;
         setDeleting(true);
         try {
             await axios.delete(`${config.API_BASE_URL}/users/me`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
+                ...(proof ? { data: proof } : {}),
             });
+            setDeletionMethods(null);
+            setDeletionPassword('');
             await logout();
             showMessage('삭제 완료', '계정과 개인 데이터가 삭제되었습니다.');
             onNavigate('chat');
         } catch (error) {
             if (isAuthError(error)) return;
-            console.error('계정 삭제 실패:', error);
+            const data = error?.response?.data;
+            if (data?.error === 'REAUTH_REQUIRED') {
+                await startDeletionReauth(Array.isArray(data.methods) ? data.methods : []);
+                return;
+            }
+            if (data?.error !== 'REAUTH_FAILED' && data?.error !== 'PAYMENT_IN_PROGRESS') {
+                console.error('계정 삭제 실패:', error);
+            }
             showMessage('삭제 실패', getErrorMessage(error, '계정 삭제 중 문제가 발생했습니다.'));
         } finally {
             setDeleting(false);
         }
+    };
+
+    // 비밀번호가 있으면 입력 칸을 보여 주고, 없으면 연결된 소셜 로그인으로 다시 확인한 값을 그대로 탈퇴 요청에 담습니다.
+    const startDeletionReauth = async (methods) => {
+        if (methods.includes('EMAIL')) {
+            setDeletionMethods(methods);
+            return;
+        }
+        const provider = methods.find((method) => PROVIDER_NAMES[method]);
+        if (!provider) {
+            showMessage('계정 삭제', '본인 확인에 쓸 수 있는 로그인 수단이 없어요. 다시 로그인한 뒤 바로 삭제해 주세요.');
+            return;
+        }
+        await deleteWithSocialProof(provider);
+    };
+
+    const deleteWithSocialProof = async (provider) => {
+        const confirmed = await askConfirm('본인 확인',
+            `보안을 위해 ${PROVIDER_NAMES[provider]}로 다시 로그인하면 바로 삭제돼요.`,
+            `${PROVIDER_NAMES[provider]}로 확인`);
+        if (!confirmed) return;
+        const credential = await acquireDeletionCredential(provider.toLowerCase());
+        if (!credential) return;
+        await deleteAccount({ provider, ...credential });
+    };
+
+    const submitDeletionPassword = async () => {
+        if (!deletionPassword) {
+            showMessage('계정 삭제', '비밀번호를 입력해 주세요.');
+            return;
+        }
+        await deleteAccount({ password: deletionPassword });
     };
 
     return (
@@ -325,6 +376,52 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
                     <Ionicons name="person-remove-outline" size={18} color={colors.error} />
                     <Text style={styles.deleteButtonText}>{deleting ? '삭제 중...' : '계정 및 개인 데이터 삭제'}</Text>
                 </TouchableOpacity>
+                {deletionMethods && (
+                    <View style={styles.deletionReauth}>
+                        <Text style={styles.paragraph}>보안을 위해 비밀번호를 다시 입력하면 바로 삭제돼요.</Text>
+                        <TextInput
+                            style={styles.deletionPasswordInput}
+                            value={deletionPassword}
+                            onChangeText={setDeletionPassword}
+                            placeholder="비밀번호"
+                            placeholderTextColor={colors.textTertiary}
+                            secureTextEntry
+                            autoCapitalize="none"
+                            autoComplete="current-password"
+                            textContentType="password"
+                            onSubmitEditing={submitDeletionPassword}
+                            accessibilityLabel="탈퇴 확인 비밀번호"
+                        />
+                        <View style={styles.deletionReauthActions}>
+                            <TouchableOpacity
+                                style={[styles.deleteButton, styles.deletionReauthButton, deleting && styles.disabledButton]}
+                                onPress={submitDeletionPassword}
+                                disabled={deleting}
+                                accessibilityRole="button"
+                            >
+                                <Text style={styles.deleteButtonText}>확인하고 삭제</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.deletionCancelButton}
+                                onPress={() => { setDeletionMethods(null); setDeletionPassword(''); }}
+                                accessibilityRole="button"
+                            >
+                                <Text style={styles.deletionCancelText}>취소</Text>
+                            </TouchableOpacity>
+                        </View>
+                        {deletionMethods.filter((method) => PROVIDER_NAMES[method]).map((provider) => (
+                            <TouchableOpacity
+                                key={provider}
+                                style={styles.policyLink}
+                                onPress={() => deleteWithSocialProof(provider)}
+                                disabled={deleting}
+                                accessibilityRole="button"
+                            >
+                                <Text style={styles.policyLinkText}>{PROVIDER_NAMES[provider]}로 대신 확인</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
             </ScrollView>
         </SafeAreaView>
     );
@@ -498,6 +595,21 @@ const styles = StyleSheet.create({
         borderColor: colors.error,
     },
     disabledButton: { opacity: 0.7 },
+    deletionReauth: { marginTop: 12, gap: 10 },
+    deletionPasswordInput: {
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontSize: 15,
+        color: colors.text,
+        backgroundColor: colors.surface,
+    },
+    deletionReauthActions: { flexDirection: 'row', gap: 8 },
+    deletionReauthButton: { flex: 1, paddingVertical: 12 },
+    deletionCancelButton: { paddingHorizontal: 16, justifyContent: 'center', borderRadius: 8, borderWidth: 1, borderColor: colors.border },
+    deletionCancelText: { fontSize: 15, fontWeight: '600', color: colors.textSecondary },
     loginMethodRow: {
         flexDirection: 'row',
         alignItems: 'center',

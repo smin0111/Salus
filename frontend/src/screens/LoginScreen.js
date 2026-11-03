@@ -7,6 +7,7 @@ import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
 import config from '../config';
 import ServiceBrand from '../components/ServiceBrand';
+import EmailAuthForm from '../components/EmailAuthForm';
 
 // --- 로그인 화면에서 쓰는 작은 컴포넌트 ---
 
@@ -35,7 +36,7 @@ const SocialButton = ({ icon, text, bgColor, iconColor, textColor, onPress, load
     </TouchableOpacity>
 );
 
-// 로고, 소셜 로그인 버튼(iOS에서는 Apple 포함), "로그인 없이 둘러보기" 링크로 구성된 로그인 폼
+// 이메일 로그인·가입, 소셜 로그인 버튼(iOS에서는 Apple 포함), "로그인 없이 둘러보기" 링크로 구성된 로그인 폼
 const LoginForm = ({ onLogin, onGuest, onOpenPrivacy, onOpenTerms, loading, handleSocialLogin, appleAvailable }) => {
     return (
         <View style={styles.formContainer}>
@@ -43,6 +44,9 @@ const LoginForm = ({ onLogin, onGuest, onOpenPrivacy, onOpenTerms, loading, hand
                 <Text style={styles.title}>로그인</Text>
                 <Text style={styles.subtitle}>저장한 레시피와 식사 기록을 이어서 볼 수 있어요.</Text>
             </View>
+
+            <EmailAuthForm disabled={loading} />
+            <View style={styles.divider}><View style={styles.dividerLine} /><Text style={styles.dividerText}>또는</Text><View style={styles.dividerLine} /></View>
 
             <View style={styles.buttonStack}>
                 <SocialButton
@@ -170,6 +174,9 @@ const styles = StyleSheet.create({
     title: { fontSize: 28, lineHeight: 36, fontWeight: '600', color: colors.text, marginBottom: 12 },
     subtitle: { fontSize: 15, lineHeight: 24, color: colors.textSecondary },
     buttonStack: { gap: 12, marginBottom: 32 },
+    divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 24 },
+    dividerLine: { flex: 1, height: 1, backgroundColor: colors.divider },
+    dividerText: { fontSize: 13, color: colors.textTertiary },
     socialButton: { minHeight: 50, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
     appleButton: { height: 50, width: '100%' },
     buttonText: { fontSize: 15, fontWeight: '600' },

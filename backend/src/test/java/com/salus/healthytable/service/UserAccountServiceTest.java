@@ -61,6 +61,8 @@ class UserAccountServiceTest {
     private final com.salus.healthytable.repository.UserRecipeRepository userRecipeRepository =
             mock(com.salus.healthytable.repository.UserRecipeRepository.class);
     private final RecipeWorkSessionService recipeWorkSessionService = mock(RecipeWorkSessionService.class);
+    private final com.salus.healthytable.repository.PaymentOrderRepository paymentOrderRepository =
+            mock(com.salus.healthytable.repository.PaymentOrderRepository.class);
     private final UserAccountService service = new UserAccountService(
             userRepository,
             healthProfileRepository,
@@ -78,6 +80,7 @@ class UserAccountServiceTest {
             feedCommentRepository,
             userRecipeRepository,
             recipeWorkSessionService,
+            paymentOrderRepository,
             java.time.Clock.fixed(java.time.Instant.parse("2026-10-26T01:00:00Z"), java.time.ZoneId.of("Asia/Seoul")));
 
     // 데이터 요약에 채팅방과 채팅 메시지 수가 포함되어야 합니다.
@@ -123,7 +126,7 @@ class UserAccountServiceTest {
         CommunityPost post = new CommunityPost();
         post.setId(10L);
 
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
         when(communityPostRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(post));
 
         service.deleteAccount(1L);
@@ -167,7 +170,7 @@ class UserAccountServiceTest {
     @Test
     void deleteAccountSkipsPostDependencyCleanupWhenUserHasNoPosts() {
         User user = user(1L);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
         when(communityPostRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(List.of());
 
         service.deleteAccount(1L);
@@ -179,6 +182,22 @@ class UserAccountServiceTest {
     }
 
     // 사용자가 없으면 404 예외여야 합니다.
+    // 회원 행을 잠근 뒤 최근 미완료 결제 주문이 보이면 아무것도 지우지 않고 막아야 합니다(사전 확인과 삭제 사이에 생긴 주문).
+    @Test
+    void deleteAccountRefusesWhenRecentPendingOrderAppearsAfterLock() {
+        User user = user(1L);
+        when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
+        when(paymentOrderRepository.findByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
+                org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(com.salus.healthytable.domain.PaymentOrderStatus.PENDING),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(List.of(new com.salus.healthytable.domain.PaymentOrder()));
+
+        assertThatThrownBy(() -> service.deleteAccount(1L)).isInstanceOf(UserAccountService.PaymentInProgressException.class);
+        org.mockito.Mockito.verify(userRepository, org.mockito.Mockito.never()).delete(org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verifyNoInteractions(chatMessageRepository, healthProfileRepository);
+    }
+
     @Test
     void deleteAccountThrowsWhenUserDoesNotExist() {
         when(userRepository.findById(404L)).thenReturn(Optional.empty());
@@ -196,7 +215,7 @@ class UserAccountServiceTest {
     @Test
     void deleteAccountClearsRecipeWorkSessionsForAllChatSessions() {
         User user = user(1L);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
         when(communityPostRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(List.of());
         when(chatSessionRepository.findByUserIdOrderByUpdatedAtDesc(1L)).thenReturn(List.of(chatSession(9L), chatSession(10L)));
 
@@ -209,7 +228,7 @@ class UserAccountServiceTest {
     @Test
     void deleteAccountClearsWorkSessionsOnlyAfterCommit() {
         User user = user(1L);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
         when(communityPostRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(List.of());
         when(chatSessionRepository.findByUserIdOrderByUpdatedAtDesc(1L)).thenReturn(List.of(chatSession(9L)));
 

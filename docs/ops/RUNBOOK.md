@@ -23,6 +23,8 @@
   - 저장: `~/salus-backups/salus-mysql-<시각>.sql.gz.enc`(AES-256, 키 파일 필수) + `.sha256`
   - 보관: `BACKUP_RETENTION_DAYS`(기본 14일). 처리방침 4절 "백업 보관 기간"과 같은 값으로 정합니다: 14일(2026-10-31 확정)
   - 외부 보관 위치: [작성 필요]. 키 파일은 백업과 다른 곳에 둡니다.
+  - 배포 전 백업도 이 스크립트로만 만듭니다. `mysqldump > *.sql` 같은 평문 덤프는 만들지 않습니다.
+  - 예전 평문 덤프(`~/salus-beta-backups/*.sql`)는 `BACKUP_KEY_FILE=... scripts/beta/encrypt-legacy-backups.sh`로 암호화해 옮깁니다(`DRY_RUN=1`로 먼저 확인). 원래 날짜를 유지해 14일 정리 대상이 됩니다.
   - 주기: [작성 필요] (예: 매일 새벽 launchd/cron)
 - 복구 확인(임시 컨테이너, 운영 DB 불변): `BACKUP_KEY_FILE=... scripts/beta/restore-mysql-check.sh <파일>`
   - 체크섬, 복구, 테이블 수, Flyway 마지막 버전·실패 0건을 확인합니다. 2026-10-29 임시 DB로 리허설 통과(V26, 테이블 38개).

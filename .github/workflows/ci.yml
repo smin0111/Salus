@@ -1,6 +1,7 @@
 name: 지속적 통합 검사
 
 # 브랜치 흐름: feat/*·fix/*·chore/* → develop(베타에서 검증) → main. 긴급 수정은 hotfix/* → main.
+# 작업 브랜치는 PR(pull_request)로만 검사합니다. push까지 걸면 같은 커밋을 두 번 검사하고 실패 메일도 두 번 옵니다.
 on:
   pull_request:
     branches:
@@ -10,18 +11,11 @@ on:
     branches:
       - main
       - develop
-      - "feat/**"
-      - "fix/**"
-      - "chore/**"
-      - "hotfix/**"
-      - "feature/**"
-      - "feature-*"
-      - "hotfix-*"
-      - "codex/**"
 
 permissions:
   contents: read
 
+# 같은 PR(refs/pull/N/merge)·브랜치에 새 커밋이 오면 진행 중인 이전 검사를 취소합니다(이미 고친 커밋의 실패 메일 방지).
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

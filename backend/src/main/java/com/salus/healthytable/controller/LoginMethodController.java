@@ -4,6 +4,8 @@ import com.salus.healthytable.domain.SocialProvider;
 import com.salus.healthytable.dto.LoginRequestDTO;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
 import com.salus.healthytable.security.JwtTokenProvider;
+import com.salus.healthytable.security.RecentIdentityConfirmation;
+import com.salus.healthytable.service.EmailAuthTxHelper;
 import com.salus.healthytable.service.AccountLinkException;
 import com.salus.healthytable.service.KakaoWebAuthService;
 import com.salus.healthytable.service.LoginMethodService;
@@ -20,7 +22,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -44,14 +45,14 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class LoginMethodController {
 
-    static final Duration RECENT_AUTH_WINDOW = Duration.ofMinutes(10);
-
     private final AuthenticatedUserProvider authenticatedUserProvider;
     private final JwtTokenProvider jwtTokenProvider;
     private final SocialCredentialVerifier socialCredentialVerifier;
     private final LoginMethodService loginMethodService;
     private final RefreshTokenService refreshTokenService;
     private final KakaoWebAuthService kakaoWebAuthService;
+    private final RecentIdentityConfirmation recentIdentityConfirmation;
+    private final EmailAuthTxHelper emailAuthTxHelper;
     private final Clock clock;
 
     @GetMapping("/login-methods")
@@ -78,6 +79,27 @@ public class LoginMethodController {
             return error(HttpStatus.SERVICE_UNAVAILABLE, "KAKAO_WEB_AUTH_UNAVAILABLE",
                     "지금은 카카오로 다시 확인할 수 없습니다. 다른 로그인 수단을 이용해 주세요.", httpRequest.getRequestURI());
         }
+    }
+
+    /**
+     * 이메일 로그인 회원의 재인증: 이 회원의 비밀번호를 다시 확인하면 identity_confirmed_at이 담긴 새 토큰을 줍니다.
+     * 로그인과 같은 실패 횟수·잠금(5번, 15분)을 씁니다. 이메일 로그인 정보가 없거나 틀리면 같은 403입니다.
+     * 401이 아닌 이유: 앱은 401을 로그인 만료로 보고 세션을 지우므로, 비밀번호를 틀리면 로그아웃이 됩니다.
+     */
+    @PostMapping("/reauth/email")
+    public ResponseEntity<?> reauthenticateWithPassword(@RequestBody(required = false) Map<String, String> request,
+            HttpServletRequest httpRequest) {
+        Long userId = authenticatedUserProvider.requireUserId();
+        String password = request != null ? request.get("password") : null;
+        if (!emailAuthTxHelper.verifyPasswordForUser(userId, password)) {
+            return error(HttpStatus.FORBIDDEN, "REAUTH_FAILED",
+                    "비밀번호가 맞지 않거나 잠시 잠겼습니다. 잠시 후 다시 시도해 주세요.", httpRequest.getRequestURI());
+        }
+        Instant confirmedAt = clock.instant();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("token", jwtTokenProvider.createToken(String.valueOf(userId), confirmedAt));
+        body.put("refreshToken", refreshTokenService.issue(userId, confirmedAt));
+        return ResponseEntity.ok(body);
     }
 
     @PostMapping("/reauth/{provider}")
@@ -121,7 +143,7 @@ public class LoginMethodController {
             @RequestBody(required = false) LoginRequestDTO request, HttpServletRequest httpRequest) {
         Long userId = authenticatedUserProvider.requireUserId();
         String path = httpRequest.getRequestURI();
-        if (!recentlyConfirmed(httpRequest)) {
+        if (!recentIdentityConfirmation.isRecent(httpRequest)) {
             return error(HttpStatus.UNAUTHORIZED, "REAUTH_REQUIRED",
                     "보안을 위해 다시 로그인한 뒤 로그인 수단을 추가해 주세요.", path);
         }
@@ -147,18 +169,6 @@ public class LoginMethodController {
             return error(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "소셜 로그인 인증에 실패했습니다.", path);
         }
         return ResponseEntity.ok(loginMethodService.list(userId));
-    }
-
-    // 현재 요청 토큰의 identity_confirmed_at이 최근 10분 안이어야 합니다. 없으면(갱신만 거친 오래된 세션 포함) 재인증이 필요합니다.
-    private boolean recentlyConfirmed(HttpServletRequest request) {
-        String token = jwtTokenProvider.resolveToken(request);
-        if (token == null) {
-            return false;
-        }
-        Instant now = clock.instant();
-        return jwtTokenProvider.getIdentityConfirmedAt(token)
-                .map(identityConfirmedAt -> !identityConfirmedAt.isBefore(now.minus(RECENT_AUTH_WINDOW)) && !identityConfirmedAt.isAfter(now.plusSeconds(60)))
-                .orElse(false);
     }
 
     private SocialProvider parseProvider(String value) {

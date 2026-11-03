@@ -79,6 +79,8 @@ public class ChatDto {
         // 이번 요청으로 식단 캘린더에 저장되었는지 여부
         private boolean mealSaved;
         private RecipeCard recipe;
+        // 재료 정보 답변일 때 출처(검토된 자료의 문서 제목·링크). 다른 답변에서는 null입니다.
+        private IngredientInfo ingredientInfo;
 
         public Response(Long sessionId, String reply, boolean workSessionActive, boolean mealSaved) {
             this.sessionId = sessionId;
@@ -90,6 +92,29 @@ public class ChatDto {
         public Response(String reply) {
             this.reply = reply;
         }
+    }
+
+    /** 재료 정보 답변의 출처입니다. 답변 본문은 이 문서들의 원문 문장을 그대로 옮긴 것입니다. */
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class IngredientInfo {
+        private List<IngredientInfoItem> items;
+        // 예: "위키백과 (CC BY-SA 4.0)"
+        private String sourceLabel;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class IngredientInfoItem {
+        // 사용자가 물은 이름(예: "광어")
+        private String asked;
+        // 근거 문서 제목(예: "넙치")
+        private String title;
+        private String url;
+        // NAME(같은 제목) / RELATED_NAMED·TEXT_NAMED(본문이 그 이름을 직접 부름) / RELATED(넘겨주기만 있음, 같은 것이라는 근거 아님)
+        private String basis;
     }
 
     /** 채팅 화면에 표시할 구조화된 레시피 카드입니다. */

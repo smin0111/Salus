@@ -224,7 +224,7 @@ public class ChatFollowUpService {
         Long sessionId = chatSession.getId();
         // LLM 답변을 정리하고 품질 보정 규칙을 적용한 뒤, 새 답변을 작업 세션의 "직전 레시피"로 저장합니다.
         // block()으로 응답을 기다리는 동기 방식이라 LLM 응답 시간만큼 요청 스레드가 대기합니다.
-        return Optional.of(llmService.getChatResponse(prompt, history)
+        return Optional.of(llmService.getChatResponse(LlmService.Task.RECIPE_DETAIL, prompt, history)
                 .map(reply -> {
                     String sanitized = recipeResponseSanitizer.sanitizeRecipeReply(reply);
                     String title = recipeReplyParser.extractRecipeTitle(workSession.get().getLastRecommendation());

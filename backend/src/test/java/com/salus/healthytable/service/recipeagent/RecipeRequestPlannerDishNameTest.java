@@ -52,6 +52,33 @@ class RecipeRequestPlannerDishNameTest {
         assertThat(planner.plan("먹물 파스타 레시피 알려줘", false).dishName()).isEqualTo("먹물 파스타");
     }
 
+    // 감상·기분 낱말도 요리 이름과 검색어에서 뺍니다(2026-11-03 "삼겹살 볶음 맛있겠다"로 검색해 출처를 못 찾음).
+    @Test
+    void moodWordsAreRemovedFromDishNameAndQueries() {
+        RecipeResearchPlan plan = planner.plan("삼겹살 볶음 맛있겠다 레시피 알려줘", false);
+        assertThat(plan.dishName()).isEqualTo("삼겹살 볶음");
+        assertThat(plan.searchQueries()).containsExactly("삼겹살 볶음 레시피", "삼겹살 볶음 만드는 법");
+        assertThat(planner.plan("삼겹살 볶음 맛있겠다", false).dishName()).isEqualTo("삼겹살 볶음");
+        assertThat(planner.plan("김치찌개 진짜 맛있어 보여 레시피 알려줘", false).dishName()).isEqualTo("김치찌개");
+        assertThat(planner.plan("맛있는 된장찌개 레시피 알려줘", false).dishName()).isEqualTo("된장찌개");
+        assertThat(planner.plan("떡볶이가 너무 땡긴다 레시피", false).dishName()).isEqualTo("떡볶이");
+        assertThat(planner.plan("마라탕 궁금해 레시피 알려줘", false).dishName()).isEqualTo("마라탕");
+        assertThat(planner.plan("감바스 해 먹으면 좋겠다 레시피", false).dishName()).isNotBlank().doesNotContain("좋겠");
+    }
+
+    // 감상 낱말과 첫머리가 겹치는 요리·재료 이름은 그대로입니다.
+    @Test
+    void moodRemovalKeepsDishNames() {
+        assertThat(planner.plan("맛살 볶음 레시피 알려줘", false).dishName()).isEqualTo("맛살 볶음");
+        assertThat(planner.plan("당근 라페 레시피 알려줘", false).dishName()).isEqualTo("당근 라페");
+        assertThat(planner.plan("크림소다 레시피 알려줘", false).dishName()).isEqualTo("크림소다");
+        assertThat(planner.plan("떡볶이 레시피 알려줘", false).dishName()).isEqualTo("떡볶이");
+        assertThat(planner.plan("새송이 버터구이 맛있겠다 레시피", false).dishName()).isEqualTo("새송이 버터구이");
+        assertThat(planner.plan("양송이 맛있겠다 레시피 알려줘", false).dishName()).isEqualTo("양송이");
+        assertThat(planner.plan("차돌박이 먹고 싶어 레시피", false).dishName()).isEqualTo("차돌박이");
+        assertThat(planner.plan("삼겹살 볶음이 맛있겠다 레시피", false).dishName()).isEqualTo("삼겹살 볶음");
+    }
+
     @Test
     void dishNameWithoutExclusionIsUnchanged() {
         assertThat(planner.plan("두쫀쿠 레시피 알려줘", false).dishName()).isEqualTo("두쫀쿠");

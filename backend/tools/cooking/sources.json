@@ -1,0 +1,137 @@
+[
+ {
+  "id": "rda_store1",
+  "publisher": "농촌진흥청",
+  "url": "https://www.rda.go.kr/board/board.do?boardId=farmprmninfo&prgId=day_farmprmninfoEntry&mode=updateCnt&dataNo=100000790713"
+ },
+ {
+  "id": "rda_store2",
+  "publisher": "농촌진흥청",
+  "url": "https://www.rda.go.kr/board/board.do?mode=view&prgId=day_farmprmninfoEntry&dataNo=100000805469"
+ },
+ {
+  "id": "rda_store3",
+  "publisher": "농촌진흥청",
+  "url": "https://www.rda.go.kr/board/board.do?boardId=farmprmninfo&prgId=day_farmprmninfoEntry&dataNo=100000612513&mode=updateCnt"
+ },
+ {
+  "id": "rda_potato",
+  "publisher": "농촌진흥청",
+  "url": "https://rda.go.kr/board/board.do?boardId=farmprmninfo&currPage=1&dataNo=100000735068&mode=updateCnt&prgId=day_farmprmninfoEntry&searchEDate=&searchSDate="
+ },
+ {
+  "id": "fsk_temp",
+  "publisher": "식품안전나라",
+  "url": "https://www.foodsafetykorea.go.kr/portal/board/boardDetail.do?menu_no=3120&bbs_no=bbs001&ntctxt_no=21793&menu_grp=MENU_NEW01"
+ },
+ {
+  "id": "fsk_hazard",
+  "publisher": "식품안전나라",
+  "url": "https://www.foodsafetykorea.go.kr/portal/board/boardDetail.do?menu_no=3120&bbs_no=bbs001&ntctxt_no=22266&menu_grp=MENU_NEW01"
+ },
+ {
+  "id": "kr_spring1",
+  "publisher": "식품의약품안전처(정책브리핑)",
+  "url": "https://www.korea.kr/news/examPassView.do?newsId=148757764"
+ },
+ {
+  "id": "kr_spring2",
+  "publisher": "정책브리핑",
+  "url": "https://www.korea.kr/news/healthView.do?newsId=148791786"
+ },
+ {
+  "id": "kr_seeds",
+  "publisher": "식품의약품안전청(정책브리핑, 하이닥 전재)",
+  "url": "https://www.korea.kr/news/healthView.do?newsId=148738996"
+ },
+ {
+  "id": "kr_ginkgo",
+  "publisher": "식품의약품안전처(정책브리핑)",
+  "url": "https://www.korea.kr/news/interviewView.do?newsId=148787003"
+ },
+ {
+  "id": "kr_maesil",
+  "publisher": "식품의약품안전처(정책브리핑)",
+  "url": "https://www.korea.kr/news/policyNewsView.do?newsId=148816713"
+ },
+ {
+  "id": "kr_salmonella",
+  "publisher": "식품의약품안전처(정책브리핑)",
+  "url": "https://www.korea.kr/news/policyNewsView.do?newsId=148945885"
+ },
+ {
+  "id": "kr_salmonella2",
+  "publisher": "식품의약품안전처(정책브리핑)",
+  "url": "https://www.korea.kr/news/healthView.do?newsId=148917125"
+ },
+ {
+  "id": "kr_campy1",
+  "publisher": "식품의약품안전처(정책브리핑)",
+  "url": "https://www.korea.kr/news/policyNewsView.do?newsId=148839251"
+ },
+ {
+  "id": "kr_campy2",
+  "publisher": "정책브리핑",
+  "url": "https://www.korea.kr/news/policyNewsView.do?newsId=148853173"
+ },
+ {
+  "id": "kr_chuseok",
+  "publisher": "식품의약품안전처(정책브리핑)",
+  "url": "https://www.korea.kr/news/policyNewsView.do?newsId=148821433"
+ },
+ {
+  "id": "kr_buy",
+  "publisher": "식품의약품안전처(정책브리핑)",
+  "url": "https://www.korea.kr/news/policyNewsView.do?newsId=148878177"
+ },
+ {
+  "id": "kr_delivery",
+  "publisher": "식품의약품안전처(정책브리핑)",
+  "url": "https://www.korea.kr/news/policyNewsView.do?newsId=148932215"
+ },
+ {
+  "id": "kr_wash1",
+  "publisher": "식품의약품안전청(정책브리핑)",
+  "url": "https://www.korea.kr/briefing/policyBriefingView.do?newsId=148694209"
+ },
+ {
+  "id": "kr_wash2",
+  "publisher": "정책브리핑",
+  "url": "https://www.korea.kr/news/healthView.do?newsId=148786718"
+ },
+ {
+  "id": "kr_wash3",
+  "publisher": "식품의약품안전청(정책브리핑)",
+  "url": "https://www.korea.kr/news/policyNewsView.do?newsId=148651086"
+ },
+ {
+  "id": "kr_noro",
+  "publisher": "식품의약품안전청(정책브리핑)",
+  "url": "https://m.korea.kr/briefing/pressReleaseView.do?newsId=155426962"
+ },
+ {
+  "id": "kr_fruitpeel",
+  "publisher": "식품의약품안전청(정책브리핑)",
+  "url": "https://m.korea.kr/briefing/policyBriefingView.do?newsId=148679953"
+ },
+ {
+  "id": "kr_mush1",
+  "publisher": "식품의약품안전처(정책브리핑)",
+  "url": "https://www.korea.kr/news/policyNewsView.do?newsId=148783510"
+ },
+ {
+  "id": "ks_fish",
+  "publisher": "한국식품조리과학회지(KoreaScience 초록)",
+  "url": "https://koreascience.kr/article/JAKO197903041865746.page"
+ },
+ {
+  "id": "ks_tender",
+  "publisher": "한국식품조리과학회지(KoreaScience 초록)",
+  "url": "https://koreascience.kr/article/JAKO200011921859030.do"
+ },
+ {
+  "id": "kr_holiday2",
+  "publisher": "식품의약품안전처(정책브리핑)",
+  "url": "https://www.korea.kr/news/policyNewsView.do?newsId=148925685"
+ }
+]

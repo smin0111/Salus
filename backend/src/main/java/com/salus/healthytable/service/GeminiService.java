@@ -41,7 +41,7 @@ public class GeminiService {
                         "중요: 반드시 이 요리의 1인분 총 칼로리를 계산하여 응답 마지막에 '총 XXXkcal' 형식으로 명시해주세요.",
                 String.join(", ", ingredients),
                 healthContext);
-        return getChatResponse(prompt, null);
+        return llmService.getChatResponse(LlmService.Task.RECIPE_SUGGESTION, prompt, null);
     }
 
     /**
@@ -79,6 +79,6 @@ public class GeminiService {
             prompt.append("\n");
         }
 
-        return getChatResponse(prompt.toString(), null);
+        return llmService.getChatResponse(LlmService.Task.MEAL_LOG_SUMMARY, prompt.toString(), null);
     }
 }

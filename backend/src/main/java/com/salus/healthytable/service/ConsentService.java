@@ -25,8 +25,8 @@ public class ConsentService {
 
     // 문서를 고치면 버전을 올립니다. 올리면 모든 사용자가 다음 로그인 때 다시 동의합니다.
     static final Map<ConsentType, String> CURRENT_VERSIONS = Map.of(
-            ConsentType.TERMS, "2026-10-29",
-            ConsentType.PRIVACY, "2026-10-29",
+            ConsentType.TERMS, "2026-10-31",
+            ConsentType.PRIVACY, "2026-10-31",
             ConsentType.HEALTH_INFO, "2026-10-29",
             ConsentType.AGE_OVER_14, "1");
 

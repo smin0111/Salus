@@ -112,6 +112,8 @@ public class MealLogService {
 
     // 월간 식단 총평 생성에 사용하는 AI 서비스 (final 필드라 @RequiredArgsConstructor 생성자로 주입됩니다)
     private final com.salus.healthytable.service.GeminiService geminiService;
+    // 같은 기록이면 저장한 총평을 다시 쓰고, 새로 만드는 횟수·동시 실행을 제한합니다.
+    private final MonthlyAnalysisGuard monthlyAnalysisGuard;
 
     /**
      * 지정한 연/월의 식단 기록을 모아 AI 총평을 받습니다.
@@ -126,8 +128,31 @@ public class MealLogService {
         // 해당 월(1일~말일) 사이의 기록만 DB에서 조회합니다.
         List<MealLog> monthlyLogs = mealLogRepository.findByUserAndRecordDateBetween(user, startDate, endDate);
 
+        // 기록이 없으면 LLM을 부르지 않는 고정 안내라 제한 없이 바로 돌려줍니다.
+        if (monthlyLogs.isEmpty()) {
+            return geminiService.analyzeMonthlyMealPlan(monthlyLogs).block();
+        }
         // 이 메서드는 문자열을 바로 반환해야 하므로, 비동기(Mono) 결과가 올 때까지 기다렸다가(block) 꺼냅니다.
-        return geminiService.analyzeMonthlyMealPlan(monthlyLogs).block();
+        return monthlyAnalysisGuard.getOrGenerate(user.getId(), yearMonth.toString(), fingerprint(monthlyLogs),
+                () -> geminiService.analyzeMonthlyMealPlan(monthlyLogs).block());
+    }
+
+    // 총평에 들어가는 값(날짜·끼니)이 같으면 같은 지문입니다. 기록을 고치면 지문이 바뀌어 새로 만듭니다.
+    private static String fingerprint(List<MealLog> logs) {
+        StringBuilder source = new StringBuilder();
+        logs.stream()
+                .sorted(java.util.Comparator.comparing(MealLog::getRecordDate))
+                .forEach(log -> source.append(log.getRecordDate()).append('\u0001')
+                        .append(log.getBreakfast()).append('\u0001')
+                        .append(log.getLunch()).append('\u0001')
+                        .append(log.getDinner()).append('\u0002'));
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(source.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(digest);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     // 날짜는 필수이며, 메뉴 이름/열량/JSON 필드는 입력된 경우에만 형식과 범위를 검사하고 정규화합니다.

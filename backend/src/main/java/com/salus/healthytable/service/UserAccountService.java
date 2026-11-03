@@ -41,7 +41,23 @@ public class UserAccountService {
     private final FeedCommentRepository feedCommentRepository;
     private final UserRecipeRepository userRecipeRepository;
     private final RecipeWorkSessionService recipeWorkSessionService;
+    private final PaymentOrderRepository paymentOrderRepository;
     private final Clock clock;
+
+    /** 결제 확인 중인 주문이 있어 탈퇴를 막았습니다(컨트롤러가 409 PAYMENT_IN_PROGRESS로 바꿈). */
+    public static class PaymentInProgressException extends RuntimeException {
+        public PaymentInProgressException() {
+            super("payment_in_progress");
+        }
+    }
+
+    // 이메일 인증 코드 기록(가입 전 이메일이라 회원과 FK로 묶이지 않음). 없으면(테스트 구성 등) 지우지 않습니다.
+    private com.salus.healthytable.repository.EmailVerificationRepository emailVerificationRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setEmailVerificationRepository(com.salus.healthytable.repository.EmailVerificationRepository repository) {
+        this.emailVerificationRepository = repository;
+    }
 
     /**
      * 사용자가 남긴 데이터의 종류별 건수를 집계합니다.
@@ -76,7 +92,15 @@ public class UserAccountService {
      */
     @Transactional
     public void deleteAccount(Long userId) {
-        User user = getUser(userId);
+        // 첫 조회에서 회원 행을 잠급니다. 그동안 새 결제 주문은 외래 키 확인에서 기다리다 탈퇴 뒤 실패합니다.
+        // 잠근 뒤 최근 미완료 주문을 다시 보므로, 컨트롤러의 사전 확인과 이 트랜잭션 사이에 생긴 주문도 막습니다.
+        User user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+        if (!paymentOrderRepository.findByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(userId,
+                com.salus.healthytable.domain.PaymentOrderStatus.PENDING,
+                LocalDateTime.now(clock).minus(PaymentService.PAYMENT_IN_PROGRESS_WINDOW)).isEmpty()) {
+            throw new PaymentInProgressException();
+        }
         List<Long> postIds = communityPostRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
                 .map(CommunityPost::getId)
                 .toList();
@@ -106,6 +130,11 @@ public class UserAccountService {
         // 피드 댓글: 다른 사람의 답글 구조를 유지하려고 행은 남기고 본문을 지운 삭제 상태로 바꿉니다(부모·root 연결 유지).
         // 작성자 연결은 회원 행을 지울 때 FK(SET NULL)가 끊습니다. 내 공유본·좋아요는 FK(CASCADE)로 함께 지워집니다.
         feedCommentRepository.deleteAllByAuthor(userId, LocalDateTime.now(clock));
+        // 이메일 로그인 정보(password_credentials)는 회원 행을 지울 때 FK(CASCADE)로 함께 지워집니다.
+        // 그 이메일로 받은 인증 코드 기록은 회원과 묶이지 않아 여기서 지웁니다.
+        if (emailVerificationRepository != null && user.getEmail() != null && !user.getEmail().isBlank()) {
+            emailVerificationRepository.deleteByEmail(user.getEmail().trim().toLowerCase(java.util.Locale.ROOT));
+        }
         userRepository.delete(user);
         clearWorkSessionsAfterCommit(userId, chatSessionIds);
     }

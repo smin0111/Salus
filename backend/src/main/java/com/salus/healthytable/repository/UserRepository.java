@@ -1,7 +1,11 @@
 package com.salus.healthytable.repository;
 
 import com.salus.healthytable.domain.User;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -11,6 +15,11 @@ import java.util.List;
  */
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
+
+    // 회원 탈퇴: 회원 행을 잠가, 탈퇴가 끝날 때까지 이 회원의 새 결제 주문(외래 키로 회원 행을 참조)이 끼어들지 못하게 합니다.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM User u WHERE u.id = :id")
+    java.util.Optional<User> findByIdForUpdate(@Param("id") Long id);
 
     // 계정 연결 후보 찾기: 같은 이메일(검증된 이메일만 저장됨)의 회원을 모두 가져옵니다.
     // 여러 명이면 임의로 고르지 않고 연결을 보류해야 하므로 목록으로 받습니다.

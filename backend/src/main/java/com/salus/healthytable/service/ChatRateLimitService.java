@@ -121,8 +121,9 @@ public class ChatRateLimitService {
      * 오른쪽(프록시가 붙인 쪽)부터 읽어 믿을 수 있는 프록시가 아닌 첫 주소를 씁니다.
      * 예전에는 첫 번째 값을 그대로 써서, 사용자가 헤더에 아무 IP나 적어 보내면 게스트 요청 제한을 피할 수 있었습니다
      * (2026-10-17 리뷰: 헤더만 바꾼 3회 요청이 분당 1회 제한을 모두 통과). 왼쪽 값은 사용자가 마음대로 적을 수 있습니다.
+     * 이메일 로그인·인증 메일 요청 제한(EmailAuthService)도 같은 기준을 씁니다.
      */
-    private String resolveClientIp(HttpServletRequest request) {
+    public String resolveClientIp(HttpServletRequest request) {
         if (request == null) {
             return "unknown";
         }

@@ -139,10 +139,10 @@ class PaymentServiceTest {
         verify(orderRepository, never()).save(any());
     }
 
-    // 결제를 켰어도 포트원 설정이 비어 있으면 결제를 받지 않고, 화면에도 결제 불가로 알립니다.
+    // 결제를 켰어도 포트원 설정(웹훅 시크릿 포함)이 비어 있으면 결제를 받지 않고, 화면에도 결제 불가로 알립니다.
     @Test
     void missingPortoneSettingsDisablePayment() {
-        for (String field : List.of("portoneApiSecret", "portoneStoreId", "portoneChannelKey")) {
+        for (String field : List.of("portoneApiSecret", "portoneStoreId", "portoneChannelKey", "portoneWebhookSecret")) {
             Object original = ReflectionTestUtils.getField(paymentService, field);
             ReflectionTestUtils.setField(paymentService, field, "");
             assertThat(paymentService.productInfo().paymentEnabled()).isFalse();
@@ -279,6 +279,36 @@ class PaymentServiceTest {
         assertThat(notPaid.getStatus()).isEqualTo(PaymentOrderStatus.PENDING);
         assertThat(status.plusActive()).isTrue();
         server.verify();
+    }
+
+    // 탈퇴 전 확인: 포트원에 다시 조회해도 결제 전인 최근 30분 안의 주문이 있으면 결제 진행 중으로 봅니다.
+    // 다시 조회해 결제가 끝난 주문은 마무리되므로 막지 않습니다.
+    @Test
+    void paymentInProgressBlocksOnlyRecentUnfinishedOrders() {
+        PaymentOrder notPaid = order("salus_order2", user, 11L);
+        when(orderRepository.findByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
+                1L, PaymentOrderStatus.PENDING, NOW.minusDays(2))).thenReturn(List.of(notPaid));
+        when(orderRepository.findByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
+                1L, PaymentOrderStatus.PENDING, NOW.minusMinutes(30))).thenReturn(List.of(notPaid));
+        server.expect(requestTo("https://api.portone.io/payments/salus_order2?storeId=store-test"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThat(paymentService.hasPaymentInProgress(1L)).isTrue();
+        server.verify();
+
+        when(orderRepository.findByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
+                1L, PaymentOrderStatus.PENDING, NOW.minusDays(2))).thenReturn(List.of());
+        when(orderRepository.findByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
+                1L, PaymentOrderStatus.PENDING, NOW.minusMinutes(30))).thenReturn(List.of());
+        assertThat(paymentService.hasPaymentInProgress(1L)).isFalse();
+    }
+
+    // 결제를 받지 않는 설정이면 막을 주문이 없습니다(포트원도 부르지 않음).
+    @Test
+    void paymentInProgressIsFalseWhenPaymentIsOff() {
+        ReflectionTestUtils.setField(paymentService, "paymentEnabled", false);
+        assertThat(paymentService.hasPaymentInProgress(1L)).isFalse();
+        verifyNoInteractions(orderRepository);
     }
 
     // 서명이 없거나 틀리거나 오래된 웹훅은 400으로 거부하고, 주문 조회·포트원 호출을 하지 않습니다.

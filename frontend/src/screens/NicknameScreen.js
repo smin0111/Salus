@@ -67,7 +67,7 @@ export default function NicknameScreen({ mode = 'onboarding', onDone, onSkip }) 
           {isEdit ? (user?.nickname ? '닉네임 바꾸기' : '닉네임 정하기') : '사용하실 닉네임을 입력해 주세요'}
         </Text>
         <Text style={styles.lead}>
-          레시피를 공유하거나 댓글을 남길 때 이 닉네임으로 보여요. 소셜 계정의 실명은 다른 사람에게 보이지 않아요.
+          레시피를 공유하거나 댓글을 남길 때 이 닉네임으로 보여요. 가입할 때 받은 이름(소셜 계정 실명 등)은 다른 사람에게 보이지 않아요.
         </Text>
         <Card style={styles.card}>
           <Input

@@ -219,6 +219,27 @@ export const AuthProvider = ({ children }) => {
         return userData;
     };
 
+    // --- 살루스 자체 이메일·비밀번호 로그인 ---
+    // 실패하면 서버 오류(error.response.data.message)를 그대로 던지고, 화면이 getApiErrorMessage로 보여 줍니다.
+    // 로그인·가입 응답은 소셜 로그인과 같은 모양({ token, refreshToken, user })이라 applySession을 함께 씁니다.
+
+    // purpose: 'SIGNUP'(가입 인증 코드) | 'PASSWORD_RESET'(비밀번호 재설정 코드)
+    const requestEmailCode = (email, purpose) =>
+        axios.post(`${config.API_BASE_URL}/auth/email/code`, { email, purpose });
+
+    const emailSignup = async ({ email, code, password, name }, keepLoggedIn = true) => {
+        const response = await axios.post(`${config.API_BASE_URL}/auth/email/signup`, { email, code, password, name });
+        return applySession(response.data, keepLoggedIn);
+    };
+
+    const emailLogin = async (email, password, keepLoggedIn = true) => {
+        const response = await axios.post(`${config.API_BASE_URL}/auth/email/login`, { email, password });
+        return applySession(response.data, keepLoggedIn);
+    };
+
+    const resetPassword = ({ email, code, newPassword }) =>
+        axios.post(`${config.API_BASE_URL}/auth/email/password-reset`, { email, code, newPassword });
+
     // refresh token으로 새 access token을 받습니다. 실패하면 null을 돌려주고 호출한 쪽이 로그아웃 처리합니다.
     // 서버는 쓴 refresh token을 폐기하고 새 토큰을 주므로, 응답의 refreshToken으로 반드시 교체합니다.
     const refreshAccessToken = () => {
@@ -584,6 +605,23 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // 회원 탈퇴 본인 확인용 제공자 값입니다. 서버는 탈퇴에 한해 이 회원의 소셜 계정이면 access token도 받으므로,
+    // 앱의 카카오는 선택 설정인 서버 콜백 웹 로그인 대신 로그인 화면과 같은 카카오 SDK 로그인을 씁니다(웹 로그인 설정이 없어도 탈퇴 가능).
+    // 웹의 카카오와 다른 제공자는 계정 설정과 같은 방법입니다.
+    const acquireDeletionCredential = async (provider) => {
+        if (provider === 'kakao' && Platform.OS !== 'web') {
+            try {
+                const { login: kakaoLogin } = require('@react-native-seoul/kakao-login');
+                const tokenResult = await kakaoLogin();
+                return tokenResult?.accessToken ? { accessToken: tokenResult.accessToken } : null;
+            } catch (error) {
+                console.error('Kakao native login error:', error);
+                return null;
+            }
+        }
+        return acquireProviderCredential(provider);
+    };
+
     // 현재 access token에 담긴 계정 확인 시각(identity_confirmed_at)이 9분 이내인지 봅니다. 화면 안내용이며, 최종 판단은 서버가 합니다.
     const hasRecentIdentityConfirmation = () => {
         try {
@@ -810,7 +848,8 @@ export const AuthProvider = ({ children }) => {
     return (
         <AuthContext.Provider value={{
             isLoggedIn, user, token, login, logout, refreshUser, applyUser, loading,
-            getLoginMethods, addLoginMethod, reauthenticate, hasRecentIdentityConfirmation,
+            getLoginMethods, addLoginMethod, reauthenticate, hasRecentIdentityConfirmation, acquireDeletionCredential,
+            requestEmailCode, emailSignup, emailLogin, resetPassword,
         }}>
             {children}
         </AuthContext.Provider>

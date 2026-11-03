@@ -5,7 +5,7 @@ Salus is a personal diet/health service: meal logs, health profile and allergies
 Code is the source of truth. This file and `docs/ai/*` are maps verified against commit `7aaeefc` plus the 2026-09-17 working tree; items marked (WIP) were uncommitted at that time. If a doc and the code disagree, trust the code and fix the doc in the same change.
 
 ## Repository map
-- `backend/` Spring Boot API (Maven). Java root `backend/src/main/java/com/salus/healthytable/`: `config controller domain dto exception repository security service util`. `service/` is flat except `service/allergen/` and `service/recipeagent/`.
+- `backend/` Spring Boot API (Maven). Java root `backend/src/main/java/com/salus/healthytable/`: `config controller domain dto exception repository security service util`. `service/` is flat except `service/allergen/`, `service/recipeagent/` and (WIP) `service/ingredient/`.
 - `backend/src/main/resources/`: `application.properties`, `db/migration/` (Flyway), `allergens/ko-allergens.yaml`.
 - `backend/src/test/java/...` mirrors main packages. Tests are unit tests (JUnit 5 + Mockito); no MySQL/Redis needed.
 - `frontend/` Expo / React Native app. `admin/` Vite / React admin web.
