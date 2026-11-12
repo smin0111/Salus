@@ -19,15 +19,14 @@ import java.util.Locale;
  */
 
 /**
- * 약물-음식 상호작용 확인의 기본 구현입니다. 실제 조회 없이 항상 "알 수 없음(UNKNOWN)"을 반환합니다.
- * 확인하지 못한 상호작용을 "없음"으로 표시하지 않기 위한 안전한 기본값입니다.
+ * 약물-음식 상호작용 조회가 꺼진 경우의 구현입니다.
  */
 @Service
 class UnknownMedicationFoodInteractionAdapter implements MedicationFoodInteractionPort {
 
     @Override
     public MedicationInteractionResult check(List<String> medications, List<String> recipeIngredients) {
-        return MedicationInteractionResult.unknown(medications);
+        return MedicationInteractionResult.disabled(medications);
     }
 }
 

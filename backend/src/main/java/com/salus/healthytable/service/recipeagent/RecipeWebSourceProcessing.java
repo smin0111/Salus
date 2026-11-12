@@ -618,17 +618,32 @@ class StructuredRecipePageAdapter {
                 optional: %s
                 risk: %s
                 """.formatted(
-                recipe.title(),
+                oneLine(recipe.title()),
                 "",
-                blank(evidence.creatorName(), ""),
-                evidence.provenance().sourceUrl(),
-                blank(evidence.provenance().canonicalUrl(), ""),
+                oneLine(blank(evidence.creatorName(), "")),
+                oneLine(evidence.provenance().sourceUrl()),
+                oneLine(blank(evidence.provenance().canonicalUrl(), "")),
                 RecipeServingsScaler.validServings(evidence.servings()) == null ? "" : evidence.servings(),
-                String.join("\n", recipe.ingredients()),
-                String.join("\n", recipe.steps()),
-                String.join(", ", recipe.coreIngredients()),
-                String.join(", ", recipe.optionalIngredients()),
-                String.join(", ", recipe.healthRiskTags()));
+                listLines(recipe.ingredients()),
+                listLines(recipe.steps()),
+                oneLine(String.join(", ", recipe.coreIngredients())),
+                oneLine(String.join(", ", recipe.optionalIngredients())),
+                oneLine(String.join(", ", recipe.healthRiskTags())));
+    }
+
+    // 웹에서 온 재료·단계 한 줄이 "description: 땅콩 10g"이나 "steps"처럼 문서의 제어 줄로 다시 읽히면
+    // 재료가 설명 칸으로 옮겨져 알레르기 검사에서 빠집니다(2026-11-06 보안 점검). 항목마다 "- "를 붙여 늘 목록 항목으로 읽히게 하고,
+    // 항목 안의 줄바꿈은 공백으로 바꿔 한 항목이 여러 줄(새 제어 줄)로 쪼개지지 않게 합니다.
+    static String listLines(List<String> values) {
+        return values == null ? "" : values.stream()
+                .map(value -> oneLine(value).replaceFirst("^[-*]\\s*", ""))
+                .filter(value -> !value.isBlank())
+                .map(value -> "- " + value)
+                .collect(java.util.stream.Collectors.joining("\n"));
+    }
+
+    static String oneLine(String value) {
+        return value == null ? "" : value.replaceAll("\\R", " ").trim();
     }
 
     private String exactDuplicateKey(RecipeSourceCandidate candidate) {
@@ -744,6 +759,7 @@ class StructuredRecipePageAdapter {
 class InMemoryRecipeSourceCache {
 
     private static final Duration DEFAULT_TTL = Duration.ofHours(6);
+    static final int MAX_ENTRIES = 2_000;
 
     private final Map<String, CachedRecipeEvidence> cache = new ConcurrentHashMap<>();
 
@@ -777,6 +793,15 @@ class InMemoryRecipeSourceCache {
             return;
         }
         LocalDateTime now = LocalDateTime.now();
+        // 요리·뺀 재료 조합을 계속 바꿔 요청해도 메모리가 끝없이 늘지 않게, 넘치면 만료된 것을 먼저 지우고
+        // 그래도 많으면 비웁니다(DB 근거가 따로 있어 캐시는 다시 채워짐, 2026-11-06 보안 점검).
+        if (cache.size() >= MAX_ENTRIES && !cache.containsKey(key)) {
+            cache.entrySet().removeIf(entry -> entry.getValue().expiresAt().isBefore(now));
+            if (cache.size() >= MAX_ENTRIES) {
+                cache.clear();
+            }
+            supporting.keySet().retainAll(cache.keySet());
+        }
         cache.put(key, new CachedRecipeEvidence(
                 candidate.source(),
                 candidate.originalRecipe(),

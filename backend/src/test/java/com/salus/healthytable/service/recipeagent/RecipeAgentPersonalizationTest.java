@@ -240,7 +240,7 @@ class RecipeAgentPersonalizationTest {
         assertThat(decision.decisionType()).isEqualTo(RecipeDecisionType.ALLOW_WITH_NOTICE);
         assertThat(decision.conflicts()).noneMatch(conflict -> conflict.type() == RecipeConflictType.MEDICATION_INTERACTION);
         assertThat(decision.userNotices())
-                .contains("확인된 공식 음식 상호작용 근거를 찾지 못했습니다.")
+                .contains("복용약과 음식의 상호작용 조회가 꺼져 있어 공식 근거를 조회하지 않았습니다.")
                 .contains("상호작용이 없다는 의미는 아닙니다.")
                 .contains("약 복용 방식은 의사 또는 약사에게 확인하세요.");
     }

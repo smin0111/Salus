@@ -51,6 +51,14 @@ public class ApiSecurityErrorHandler {
         }
     }
 
+    /**
+     * 토큰을 확인하는 중 서버 쪽 오류(DB 장애 등)가 났을 때 씁니다. 게스트로 넘기지 않고 503을 줍니다.
+     */
+    public void handleAuthenticationUnavailable(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        writeError(response, request, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "AUTH_UNAVAILABLE",
+                "로그인 상태를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.");
+    }
+
     private void writeError(HttpServletResponse response, HttpServletRequest request, int status, String error,
             String message) throws IOException {
         // 이미 응답이 클라이언트로 전송되기 시작했다면 상태 코드나 본문을 바꿀 수 없으므로 그대로 종료합니다.

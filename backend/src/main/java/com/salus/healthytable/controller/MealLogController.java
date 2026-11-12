@@ -5,6 +5,7 @@ import com.salus.healthytable.domain.User;
 import com.salus.healthytable.dto.MealLogDTO;
 import com.salus.healthytable.repository.UserRepository;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
+import com.salus.healthytable.service.ConsentService;
 import com.salus.healthytable.service.MealLogService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,7 @@ public class MealLogController {
     private final MealLogService mealLogService;
     private final UserRepository userRepository;
     private final AuthenticatedUserProvider authenticatedUserProvider;
+    private final ConsentService consentService;
 
     // 로그인 사용자 ID로 User 엔티티를 조회합니다.
     private User getCurrentUser() {
@@ -47,6 +49,8 @@ public class MealLogController {
      */
     @PostMapping
     public ResponseEntity<MealLog> saveMealLog(@RequestBody MealLogDTO dto) {
+        // 식단 저장·분석은 건강정보를 쓰는 기능이라 필수 동의가 있어야 합니다(조회는 본인 열람이라 막지 않음, 2026-11-06 보안 점검).
+        consentService.requireConsent(authenticatedUserProvider.requireUserId());
         User user = getCurrentUser();
         // @RequestBody가 프론트엔드에서 보낸 JSON을 MealLogDTO로 변환해 줍니다.
         return ResponseEntity.ok(mealLogService.saveOrUpdateMealLog(user, dto));
@@ -57,6 +61,7 @@ public class MealLogController {
      */
     @GetMapping("/analysis/monthly")
     public ResponseEntity<String> getMonthlyAnalysis(@RequestParam int year, @RequestParam int month) {
+        consentService.requireConsent(authenticatedUserProvider.requireUserId());
         User user = getCurrentUser();
         return ResponseEntity.ok(mealLogService.getMonthlyAnalysis(user, year, month));
     }

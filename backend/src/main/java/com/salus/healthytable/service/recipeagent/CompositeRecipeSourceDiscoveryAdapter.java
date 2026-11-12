@@ -159,7 +159,8 @@ class CompositeRecipeSourceDiscoveryAdapter implements RecipeSourceDiscoveryPort
         }
         // 표시용 정리: 다른 변형 레시피 단계("김치비빔국수는 …")를 빼고 원문 소제목 번호("오이 초무침①")를 정리합니다.
         String sourceTitle = top.source() == null ? "" : top.source().title();
-        summaries = summaries.map(steps -> RecipeStepSummarizer.tidySteps(plan.dishName(), sourceTitle, steps));
+        summaries = summaries.map(steps -> RecipeStepSummarizer.tidySteps(plan.dishName(), sourceTitle, steps,
+                top.originalRecipe() == null ? List.of() : top.originalRecipe().ingredients()));
         if (summaries.isPresent()) {
             RecipeSourceCandidate summarized = withStepSummaries(top, summaries.get());
             sourceCache.put(cacheKey, summarized);

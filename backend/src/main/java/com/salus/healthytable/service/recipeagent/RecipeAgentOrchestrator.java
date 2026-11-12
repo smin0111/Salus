@@ -288,7 +288,7 @@ public class RecipeAgentOrchestrator {
         if (detailFollowUp && !evaluation.blocked()) {
             Optional<List<String>> tips = beginnerGuide == null
                     ? Optional.empty()
-                    : beginnerGuide.explain(evaluation.personalized(), context.allergies());
+                    : beginnerGuide.explain(evaluation.personalized(), avoidInTips(context));
             if (tips.isPresent()) {
                 stepTips = tips.get();
                 infoNotices.add("단계마다 덧붙인 초보 팁은 Salus가 쓴 설명이라 원문에 없는 내용이에요. 분량·시간·불 세기는 원래 단계를 따라 주세요.");
@@ -753,5 +753,13 @@ public class RecipeAgentOrchestrator {
             List<RecipeSourceDocument> sources,
             RecipeResearchStatus status
     ) {
+    }
+
+    // 초보 팁이 다시 꺼내면 안 되는 재료: 등록 알레르기와 이번에 빼 달라고 한 재료("양파 빼줘")입니다.
+    // 팁은 원문에 없는 설명이라, 뺀 재료를 다시 넣으라고 하면 걸러야 합니다(2026-11-06 보안 점검).
+    static List<String> avoidInTips(UserRecipeContext context) {
+        java.util.LinkedHashSet<String> avoid = new java.util.LinkedHashSet<>(context.allergies());
+        avoid.addAll(context.explicitlyExcludedIngredients());
+        return List.copyOf(avoid);
     }
 }

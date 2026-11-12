@@ -570,7 +570,10 @@ export default function FeedScreen({ onBack, webMode = false }) {
   );
 
   const likeButton = (post) => (post.mine ? (
-    <Text style={styles.likeCount}>♥ {post.likeCount || 0}</Text>
+    <View style={styles.metric} accessible accessibilityLabel={`좋아요 ${post.likeCount || 0}개`}>
+      <Ionicons name="heart-outline" size={18} color={colors.textSecondary} />
+      <Text style={styles.likeCount}>{post.likeCount || 0}</Text>
+    </View>
   ) : (
     <TouchableOpacity onPress={() => toggleLike(post)} disabled={!!likeBusy[post.id]} style={styles.likeButton}
       accessibilityRole="button" accessibilityLabel={post.likedByMe ? '좋아요 취소' : '좋아요'}
@@ -618,7 +621,10 @@ export default function FeedScreen({ onBack, webMode = false }) {
               <AllergenBadge allergen={item.allergen} />
               <View style={styles.spacer} />
               {likeButton(item)}
-              <Text style={styles.likeCount}>  💬 {item.commentCount || 0}</Text>
+              <View style={styles.metric} accessible accessibilityLabel={`댓글 ${item.commentCount || 0}개`}>
+                <Ionicons name="chatbubble-outline" size={16} color={colors.textSecondary} />
+                <Text style={styles.likeCount}>{item.commentCount || 0}</Text>
+              </View>
             </View>
           </Card>
         ))}
@@ -812,6 +818,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   spacer: { flex: 1 },
   likeButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4 },
+  metric: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 },
   likeCount: { fontSize: 13, color: colors.textSecondary, marginLeft: 4 },
   badge: { alignSelf: 'flex-start', fontSize: 12, fontWeight: '700', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, overflow: 'hidden', marginTop: 4 },
   originBadge: { alignSelf: 'flex-start', fontSize: 12, fontWeight: '700', color: colors.secondary, backgroundColor: colors.secondaryLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, overflow: 'hidden', marginBottom: 6 },

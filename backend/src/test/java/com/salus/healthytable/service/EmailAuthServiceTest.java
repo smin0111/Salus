@@ -116,7 +116,7 @@ class EmailAuthServiceTest {
     void weakPasswordsAreRejectedBeforeCodeCheck() {
         for (String password : new String[]{"short1", "aaaaaaaaaa", "abababab12".substring(0, 8), "user@example.test", "user1234".repeat(10)}) {
             String email = password.equals("user1234") ? "user1234@example.test" : "user@example.test";
-            assertThatThrownBy(() -> service.signup(email, "123456", password, null))
+            assertThatThrownBy(() -> service.signup(email, "123456", password, null, "127.0.0.1"))
                     .isInstanceOfSatisfying(EmailAuthService.EmailAuthException.class,
                             e -> assertThat(e.getCode()).isEqualTo("WEAK_PASSWORD"));
         }
@@ -126,7 +126,7 @@ class EmailAuthServiceTest {
     // 이메일 앞부분과 같은 비밀번호도 거절합니다.
     @Test
     void passwordEqualToEmailLocalPartIsRejected() {
-        assertThatThrownBy(() -> service.signup("myname123@example.test", "123456", "MyName123", null))
+        assertThatThrownBy(() -> service.signup("myname123@example.test", "123456", "MyName123", null, "127.0.0.1"))
                 .isInstanceOfSatisfying(EmailAuthService.EmailAuthException.class,
                         e -> assertThat(e.getCode()).isEqualTo("WEAK_PASSWORD"));
     }
@@ -143,11 +143,11 @@ class EmailAuthServiceTest {
         when(txHelper.signup("bad@example.test", "000000", "salus-pass-1", "bad"))
                 .thenReturn(new EmailAuthTxHelper.SignupOutcome(EmailAuthTxHelper.SignupResult.INVALID_CODE, null));
 
-        assertThat(service.signup("new@example.test", "123456", "salus-pass-1", " ")).isSameAs(user);
-        assertThatThrownBy(() -> service.signup("old@example.test", "123456", "salus-pass-1", null))
+        assertThat(service.signup("new@example.test", "123456", "salus-pass-1", " ", "127.0.0.1")).isSameAs(user);
+        assertThatThrownBy(() -> service.signup("old@example.test", "123456", "salus-pass-1", null, "127.0.0.1"))
                 .isInstanceOfSatisfying(EmailAuthService.EmailAuthException.class,
                         e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT));
-        assertThatThrownBy(() -> service.signup("bad@example.test", "000000", "salus-pass-1", null))
+        assertThatThrownBy(() -> service.signup("bad@example.test", "000000", "salus-pass-1", null, "127.0.0.1"))
                 .isInstanceOfSatisfying(EmailAuthService.EmailAuthException.class,
                         e -> assertThat(e.getCode()).isEqualTo("CODE_INVALID"));
     }
@@ -169,5 +169,18 @@ class EmailAuthServiceTest {
         assertThatThrownBy(() -> service.login("a@example.test", "wrong-pass", IP, clock.instant()))
                 .isInstanceOfSatisfying(EmailAuthService.EmailAuthException.class,
                         e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
+    }
+
+    // 가입 코드 확인은 IP마다 10분에 20번까지입니다. 틀린 코드를 마구 보내 남의 코드 시도 횟수를 소진하거나
+    // DB 연결을 붙잡는 것을 줄입니다(2026-11-06 보안 점검).
+    @Test
+    void codeChecksAreLimitedPerIp() {
+        for (int i = 0; i < 20; i++) {
+            assertThatThrownBy(() -> service.signup("x@example.test", "123456", "short", null, "10.0.0.9"))
+                    .isInstanceOf(EmailAuthService.EmailAuthException.class);
+        }
+        assertThatThrownBy(() -> service.signup("x@example.test", "123456", "salus-pass-1", null, "10.0.0.9"))
+                .isInstanceOfSatisfying(EmailAuthService.EmailAuthException.class,
+                        e -> assertThat(e.getStatus().value()).isEqualTo(429));
     }
 }

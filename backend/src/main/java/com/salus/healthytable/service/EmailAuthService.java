@@ -48,6 +48,9 @@ public class EmailAuthService {
     private static final int EMAIL_MAILS_PER_HOUR = 5;
     private static final int IP_MAIL_REQUESTS_PER_HOUR = 10;
     private static final int IP_LOGINS_PER_10_MINUTES = 20;
+    // 가입·비밀번호 재설정의 코드 확인도 IP마다 제한합니다. 틀린 코드를 마구 보내 DB 연결을 붙잡거나
+    // 남의 이메일 코드 시도 횟수를 소진하는 것을 줄입니다(2026-11-06 보안 점검).
+    private static final int IP_CODE_CHECKS_PER_10_MINUTES = 20;
 
     private final EmailAuthTxHelper txHelper;
     private final AuthMailService mailService;
@@ -58,6 +61,7 @@ public class EmailAuthService {
     private final SlidingWindow emailMailWindow = new SlidingWindow();
     private final SlidingWindow ipMailWindow = new SlidingWindow();
     private final SlidingWindow ipLoginWindow = new SlidingWindow();
+    private final SlidingWindow ipCodeWindow = new SlidingWindow();
 
     /** 화면에 그대로 보여 줄 수 있는 오류입니다(error 코드와 상태). */
     public static class EmailAuthException extends RuntimeException {
@@ -118,7 +122,8 @@ public class EmailAuthService {
     }
 
     /** 가입하고 바로 로그인합니다. 반환한 회원으로 토큰을 발급합니다. */
-    public User signup(String rawEmail, String code, String password, String rawName) {
+    public User signup(String rawEmail, String code, String password, String rawName, String clientIp) {
+        requireCodeCheckAllowed(clientIp);
         String email = normalizeEmail(rawEmail);
         validatePassword(password, email);
         String name = normalizeName(rawName, email);
@@ -162,7 +167,8 @@ public class EmailAuthService {
         return new LoginSession(outcome.user(), outcome.refreshToken());
     }
 
-    public void resetPassword(String rawEmail, String code, String newPassword) {
+    public void resetPassword(String rawEmail, String code, String newPassword, String clientIp) {
+        requireCodeCheckAllowed(clientIp);
         String email = normalizeEmail(rawEmail);
         validatePassword(newPassword, email);
         switch (txHelper.resetPassword(email, code, newPassword)) {
@@ -171,6 +177,12 @@ public class EmailAuthService {
             case EXPIRED_CODE -> throw codeExpired();
             case TOO_MANY_ATTEMPTS -> throw codeTooManyAttempts();
             case INVALID_CODE -> throw codeInvalid();
+        }
+    }
+
+    private void requireCodeCheckAllowed(String clientIp) {
+        if (!ipCodeWindow.tryAcquire("ip:" + clientIp, IP_CODE_CHECKS_PER_10_MINUTES, Duration.ofMinutes(10), clock)) {
+            throw tooMany();
         }
     }
 

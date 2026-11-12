@@ -104,6 +104,8 @@ class DefaultSafeWebPageFetcher implements SafeWebPageFetcher {
             HttpResponse<InputStream> response = send(current, remainingUntil(deadline));
             int status = response.statusCode();
             if (isRedirect(status)) {
+                // 리다이렉트·오류·HTML이 아닌 응답의 본문은 읽지 않으므로 바로 닫아 연결이 남지 않게 합니다(2026-11-06 보안 점검).
+                closeQuietly(response.body());
                 Optional<String> location = response.headers().firstValue("location");
                 if (location.isEmpty()) {
                     throw new SafeWebPageFetchException("redirect response without Location");
@@ -112,10 +114,16 @@ class DefaultSafeWebPageFetcher implements SafeWebPageFetcher {
                 continue;
             }
             if (status < 200 || status >= 300) {
+                closeQuietly(response.body());
                 throw new SafeWebPageFetchException("non-success status: " + status);
             }
             String contentType = response.headers().firstValue("content-type").orElse("");
-            validateHtmlContentType(contentType);
+            try {
+                validateHtmlContentType(contentType);
+            } catch (SafeWebPageFetchException e) {
+                closeQuietly(response.body());
+                throw e;
+            }
             byte[] bytes = readWithinDeadline(response.body(), deadline);
             String body = new String(bytes, StandardCharsets.UTF_8);
             return new WebPageFetchResult(
@@ -185,6 +193,10 @@ class DefaultSafeWebPageFetcher implements SafeWebPageFetcher {
             throw new SafeWebPageFetchException("empty redirect location");
         }
         URI next = current.resolve(location);
+        // HTTPS로 받던 페이지가 HTTP로 넘기면 중간에서 본문을 바꿀 수 있으므로 따라가지 않습니다(2026-11-06 보안 점검).
+        if ("https".equalsIgnoreCase(current.getScheme()) && "http".equalsIgnoreCase(next.getScheme())) {
+            throw new SafeWebPageFetchException("https to http redirect is not allowed");
+        }
         return validateExternalUri(next);
     }
 

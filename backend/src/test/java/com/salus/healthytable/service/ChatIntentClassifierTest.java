@@ -35,4 +35,14 @@ class ChatIntentClassifierTest {
         assertThat(classifier.classify("아침메뉴 뭐가 좋을까")).isEqualTo(ChatIntentClassifier.ChatIntent.MENU_RECOMMENDATION);
         assertThat(classifier.classify("점심 식사로 먹을 거")).isEqualTo(ChatIntentClassifier.ChatIntent.MENU_RECOMMENDATION);
     }
+
+    @Test
+    void aFoodCategoryDoesNotDetermineTheRequestedAction() {
+        assertThat(classifier.classify("자몽주스는 어떻게 보관해?"))
+                .isEqualTo(ChatIntentClassifier.ChatIntent.COOKING_QUESTION);
+        assertThat(classifier.classify("청포도 에이드"))
+                .isEqualTo(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        assertThat(classifier.classify("자몽주스 만드는 법 알려줘"))
+                .isEqualTo(ChatIntentClassifier.ChatIntent.RECIPE_REQUEST);
+    }
 }

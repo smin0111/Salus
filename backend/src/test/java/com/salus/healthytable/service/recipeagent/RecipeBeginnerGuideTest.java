@@ -48,6 +48,20 @@ class RecipeBeginnerGuideTest {
         assertThat(tips).containsExactly("반죽이 주르륵 흐르지 않고 천천히 떨어지면 알맞아요.", "", "", "");
     }
 
+    // "양파 빼줘"로 뺀 재료를 다시 넣으라는 팁은 버립니다. 오케스트레이터는 알레르기와 뺀 재료를 함께 넘깁니다(2026-11-06 보안 점검).
+    @Test
+    void dropsTipsReintroducingExplicitlyExcludedIngredient() {
+        UserRecipeContext context = new UserRecipeContext(1L, List.of(), List.of(), List.of(), List.of(), List.of(), List.of("양파"));
+        List<String> tips = guide(List.of(
+                "양파를 조금 넣으면 단맛이 나니 주의하세요.",
+                "김치 국물이 반죽에 고르게 퍼지면 다음 단계로 넘어가요.",
+                "", ""))
+                .explain(kimchiPancake, RecipeAgentOrchestrator.avoidInTips(context)).orElseThrow();
+
+        assertThat(tips.get(0)).isEmpty();
+        assertThat(tips.get(1)).isEqualTo("김치 국물이 반죽에 고르게 퍼지면 다음 단계로 넘어가요.");
+    }
+
     // 효과만 말하는 팁은 버리고, 확인 방법이나 주의를 말하는 팁만 남깁니다(2026-10-12 봉골레).
     @Test
     void keepsOnlyTipsWithPracticalCues() {

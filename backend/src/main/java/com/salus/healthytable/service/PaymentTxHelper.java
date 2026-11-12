@@ -35,6 +35,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PaymentTxHelper {
 
+    static final int MAX_PENDING_ORDERS_PER_DAY = 10;
+
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     private final PaymentRepository paymentRepository;
@@ -45,12 +47,19 @@ public class PaymentTxHelper {
     /** 회원의 결제 주문을 만듭니다. 주문번호·금액·기간은 서버가 정합니다. 이미 PLUS 이용 중이면 409입니다. */
     @Transactional
     public PaymentOrder createOrder(Long userId, String productCode, int amount, int plusDays) {
-        User user = userRepository.findById(userId)
+        // 회원 행을 잠가 같은 회원의 주문 생성을 한 줄로 세웁니다. 그래야 아래 하루 건수 확인을 동시 요청으로 넘지 못합니다.
+        User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
         LocalDateTime now = LocalDateTime.now(clock);
         if (user.hasActivePlus(now)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "이미 PLUS를 이용 중이에요(" + user.getPlusExpiresAt().format(DATE) + "까지). 기간이 끝난 뒤 다시 결제할 수 있어요.");
+        }
+        // 결제창만 열고 끝내지 않은 주문을 끝없이 만들지 못하게 하루 10건으로 제한합니다(2026-11-06 보안 점검).
+        if (paymentOrderRepository.countByUserIdAndStatusAndCreatedAtAfter(
+                userId, PaymentOrderStatus.PENDING, now.minusDays(1)) >= MAX_PENDING_ORDERS_PER_DAY) {
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                    "결제를 너무 여러 번 시작했어요. 진행 중인 결제를 마치거나 내일 다시 시도해 주세요.");
         }
         PaymentOrder order = PaymentOrder.builder()
                 // 추측할 수 없는 무작위 주문번호입니다(앱이 시각으로 만들던 번호를 대신함).
@@ -96,7 +105,8 @@ public class PaymentTxHelper {
         order.setImpUid(transactionId);
         order.setPaidAt(now);
 
-        User user = order.getUser();
+        // 회원 행을 잠근 뒤 만료일을 읽습니다. 같은 회원의 다른 주문 완료·취소가 동시에 와도 기간 계산이 덮어쓰이지 않습니다(2026-11-06 보안 점검).
+        User user = lockedUser(order);
         if (user != null) {
             // 남은 기간이 있으면 그 뒤에 이어 붙이고, 없으면 지금부터 셉니다.
             LocalDateTime base = user.hasActivePlus(now) ? user.getPlusExpiresAt() : now;
@@ -131,10 +141,21 @@ public class PaymentTxHelper {
     @Transactional
     public boolean cancelOrder(Long orderId, String transactionId) {
         PaymentOrder order = paymentOrderRepository.findByIdForUpdate(orderId).orElse(null);
-        if (order == null || order.getStatus() != PaymentOrderStatus.PAID || !transactionId.equals(order.getImpUid())) {
+        if (order == null) {
             return false;
         }
         LocalDateTime now = LocalDateTime.now(clock);
+        // 결제 확인(verify)이 PAID를 본 직후 환불되고, 취소 알림이 완료 저장보다 먼저 오면 주문은 아직 PENDING입니다.
+        // 이때 무시하면 뒤이어 완료가 저장돼 환불받은 결제로 PLUS가 생깁니다. 주문을 취소로 바꿔 두면 완료가 거절됩니다(2026-11-06 보안 점검).
+        if (order.getStatus() == PaymentOrderStatus.PENDING) {
+            order.setStatus(PaymentOrderStatus.CANCELLED);
+            order.setCancelledAt(now);
+            paymentOrderRepository.save(order);
+            return true;
+        }
+        if (order.getStatus() != PaymentOrderStatus.PAID || !transactionId.equals(order.getImpUid())) {
+            return false;
+        }
         order.setStatus(PaymentOrderStatus.CANCELLED);
         order.setCancelledAt(now);
         paymentOrderRepository.save(order);
@@ -144,7 +165,7 @@ public class PaymentTxHelper {
             paymentRepository.save(payment);
         });
 
-        User user = order.getUser();
+        User user = lockedUser(order);
         if (user != null && user.getPlusExpiresAt() != null) {
             LocalDateTime reverted = user.getPlusExpiresAt().minusDays(order.getPlusDays());
             if (reverted.isAfter(now)) {
@@ -156,5 +177,10 @@ public class PaymentTxHelper {
             userRepository.save(user);
         }
         return true;
+    }
+
+    private User lockedUser(PaymentOrder order) {
+        User user = order.getUser();
+        return user == null ? null : userRepository.findByIdForUpdate(user.getId()).orElse(null);
     }
 }

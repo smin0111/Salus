@@ -22,6 +22,15 @@ class RecipeRequestPlannerDishNameTest {
         assertThat(planner.plan("돼지고기 없는 김치찌개 레시피", false).dishName()).isEqualTo("김치찌개");
     }
 
+    // 핵심 재료 빼기·바꾸기 후속 요청을 바꾼 문장(ChatFollowUpService.coreRemovalRecipeRequest)도 요리 이름과 뺄 재료가 바르게 잡힙니다.
+    @Test
+    void rewrittenCoreEditRequestsKeepDishAndAvoidedIngredient() {
+        RecipeResearchPlan removal = planner.plan("돼지고기 빼고 김치찌개 2인분 레시피 알려줘", false);
+        assertThat(removal.dishName()).isEqualTo("김치찌개");
+        RecipeResearchPlan substitution = planner.plan("돼지고기 빼고 참치 김치찌개 2인분 레시피 알려줘", false);
+        assertThat(substitution.dishName()).isEqualTo("참치 김치찌개");
+    }
+
     // 인분 표현은 요리 이름에서 뺍니다(2026-10-17 "우유 알레르기 있어. 2인분 파스타 레시피 알려줘"가 "2인분 파스타"로 검색·표시).
     @Test
     void servingsWordsAreRemovedFromDishName() {

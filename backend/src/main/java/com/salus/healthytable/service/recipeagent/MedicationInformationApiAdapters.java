@@ -3,6 +3,8 @@ package com.salus.healthytable.service.recipeagent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Element;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -1432,6 +1434,27 @@ class OpenFdaDrugLabelAdapter implements OpenFdaDrugLabelPort {
         for (String value : list(result, field)) {
             if (!value.isBlank()) {
                 sections.add(new MedicationLabelSection(type, value));
+            }
+        }
+        // Newlines keep cells independent during extraction. Row boundaries let the
+        // extractor recognize a possible association without asserting one.
+        for (String table : list(result, field + "_table")) {
+            for (Element row : Jsoup.parseBodyFragment(table).select("tr")) {
+                List<String> cells = new ArrayList<>();
+                for (Element cell : row.children()) {
+                    if (!cell.normalName().equals("td") && !cell.normalName().equals("th")) {
+                        continue;
+                    }
+                    Element content = cell.clone();
+                    content.select("table").remove();
+                    String value = content.text();
+                    if (!value.isBlank()) {
+                        cells.add(value);
+                    }
+                }
+                if (!cells.isEmpty()) {
+                    sections.add(new MedicationLabelSection(type, String.join("\n", cells), true));
+                }
             }
         }
     }

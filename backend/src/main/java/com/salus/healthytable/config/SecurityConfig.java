@@ -133,9 +133,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/chat/progress/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/chat/cancel/*").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
-                        // 홈 화면 공개 레시피 조회와 게스트 추천만 열어두고, 향후 추가될 쓰기 API는 기본 인증 규칙을 따르게 합니다.
+                        // 홈 화면 공개 레시피 조회만 열어두고, 그 밖의 레시피 API는 기본 인증 규칙을 따르게 합니다.
                         .requestMatchers(HttpMethod.GET, "/api/recipes/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/recipes/recommend").permitAll()
                         .requestMatchers("/api/health-checkups/**").authenticated()
                         .requestMatchers("/api/users/**").authenticated()
                         .anyRequest().authenticated()

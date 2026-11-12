@@ -417,11 +417,15 @@ enum OpenFdaLabelMatchStatus {
     PARSING_FAILED
 }
 
-// 라벨 섹션 한 개(종류와 원문)
+// 라벨 섹션 또는 표의 한 행. 표는 줄바꿈으로 셀 경계를 보존합니다.
 record MedicationLabelSection(
         MedicationLabelSectionType type,
-        String originalText
+        String originalText,
+        boolean tableRow
 ) {
+    MedicationLabelSection(MedicationLabelSectionType type, String originalText) {
+        this(type, originalText, false);
+    }
 }
 
 // 음식 상호작용 근거를 찾을 라벨 섹션 종류(약물 상호작용, 음식 안전 경고, 환자 정보, 용법·용량, 경고, 주의)
@@ -470,6 +474,7 @@ record MedicationFoodEvidence(
 // 음식이 약에 주는 영향/권고 종류(피하기, 제한, 복용 시간 분리, 식후/공복 복용, 흡수·효과 증감, 모니터링 등)
 enum MedicationFoodEffectType {
     AVOID,
+    AVOID_STANDALONE,
     LIMIT,
     SEPARATE_TIMING,
     TAKE_WITH_FOOD,
@@ -614,14 +619,13 @@ enum MedicationResearchStatus {
 // 캐시에 저장한 약물 근거와 만료 시각
 record CachedMedicationEvidence(
         NormalizedMedication medication,
-        List<MedicationFoodEvidence> evidences,
+        MedicationEvidenceLookup lookup,
         List<MedicationEvidenceSource> sources,
         String contentHash,
         LocalDateTime fetchedAt,
         LocalDateTime expiresAt
 ) {
     CachedMedicationEvidence {
-        evidences = evidences == null ? List.of() : List.copyOf(evidences);
         sources = sources == null ? List.of() : List.copyOf(sources);
     }
 }

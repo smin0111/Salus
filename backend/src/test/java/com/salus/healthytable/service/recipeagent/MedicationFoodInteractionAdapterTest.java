@@ -3,6 +3,7 @@ package com.salus.healthytable.service.recipeagent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -120,6 +121,176 @@ class MedicationFoodInteractionAdapterTest {
             assertThat(conflict.severity()).isEqualTo(ConflictSeverity.BLOCKING);
             assertThat(conflict.ingredient()).contains("자몽");
         });
+    }
+
+    @Test
+    void simvastatinTableInstructionMatchesKoreanGrapefruitJuiceIngredient() {
+        OpenFdaDrugLabelAdapter labels = new OpenFdaDrugLabelAdapter(WebClient.builder(), new ObjectMapper(), false, "", 5000);
+        DrugLabelEvidenceResult label = labels.parseLabelResponse("""
+                {"results":[{
+                  "set_id":"6de29f85-92e9-4a28-9bcc-6789f2f698de",
+                  "openfda":{"generic_name":["SIMVASTATIN"]},
+                  "drug_interactions_table":[
+                    "<table><tr><th>Grapefruit Juice</th></tr><tr><td>Intervention:</td><td>Avoid grapefruit juice when taking simvastatin.</td></tr><tr><td>Milk</td></tr></table>"
+                  ]
+                }]}
+                """);
+        OfficialMedicationFoodInteractionAdapter adapter = adapter(
+                new FakeMfdsPort().with("simvastatin", mfdsFound("simvastatin", List.of("simvastatin"), "", "", "")),
+                new FakeOpenFdaPort().with("simvastatin", label),
+                new FakeRxNormPort(),
+                true);
+
+        MedicationInteractionResult result = adapter.check(List.of("simvastatin"), List.of("자몽주스 100ml"));
+
+        assertThat(result.status()).isEqualTo(InteractionStatus.CONFIRMED_CONFLICT);
+        assertThat(result.conflicts()).singleElement().satisfies(conflict ->
+                assertThat(conflict.ingredient()).isEqualTo("자몽주스 100ml"));
+        assertThat(adapter.check(List.of("simvastatin"), List.of("우유 100ml")).status())
+                .isEqualTo(InteractionStatus.NO_MATCHING_INTERACTION_FOUND);
+    }
+
+    @Test
+    void vitaminKIntakeConditionKeepsTheRecipeAndIdentifiesTheMedication() {
+        DrugLabelEvidenceResult label = fdaFound("vitamin-k", "", "warfarin", List.of("warfarin"),
+                new MedicationLabelSection(MedicationLabelSectionType.INFORMATION_FOR_PATIENTS,
+                        "Maintain a consistent intake of foods containing vitamin K."));
+        OfficialMedicationFoodInteractionAdapter adapter = adapter(
+                new FakeMfdsPort().with("warfarin", mfdsFound("warfarin", List.of("warfarin"), "", "", "")),
+                new FakeOpenFdaPort().with("warfarin", label), new FakeRxNormPort(), true);
+
+        MedicationInteractionResult result = adapter.check(List.of("warfarin"), List.of("시금치 50g"));
+
+        assertThat(result.status()).isEqualTo(InteractionStatus.CAUTION);
+        assertThat(result.conflicts()).isEmpty();
+        assertThat(result.notices()).anyMatch(note -> note.contains("섭취량을 일정하게"))
+                .anyMatch(note -> note.contains("warfarin") && note.contains("https://"));
+    }
+
+    @Test
+    void standaloneDairyRestrictionDoesNotBecomeABlanketRecipeBlock() {
+        DrugLabelEvidenceResult label = fdaFound("dairy-condition", "", "ciprofloxacin", List.of("ciprofloxacin"),
+                new MedicationLabelSection(MedicationLabelSectionType.DOSAGE_AND_ADMINISTRATION,
+                        "Concomitant administration with dairy products or calcium-fortified juices alone should be avoided."));
+        OfficialMedicationFoodInteractionAdapter adapter = adapter(
+                new FakeMfdsPort().with("ciprofloxacin", mfdsFound("ciprofloxacin", List.of("ciprofloxacin"), "", "", "")),
+                new FakeOpenFdaPort().with("ciprofloxacin", label), new FakeRxNormPort(), true);
+
+        MedicationInteractionResult result = adapter.check(List.of("ciprofloxacin"), List.of("우유 100ml", "칼슘 강화 주스"));
+
+        assertThat(result.status()).isEqualTo(InteractionStatus.FOOD_INTAKE_CONDITION);
+        assertThat(result.conflicts()).isEmpty();
+        assertThat(result.notices()).anyMatch(note -> note.contains("만으로 약을 복용하는 경우"));
+    }
+
+    @Test
+    void teaAliasesDoNotMatchSteakOrBrisket() {
+        OfficialMedicationFoodInteractionAdapter adapter = adapter(
+                new FakeMfdsPort().with("확인정", mfdsFound("확인정", List.of("성분"), "Avoid tea.", "", "")),
+                new FakeOpenFdaPort(), new FakeRxNormPort(), true);
+
+        assertThat(adapter.check(List.of("확인정"), List.of("steak 200g", "차돌박이 200g")).conflicts()).isEmpty();
+        assertThat(adapter.check(List.of("확인정"), List.of("tea 200ml")).status())
+                .isEqualTo(InteractionStatus.CONFIRMED_CONFLICT);
+    }
+
+    @Test
+    void tyramineWarningAppliesToListedFoodsAndNotEveryMeal() {
+        DrugLabelEvidenceResult label = fdaFound("tyramine", "", "tranylcypromine", List.of("tranylcypromine"),
+                new MedicationLabelSection(MedicationLabelSectionType.INFORMATION_FOR_PATIENTS,
+                        "Avoid food containing significant tyramine."));
+        OfficialMedicationFoodInteractionAdapter adapter = adapter(
+                new FakeMfdsPort().with("tranylcypromine", mfdsFound(
+                        "tranylcypromine", List.of("tranylcypromine"), "", "", "")),
+                new FakeOpenFdaPort().with("tranylcypromine", label), new FakeRxNormPort(), true);
+
+        assertThat(adapter.check(List.of("tranylcypromine"), List.of("숙성 치즈 50g", "살라미 20g")).status())
+                .isEqualTo(InteractionStatus.CONFIRMED_CONFLICT);
+        assertThat(adapter.check(List.of("tranylcypromine"), List.of("밥 200g", "일반 치즈 50g")).conflicts())
+                .isEmpty();
+    }
+
+    @Test
+    void levothyroxineMealAndSupplementDirectionsStayConditions() {
+        DrugLabelEvidenceResult label = fdaFound("intake-timing", "", "levothyroxine", List.of("levothyroxine"),
+                new MedicationLabelSection(MedicationLabelSectionType.DOSAGE_AND_ADMINISTRATION,
+                        "Take on an empty stomach. Separate iron supplements and calcium supplements by at least 4 hours."));
+        OfficialMedicationFoodInteractionAdapter adapter = adapter(
+                new FakeMfdsPort().with("levothyroxine", mfdsFound(
+                        "levothyroxine", List.of("levothyroxine"), "", "", "")),
+                new FakeOpenFdaPort().with("levothyroxine", label), new FakeRxNormPort(), true);
+
+        var meal = adapter.check(List.of("levothyroxine"), List.of("밥 200g"));
+        var supplements = adapter.check(List.of("levothyroxine"), List.of("밥 200g", "철분 보충제", "칼슘 보충제"));
+
+        assertThat(meal.status()).isEqualTo(InteractionStatus.FOOD_INTAKE_CONDITION);
+        assertThat(meal.notices()).anyMatch(notice -> notice.contains("공복에 복용"));
+        assertThat(supplements.status()).isEqualTo(InteractionStatus.TIMING_CONDITION);
+        assertThat(supplements.conflicts()).isEmpty();
+        assertThat(supplements.notices()).anyMatch(notice -> notice.contains("철분 보충제") && notice.contains("간격"))
+                .anyMatch(notice -> notice.contains("칼슘 보충제") && notice.contains("간격"));
+    }
+
+    @Test
+    void unverifiedAssociationBetweenTableCellsDoesNotBecomeNoMatch() {
+        OpenFdaDrugLabelAdapter labels = new OpenFdaDrugLabelAdapter(WebClient.builder(), new ObjectMapper(), false, "", 5000);
+        DrugLabelEvidenceResult label = labels.parseLabelResponse("""
+                {"results":[{
+                  "openfda":{"generic_name":["test"]},
+                  "drug_interactions_table":[
+                    "<table><tr><td>Grapefruit juice</td><td>Avoid concomitant use.</td></tr></table>"
+                  ]
+                }]}
+                """);
+        FakeOpenFdaPort fda = new FakeOpenFdaPort().with("확인정", label);
+        OfficialMedicationFoodInteractionAdapter adapter = adapter(
+                new FakeMfdsPort().with("확인정", mfdsFound("확인정", List.of("성분"), "", "", "")),
+                fda, new FakeRxNormPort(), true);
+
+        for (int attempt = 0; attempt < 2; attempt++) {
+            MedicationInteractionResult result = adapter.check(List.of("확인정"), List.of("자몽주스"));
+            assertThat(result.status()).isEqualTo(InteractionStatus.EVIDENCE_INSUFFICIENT);
+            assertThat(result.conflicts()).isEmpty();
+        }
+        assertThat(fda.calls).isEqualTo(2);
+    }
+
+    @Test
+    void sourceFailureAfterIdentificationDoesNotBecomeNoIngredientMatch() {
+        FakeMfdsPort mfds = new FakeMfdsPort()
+                .with("확인정", mfdsFound("확인정", List.of("성분"), "", "", ""));
+        FakeOpenFdaPort fda = new FakeOpenFdaPort()
+                .defaultResult(new DrugLabelEvidenceResult(MedicationDataStatus.API_FAILED, List.of(), List.of()));
+
+        OfficialMedicationFoodInteractionAdapter adapter = adapter(mfds, fda, new FakeRxNormPort(), true);
+        MedicationInteractionResult result = adapter.check(List.of("확인정"), List.of("자몽주스"));
+
+        assertThat(result.status()).isEqualTo(InteractionStatus.API_FAILED);
+        assertThat(result.notices()).anyMatch(notice -> notice.contains("공식 정보 조회 오류"))
+                .noneMatch(notice -> notice.contains("일치하는 음식 근거를 찾지 못했습니다"));
+
+        fda.defaultResult(fdaFound("recovered", "확인정", "test", List.of("test"),
+                new MedicationLabelSection(MedicationLabelSectionType.DRUG_INTERACTIONS, "Avoid grapefruit juice.")));
+        assertThat(adapter.check(List.of("확인정"), List.of("자몽주스")).status())
+                .isEqualTo(InteractionStatus.CONFIRMED_CONFLICT);
+        assertThat(adapter.check(List.of("확인정"), List.of("두부")).status())
+                .isEqualTo(InteractionStatus.NO_MATCHING_INTERACTION_FOUND);
+        assertThat(fda.calls).isEqualTo(2);
+    }
+
+    @Test
+    void multipleVerifiedLabelsRemainUnresolved() {
+        FakeMfdsPort mfds = new FakeMfdsPort()
+                .with("확인정", mfdsFound("확인정", List.of("성분"), "", "", ""));
+        FakeOpenFdaPort fda = new FakeOpenFdaPort()
+                .defaultResult(new DrugLabelEvidenceResult(MedicationDataStatus.INCOMPLETE, List.of(), List.of()));
+
+        MedicationInteractionResult result = adapter(mfds, fda, new FakeRxNormPort(), true)
+                .check(List.of("확인정"), List.of("자몽주스"));
+
+        assertThat(result.status()).isEqualTo(InteractionStatus.EVIDENCE_INSUFFICIENT);
+        assertThat(result.notices()).anyMatch(notice -> notice.contains("확인을 완료하지 못했습니다"))
+                .noneMatch(notice -> notice.contains("일치하는 음식 근거를 찾지 못했습니다"));
     }
 
     // 섭취 제한/주의, 복용 간격, 식사 조건을 서로 다른 상태로 구분해야 합니다.
@@ -359,7 +530,7 @@ class MedicationFoodInteractionAdapterTest {
 
     // 공식 조회가 꺼져 있어도 알 수 없는 약 두 개는 각각 따로 기록되어야 합니다.
     @Test
-    void twoUnknownMedicationsRemainSeparateWhenOfficialLookupIsDisabled() throws Exception {
+    void twoMedicationsRemainSeparateWhenOfficialLookupIsDisabled() throws Exception {
         OfficialMedicationFoodInteractionAdapter adapter = adapter(
                 new FakeMfdsPort(),
                 new FakeOpenFdaPort(),
@@ -368,9 +539,10 @@ class MedicationFoodInteractionAdapterTest {
 
         MedicationInteractionResult result = adapter.check(List.of("테스트약A", "테스트약B"), List.of("두부 1모"));
 
-        assertThat(result.status()).isEqualTo(InteractionStatus.UNKNOWN);
-        assertMedicationSummary(result, 0, 2, 0, 0, 0, 0);
-        assertThat(perDrugStatuses(result)).containsExactly(InteractionStatus.UNKNOWN, InteractionStatus.UNKNOWN);
+        assertThat(result.status()).isEqualTo(InteractionStatus.API_DISABLED);
+        assertMedicationSummary(result, 0, 0, 0, 0, 0, 0);
+        assertThat(perDrugStatuses(result)).containsExactly(InteractionStatus.API_DISABLED, InteractionStatus.API_DISABLED);
+        assertThat(result.notices()).anyMatch(notice -> notice.contains("공식 근거를 조회하지 않았습니다"));
         assertThat(result.notices()).contains("상호작용이 없다는 의미는 아닙니다.");
     }
 
@@ -529,7 +701,8 @@ class MedicationFoodInteractionAdapterTest {
                 new MedicationEvidenceSource(MedicationEvidenceSourceType.MFDS_EASY_DRUG, "ITEM1", "자몽주의정", "", null, LocalDateTime.now()),
                 0.95);
 
-        cache.put(cache.key(medication), medication, List.of(evidence));
+        cache.put(cache.key(medication), medication, new MedicationEvidenceLookup(
+                List.of(evidence), MedicationDataStatus.FOUND, MedicationDataStatus.NOT_FOUND, List.of()));
 
         String json = new ObjectMapper().findAndRegisterModules().writeValueAsString(cache.snapshot());
         assertThat(json).contains("자몽주의정").contains("ITEM1");
@@ -537,9 +710,9 @@ class MedicationFoodInteractionAdapterTest {
                 .doesNotContain("contextSnapshot").doesNotContain("personalizedRecipe");
     }
 
-    // 기능이 꺼져 있으면 UNKNOWN 대체 구현을 쓰고, 관련 기능 플래그 기본값은 모두 꺼져 있어야 합니다.
+    // 기능이 꺼져 있으면 조회하지 않으며, 플래그 기본값은 비활성 상태를 유지합니다.
     @Test
-    void disabledFeatureKeepsExistingUnknownFallbackAndFeatureFlagsRemainDefaultOff() throws Exception {
+    void disabledFeatureDoesNotLookUpEvidenceAndFlagsRemainDefaultOff() throws Exception {
         OfficialMedicationFoodInteractionAdapter adapter = adapter(
                 new FakeMfdsPort().with("자몽주의정", mfdsFound("자몽주의정", List.of("성분"), "자몽주스와 함께 복용하지 마십시오.", "", "")),
                 new FakeOpenFdaPort(),
@@ -549,7 +722,7 @@ class MedicationFoodInteractionAdapterTest {
         MedicationInteractionResult result = adapter.check(List.of("자몽주의정"), List.of("자몽 1개"));
         String properties = java.nio.file.Files.readString(java.nio.file.Path.of("src/main/resources/application.properties"));
 
-        assertThat(result.status()).isEqualTo(InteractionStatus.UNKNOWN);
+        assertThat(result.status()).isEqualTo(InteractionStatus.API_DISABLED);
         assertThat(properties).contains("recipe.agent.medication-interaction-enabled=${RECIPE_AGENT_MEDICATION_INTERACTION_ENABLED:false}");
         assertThat(properties).contains("recipe.agent.mfds-drug-product-permit-enabled=${RECIPE_AGENT_MFDS_DRUG_PRODUCT_PERMIT_ENABLED:false}");
         assertThat(properties).contains("recipe.agent.medication-live-eval-enabled=${RECIPE_AGENT_MEDICATION_LIVE_EVAL_ENABLED:false}");
@@ -586,7 +759,8 @@ class MedicationFoodInteractionAdapterTest {
                 new MedicationFoodEvidenceExtractor(foodNormalizer),
                 new MedicationRecipeEvidenceMatcher(foodNormalizer),
                 new InMemoryMedicationEvidenceCache(),
-                new UnknownMedicationFoodInteractionAdapter());
+                new UnknownMedicationFoodInteractionAdapter(),
+                org.mockito.Mockito.mock(MedicationFoodEvidenceArchive.class));
         ReflectionTestUtils.setField(adapter, "enabled", enabled);
         return adapter;
     }

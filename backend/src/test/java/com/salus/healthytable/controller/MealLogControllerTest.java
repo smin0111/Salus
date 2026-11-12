@@ -5,6 +5,7 @@ import com.salus.healthytable.domain.User;
 import com.salus.healthytable.dto.MealLogDTO;
 import com.salus.healthytable.repository.UserRepository;
 import com.salus.healthytable.security.AuthenticatedUserProvider;
+import com.salus.healthytable.service.ConsentService;
 import com.salus.healthytable.service.MealLogService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -30,10 +31,12 @@ class MealLogControllerTest {
     private final MealLogService mealLogService = mock(MealLogService.class);
     private final UserRepository userRepository = mock(UserRepository.class);
     private final AuthenticatedUserProvider authenticatedUserProvider = mock(AuthenticatedUserProvider.class);
+    private final ConsentService consentService = mock(ConsentService.class);
     private final MealLogController controller = new MealLogController(
             mealLogService,
             userRepository,
-            authenticatedUserProvider);
+            authenticatedUserProvider,
+            consentService);
 
     // 식단 조회는 현재 로그인 사용자의 기록을 반환해야 합니다.
     @Test
@@ -100,6 +103,22 @@ class MealLogControllerTest {
                     assertThat(ex.getReason()).isEqualTo("사용자를 찾을 수 없습니다.");
                 });
 
+        verifyNoInteractions(mealLogService);
+    }
+
+    // 필수 동의(건강정보 포함)가 없으면 식단 저장과 월간 분석을 막습니다. 조회는 본인 열람이라 막지 않습니다.
+    @Test
+    void saveAndMonthlyAnalysisRequireConsent() {
+        when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
+        org.mockito.Mockito.doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "동의 필요"))
+                .when(consentService).requireConsent(1L);
+
+        assertThatThrownBy(() -> controller.saveMealLog(new MealLogDTO()))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+        assertThatThrownBy(() -> controller.getMonthlyAnalysis(2026, 11))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
         verifyNoInteractions(mealLogService);
     }
 

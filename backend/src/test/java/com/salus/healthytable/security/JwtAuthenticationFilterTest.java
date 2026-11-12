@@ -235,6 +235,29 @@ class JwtAuthenticationFilterTest {
         assertThat(chain.getRequest()).isNull();
     }
 
+    // 토큰 확인 중 DB 오류가 나면 게스트로 넘기지 않고 503을 줍니다(등록 알레르기 없는 채팅 방지).
+    @Test
+    void lookupFailureReturnsServiceUnavailableInsteadOfGuest() throws Exception {
+        JwtTokenProvider tokenProvider = mock(JwtTokenProvider.class);
+        UserRepository userRepository = mock(UserRepository.class);
+        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(tokenProvider, userRepository, errorHandler);
+        when(tokenProvider.validateToken("valid-token")).thenReturn(true);
+        when(tokenProvider.getUserId("valid-token")).thenReturn("7");
+        when(userRepository.findById(7L)).thenThrow(new IllegalStateException("db down"));
+
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/chat/message");
+        request.addHeader("Authorization", "Bearer valid-token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(503);
+        assertThat(response.getContentAsString()).contains("\"error\":\"AUTH_UNAVAILABLE\"");
+        assertThat(chain.getRequest()).isNull();
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
+
     // 토큰이 없는 게스트 요청은 그대로 통과해 SecurityConfig 규칙에 맡겨야 합니다.
     @Test
     void requestWithoutTokenPassesThrough() throws Exception {

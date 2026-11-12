@@ -557,19 +557,18 @@ record MedicationInteractionResult(
         summary = summary == null ? MedicationResultSummary.from(perDrugResults) : summary;
     }
 
-    // 근거를 확인하지 못한 결과를 만듭니다. "상호작용 없음"이 아니라 UNKNOWN이며, 약사 확인 안내 문구를 포함합니다.
-    static MedicationInteractionResult unknown(List<String> medications) {
+    static MedicationInteractionResult disabled(List<String> medications) {
         if (medications == null || medications.isEmpty()) {
             return new MedicationInteractionResult(InteractionStatus.NO_MATCHING_INTERACTION_FOUND, List.of(), List.of(), List.of(), List.of(), MedicationResultSummary.empty());
         }
         List<MedicationPerDrugResult> perDrug = medications.stream()
-                .map(medication -> MedicationPerDrugResult.unknown(maskedMedicationId(medication)))
+                .map(medication -> MedicationPerDrugResult.disabled(maskedMedicationId(medication)))
                 .toList();
         return new MedicationInteractionResult(
-                InteractionStatus.UNKNOWN,
+                InteractionStatus.API_DISABLED,
                 List.of(),
                 List.of(
-                        "확인된 공식 음식 상호작용 근거를 찾지 못했습니다.",
+                        "복용약과 음식의 상호작용 조회가 꺼져 있어 공식 근거를 조회하지 않았습니다.",
                         "상호작용이 없다는 의미는 아닙니다.",
                         "약 복용 방식은 의사 또는 약사에게 확인하세요."),
                 List.of(),
@@ -609,15 +608,15 @@ record MedicationPerDrugResult(
         failureReason = failureReason == null ? "" : failureReason;
     }
 
-    static MedicationPerDrugResult unknown(String maskedMedicationId) {
+    static MedicationPerDrugResult disabled(String maskedMedicationId) {
         return new MedicationPerDrugResult(
                 maskedMedicationId,
                 MedicationNormalizationStatus.NOT_FOUND,
-                MedicationResearchStatus.MEDICATION_NOT_IDENTIFIED,
-                InteractionStatus.UNKNOWN,
+                MedicationResearchStatus.ALL_SOURCES_DISABLED,
+                InteractionStatus.API_DISABLED,
                 List.of(),
                 List.of(),
-                "MEDICATION_EVIDENCE_UNKNOWN");
+                "INTERACTION_LOOKUP_DISABLED");
     }
 }
 
@@ -645,12 +644,11 @@ record MedicationResultSummary(
                 (int) values.stream().filter(result -> result.interactionStatus() == InteractionStatus.API_FAILED).count(),
                 (int) values.stream().filter(result -> result.interactionStatus() == InteractionStatus.MULTIPLE_MEDICATION_MATCHES).count(),
                 (int) values.stream().filter(result -> result.interactionStatus() == InteractionStatus.CONFIRMED_CONFLICT).count(),
-                (int) values.stream().filter(result -> result.interactionStatus() == InteractionStatus.NO_MATCHING_INTERACTION_FOUND
-                        || result.interactionStatus() == InteractionStatus.EVIDENCE_INSUFFICIENT).count());
+                (int) values.stream().filter(result -> result.interactionStatus() == InteractionStatus.NO_MATCHING_INTERACTION_FOUND).count());
     }
 }
 
-// 약물-음식 상호작용 상태. SAFE/NO_MATCHING_INTERACTION_FOUND 외의 값(식별 실패, API 실패, 근거 부족 등)은 "안전"으로 해석하면 안 됩니다.
+// 약물-음식 상호작용 상태. 조회 실패나 일치하는 근거가 없는 결과는 안전을 뜻하지 않습니다.
 enum InteractionStatus {
     SAFE,
     CONFIRMED_CONFLICT,

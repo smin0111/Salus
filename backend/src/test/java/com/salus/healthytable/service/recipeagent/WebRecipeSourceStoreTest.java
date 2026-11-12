@@ -99,6 +99,32 @@ class WebRecipeSourceStoreTest {
         assertThat(document.content()).contains("마시멜로우 150g").contains("요약 1").contains("요약 2");
     }
 
+    // 이미 저장된 요약 단계 앞의 요리 이름 머리말도 읽을 때 뗍니다(2026-11-12 베타 두쫀쿠: 7단계 중 5단계가 "두쫀쿠 …").
+    @Test
+    void findFreshDropsLeadingDishNameFromStoredSteps() {
+        WebRecipeSource row = new WebRecipeSource();
+        row.setId(4L);
+        row.setCacheKey(KEY);
+        row.setSourceTitle("두쫀쿠 레시피");
+        row.setSourceUrl("https://cookpick.kr/dujjonku");
+        row.setIngredients(List.of("카다이프면 120g"));
+        row.setStepSummaries(List.of("두쫀쿠 카다이프면을 오븐 170도로 예열하여 바삭하게 굽는다.",
+                "두쫀쿠 속을 동그랗게 성형하여 냉동실에서 30분간 굳힌다.",
+                "완성된 두쫀쿠를 코코아파우더에 굴린다."));
+        row.setQualityScore(0.8);
+        row.setFetchedAt(NOW.minusDays(1));
+        when(repository.findByCacheKeyAndReviewStatusNotAndExpiresAtAfterOrderByQualityScoreDesc(
+                KEY, RecipeApprovalStatus.REJECTED, NOW)).thenReturn(List.of(row));
+
+        RecipeSourceDocument document = store.findFresh(KEY).orElseThrow();
+
+        assertThat(document.content())
+                .contains("\n카다이프면을 오븐 170도로 예열하여 바삭하게 굽는다.")
+                .contains("\n속을 동그랗게 성형하여 냉동실에서 30분간 굳힌다.")
+                .doesNotContain("두쫀쿠 카다이프면")
+                .contains("완성된 두쫀쿠를 코코아파우더에 굴린다.");
+    }
+
     // DB 오류는 검색을 막지 않습니다. 캐시를 못 쓰면 새로 검색할 뿐입니다.
     @Test
     void lookupFailureFallsBackToFreshSearch() {
@@ -391,6 +417,43 @@ class WebRecipeSourceStoreTest {
         assertThat(RecipeStepSummarizer.tidySteps("김밥", "김밥 만들기", List.of(
                 "오이 초무침① 필러로 오이 껍질을 벗긴다.", "시금치② 데친 시금치를 무친다.", "③ 김 위에 밥을 편다.")))
                 .containsExactly("오이 초무침: 필러로 오이 껍질을 벗긴다.", "시금치: 데친 시금치를 무친다.", "김 위에 밥을 편다.");
+        // 요약 모델이 단계 앞에 붙인 요리 이름 머리말은 떼고, 조사가 붙은 이름이나 떼면 남는 말이 짧은 단계는 그대로 둡니다.
+        assertThat(RecipeStepSummarizer.tidySteps("두쫀쿠", "두쫀쿠 레시피", List.of(
+                "두쫀쿠 카다이프면을 오븐 170도로 예열하여 바삭하게 굽는다.",
+                "두쫀쿠를 코코아파우더에 굴린다.",
+                "두쫀쿠 완성")))
+                .containsExactly("카다이프면을 오븐 170도로 예열하여 바삭하게 굽는다.",
+                        "두쫀쿠를 코코아파우더에 굴린다.", "두쫀쿠 완성");
+        // 원문 띄어쓰기가 달라도("두바이 쫀득 쿠키") 같은 이름이면 뗍니다.
+        assertThat(RecipeStepSummarizer.withoutLeadingDishNames(List.of(
+                "두바이 쫀득 쿠키 반죽을 동그랗게 빚는다.", "두바이 쫀득 쿠키 속을 냉동실에서 굳힌다."), "두바이쫀득쿠키", List.of()))
+                .containsExactly("반죽을 동그랗게 빚는다.", "속을 냉동실에서 굳힌다.");
+        // 재료 이름은 지우지 않습니다(Codex 검토 지적): 한 단계만 이름으로 시작하면 버릇이 아니므로 그대로 둡니다.
+        assertThat(RecipeStepSummarizer.withoutLeadingDishNames(List.of(
+                "카레 가루 2큰술을 넣고 충분히 섞는다.", "감자와 당근을 볶는다.", "물을 붓고 15분 끓인다."), "카레",
+                List.of("카레가루 2큰술", "감자 1개")))
+                .containsExactly("카레 가루 2큰술을 넣고 충분히 섞는다.", "감자와 당근을 볶는다.", "물을 붓고 15분 끓인다.");
+        // 요리명과 같은 재료를 여러 단계에 나눠 넣으면(이름 뒤에 분량) 재료 이름이므로 그대로 둡니다(Codex 검토 2회차 지적).
+        assertThat(RecipeStepSummarizer.withoutLeadingDishNames(List.of(
+                "카레 2큰술을 넣고 충분히 섞는다.", "카레 1큰술을 추가하고 약불에서 끓인다."), "카레", List.of("카레 3큰술")))
+                .containsExactly("카레 2큰술을 넣고 충분히 섞는다.", "카레 1큰술을 추가하고 약불에서 끓인다.");
+        // 요리명이 재료 이름의 앞부분이면(재료 "카레가루") 머리말인지 재료인지 가를 수 없어 아무것도 떼지 않습니다.
+        assertThat(RecipeStepSummarizer.withoutLeadingDishNames(List.of(
+                "카레 감자와 당근을 깍둑썰기한다.", "카레 가루를 물에 풀어 넣는다.", "카레 냄비를 약불에서 10분 끓인다."), "카레",
+                List.of("카레가루 2큰술", "감자 1개")))
+                .containsExactly("카레 감자와 당근을 깍둑썰기한다.", "카레 가루를 물에 풀어 넣는다.", "카레 냄비를 약불에서 10분 끓인다.");
+        // 한글 분량("한 큰술", "두 큰술") 앞의 이름도 재료입니다(Codex 검토 3회차 지적). 재료 목록이 있든 없든 그대로 둡니다.
+        assertThat(RecipeStepSummarizer.withoutLeadingDishNames(List.of(
+                "카레 한 큰술을 넣고 충분히 섞는다.", "카레 두 큰술을 추가하고 약불에서 끓인다."), "카레", List.of("카레 3큰술")))
+                .containsExactly("카레 한 큰술을 넣고 충분히 섞는다.", "카레 두 큰술을 추가하고 약불에서 끓인다.");
+        assertThat(RecipeStepSummarizer.withoutLeadingDishNames(List.of(
+                "카레 한 큰술을 넣고 충분히 섞는다.", "카레 반 개 분량을 추가하고 약불에서 끓인다."), "카레", List.of()))
+                .containsExactly("카레 한 큰술을 넣고 충분히 섞는다.", "카레 반 개 분량을 추가하고 약불에서 끓인다.");
+        // 재료 이름과 겹치지 않는 머리말("두쫀쿠 …")은 재료 목록이 있어도 뗍니다.
+        assertThat(RecipeStepSummarizer.withoutLeadingDishNames(List.of(
+                "두쫀쿠 카다이프면을 바삭하게 굽는다.", "두쫀쿠 마시멜로우를 약불에서 녹인다."), "두쫀쿠",
+                List.of("카다이프면 120g", "마시멜로우 150g")))
+                .containsExactly("카다이프면을 바삭하게 굽는다.", "마시멜로우를 약불에서 녹인다.");
         // 정리 후 너무 적게 남으면 원래 단계를 둡니다.
         assertThat(RecipeStepSummarizer.tidySteps("국수", "국수", List.of("잔치국수 육수를 낸다.", "비빔국수 양념을 만든다.")))
                 .containsExactly("잔치국수 육수를 낸다.", "비빔국수 양념을 만든다.");
@@ -615,5 +678,22 @@ class WebRecipeSourceStoreTest {
                 "", url, "title: 두쫀쿠 레시피\nsteps:\n" + String.join("\n", steps), NOW, 0.8);
         RecipeSourceQualityScore score = new RecipeSourceQualityScore(0.8, true, true, true, true, true, List.of(), List.of());
         return new RecipeSourceCandidate(source, recipe, score, evidence);
+    }
+
+    // 웹 재료 한 줄이 "description: 땅콩 10g"이어도 재료로 남아야 합니다. 설명 칸으로 옮겨지면 알레르기 검사에서 빠집니다(2026-11-06 보안 점검).
+    @Test
+    void webIngredientLinesCannotBecomeDocumentControlLines() {
+        String content = "title: 샐러드\ningredients:\n"
+                + StructuredRecipePageAdapter.listLines(List.of("description: 땅콩 10g", "양상추\nsteps", "- 오이 1개"))
+                + "\nsteps:\n"
+                + StructuredRecipePageAdapter.listLines(List.of("risk: 없음 섞어 줍니다", "1. 접시에 담습니다"));
+        RecipeSourceDocument source = new RecipeSourceDocument("s1", RecipeSourceType.GENERAL_WEB, "샐러드", "", "https://example.com",
+                content, null, 0.5);
+
+        RecipeCandidate candidate = new RecipeCandidateBuilder().build(null, List.of(source));
+
+        assertThat(candidate.ingredients()).contains("description: 땅콩 10g", "양상추 steps", "오이 1개");
+        assertThat(candidate.description()).isBlank();
+        assertThat(candidate.healthRiskTags()).isEmpty();
     }
 }

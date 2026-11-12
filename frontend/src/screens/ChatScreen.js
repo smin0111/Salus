@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Modal, ScrollView, Pressable, Alert, Switch, Animated, Dimensions, Linking, Share, useWindowDimensions } from 'react-native';
+import * as Crypto from 'expo-crypto';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import * as Speech from 'expo-speech'; // 음성 읽기 기능
@@ -485,8 +486,9 @@ const AnimatedMessageBubble = ({ item, speakingMessageId, speak, isLoggedIn, ope
                             />
                         </TouchableOpacity>
 
-                        {/* 식단 추가는 사용자 데이터 저장이 필요하므로 로그인 상태에서만 보여줍니다. */}
-                        {isLoggedIn && (
+                        {/* 식단 추가는 사용자 데이터 저장이 필요하므로 로그인 상태에서만 보여줍니다.
+                            레시피를 막은 답변·일반 대화처럼 레시피가 없는 답변에는 기록할 메뉴가 없어 보이지 않습니다(2026-11-12 베타). */}
+                        {isLoggedIn && recipe && (
                             <TouchableOpacity
                                 style={[styles.addToPlanButton, item.isMealSaved && styles.addToPlanButtonSaved]}
                                 accessibilityRole="button"
@@ -899,6 +901,17 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         const messageText = typeof text === 'string' ? text : inputText;
         if (!messageText.trim()) return;
 
+        // 진행 조회·취소에 쓰는 ID는 암호학적 난수로 만듭니다.
+        // getRandomValues는 개발용 HTTP 웹에서도 사용할 수 있습니다.
+        let progressId;
+        try {
+            const randomBytes = Crypto.getRandomValues(new Uint8Array(16));
+            progressId = `chat-${Array.from(randomBytes, byte => byte.toString(16).padStart(2, '0')).join('')}`;
+        } catch {
+            Alert.alert('메시지를 보내지 못했어요', '브라우저에서 보안 난수를 사용할 수 없어요. 페이지를 다시 열어 주세요.');
+            return;
+        }
+
         // 답을 기다리는 중에 새 메시지를 보내면 지금 답을 멈추고 새 메시지와 합쳐 다시 묻습니다(Claude·ChatGPT처럼).
         const interruptedNow = loading ? stopGeneration() : null;
         // 마지막 AI 답 뒤에 멈춘 질문들은 이번 메시지와 함께 보내 하나의 요청으로 이해하게 합니다.
@@ -915,8 +928,7 @@ export default function ChatScreen({ messages, setMessages, healthProfile, setMe
         setInputText('');
         setLoading(true);
 
-        // 요청 ID를 직접 만들어 보내고, 같은 ID로 서버의 진행 단계를 1초마다 물어봅니다.
-        const progressId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        // 같은 ID로 서버의 진행 단계를 1초마다 물어봅니다.
         startProgressPolling(progressId);
         const abortController = new AbortController();
         activeRequestRef.current = { abortController, progressId, userMessageId: userMessage.id };

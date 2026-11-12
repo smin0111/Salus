@@ -82,6 +82,25 @@ class MealLogServiceTest {
         assertThat(saved.getDinner()).isEqualTo("채소 덮밥");
     }
 
+    // 요청마다 제한 안이어도 다른 키로 계속 합쳐 한 행을 키우지 못하게, 합친 결과도 20000자로 제한합니다(2026-11-06 보안 점검).
+    @Test
+    void mergedMealDetailsCannotGrowBeyondLimit() {
+        User user = user(1L);
+        MealLog existing = new MealLog();
+        existing.setUser(user);
+        existing.setRecordDate(LocalDate.of(2026, 7, 3));
+        existing.setMealDetails("{\"a\":\"" + "가".repeat(15_000) + "\"}");
+
+        MealLogDTO dto = new MealLogDTO();
+        dto.setRecordDate(LocalDate.of(2026, 7, 3));
+        dto.setMealDetails("{\"b\":\"" + "나".repeat(15_000) + "\"}");
+        when(mealLogRepository.findByUserAndRecordDate(user, LocalDate.of(2026, 7, 3))).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.saveOrUpdateMealLog(user, dto))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("너무 커요");
+    }
+
     // 기록 날짜는 필수여야 합니다.
     @Test
     void saveOrUpdateMealLogRequiresRecordDate() {

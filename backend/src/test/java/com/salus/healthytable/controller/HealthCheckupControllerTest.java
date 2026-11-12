@@ -136,13 +136,13 @@ class HealthCheckupControllerTest {
         when(authenticatedUserProvider.requireUserId()).thenReturn(1L);
         when(healthCheckupRepository.findTopByUserIdOrderByCheckupDateDescIdDesc(1L))
                 .thenReturn(Optional.of(checkup));
-        when(analysisService.analyze(checkup)).thenReturn(analysis);
+        when(analysisService.analyzeForUser(1L, checkup)).thenReturn(analysis);
 
         ResponseEntity<HealthCheckupAnalysisDTO> response = controller.getLatestAnalysis();
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         assertThat(response.getBody()).isSameAs(analysis);
-        verify(analysisService).analyze(checkup);
+        verify(analysisService).analyzeForUser(1L, checkup);
     }
 
     // 검진 기록이 없으면 빈 분석 결과를 반환해야 합니다.

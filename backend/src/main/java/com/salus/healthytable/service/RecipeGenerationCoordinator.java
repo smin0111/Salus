@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -114,6 +115,7 @@ public class RecipeGenerationCoordinator {
                 initialTimeoutSeconds,
                 "INITIAL_GENERATION")
                 .flatMap(draft -> ChatProgress.stage("레시피를 검증하고 있어요", Mono.just(draft)))
+                .publishOn(Schedulers.boundedElastic())
                 .flatMap(draft -> validateStructuredDraft(
                         generationRequest,
                         draft,
@@ -223,9 +225,13 @@ public class RecipeGenerationCoordinator {
         }
 
         // 3단계: 주의 문구를 계산하고 답변 텍스트를 만든 뒤, 검색 근거와 비교하는 최종 검증을 합니다.
+        var medication = chatSafetyContextService.assessRecipeMedication(safetyContext, candidate);
+        if (medication.avoid()) {
+            return Mono.just(StructuredRecipeOutcome.blocked(medication.blockedRecipeReply()));
+        }
         List<String> safetyNotes = candidate == null
                 ? List.of()
-                : chatSafetyContextService.buildRecipeSafetyNotes(authenticatedUserId, safetyContext, candidate);
+                : chatSafetyContextService.buildRecipeSafetyNotes(authenticatedUserId, safetyContext, candidate, medication);
         String reply = recipeReplyFormatter.format(draft, safetyNotes);
         RecipeValidator.ValidationResult validationResult = recipeValidator.validateStructured(
                 candidate,
@@ -298,6 +304,7 @@ public class RecipeGenerationCoordinator {
                 deadlineNanos,
                 initialTimeoutSeconds,
                 "FALLBACK_MODEL_GENERATION")
+                .publishOn(Schedulers.boundedElastic())
                 .flatMap(fallbackDraft -> validateStructuredDraft(
                         generationRequest,
                         fallbackDraft,
@@ -338,6 +345,7 @@ public class RecipeGenerationCoordinator {
                 deadlineNanos,
                 repairTimeoutSeconds,
                 "REPAIR")
+                .publishOn(Schedulers.boundedElastic())
                 .flatMap(repairedDraft -> validateStructuredDraft(
                         generationRequest,
                         repairedDraft,

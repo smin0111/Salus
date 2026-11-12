@@ -59,6 +59,8 @@ public class RecipeReplyParser {
                 .replaceFirst("\\s*레시피입니다\\.?\\s*$", "")
                 .replaceFirst("\\s*레시피\\s*입니다\\.?\\s*$", "")
                 .replaceFirst("\\s*조리\\s*시간:.*$", "")
+                // 승인 레시피 답변 첫 줄 "김치찌개 2인분 레시피입니다."의 인분은 제목이 아닙니다.
+                .replaceFirst("\\s+\\d{1,2}\\s*인분$", "")
                 .replaceAll("\\s+", " ")
                 .trim();
 
@@ -203,10 +205,18 @@ public class RecipeReplyParser {
                 }
 
                 // 조리 시간, 열량, 난이도 추출
-                if (trimmed.startsWith("조리 시간:") || trimmed.contains("열량:") || trimmed.contains("난이도:")) {
+                if (trimmed.startsWith("조리 시간:") || trimmed.contains("열량:") || trimmed.contains("난이도:")
+                        || trimmed.startsWith("인분:")) {
                     java.util.regex.Matcher timeMatcher = java.util.regex.Pattern.compile("조리\\s*시간:\\s*(\\d+)분").matcher(trimmed);
                     if (timeMatcher.find()) {
                         cookingTime = Integer.parseInt(timeMatcher.group(1));
+                    }
+                    // 고친 레시피 답변의 요약 줄("조리 시간: 40분 / 인분: 2인분 / …")에 적힌 인분입니다. 이 줄을 읽지 않아
+                    // 한 번 고친 레시피를 다시 고치며 인분을 바꾸면 원래 인분을 모른다고 답했습니다(2026-11-12).
+                    java.util.regex.Matcher servingsMatcher = java.util.regex.Pattern
+                            .compile("(?:^|/)\\s*인분:\\s*(\\d{1,2})\\s*인분").matcher(trimmed);
+                    if (servings == null && servingsMatcher.find()) {
+                        servings = Integer.parseInt(servingsMatcher.group(1));
                     }
                     java.util.regex.Matcher calMatcher = java.util.regex.Pattern
                             // "1인분당"이라고 명시된 경우에만 1인분 열량으로 저장합니다(기준 인분이 불명확한 값을 추측하지 않음).

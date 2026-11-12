@@ -1,5 +1,6 @@
 package com.salus.healthytable.service.allergen;
 
+import com.salus.healthytable.service.recipeagent.MedicationSafetyService;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
@@ -38,7 +39,7 @@ class ProfileResolutionShadowIntegrationTest {
 
     private ChatSafetyContextService service(ProfileResolutionShadowObserver observer) {
         return new ChatSafetyContextService(profiles(), mock(HealthCheckupRepository.class), mock(HealthCheckupAnalysisService.class),
-                new AllergenMatcher(dictionary), registry, observer);
+                new AllergenMatcher(dictionary), registry, observer, mock(MedicationSafetyService.class));
     }
 
     private static HealthProfileRepository profiles() {
@@ -159,7 +160,7 @@ class ProfileResolutionShadowIntegrationTest {
         when(profiles.findByUserId(1L)).thenThrow(new IllegalStateException("DB unavailable"));
         ProfileResolutionShadowObserver observer = mock(ProfileResolutionShadowObserver.class);
         var service = new ChatSafetyContextService(profiles, mock(HealthCheckupRepository.class), mock(HealthCheckupAnalysisService.class),
-                new AllergenMatcher(dictionary), registry, observer);
+                new AllergenMatcher(dictionary), registry, observer, mock(MedicationSafetyService.class));
         assertThat(service.build(Optional.of(1L), request()).healthContextAvailable()).isFalse();
         verify(observer, never()).observeStoredProfile(any());
     }
@@ -171,6 +172,7 @@ class ProfileResolutionShadowIntegrationTest {
             context.registerBean(HealthProfileRepository.class, ProfileResolutionShadowIntegrationTest::profiles);
             context.registerBean(HealthCheckupRepository.class, () -> mock(HealthCheckupRepository.class));
             context.registerBean(HealthCheckupAnalysisService.class, () -> mock(HealthCheckupAnalysisService.class));
+            context.registerBean(MedicationSafetyService.class, () -> mock(MedicationSafetyService.class));
             context.register(AllergenDictionary.class, AllergenRegistry.class, AllergenMatcher.class,
                     MicrometerProfileResolutionShadowMetrics.class, ProfileResolutionShadowObserver.class, ChatSafetyContextService.class);
             context.refresh();

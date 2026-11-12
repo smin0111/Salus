@@ -61,11 +61,13 @@ public class EmailAuthController {
     }
 
     @PostMapping("/api/auth/email/signup")
-    public ResponseEntity<?> signup(@RequestBody(required = false) EmailAuthRequestDTO request) {
+    public ResponseEntity<?> signup(@RequestBody(required = false) EmailAuthRequestDTO request,
+            HttpServletRequest httpRequest) {
         String path = "/api/auth/email/signup";
         return handle(path, () -> {
             EmailAuthRequestDTO body = request == null ? new EmailAuthRequestDTO() : request;
-            User user = emailAuthService.signup(body.getEmail(), body.getCode(), body.getPassword(), body.getName());
+            User user = emailAuthService.signup(body.getEmail(), body.getCode(), body.getPassword(), body.getName(),
+                    chatRateLimitService.resolveClientIp(httpRequest));
             log.info("Email signup completed. userId={}", user.getId());
             Instant confirmedAt = Instant.now(clock);
             return ResponseEntity.ok(loginBody(user, refreshTokenService.issue(user.getId(), confirmedAt), confirmedAt));
@@ -86,11 +88,13 @@ public class EmailAuthController {
     }
 
     @PostMapping("/api/auth/email/password-reset")
-    public ResponseEntity<?> resetPassword(@RequestBody(required = false) EmailAuthRequestDTO request) {
+    public ResponseEntity<?> resetPassword(@RequestBody(required = false) EmailAuthRequestDTO request,
+            HttpServletRequest httpRequest) {
         String path = "/api/auth/email/password-reset";
         return handle(path, () -> {
             EmailAuthRequestDTO body = request == null ? new EmailAuthRequestDTO() : request;
-            emailAuthService.resetPassword(body.getEmail(), body.getCode(), body.getNewPassword());
+            emailAuthService.resetPassword(body.getEmail(), body.getCode(), body.getNewPassword(),
+                    chatRateLimitService.resolveClientIp(httpRequest));
             return ResponseEntity.noContent().build();
         });
     }

@@ -1,5 +1,6 @@
 package com.salus.healthytable.service;
 
+import com.salus.healthytable.service.recipeagent.MedicationSafetyService;
 import com.salus.healthytable.domain.HealthCheckup;
 import com.salus.healthytable.domain.Recipe;
 import com.salus.healthytable.dto.ChatDto;
@@ -42,6 +43,7 @@ public class ChatSafetyContextService {
     private final AllergenMatcher allergenMatcher;
     private final AllergenRegistry allergenRegistry;
     private final ProfileResolutionShadowObserver profileResolutionShadowObserver;
+    private final MedicationSafetyService medicationSafetyService;
 
     /**
      * 사용자 건강 조건을 모아 SafetyContext를 만듭니다.
@@ -127,10 +129,7 @@ public class ChatSafetyContextService {
         if (!safetyContext.dietaryRestrictions().isEmpty()) {
             systemContext.append("식단 제한: ").append(String.join(", ", safetyContext.dietaryRestrictions())).append("\n");
         }
-        if (!safetyContext.medications().isEmpty()) {
-            systemContext.append("복용 약물: ").append(String.join(", ", safetyContext.medications())).append("\n");
-            systemContext.append("약물과 상호작용할 수 있는 음식을 피해주세요.\n");
-        }
+        systemContext.append("음식과 약물의 상호작용이나 복용 방법을 추정하지 마세요.\n");
         if (!safetyContext.goals().isEmpty()) {
             systemContext.append("건강 목표: ").append(String.join(", ", safetyContext.goals())).append("\n");
         }
@@ -195,6 +194,25 @@ public class ChatSafetyContextService {
                 : Optional.of(buildAllergyBlockedReply(requestedTitle, conflicts));
     }
 
+    /**
+     * 저장된 레시피를 다시 쓰는 후속 답변(승인 레시피 조정, 레시피 질문, 상세 설명)을 이번 요청의 알레르기로 한 번 더 확인합니다.
+     * 레시피를 받은 뒤 알레르기를 새로 등록하거나 방금 말했으면, 이전 레시피를 그대로 다시 보여 주지 않고 차단 문구를 돌려줍니다.
+     * 건강 정보를 불러오지 못한 로그인 요청도 알레르기 없음으로 보지 않고 막습니다(2026-11-06 보안 점검).
+     */
+    public Optional<String> blockFollowUpIfAllergyConflict(SafetyContext safetyContext, String title, List<String> texts) {
+        if (safetyContext == null) {
+            return Optional.empty();
+        }
+        if (!safetyContext.healthContextAvailable()) {
+            return Optional.of("건강 정보를 안전하게 확인하지 못해 이전 레시피를 다시 보여 드리지 않았습니다. 잠시 후 다시 시도해 주세요.");
+        }
+        if (safetyContext.allergies().isEmpty() || texts == null || texts.isEmpty()) {
+            return Optional.empty();
+        }
+        List<String> conflicts = allergenMatcher.findConflicts(safetyContext.allergies(), texts);
+        return conflicts.isEmpty() ? Optional.empty() : Optional.of(buildAllergyBlockedReply(title, conflicts));
+    }
+
     // 알레르기 때문에 레시피를 제공할 수 없다는 사용자 안내 문구를 만듭니다.
     public String buildAllergyBlockedReply(String requestedTitle, List<String> conflicts) {
         String foodName = nullToBlank(requestedTitle).isBlank() ? "요청하신 메뉴" : requestedTitle.trim();
@@ -231,46 +249,32 @@ public class ChatSafetyContextService {
         return allergenMatcher.findConflicts(safetyContext.allergies(), texts);
     }
 
-    // "땅콩 먹어도 돼?", "새우깡 먹어도 될까요", "우유 먹으면 안 돼?"처럼 먹어도 되는지 묻는 표현
-    private static final Pattern EATING_PERMISSION_QUESTION = Pattern.compile(
-            "먹어도|먹으면\\s*(?:안|돼|되|괜찮)|먹을\\s*수\\s*있(?:어|나|을까|나요)|먹여도|드셔도|섭취해도");
-    // "땅콩 알레르기인데 땅콩버터"처럼 앞에 붙은 사정 설명과 묻는 음식을 가르는 연결 표현.
-    // 쉼표는 음식 나열("땅콩, 우유")이라 나누지 않습니다(마지막 음식만 검사하면 땅콩 충돌을 놓침, Codex 검토 P2).
-    private static final Pattern CLAUSE_BREAK = Pattern.compile("(?:인데|는데|은데|지만|있고|\\.)\\s+");
-    // 표시용으로만 떼는 조사. '이/가'는 음식 이름 끝과 겹쳐("오이", "송이") 떼지 않습니다(Codex 검토 3회차 P2).
-    private static final Pattern TRAILING_PARTICLE = Pattern.compile("(?:은|는|을|를|도|만)$");
-
     /**
-     * "X 먹어도 돼?"에 LLM 대신 정해진 규칙으로 답합니다. 일반 대화 LLM은 "대부분 괜찮아요"처럼 안전하다고 답했습니다(2026-11-01).
-     *
-     * <p>Salus는 먹어도 되는지 판단하지 않으며, 어떤 경우에도 '안전하다', '괜찮다'고 말하지 않습니다.
-     * 등록 알레르기와 겹치면 드시지 말라고 하고, 겹치지 않아도 이름만 비교했다는 한계를 밝히며,
-     * 알레르기 정보가 없으면 판단할 기준이 없다고 말합니다. 판정은 다른 경로와 같은 AllergenMatcher를 씁니다.
-     *
-     * @return 먹어도 되는지 묻는 질문이 아니면 빈 값
+     * 섭취 질문을 LLM에 맡기지 않습니다. 알레르기는 기존 매처로 비교하고 복약정보는 조회 여부를 밝힙니다.
      */
-    public Optional<String> buildEatingPermissionReply(SafetyContext safetyContext, String message) {
-        if (message == null) {
-            return Optional.empty();
-        }
-        Matcher question = EATING_PERMISSION_QUESTION.matcher(message);
-        if (!question.find()) {
-            return Optional.empty();
-        }
-        String phrase = askedPhrase(message.substring(0, question.start()));
-        String food = TRAILING_PARTICLE.matcher(phrase).replaceAll("").strip();
+    String buildFoodSafetyReply(SafetyContext safetyContext, FoodSafetyQuestion question) {
+        String phrase = question.foodPhrase();
+        String food = question.foodName();
+        boolean medicationQuestion = question.kind() == FoodSafetyQuestion.Kind.MEDICATION_INTERACTION
+                || (safetyContext != null && !safetyContext.medications().isEmpty());
         // "이거 식혜에 넣어"처럼 음식 이름으로 보기 어려운 긴 구절은 따옴표로 되풀이하지 않습니다(판정은 그 구절 전체로 함).
         boolean nameLike = !food.isBlank() && food.split("\\s+").length <= 2;
         String foodLabel = nameLike ? "‘" + food + "’" : "말씀하신 음식";
         List<String> allergies = safetyContext == null ? List.of() : safetyContext.allergies();
 
         StringBuilder reply = new StringBuilder();
-        List<String> conflicts = allergies.isEmpty() ? List.of()
+        List<String> conflicts = allergies.isEmpty() || phrase.isBlank() ? List.of()
                 // 조사를 떼기 전 구절도 함께 넘겨, 표시용 정리 때문에 원문에서 보이는 충돌을 놓치지 않게 합니다.
-                : allergenMatcher.findConflicts(allergies, phrase.isBlank() ? List.of(message) : List.of(phrase, food));
+                : allergenMatcher.findConflicts(allergies, List.of(phrase, food));
         if (!conflicts.isEmpty()) {
             reply.append(foodLabel).append(nameLike ? topicParticle(food) : "은").append(" 확인된 알레르기(").append(String.join(", ", conflicts))
                     .append(")와 관련된 음식이에요. 드시지 않는 것을 권해요. 이미 드셨거나 증상이 있으면 의료진과 상담해 주세요.");
+        } else if (medicationQuestion) {
+            return medicationQuestionReply(safetyContext, question, nameLike);
+        } else if (food.isBlank()) {
+            return "어떤 음식의 섭취 여부가 궁금하신가요? 음식명이나 원재료를 알려 주세요.";
+        } else if (safetyContext != null && !safetyContext.healthContextAvailable()) {
+            return "등록된 건강 정보를 불러오지 못해 섭취 여부를 확인할 수 없어요. 원재료 표시를 확인해 주세요.";
         } else if (!allergies.isEmpty()) {
             reply.append("Salus는 먹어도 되는지 판단하지 않아요. ").append(foodLabel)
                     .append(nameLike ? " 이름에서" : "에서").append(" 확인된 알레르기(").append(String.join(", ", allergies))
@@ -279,10 +283,34 @@ public class ChatSafetyContextService {
             reply.append("Salus는 먹어도 되는지 판단하지 않아요. 등록된 알레르기 정보가 없어 확인할 기준도 없어요. ")
                     .append("알레르기가 있다면 건강 정보에 등록해 주시고, 원재료 표시를 확인해 주세요.");
         }
-        if (safetyContext != null && (!safetyContext.chronicConditions().isEmpty() || !safetyContext.medications().isEmpty())) {
-            reply.append("\n\n등록하신 질환이나 복용 중인 약과의 관계도 Salus가 판단하지 않아요. 의사나 약사와 상담해 주세요.");
+        if (medicationQuestion) {
+            reply.append("\n\n").append(medicationQuestionReply(safetyContext, question, nameLike));
+        } else if (safetyContext != null && !safetyContext.chronicConditions().isEmpty()) {
+            reply.append("\n\n등록하신 질환과의 관계는 의사나 약사와 상담해 주세요.");
         }
-        return Optional.of(reply.toString());
+        return reply.toString();
+    }
+
+    private String medicationQuestionReply(SafetyContext context, FoodSafetyQuestion question, boolean nameLike) {
+        Set<String> medications = new LinkedHashSet<>();
+        if (context != null) {
+            medications.addAll(context.medications());
+        }
+        if (!question.declaredMedication().isBlank()) {
+            medications.add(question.declaredMedication());
+        }
+        // A compound question may contain a medicine distinct from the profile entries.
+        boolean medicationResolved = question.canUseProfileMedication() || !question.declaredMedication().isBlank();
+        String consult = "섭취 전에 약 봉투나 처방전에 적힌 제품명과 음식명을 가지고 의사나 약사와 상담해 주세요.";
+        if (!nameLike || medications.isEmpty() || !medicationResolved) {
+            return "이 대화에서는 복용약과 음식의 상호작용을 조회하지 않았어요. "
+                    + "정확한 약 제품명과 음식명을 각각 알려 주세요. " + consult;
+        }
+        var assessment = medicationSafetyService.assess(List.copyOf(medications), List.of(question.foodName()));
+        if (assessment.notes().isEmpty()) {
+            return "말씀하신 조합의 공식 근거를 확인하지 못했어요. " + consult;
+        }
+        return String.join("\n", assessment.notes()) + "\n\n" + consult;
     }
 
     // 받침이 있으면 '은', 없으면 '는'
@@ -292,12 +320,6 @@ public class ChatSafetyContextService {
             return "은(는)";
         }
         return (last - 0xAC00) % 28 == 0 ? "는" : "은";
-    }
-
-    // "나 땅콩 알레르기인데 땅콩버터는 " → "땅콩버터는"(조사는 표시할 때만 뗌)
-    private static String askedPhrase(String beforeQuestion) {
-        String[] clauses = CLAUSE_BREAK.split(beforeQuestion.strip());
-        return clauses.length == 0 ? "" : clauses[clauses.length - 1].strip();
     }
 
     /**
@@ -320,6 +342,18 @@ public class ChatSafetyContextService {
                 + ")와 관련된 재료나 메뉴가 답변에 언급되어 있습니다. 드시기 전에 실제 재료와 원재료 표시를 꼭 확인해 주세요.";
     }
 
+    MedicationSafetyService.Assessment assessRecipeMedication(SafetyContext context, Recipe recipe) {
+        if (context == null || context.medications().isEmpty()) {
+            return new MedicationSafetyService.Assessment(false, List.of());
+        }
+        List<String> ingredients = recipe == null ? List.of() : cleanRecipeValues(recipe.getIngredients());
+        if (ingredients.isEmpty()) {
+            return new MedicationSafetyService.Assessment(false,
+                    List.of("재료를 확인할 수 없어 복용약과의 상호작용 확인을 완료하지 못했어요."));
+        }
+        return medicationSafetyService.assess(context.medications(), ingredients);
+    }
+
     /**
      * 레시피 카드에 표시할 주의 문구를 만듭니다.
      * 건강 프로필(알레르기, 만성질환, 식단 제한)과 최신 검진 수치를 재료 목록과 비교합니다.
@@ -328,8 +362,9 @@ public class ChatSafetyContextService {
     public List<String> buildRecipeSafetyNotes(
             Optional<Long> authenticatedUserId,
             SafetyContext safetyContext,
-            Recipe recipe) {
-        List<String> notes = new ArrayList<>();
+            Recipe recipe,
+            MedicationSafetyService.Assessment medication) {
+        List<String> notes = new ArrayList<>(medication.notes());
         String ingredientText = String.join(" ", cleanRecipeValues(recipe.getIngredients())).toLowerCase();
         appendHealthProfileSafetyNotes(notes, safetyContext, ingredientText);
         authenticatedUserId.ifPresent(userId ->

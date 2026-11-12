@@ -31,10 +31,20 @@ const getWebApiBaseUrl = () => {
     return `http://${hostname}:8080/api`;
 };
 
-// 웹은 브라우저 주소 기준, 앱(iOS/Android)은 secrets.js의 개발 PC IP 기준으로 API 주소를 정합니다.
+// 앱(iOS/Android)은 EXPO_PUBLIC_API_BASE_URL에 https 주소(예: https://salus.tail9fe006.ts.net/api)가 있으면 그 주소를 씁니다.
+// 없으면 개발용으로 secrets.js의 개발 PC IP(http)를 씁니다. http는 같은 와이파이에서 비밀번호·토큰이 보일 수 있어
+// 개발 PC 밖에서 쓰는 앱 빌드는 반드시 https 주소로 만듭니다(2026-11-06 보안 점검).
+const getNativeApiBaseUrl = () => {
+    if (BUILD_API_BASE_URL && /^https:\/\//i.test(BUILD_API_BASE_URL)) {
+        return BUILD_API_BASE_URL;
+    }
+    return `http://${LOCAL_IP}:8080/api`;
+};
+
+// 웹은 브라우저 주소 기준, 앱은 위 규칙으로 API 주소를 정합니다.
 const API_BASE_URL = Platform.OS === 'web'
     ? getWebApiBaseUrl()
-    : `http://${LOCAL_IP}:8080/api`;
+    : getNativeApiBaseUrl();
 
 // Sign in with Apple은 유료 Apple Developer Program 계정의 권한(entitlement)이 있어야 동작합니다.
 // 켜려면 이 값을 true로 바꾸고 app.json에 "usesAppleSignIn": true와 expo-apple-authentication 플러그인을

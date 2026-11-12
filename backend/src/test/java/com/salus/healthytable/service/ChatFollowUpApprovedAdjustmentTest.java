@@ -44,7 +44,7 @@ class ChatFollowUpApprovedAdjustmentTest {
         ChatSession session = new ChatSession();
         session.setId(7L);
 
-        Optional<?> response = followUp.buildApprovedRecipeAdjustment(1L, session, "불닭계란말이 레시피 알려줘");
+        Optional<?> response = followUp.buildApprovedRecipeAdjustment(1L, session, "불닭계란말이 레시피 알려줘", null);
 
         assertThat(response).isEmpty();
         verify(workSessions, never()).find(anyLong(), anyLong());
@@ -57,7 +57,7 @@ class ChatFollowUpApprovedAdjustmentTest {
         session.setId(7L);
         when(workSessions.find(1L, 7L)).thenReturn(Optional.of(RecipeWorkSessionDTO.builder().build()));
 
-        followUp.buildApprovedRecipeAdjustment(1L, session, "3인분으로 바꿔줘");
+        followUp.buildApprovedRecipeAdjustment(1L, session, "3인분으로 바꿔줘", null);
 
         verify(workSessions).find(1L, 7L);
     }

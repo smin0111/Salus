@@ -90,38 +90,15 @@ class RecipeSecurityTest {
                 .andExpect(status().isOk());
     }
 
-    // 게스트도 재료 기반 레시피 추천은 요청할 수 있어야 합니다.
+    // 재료 기반 AI 추천(/recommend)은 등록 알레르기 확인 없이 LLM 답을 돌려줘서 없앴습니다. 게스트에게 열려 있지 않아야 합니다.
     @Test
-    void guestCanRequestRecipeRecommendation() throws Exception {
-        when(authenticatedUserProvider.getCurrentUserId()).thenReturn(Optional.empty());
-        when(geminiService.getRecipeRecommendation(List.of("양파"), "None"))
-                .thenReturn(Mono.just("추천 결과"));
-
-        MvcResult result = mockMvc.perform(post("/api/recipes/recommend")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"ingredients\":[\"양파\"]}"))
-                .andExpect(request().asyncStarted())
-                .andReturn();
-
-        mockMvc.perform(asyncDispatch(result))
-                .andExpect(status().isOk())
-                .andExpect(content().string("추천 결과"));
-    }
-
-    // 잘못된 추천 요청은 400 JSON 오류로 응답해야 합니다(@Valid 검증).
-    @Test
-    void invalidRecipeRecommendationRequestReturnsJsonBadRequest() throws Exception {
+    void recipeRecommendationIsNoLongerPublic() throws Exception {
         mockMvc.perform(post("/api/recipes/recommend")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"ingredients\":[]}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.error").value("BAD_REQUEST"))
-                .andExpect(jsonPath("$.message").value("추천에 사용할 재료를 1개 이상 입력해 주세요."))
-                .andExpect(jsonPath("$.path").value("/api/recipes/recommend"));
+                        .content("{\"ingredients\":[\"양파\"]}"))
+                .andExpect(status().isUnauthorized());
 
-        verifyNoInteractions(geminiService, authenticatedUserProvider, chatRateLimitService);
+        verifyNoInteractions(geminiService);
     }
 
     // 공개로 열어 둔 API 외의 레시피 쓰기 API는 게스트에게 401이어야 합니다.

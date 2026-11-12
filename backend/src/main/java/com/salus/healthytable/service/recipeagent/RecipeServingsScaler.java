@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
  * "약간"·"적당량"처럼 숫자가 없는 양은 그대로 둡니다. 원문 인분을 모르면 바꾸지 않습니다(추측하지 않음).
  * 2026-10-17 베타: "1인분용으로 다시 알려줘"에 같은 레시피(식빵 6장)를 그대로 다시 보여 줌.
  */
-final class RecipeServingsScaler {
+public final class RecipeServingsScaler {
 
     private static final int MAX_SERVINGS = 20;
 
@@ -59,7 +59,7 @@ final class RecipeServingsScaler {
     }
 
     /** 요청에서 원하는 인분을 읽습니다("1인분용으로", "두 인분", "혼자 먹을"). 없으면 빈 값입니다. */
-    static Optional<Integer> requestedServings(String message) {
+    public static Optional<Integer> requestedServings(String message) {
         if (message == null) {
             return Optional.empty();
         }
@@ -74,7 +74,7 @@ final class RecipeServingsScaler {
         return ALONE.matcher(message).find() ? Optional.of(1) : Optional.empty();
     }
 
-    static List<String> scale(List<String> lines, double ratio) {
+    public static List<String> scale(List<String> lines, double ratio) {
         return lines == null ? List.of() : lines.stream().map(line -> scaleLine(line, ratio)).toList();
     }
 

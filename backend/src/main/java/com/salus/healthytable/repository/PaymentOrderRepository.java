@@ -29,4 +29,11 @@ public interface PaymentOrderRepository extends JpaRepository<PaymentOrder, Long
     // 결제 후 확인 요청이 빠진 주문을 다시 확인할 때 씁니다(최근 것만).
     List<PaymentOrder> findByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
             Long userId, PaymentOrderStatus status, LocalDateTime after);
+
+    // 재확인은 최근 5건만 DB에서 바로 잘라 읽습니다(미결제 주문이 많아도 전부 메모리에 올리지 않게).
+    List<PaymentOrder> findTop5ByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
+            Long userId, PaymentOrderStatus status, LocalDateTime after);
+
+    // 결제창을 열고 끝내지 않은 주문 수(하루 생성 한도 확인용)입니다.
+    long countByUserIdAndStatusAndCreatedAtAfter(Long userId, PaymentOrderStatus status, LocalDateTime after);
 }

@@ -500,9 +500,9 @@ class MfdsDrugProductPermitAdapterTest {
         assertThat(result.notices()).contains("상호작용이 없다는 의미는 아닙니다.");
     }
 
-    // 모든 설명서 출처에 결과가 없어도 "안전"이 되면 안 됩니다.
+    // 모든 설명서 출처가 꺼져 있으면 조회를 완료하지 않은 상태입니다.
     @Test
-    void allLabelSourcesMissingDoesNotBecomeSafe() {
+    void allLabelSourcesDisabledDoesNotBecomeNoMatch() {
         OfficialMedicationFoodInteractionAdapter adapter = adapter(
                 new FakePermitPort().with("근거없음정", permitFound(candidate("P2", "근거없음정", "A사", "정제", ingredients("성분A")))),
                 new FakeMfdsPort().defaultResult(infoStatus(MedicationDataStatus.API_DISABLED)),
@@ -512,8 +512,8 @@ class MfdsDrugProductPermitAdapterTest {
 
         MedicationInteractionResult result = adapter.check(List.of("근거없음정"), List.of("자몽 1개"));
 
-        assertThat(result.status()).isEqualTo(InteractionStatus.NO_MATCHING_INTERACTION_FOUND);
-        assertThat(result.status()).isNotEqualTo(InteractionStatus.SAFE);
+        assertThat(result.status()).isEqualTo(InteractionStatus.API_DISABLED);
+        assertThat(result.notices()).contains("상호작용이 없다는 의미는 아닙니다.");
     }
 
     // 제품 후보가 여러 개면 자동으로 고르지 않아야 합니다.
@@ -740,7 +740,8 @@ class MfdsDrugProductPermitAdapterTest {
                 new MedicationFoodEvidenceExtractor(foodNormalizer),
                 new MedicationRecipeEvidenceMatcher(foodNormalizer),
                 new InMemoryMedicationEvidenceCache(),
-                new UnknownMedicationFoodInteractionAdapter());
+                new UnknownMedicationFoodInteractionAdapter(),
+                org.mockito.Mockito.mock(MedicationFoodEvidenceArchive.class));
         ReflectionTestUtils.setField(adapter, "enabled", enabled);
         return adapter;
     }

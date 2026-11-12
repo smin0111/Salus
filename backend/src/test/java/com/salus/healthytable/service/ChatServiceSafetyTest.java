@@ -1,5 +1,6 @@
 package com.salus.healthytable.service;
 
+import com.salus.healthytable.service.recipeagent.MedicationSafetyService;
 import com.salus.healthytable.domain.Recipe;
 import com.salus.healthytable.domain.ChatSession;
 import com.salus.healthytable.domain.HealthProfile;
@@ -54,6 +55,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -102,9 +104,10 @@ class ChatServiceSafetyTest {
     private final RecipeReplyParser recipeReplyParser = new RecipeReplyParser(recipeResponseSanitizer);
     private final ChatSessionService chatSessionService = new ChatSessionService(
             chatSessionRepository, chatMessageRepository);
+    private final MedicationSafetyService medicationSafetyService = mock(MedicationSafetyService.class);
     private final ChatSafetyContextService chatSafetyContextService = new ChatSafetyContextService(
             healthProfileRepository, healthCheckupRepository, healthCheckupAnalysisService, allergenMatcher(), allergenRegistry(),
-            mock(ProfileResolutionShadowObserver.class));
+            mock(ProfileResolutionShadowObserver.class), medicationSafetyService);
 
     private static AllergenRegistry allergenRegistry() {
         AllergenDictionary dictionary = new AllergenDictionary();
@@ -177,6 +180,8 @@ class ChatServiceSafetyTest {
     // 기본 설정: 식약처 공식 레시피 검색은 결과 없음으로 두어 웹 검색 경로를 타게 합니다.
     @BeforeEach
     void useWebSearchWhenOfficialRecipeIsUnavailable() {
+        when(medicationSafetyService.assess(any(), any())).thenReturn(new MedicationSafetyService.Assessment(
+                false, List.of("복용약과 음식의 상호작용을 조회하지 않았어요.")));
         when(chatReplyWriter.saveWithCard(any(), any(), any()))
                 .thenAnswer(invocation -> new ChatReplyWriter.SavedReply(
                         1L, ((ChatReplyWriter.PreparedCard) invocation.getArgument(2)).publicId()));
@@ -449,6 +454,318 @@ class ChatServiceSafetyTest {
         assertThat(ingredientSwap.getMessage()).isEqualTo("간장을 굴소스로 바꿔줘");
     }
 
+    // 게스트의 재료 수정도 앱이 보낸 대화 기록의 직전 레시피에 규칙으로 적용합니다(2026-11-12 베타: 일반 대화로 가서 안내 문구만 받음).
+    @Test
+    void guestRemovalFollowUpEditsRecipeFromHistoryWithoutLlm() {
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("돼지고기 빼고 2인분으로 바꿔줘");
+        request.setHistory(List.of(
+                new ChatDto.Message("user", "김치찌개 레시피 알려줘"),
+                new ChatDto.Message("model", PREVIOUS_KIMCHI_STEW.replace("김치찌개 레시피입니다.", "김치찌개 2인분 레시피입니다."))));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response.getRecipe()).isNotNull();
+        assertThat(response.getRecipe().getTitle()).isEqualTo("김치찌개");
+        assertThat(String.join(" ", response.getRecipe().getIngredients())).contains("김치 300g").doesNotContain("돼지고기");
+        assertThat(String.join(" ", response.getRecipe().getSteps())).doesNotContain("돼지고기").contains("대파를 넣고");
+        assertThat(response.getSessionId()).isNull();
+        verify(llmService, never()).getChatResponse(any(LlmService.Task.class), anyString(), any());
+        verify(recipeGenerationClient, never()).generate(any());
+        verify(recipeWorkSessionService, never()).saveRecommendation(any(), any(), anyString());
+        verify(chatReplyWriter, never()).saveWithCard(any(), any(), any());
+    }
+
+    // 게스트가 대화에서 말한 알레르기 재료를 더해 달라고 하면 고친 레시피로 다시 판정해 막습니다.
+    @Test
+    void guestAdditionFollowUpIsBlockedByAllergyStatedInHistory() {
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("땅콩 넣어줘");
+        request.setHistory(List.of(
+                new ChatDto.Message("user", "땅콩 알레르기가 있어요"),
+                new ChatDto.Message("user", "김치찌개 레시피 알려줘"),
+                new ChatDto.Message("model", PREVIOUS_KIMCHI_STEW)));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response.getRecipe()).isNull();
+        assertThat(response.getReply()).contains("땅콩");
+        verify(llmService, never()).getChatResponse(any(LlmService.Task.class), anyString(), any());
+    }
+
+    // 승인 레시피 답변 형식(첫 줄 인분, [재료 - N인분], 단계 뒤 [불/시간/완료 기준]).
+    private static final String PREVIOUS_APPROVED_STEW = """
+            김치찌개 2인분 레시피입니다.
+
+            [재료 - 2인분]
+            - 돼지고기 목살 200g
+            - 익은 배추김치 300g
+            - 양파 100g
+            - 식용유 5ml
+
+            [조리 순서]
+            1. 두꺼운 냄비에 식용유와 돼지고기를 넣어 볶는다. [불: 중강불 / 시간: 4~5분 / 완료 기준: 고기 겉면의 붉은색이 사라진 상태]
+            2. 김치와 양파를 넣고 바닥이 타지 않게 볶는다. [불: 중불 / 시간: 3분 / 완료 기준: 김치 숨이 죽은 상태]
+            3. 물을 붓고 뚜껑을 반쯤 덮어 끓인다. [불: 중약불 / 시간: 20분 / 완료 기준: 국물 맛이 우러난 상태]
+            """;
+
+    // 핵심 재료(돼지고기)를 빼 달라는 후속 요청은 규칙으로 지우지 않고 레시피 요청으로 바꿔 출처에서 다시 찾게 합니다.
+    // 2026-11-12 베타: 지우면 "식용유 넣어 볶는다 / 완료 기준: 고기 겉면…" 단계와 원래 열량이 남음.
+    @Test
+    void coreIngredientRemovalIsRewrittenAsRecipeRequest() {
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        when(llmService.getChatResponse(any(LlmService.Task.class), anyString(), any())).thenReturn(Mono.just("답변"));
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("돼지고기 빼고 2인분으로 바꿔줘");
+        request.setHistory(List.of(
+                new ChatDto.Message("user", "김치찌개 레시피 알려줘"),
+                new ChatDto.Message("model", PREVIOUS_APPROVED_STEW)));
+
+        chatService.processChat(Optional.empty(), request).block();
+
+        verify(chatIntentClassifier).classify("돼지고기 빼고 김치찌개 2인분 레시피 알려줘");
+    }
+
+    // 핵심 재료를 다른 재료로 바꾸면 같은 자리에 끼워 넣지 않고 그 재료가 들어간 레시피를 다시 찾게 합니다
+    // (2026-11-12 사용자: "돼지고기 말고 참치 넣어줘"에 맛이 달라질 수 있다는 안내만 붙어 쓸모없음).
+    @Test
+    void coreIngredientSubstitutionIsRewrittenAsRecipeRequest() {
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        when(llmService.getChatResponse(any(LlmService.Task.class), anyString(), any())).thenReturn(Mono.just("답변"));
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("돼지고기 말고 참치 넣어줘");
+        request.setHistory(List.of(
+                new ChatDto.Message("user", "김치찌개 레시피 알려줘"),
+                new ChatDto.Message("model", PREVIOUS_APPROVED_STEW)));
+
+        chatService.processChat(Optional.empty(), request).block();
+
+        verify(chatIntentClassifier).classify("돼지고기 빼고 참치 김치찌개 레시피 알려줘");
+    }
+
+    // 바꿔 넣는 재료가 대화에서 말한 알레르기 재료면, 바뀐 레시피 요청도 출처를 찾기 전에 막습니다(Recipe Agent를 쓰지 않는 경로).
+    @Test
+    void coreSubstitutionToAllergenIsBlockedBeforeSearch() {
+        RecipeNormalizer realNormalizer = new RecipeNormalizer();
+        when(recipeNormalizer.normalize(anyString()))
+                .thenAnswer(invocation -> realNormalizer.normalize(invocation.getArgument(0)));
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.RECIPE_REQUEST);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("돼지고기 말고 새우 넣어줘");
+        request.setHistory(List.of(
+                new ChatDto.Message("user", "새우 알레르기가 있어요"),
+                new ChatDto.Message("user", "김치찌개 레시피 알려줘"),
+                new ChatDto.Message("model", PREVIOUS_APPROVED_STEW)));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(request.getMessage()).isEqualTo("돼지고기 빼고 새우 김치찌개 레시피 알려줘");
+        assertThat(response.getRecipe()).isNull();
+        assertThat(response.getReply()).contains("새우");
+        verify(searchEngine, never()).search(anyString());
+        verify(recipeGenerationClient, never()).generate(any());
+        verify(llmService, never()).getChatResponse(any(LlmService.Task.class), anyString(), any());
+    }
+
+    // Recipe Agent 경로로 가도 대화에서 말한 알레르기는 원문에서 읽혀 Agent의 안전 판정에 전달됩니다.
+    @Test
+    void coreSubstitutionKeepsHistoryAllergyForRecipeAgent() {
+        ReflectionTestUtils.setField(chatService, "recipeAgentEnabled", true);
+        ReflectionTestUtils.setField(chatService, "recipeAgentInitialRoutingEnabled", true);
+        RecipeNormalizer realNormalizer = new RecipeNormalizer();
+        when(recipeNormalizer.normalize(anyString()))
+                .thenAnswer(invocation -> realNormalizer.normalize(invocation.getArgument(0)));
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.RECIPE_REQUEST);
+        when(recipeAgentOrchestrator.handle(any(), any(), any(), any()))
+                .thenReturn(Mono.just(new ChatDto.Response("agent response")));
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("돼지고기 말고 참치 넣어줘");
+        request.setHistory(List.of(
+                new ChatDto.Message("user", "우유 알레르기가 있어요"),
+                new ChatDto.Message("user", "김치찌개 레시피 알려줘"),
+                new ChatDto.Message("model", PREVIOUS_APPROVED_STEW)));
+
+        chatService.processChat(Optional.empty(), request).block();
+
+        ArgumentCaptor<ChatSafetyContextService.SafetyContext> safety =
+                ArgumentCaptor.forClass(ChatSafetyContextService.SafetyContext.class);
+        verify(recipeAgentOrchestrator).handle(any(), any(), eq(request), safety.capture());
+        assertThat(request.getMessage()).isEqualTo("돼지고기 빼고 참치 김치찌개 레시피 알려줘");
+        assertThat(safety.getValue().allergies()).contains("우유");
+    }
+
+    // 핵심이 아닌 재료끼리 바꾸는 요청(양파 → 대파)은 기존처럼 규칙으로 바꿉니다.
+    @Test
+    void nonCoreSubstitutionStaysRuleBased() {
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("양파 말고 대파 넣어줘");
+        request.setHistory(List.of(
+                new ChatDto.Message("user", "김치찌개 레시피 알려줘"),
+                new ChatDto.Message("model", PREVIOUS_APPROVED_STEW)));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        verify(chatIntentClassifier).classify("양파 말고 대파 넣어줘");
+        assertThat(response.getRecipe()).isNotNull();
+        assertThat(String.join(" ", response.getRecipe().getIngredients())).contains("대파 100g").doesNotContain("양파");
+    }
+
+    // 한 번 고친 레시피(요약 줄 "인분: 1인분")를 다시 고치며 인분을 바꾸면, 그 인분을 기준으로 분량을 바꿉니다.
+    @Test
+    void secondEditKeepsServingsFromEditedReply() {
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("대파 빼고 2인분으로 바꿔줘");
+        request.setHistory(List.of(
+                new ChatDto.Message("user", "양파 빼고 1인분으로 바꿔줘"),
+                new ChatDto.Message("model", """
+                        김치찌개 레시피입니다.
+
+                        조리 시간: 40분 / 인분: 1인분 / 난이도: 2
+
+                        [재료]
+                        - 김치 150g
+                        - 대파 1/2대
+
+                        [조리 순서]
+                        1. 김치를 중불에서 5분 볶는다.
+                        2. 물 250ml를 붓고 10분 끓인다.
+                        3. 대파를 넣고 2분 더 끓여 완성한다.
+                        """)));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response.getRecipe()).isNotNull();
+        assertThat(response.getRecipe().getServings()).isEqualTo(2);
+        assertThat(String.join(" ", response.getRecipe().getIngredients())).contains("김치 300g").doesNotContain("대파");
+        assertThat(String.join(" ", response.getRecipe().getSteps())).contains("물 500ml");
+        assertThat(response.getRecipe().getDescription()).doesNotContain("인분을 알 수 없어");
+    }
+
+    // 핵심이 아닌 재료(양파)는 규칙으로 빼고, 같은 문장의 인분 변경은 원래 인분(2인분)을 알면 분량을 비율대로 바꿉니다.
+    // 재료가 바뀌었으므로 열량은 보여 주지 않습니다.
+    @Test
+    void nonCoreRemovalWithServingsScalesIngredientsAndHidesCalories() {
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("양파 빼고 1인분으로 바꿔줘");
+        request.setHistory(List.of(
+                new ChatDto.Message("user", "김치찌개 레시피 알려줘"),
+                new ChatDto.Message("model", PREVIOUS_APPROVED_STEW + "\n[검증 정보]\n- 열량: 1인분당 약 360kcal\n")));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response.getRecipe()).isNotNull();
+        assertThat(response.getRecipe().getServings()).isEqualTo(1);
+        assertThat(String.join(" ", response.getRecipe().getIngredients()))
+                .contains("돼지고기 목살 100g").contains("익은 배추김치 150g").doesNotContain("양파");
+        assertThat(response.getRecipe().getCalories()).isNull();
+        assertThat(response.getRecipe().getCaloriesPerServing()).isNull();
+        assertThat(response.getRecipe().getDescription()).contains("열량은 표시하지 않았어요");
+        verify(llmService, never()).getChatResponse(any(LlmService.Task.class), anyString(), any());
+    }
+
+    // 직전 답변에 "요리명:"이 있어도(Recipe Agent 형식) 재료 수정+인분 문장은 인분 재작성으로 새지 않고 재료 수정 처리로 갑니다.
+    // 단계에 적힌 분량도 같은 비율로 바꾸고 시간은 그대로 둡니다(Codex 검토 지적 2건).
+    @Test
+    void removalWithServingsAlsoScalesStepAmountsWhenHistoryHasDishNameLine() {
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("양파 빼고 1인분으로 바꿔줘");
+        request.setHistory(List.of(
+                new ChatDto.Message("user", "김치찌개 레시피 알려줘"),
+                new ChatDto.Message("model", """
+                        김치찌개 2인분 레시피입니다.
+                        - 요리명: 김치찌개
+
+                        [재료 - 2인분]
+                        - 돼지고기 200g
+                        - 김치 300g
+                        - 양파 100g
+
+                        [조리 순서]
+                        1. 냄비에 돼지고기 200g과 김치를 넣고 중불에서 5분 볶는다.
+                        2. 물 500ml를 붓고 10분 끓인다.
+                        3. 양파를 썰어 넣고 2분 더 끓여 완성한다.
+                        """)));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        verify(chatIntentClassifier).classify("양파 빼고 1인분으로 바꿔줘");
+        assertThat(response.getRecipe()).isNotNull();
+        assertThat(String.join(" ", response.getRecipe().getIngredients())).contains("돼지고기 100g").contains("김치 150g")
+                .doesNotContain("양파");
+        assertThat(String.join(" ", response.getRecipe().getSteps()))
+                .contains("돼지고기 100g").contains("물 250ml").contains("5분").contains("10분").doesNotContain("200g");
+    }
+
+    // 원래 인분을 모르면 분량을 추측해 바꾸지 않고 그렇다고 안내합니다.
+    @Test
+    void servingsChangeWithUnknownBaseServingsKeepsAmountsAndSaysSo() {
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("양파 빼고 3인분으로 바꿔줘");
+        request.setHistory(List.of(
+                new ChatDto.Message("user", "김치찌개 레시피 알려줘"),
+                new ChatDto.Message("model", PREVIOUS_KIMCHI_STEW)));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response.getRecipe()).isNotNull();
+        assertThat(String.join(" ", response.getRecipe().getIngredients())).contains("김치 300g").doesNotContain("양파");
+        assertThat(response.getRecipe().getDescription()).contains("원래 레시피의 인분을 알 수 없어 분량은 그대로 두었어요");
+    }
+
+    // 로그인 사용자의 승인 레시피는 원본에서 요청 인분으로 다시 계산한 뒤 재료를 뺍니다.
+    @Test
+    void memberApprovedRecipeIsReRenderedAtRequestedServingsBeforeRemoval() {
+        ChatDto.Request request = editFollowUp("양파 빼고 4인분으로 바꿔줘", List.of());
+        Recipe recipe = new Recipe();
+        recipe.setTitle("김치찌개");
+        recipe.setIngredients(List.of("김치 600g", "양파 200g", "대파 2대"));
+        recipe.setSteps(List.of("김치를 중불에서 5분 볶는다.", "양파를 썰어 넣는다.", "대파를 넣고 2분 더 끓여 완성한다."));
+        recipe.setBaseServings(4);
+        when(recipeWorkSessionService.find(1L, 10L)).thenReturn(Optional.of(RecipeWorkSessionDTO.builder()
+                .userId(1L).chatSessionId(10L).recipeId(92L).recipeVersion(2).servings(2)
+                .spiceLevel("NORMAL").build()));
+        when(approvedRecipeService.renderApprovedRecipe(92L, 2, 4, ApprovedRecipeService.SpiceLevel.NORMAL))
+                .thenReturn(new ApprovedRecipeService.RenderedRecipe(recipe, "4인분 김치찌개", 4,
+                        ApprovedRecipeService.SpiceLevel.NORMAL, 2, List.of()));
+        Recipe twoServings = new Recipe();
+        twoServings.setTitle("김치찌개");
+        twoServings.setIngredients(List.of("김치 300g", "양파 100g", "대파 1대"));
+        twoServings.setSteps(recipe.getSteps());
+        twoServings.setBaseServings(2);
+        when(approvedRecipeService.renderApprovedRecipe(92L, 2, 2, ApprovedRecipeService.SpiceLevel.NORMAL))
+                .thenReturn(new ApprovedRecipeService.RenderedRecipe(twoServings, "2인분 김치찌개", 2,
+                        ApprovedRecipeService.SpiceLevel.NORMAL, 2, List.of()));
+
+        ChatDto.Response response = chatService.processChat(Optional.of(1L), request).block();
+
+        assertThat(response.getRecipe()).isNotNull();
+        assertThat(response.getRecipe().getServings()).isEqualTo(4);
+        assertThat(String.join(" ", response.getRecipe().getIngredients())).contains("김치 600g").doesNotContain("양파");
+        verify(approvedRecipeService).renderApprovedRecipe(92L, 2, 4, ApprovedRecipeService.SpiceLevel.NORMAL);
+    }
+
+    // 대화 기록에 레시피가 없으면 지어내지 않고 기존 처리(일반 대화)로 넘깁니다.
+    @Test
+    void guestEditWithoutPreviousRecipeFallsThrough() {
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        when(llmService.getChatResponse(any(LlmService.Task.class), anyString(), any())).thenReturn(Mono.just("어떤 요리에서 뺄까요?"));
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("양파 빼줘");
+        request.setHistory(List.of(new ChatDto.Message("user", "안녕")));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response.getRecipe()).isNull();
+        verify(llmService).getChatResponse(any(LlmService.Task.class), anyString(), any());
+    }
+
     // "불세기는 어떻게해?"는 일반 대화 LLM 대신 직전 레시피 단계에 적힌 값만으로 답합니다(게스트는 대화 기록의 레시피).
     // 2026-10-12 일반 대화가 원문(중약불 한 곳)에 없는 "양파와 조개는 약불, 와인은 중불"을 지어냄.
     @Test
@@ -477,6 +794,32 @@ class ChatServiceSafetyTest {
         assertThat(response.getReply()).contains("3단계").contains("중약불")
                 .contains("1, 2, 4단계: 원문에 불 세기가 적혀 있지 않아요").doesNotContain("약불,").doesNotContain("중불에서 끓");
         verify(llmService, never()).getChatResponse(any(LlmService.Task.class), anyString(), any());
+    }
+
+    // 불 세기 답에는 재료가 안 나와도, 바탕 레시피(바지락)가 이번에 말한 알레르기(조개)와 충돌하면 답하지 않고 막습니다(2026-11-06 보안 점검).
+    @Test
+    void stepQuestionIsBlockedWhenUnderlyingRecipeConflictsWithAllergy() {
+        when(chatIntentClassifier.classify(anyString())).thenReturn(ChatIntentClassifier.ChatIntent.GENERAL_CHAT);
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("불세기는 어떻게해?");
+        request.setHistory(List.of(
+                new ChatDto.Message("user", "조개 알레르기가 있어요"),
+                new ChatDto.Message("user", "봉골레파스타 레시피 알려줘"),
+                new ChatDto.Message("model", """
+                        봉골레파스타 레시피입니다.
+
+                        [재료]
+                        - 카펠리니면 100g
+                        - 바지락 1줌
+
+                        [조리 순서]
+                        1. 면을 4분 삶는다.
+                        2. 팬에 올리브오일을 두르고 마늘을 중약불에서 볶는다.
+                        """)));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response.getReply()).contains("추천할 수 없습니다").doesNotContain("중약불");
     }
 
     @Test
@@ -1219,6 +1562,123 @@ class ChatServiceSafetyTest {
         verify(ingredientInfoService, never()).answer(anyString());
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "나 심바스타틴 복용중인데 자몽주스 먹어도 돼?",
+            "왜 자몽주스는 약이랑 같이 먹으면 안 돼?",
+            "약을 복용 중인데 과일 스무디 마셔도 될까요?",
+            "복용약과 자몽주스의 상호작용을 알려줘"
+    })
+    void medicationFoodQuestionNeverReachesRecipeRouting(String message) {
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage(message);
+        ReflectionTestUtils.setField(chatService, "recipeAgentEnabled", true);
+        ReflectionTestUtils.setField(chatService, "recipeAgentInitialRoutingEnabled", true);
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response.getReply()).contains("상호작용을 조회하지 않았어요", "의사나 약사");
+        assertThat(response.getRecipe()).isNull();
+        verify(approvedRecipeService, never()).findApprovedMatch(anyString());
+        verify(recipeNormalizer, never()).normalize(anyString());
+        verify(searchEngine, never()).search(anyString());
+        verifyNoInteractions(chatIntentClassifier, recipeAgentOrchestrator, llmService);
+    }
+
+    @Test
+    void directQuestionChecksTheExplicitDrugAndFood() {
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("나 심바스타틴 복용중인데 자몽주스 먹어도 돼?");
+        when(medicationSafetyService.assess(List.of("심바스타틴"), List.of("자몽주스")))
+                .thenReturn(new MedicationSafetyService.Assessment(true, List.of("공식 라벨에서 자몽주스를 피하도록 안내합니다.")));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response.getReply()).contains("공식 라벨에서 자몽주스", "의사나 약사");
+        assertThat(response.getRecipe()).isNull();
+        verifyNoInteractions(recipeAgentOrchestrator, llmService);
+    }
+
+    @Test
+    void ambiguousDrugAndFoodQuestionDoesNotSubstituteTheProfileDrug() {
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("심바스타틴이랑 자몽주스 먹어도 돼?");
+        request.setHealthProfile(new ChatDto.HealthProfileContext(
+                List.of(), List.of(), List.of(), List.of("와파린"), List.of()));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response.getReply()).contains("정확한 약 제품명과 음식명을 각각 알려 주세요");
+        verifyNoInteractions(medicationSafetyService);
+    }
+
+    @Test
+    void approvedRecipeWithConfirmedMedicationConflictIsNotServed() {
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("자몽주스 레시피 알려줘");
+        request.setHealthProfile(new ChatDto.HealthProfileContext(
+                List.of(), List.of(), List.of(), List.of("심바스타틴"), List.of()));
+        Recipe recipe = new Recipe();
+        recipe.setTitle("자몽주스");
+        recipe.setIngredients(List.of("자몽주스 200ml"));
+        recipe.setSteps(List.of("얼음을 넣습니다."));
+        stubRecipeRequest("자몽주스");
+        when(approvedRecipeService.findApprovedMatch(request.getMessage())).thenReturn(Optional.of(recipe));
+        when(approvedRecipeService.renderApprovedRecipe(recipe, request.getMessage()))
+                .thenReturn(new ApprovedRecipeService.RenderedRecipe(
+                        recipe, "승인 레시피", 2, ApprovedRecipeService.SpiceLevel.NORMAL, 2, List.of()));
+        when(medicationSafetyService.assess(List.of("심바스타틴"), List.of("자몽주스 200ml")))
+                .thenReturn(new MedicationSafetyService.Assessment(true, List.of("자몽주스 회피 근거")));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response.getRecipe()).isNull();
+        assertThat(response.getReply()).contains("자몽주스 회피 근거");
+        verifyNoInteractions(recipeAgentOrchestrator, llmService);
+    }
+
+    @Test
+    void consumptionQuestionWithoutFoodAsksForClarification() {
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("먹어도 돼?");
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response.getReply()).contains("음식명이나 원재료를 알려 주세요");
+        verifyNoInteractions(chatIntentClassifier, recipeAgentOrchestrator, llmService);
+    }
+
+    @Test
+    void interactionQuestionStillChecksKnownAllergens() {
+        ChatDto.Request request = new ChatDto.Request();
+        request.setMessage("복용약과 땅콩의 상호작용을 알려줘");
+        request.setHealthProfile(new ChatDto.HealthProfileContext(
+                List.of("땅콩"), List.of(), List.of(), List.of(), List.of()));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response.getReply()).contains("확인된 알레르기(땅콩)", "상호작용을 조회하지 않았어요");
+        assertThat(response.getRecipe()).isNull();
+        verifyNoInteractions(chatIntentClassifier, recipeAgentOrchestrator, llmService);
+    }
+
+    @Test
+    void recipeRequestWithConsumptionDescriptionStillSearchesForTheDish() {
+        ChatDto.Request request = new ChatDto.Request();
+        String message = "차갑게 먹어도 맛있는 파스타 레시피 알려줘";
+        request.setMessage(message);
+        stubRecipeRequest("파스타");
+        when(chatIntentClassifier.classify(message)).thenReturn(new ChatIntentClassifier().classify(message));
+        when(searchEngine.search("파스타")).thenReturn(Mono.just(new SearchEngine.SearchResponse(
+                SearchEngine.SearchStatus.EMPTY, List.of(), "test")));
+
+        ChatDto.Response response = chatService.processChat(Optional.empty(), request).block();
+
+        assertThat(response.getReply()).contains("레시피 정보를 찾지 못했습니다");
+        verify(recipeNormalizer).normalize(message);
+        verify(searchEngine).search("파스타");
+    }
+
     // 재료 정보 답변이 없으면(재료 정체를 묻는 질문 모양이 아님) 지금처럼 일반 대화 지시문으로 답합니다.
     @Test
     void messageWithoutIngredientAnswerFallsBackToConversation() {
@@ -1813,9 +2273,10 @@ class ChatServiceSafetyTest {
         verify(chatMessageRepository, times(1)).save(any());
     }
 
-    @Test
-    void approvedAdjustmentPersistsRenderedCardAndRegisteredSources() throws Exception {
-        ChatDto.Request request = editFollowUp("4인분으로 바꿔줘", List.of());
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void approvedAdjustmentPersistsOnlyAfterAllergyCheck(boolean hasConflict) throws Exception {
+        ChatDto.Request request = editFollowUp("4인분으로 바꿔줘", hasConflict ? List.of("돼지고기") : List.of());
         Recipe recipe = new Recipe();
         recipe.setId(92L);
         recipe.setTitle("김치찌개");
@@ -1835,6 +2296,13 @@ class ChatServiceSafetyTest {
 
         ChatDto.Response response = chatService.processChat(Optional.of(1L), request).block();
 
+        if (hasConflict) {
+            assertThat(response.getRecipe()).isNull();
+            assertThat(response.getReply()).contains("돼지고기", "알레르기");
+            verify(recipeWorkSessionService, never()).saveApprovedRecommendation(
+                    1L, 10L, "4인분 김치찌개", 92L, 2, 4, ApprovedRecipeService.SpiceLevel.NORMAL);
+            return;
+        }
         ChatReplyWriter.PreparedCard prepared = assertCardPersisted(response, RecipeCardProvenance.APPROVED_CATALOG);
         assertThat(response.getRecipe().getServings()).isEqualTo(4);
         assertThat(cardMapper.readTree(prepared.sourcesJson()).get(0).get("role").asText()).isEqualTo("REGISTERED");

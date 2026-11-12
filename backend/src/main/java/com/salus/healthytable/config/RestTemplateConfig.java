@@ -11,8 +11,13 @@ import org.springframework.web.client.RestTemplate;
 @Configuration
 public class RestTemplateConfig {
 
+    // 결제사 조회 같은 동기 호출이 응답 없이 요청 스레드를 붙잡지 않게 연결 5초·읽기 15초로 제한합니다(2026-11-06 보안 점검).
     @Bean
     public RestTemplate restTemplate() {
-        return new RestTemplate();
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory =
+                new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(5_000);
+        factory.setReadTimeout(15_000);
+        return new RestTemplate(factory);
     }
 }

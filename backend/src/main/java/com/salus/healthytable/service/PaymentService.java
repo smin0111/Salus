@@ -52,7 +52,6 @@ public class PaymentService {
     private static final int RECONCILE_LOOKBACK_DAYS = 2;
     // 결제창을 연 뒤 이 시간 안의 미완료 주문은 아직 결제될 수 있다고 봅니다(탈퇴 차단 기준, UserAccountService도 씀).
     public static final java.time.Duration PAYMENT_IN_PROGRESS_WINDOW = java.time.Duration.ofMinutes(30);
-    private static final int RECONCILE_MAX_ORDERS = 5;
     // 포트원 서버 SDK와 같은 허용 시차(5분)입니다. 이보다 오래되거나 앞선 웹훅은 재전송 공격으로 보고 받지 않습니다.
     private static final long WEBHOOK_TOLERANCE_SECONDS = 5 * 60;
     private static final String WEBHOOK_SECRET_PREFIX = "whsec_";
@@ -161,11 +160,8 @@ public class PaymentService {
         }
         LocalDateTime now = LocalDateTime.now(clock);
         List<PaymentOrder> pending = paymentOrderRepository
-                .findByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
-                        userId, PaymentOrderStatus.PENDING, now.minusDays(RECONCILE_LOOKBACK_DAYS))
-                .stream()
-                .limit(RECONCILE_MAX_ORDERS)
-                .toList();
+                .findTop5ByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
+                        userId, PaymentOrderStatus.PENDING, now.minusDays(RECONCILE_LOOKBACK_DAYS));
         for (PaymentOrder order : pending) {
             Optional<JsonNode> found;
             try {
@@ -273,7 +269,7 @@ public class PaymentService {
         } else if ("CANCELLED".equals(status)) {
             String transactionId = text(payment.get(), "transactionId");
             if (transactionId != null && paymentTxHelper.cancelOrder(order.get().getId(), transactionId)) {
-                log.info("Payment cancelled by webhook. PLUS period reverted.");
+                log.info("Payment cancelled by webhook.");
             }
         }
     }

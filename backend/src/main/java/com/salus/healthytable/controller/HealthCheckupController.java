@@ -86,7 +86,7 @@ public class HealthCheckupController {
         // 분석은 건강정보를 이용하는 기능이라 동의가 있어야 합니다(저장된 기록 조회 GET /latest는 본인 열람이라 막지 않음).
         consentService.requireConsent(userId);
         HealthCheckupAnalysisDTO analysis = healthCheckupRepository.findTopByUserIdOrderByCheckupDateDescIdDesc(userId)
-                .map(analysisService::analyze)
+                .map(checkup -> analysisService.analyzeForUser(userId, checkup))
                 .orElseGet(analysisService::emptyAnalysis);
         return ResponseEntity.ok(analysis);
     }

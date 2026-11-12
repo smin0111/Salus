@@ -68,6 +68,7 @@ class PaymentServiceTest {
     private MockRestServiceServer server;
     private PaymentService paymentService;
     private User user;
+    private PaymentTxHelper paymentTxHelper;
 
     // 웹훅 시크릿(whsec_ + Base64)과 현재 시각(초). 고정 시각 2026-07-05T15:30:00Z입니다.
     private static final String WEBHOOK_SECRET = "whsec_" + Base64.getEncoder().encodeToString(
@@ -83,7 +84,7 @@ class PaymentServiceTest {
         server = MockRestServiceServer.createServer(restTemplate);
         Clock clock = Clock.fixed(Instant.parse("2026-07-05T15:30:00Z"), ZoneId.of("Asia/Seoul"));
         // PaymentService는 외부 포트원 API 검증, PaymentTxHelper는 DB Transaction 저장을 담당합니다.
-        PaymentTxHelper paymentTxHelper = new PaymentTxHelper(paymentRepository, orderRepository, userRepository, clock);
+        paymentTxHelper = new PaymentTxHelper(paymentRepository, orderRepository, userRepository, clock);
         paymentService = new PaymentService(orderRepository, userRepository, restTemplate, clock, paymentTxHelper,
                 new ObjectMapper());
         ReflectionTestUtils.setField(paymentService, "portoneApiSecret", "test-secret");
@@ -100,6 +101,8 @@ class PaymentServiceTest {
         user.setId(1L);
         user.setGrade(UserGrade.BASIC);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        // 주문 완료·취소는 회원 행을 잠근 뒤 만료일을 계산합니다(같은 회원의 동시 처리 대비).
+        when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(user));
         when(orderRepository.save(any(PaymentOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(paymentRepository.findByImpUid(any())).thenReturn(Optional.empty());
@@ -266,7 +269,7 @@ class PaymentServiceTest {
     void reconcileCompletesPaidOrderWhoseVerificationWasMissed() {
         PaymentOrder paid = pendingOrder(user);
         PaymentOrder notPaid = order("salus_order2", user, 11L);
-        when(orderRepository.findByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
+        when(orderRepository.findTop5ByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
                 1L, PaymentOrderStatus.PENDING, NOW.minusDays(2))).thenReturn(List.of(paid, notPaid));
         expectPayment("salus_order1", paid("salus_order1", 9900).replace("tx_123", "tx_77"));
         server.expect(requestTo("https://api.portone.io/payments/salus_order2?storeId=store-test"))
@@ -286,7 +289,7 @@ class PaymentServiceTest {
     @Test
     void paymentInProgressBlocksOnlyRecentUnfinishedOrders() {
         PaymentOrder notPaid = order("salus_order2", user, 11L);
-        when(orderRepository.findByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
+        when(orderRepository.findTop5ByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
                 1L, PaymentOrderStatus.PENDING, NOW.minusDays(2))).thenReturn(List.of(notPaid));
         when(orderRepository.findByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
                 1L, PaymentOrderStatus.PENDING, NOW.minusMinutes(30))).thenReturn(List.of(notPaid));
@@ -296,7 +299,7 @@ class PaymentServiceTest {
         assertThat(paymentService.hasPaymentInProgress(1L)).isTrue();
         server.verify();
 
-        when(orderRepository.findByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
+        when(orderRepository.findTop5ByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
                 1L, PaymentOrderStatus.PENDING, NOW.minusDays(2))).thenReturn(List.of());
         when(orderRepository.findByUserIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(
                 1L, PaymentOrderStatus.PENDING, NOW.minusMinutes(30))).thenReturn(List.of());
@@ -401,6 +404,33 @@ class PaymentServiceTest {
         sendWebhook(webhookBody("Transaction.Cancelled", "salus_order1"));
         assertThat(user.getGrade()).isEqualTo(UserGrade.PLUS);
         assertThat(user.getPlusExpiresAt()).isEqualTo(NOW.plusDays(10));
+    }
+
+    // 끝내지 않은 주문이 하루 10건이면 새 주문을 만들지 않습니다(주문 테이블 부풀리기 방지).
+    @Test
+    void tooManyPendingOrdersAreRejected() {
+        when(orderRepository.countByUserIdAndStatusAndCreatedAtAfter(1L, PaymentOrderStatus.PENDING, NOW.minusDays(1)))
+                .thenReturn(10L);
+
+        assertThatThrownBy(() -> paymentTxHelper.createOrder(1L, "PLUS_30D", 9900, 30))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
+    }
+
+    // 결제 확인이 PAID를 본 직후 환불되고 취소 알림이 먼저 오면(주문은 아직 PENDING) 주문을 취소로 바꿉니다.
+    // 뒤이어 완료를 시도해도 거절되어 환불받은 결제로 PLUS가 생기지 않습니다(2026-11-06 보안 점검).
+    @Test
+    void cancelWebhookBeforeCompletionBlocksLaterCompletion() {
+        PaymentOrder order = pendingOrder(user);
+        expectCancelledPayment();
+
+        sendWebhook(webhookBody("Transaction.Cancelled", "salus_order1"));
+
+        assertThat(order.getStatus()).isEqualTo(PaymentOrderStatus.CANCELLED);
+        assertThatThrownBy(() -> paymentTxHelper.completeOrder(order.getId(), "tx_123", 9900))
+                .isInstanceOfSatisfying(ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+        assertThat(user.getGrade()).isEqualTo(UserGrade.BASIC);
     }
 
     // 다른 주문에 이미 쓰인 거래 번호로는 완료하지 않습니다.

@@ -126,6 +126,23 @@ public class ChatService {
         StringBuilder systemContext = new StringBuilder();
         // 아래 재작성(요리 바꾸기·메뉴 고르기)이 message를 바꾸기 전에 사용자가 보낸 원문을 남겨 안전 조건을 원문에서 읽게 합니다.
         rememberSentUserTexts(request);
+        // 현재 질문의 목적을 먼저 확인해야 이전 레시피 세션이나 요리명이 이 경로를 덮지 않습니다.
+        Optional<FoodSafetyQuestion> foodSafetyQuestion = FoodSafetyQuestion.parse(userText(request));
+        if (foodSafetyQuestion.isEmpty() && request.getOriginalMessage() != null) {
+            foodSafetyQuestion = FoodSafetyQuestion.parse(request.getMessage());
+        }
+        if (foodSafetyQuestion.isPresent()) {
+            SafetyContext context = buildSafetyContext(authenticatedUserId, request);
+            ChatSession session = authenticatedUserId.map(userId -> resolveSession(userId, request)).orElse(null);
+            String reply = chatSafetyContextService.buildFoodSafetyReply(context, foodSafetyQuestion.get());
+            if (session != null) {
+                saveChatMessage(session, "user", userText(request));
+                saveChatMessage(session, "model", reply);
+            }
+            return Mono.just(new ChatDto.Response(session == null ? null : session.getId(), reply, false, false));
+        }
+        // 핵심 재료를 빼는 후속 요청은 인분 재작성보다 먼저 레시피 요청으로 바꿉니다("돼지고기 빼고 2인분으로" → 인분도 함께 담음).
+        rewriteCoreRemovalRequest(authenticatedUserId, request);
         rewriteDishSwitchRequest(request);
         rewriteEquipmentSwitchRequest(request);
         rewriteServingsRequest(request);
@@ -185,15 +202,29 @@ public class ChatService {
 
         // 직전에 보여 준 승인 레시피에 대한 조정 요청(인분/맵기 변경 등)이면 여기서 처리합니다.
         if (authenticatedUserIdValue != null && chatSession != null) {
-            Optional<ChatDto.Response> approvedAdjustment = chatFollowUpService.buildApprovedRecipeAdjustment(
+            Optional<ChatFollowUpService.ApprovedAdjustment> approvedAdjustment = chatFollowUpService.buildApprovedRecipeAdjustment(
                     authenticatedUserIdValue,
                     chatSession,
-                    request.getMessage());
+                    request.getMessage(), safetyContext);
             if (approvedAdjustment.isPresent()) {
+                ChatFollowUpService.ApprovedAdjustment adjustment = approvedAdjustment.get();
+                ChatDto.Response response = adjustment.response();
+                Optional<ChatDto.Response> blocked = allergyBlockedFollowUp(response, safetyContext,
+                        chatFollowUpService.previousRecipeTexts(authenticatedUserIdValue, chatSession, request));
+                if (blocked.isPresent()) {
+                    saveChatMessage(chatSession, "user", userText(request));
+                    saveChatMessage(chatSession, "model", blocked.get().getReply());
+                    return Mono.just(blocked.get());
+                }
                 saveChatMessage(chatSession, "user", userText(request));
-                chatRecipeCardService.saveModelReply(chatSession, approvedAdjustment.get(),
-                        ChatRecipeCardService.CardContext.approved());
-                return Mono.just(approvedAdjustment.get());
+                if (response.getRecipe() == null) {
+                    saveChatMessage(chatSession, "model", response.getReply());
+                } else {
+                    chatFollowUpService.saveApprovedRecipeState(authenticatedUserIdValue, chatSession.getId(), adjustment.rendered());
+                    chatRecipeCardService.saveModelReply(chatSession, response,
+                            ChatRecipeCardService.CardContext.approved());
+                }
+                return Mono.just(response);
             }
         }
 
@@ -202,27 +233,20 @@ public class ChatService {
             Optional<ChatDto.Response> recipeQuestion = chatFollowUpService.buildRecipeQuestionAnswer(
                     authenticatedUserIdValue, chatSession, request);
             if (recipeQuestion.isPresent()) {
+                ChatDto.Response answer = allergyBlockedFollowUp(recipeQuestion.get(), safetyContext,
+                        chatFollowUpService.previousRecipeTexts(authenticatedUserIdValue, chatSession, request))
+                        .orElse(recipeQuestion.get());
                 if (chatSession != null) {
                     saveChatMessage(chatSession, "user", userText(request));
-                    saveChatMessage(chatSession, "model", recipeQuestion.get().getReply());
+                    saveChatMessage(chatSession, "model", answer.getReply());
                 }
-                return Mono.just(recipeQuestion.get());
+                return Mono.just(answer);
             }
         }
 
         // "무청이 뭐야?"처럼 재료가 무엇인지 묻는 질문은 일반 대화 LLM 대신 검토된 자료의 원문으로 답합니다(지어내지 않게).
         if (!isRecipeRequestIntent && !isDetailFollowUp && !structuredAgentFollowUp && !recipeAgentInitialRequest
                 && intent != ChatIntentClassifier.ChatIntent.MENU_RECOMMENDATION) {
-            // "땅콩 먹어도 돼?"는 LLM에 맡기지 않습니다. LLM은 "대부분 괜찮아요"처럼 안전하다고 답했습니다.
-            Optional<String> eatingReply = chatSafetyContextService.buildEatingPermissionReply(
-                    safetyContext, request.getMessage());
-            if (eatingReply.isPresent()) {
-                if (chatSession != null) {
-                    saveChatMessage(chatSession, "user", userText(request));
-                    saveChatMessage(chatSession, "model", eatingReply.get());
-                }
-                return Mono.just(new ChatDto.Response(sessionId, eatingReply.get(), false, false));
-            }
             Optional<IngredientInfoService.Answer> ingredientAnswer = ingredientInfoService.answer(request.getMessage());
             if (ingredientAnswer.isPresent()) {
                 String reply = chatSafetyContextService.appendAllergyCautionIfMentioned(
@@ -299,10 +323,17 @@ public class ChatService {
                 }
                 return Mono.just(new ChatDto.Response(sessionId, error.getMessage(), false, false));
             }
+            var medication = chatSafetyContextService.assessRecipeMedication(safetyContext, rendered.recipe());
+            if (medication.avoid()) {
+                String reply = medication.blockedRecipeReply();
+                if (chatSession != null) {
+                    saveChatMessage(chatSession, "user", userText(request));
+                    saveChatMessage(chatSession, "model", reply);
+                }
+                return Mono.just(new ChatDto.Response(sessionId, reply, false, false));
+            }
             List<String> safetyNotes = chatSafetyContextService.buildRecipeSafetyNotes(
-                    authenticatedUserId,
-                    safetyContext,
-                    rendered.recipe());
+                    authenticatedUserId, safetyContext, rendered.recipe(), medication);
             // 카드를 먼저 만든 뒤 모델 답변과 함께 저장합니다(저장한 카드 = 응답으로 보낸 카드).
             ChatDto.Response response = new ChatDto.Response(
                     sessionId,
@@ -354,6 +385,14 @@ public class ChatService {
                 ChatDto.Response response = personalizedReply.get();
                 chatRecipeCardService.saveModelReply(chatSession, response, ChatRecipeCardService.CardContext.variant());
                 return Mono.just(response);
+            }
+        } else if (!isRecipeRequestIntent) {
+            // 게스트의 "양파 빼줘", "돼지고기 빼고 2인분으로 바꿔줘"도 앱이 보낸 대화 기록의 직전 레시피에 규칙으로 적용합니다.
+            // 일반 대화로 넘기면 LLM이 레시피를 새로 써서 안내 문구로 바뀌었습니다(2026-11-12 베타).
+            Optional<ChatDto.Response> guestEdit = chatFollowUpService.buildIngredientEditFollowUp(
+                    null, null, request, safetyContext);
+            if (guestEdit.isPresent()) {
+                return Mono.just(guestEdit.get());
             }
         }
 
@@ -469,7 +508,8 @@ public class ChatService {
         if (isDetailFollowUp) {
             Optional<ChatDto.Response> detailedResponse = buildDetailedRecipeFollowUp(userIdLong, chatSession, request);
             if (detailedResponse.isPresent()) {
-                return detailedResponse;
+                return allergyBlockedFollowUp(detailedResponse.get(), safetyContext,
+                        chatFollowUpService.previousRecipeTexts(userIdLong, chatSession, request)).or(() -> detailedResponse);
             }
         }
 
@@ -576,6 +616,32 @@ public class ChatService {
                 safetyContext, title, recipe, requestMessage);
     }
 
+    // 저장된 레시피를 다시 쓰는 후속 답변이 이번 요청의 알레르기와 충돌하면 차단 답변으로 바꿉니다(2026-11-06 보안 점검).
+    // 답변 본문뿐 아니라 레시피 카드의 제목·재료·조리 순서도 봅니다.
+    // 바탕이 된 직전 레시피(제목·재료·조리 순서)도 함께 봅니다. 재료가 빠진 짧은 답(시간·불 세기)도 바탕 레시피가 충돌하면 막습니다.
+    private Optional<ChatDto.Response> allergyBlockedFollowUp(ChatDto.Response response, SafetyContext safetyContext,
+            List<String> previousRecipeTexts) {
+        List<String> texts = new ArrayList<>(previousRecipeTexts == null ? List.of() : previousRecipeTexts);
+        String title = null;
+        if (response.getReply() != null) {
+            texts.add(response.getReply());
+        }
+        if (response.getRecipe() != null) {
+            title = response.getRecipe().getTitle();
+            if (title != null) {
+                texts.add(title);
+            }
+            if (response.getRecipe().getIngredients() != null) {
+                texts.addAll(response.getRecipe().getIngredients());
+            }
+            if (response.getRecipe().getSteps() != null) {
+                texts.addAll(response.getRecipe().getSteps());
+            }
+        }
+        return chatSafetyContextService.blockFollowUpIfAllergyConflict(safetyContext, title, texts)
+                .map(reply -> new ChatDto.Response(response.getSessionId(), reply, false, false));
+    }
+
     private Optional<ChatDto.Response> buildDetailedRecipeFollowUp(
             Long userId, ChatSession chatSession, ChatDto.Request request) {
         return chatFollowUpService.buildDetailedRecipeFollowUp(userId, chatSession, request);
@@ -660,6 +726,20 @@ public class ChatService {
                 .ifPresent(target -> request.setMessage(target + " 레시피 알려줘"));
     }
 
+    /**
+     * 직전 레시피의 핵심 재료를 빼 달라는 후속 요청을 "돼지고기 빼고 김치찌개 2인분 레시피 알려줘"로 바꿔 레시피 요청 경로로 보냅니다.
+     * 규칙으로 지우면 그 재료를 위한 단계가 남기 때문입니다(판단은 {@link ChatFollowUpService#coreRemovalRecipeRequest}).
+     * 직전 레시피는 로그인 사용자면 그 사용자의 작업 세션에서만, 게스트면 앱이 보낸 대화 기록에서 읽습니다.
+     */
+    private void rewriteCoreRemovalRequest(Optional<Long> authenticatedUserId, ChatDto.Request request) {
+        if (request == null) {
+            return;
+        }
+        Long userId = authenticatedUserId.orElse(null);
+        chatFollowUpService.coreRemovalRecipeRequest(userId, userId == null ? null : request.getSessionId(), request)
+                .ifPresent(request::setMessage);
+    }
+
     // 조리 도구를 바꾸는 질문입니다: "오븐 없는데 전자레인지로는 안돼?", "에어프라이어로 해도 돼?". 새로 쓸 도구를 잡습니다.
     private static final Pattern EQUIPMENT_SWITCH = Pattern.compile(
             "(전자레인지|에어\\s*프라이어|에프|프라이팬|후라이팬|냄비|찜기|밥솥|토스터\\s*오븐|토스터기|오븐|그릴)\\s*(?:으로|로)"
@@ -700,6 +780,11 @@ public class ChatService {
         String message = request == null ? null : request.getMessage();
         if (message == null || message.length() > 40 || message.contains("레시피")
                 || !SERVINGS_CHANGE.matcher(message).find()) {
+            return;
+        }
+        // "양파 빼고 1인분으로"처럼 재료 수정이 함께 있으면 재료 수정 처리가 인분까지 반영하므로 여기서 바꾸지 않습니다
+        // (Codex 검토: 바꾸면 "레시피"가 들어가 재료 수정 처리에 닿지 못함).
+        if (IngredientEdits.parse(message).isPresent()) {
             return;
         }
         String dish = previousDishFromHistory(request.getHistory());

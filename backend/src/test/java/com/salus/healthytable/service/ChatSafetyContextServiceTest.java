@@ -1,5 +1,6 @@
 package com.salus.healthytable.service;
 
+import com.salus.healthytable.service.recipeagent.MedicationSafetyService;
 import com.salus.healthytable.dto.ChatDto;
 import com.salus.healthytable.domain.HealthProfile;
 import com.salus.healthytable.domain.Recipe;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -32,8 +34,11 @@ class ChatSafetyContextServiceTest {
     }
 
     private ChatSafetyContextService service(HealthProfileRepository profiles, AllergenRegistry registry) {
+        MedicationSafetyService medication = mock(MedicationSafetyService.class);
+        when(medication.assess(any(), any())).thenReturn(new MedicationSafetyService.Assessment(false, List.of()));
         return new ChatSafetyContextService(profiles, mock(HealthCheckupRepository.class),
-                mock(HealthCheckupAnalysisService.class), allergenMatcher(), registry, mock(ProfileResolutionShadowObserver.class));
+                mock(HealthCheckupAnalysisService.class), allergenMatcher(), registry,
+                mock(ProfileResolutionShadowObserver.class), medication);
     }
 
     @ParameterizedTest
@@ -310,11 +315,11 @@ class ChatSafetyContextServiceTest {
     void eatingQuestionChecksEveryListedFood() {
         ChatSafetyContextService service = service(mock(HealthProfileRepository.class), mock(AllergenRegistry.class));
 
-        assertThat(service.buildEatingPermissionReply(allergyContext("땅콩"), "땅콩, 우유 먹어도 돼?").orElseThrow())
+        assertThat(foodSafetyReply(service, allergyContext("땅콩"), "땅콩, 우유 먹어도 돼?").orElseThrow())
                 .contains("확인된 알레르기(땅콩)").contains("드시지 않는 것을 권해요");
-        assertThat(service.buildEatingPermissionReply(allergyContext("땅콩"), "우유, 땅콩, 계란 먹어도 돼?").orElseThrow())
+        assertThat(foodSafetyReply(service, allergyContext("땅콩"), "우유, 땅콩, 계란 먹어도 돼?").orElseThrow())
                 .contains("드시지 않는 것을 권해요");
-        assertThat(service.buildEatingPermissionReply(allergyContext("땅콩"), "우유랑 땅콩 먹어도 돼?").orElseThrow())
+        assertThat(foodSafetyReply(service, allergyContext("땅콩"), "우유랑 땅콩 먹어도 돼?").orElseThrow())
                 .contains("드시지 않는 것을 권해요");
     }
 
@@ -323,12 +328,12 @@ class ChatSafetyContextServiceTest {
     void eatingQuestionAboutRegisteredAllergenAdvisesNotToEat() {
         ChatSafetyContextService service = service(mock(HealthProfileRepository.class), mock(AllergenRegistry.class));
 
-        String reply = service.buildEatingPermissionReply(allergyContext("땅콩"), "땅콩버터 먹어도 돼?").orElseThrow();
+        String reply = foodSafetyReply(service, allergyContext("땅콩"), "땅콩버터 먹어도 돼?").orElseThrow();
 
         assertThat(reply).startsWith("‘땅콩버터’는 확인된 알레르기(땅콩)와 관련된 음식이에요.")
                 .contains("드시지 않는 것을 권해요").doesNotContain("괜찮아요");
         // 파생 재료도 같은 매처로 잡습니다(우유 → 버터).
-        assertThat(service.buildEatingPermissionReply(allergyContext("우유"), "버터 먹어도 될까요?").orElseThrow())
+        assertThat(foodSafetyReply(service, allergyContext("우유"), "버터 먹어도 될까요?").orElseThrow())
                 .contains("확인된 알레르기(우유)");
     }
 
@@ -338,7 +343,7 @@ class ChatSafetyContextServiceTest {
         ChatSafetyContextService service = service(mock(HealthProfileRepository.class), mock(AllergenRegistry.class));
 
         for (String message : List.of("오이 먹어도 돼?", "오이는 먹어도 돼?", "오이를 먹어도 될까요?")) {
-            assertThat(service.buildEatingPermissionReply(allergyContext("오이"), message).orElseThrow()).as(message)
+            assertThat(foodSafetyReply(service, allergyContext("오이"), message).orElseThrow()).as(message)
                     .startsWith("‘오이’는 확인된 알레르기(오이)와 관련된 음식이에요.");
         }
     }
@@ -348,11 +353,11 @@ class ChatSafetyContextServiceTest {
         ChatSafetyContextService service = service(mock(HealthProfileRepository.class), mock(AllergenRegistry.class));
 
         // 앞의 사정 설명("땅콩 알레르기 있는데")이 아니라 묻는 음식(우유)으로 판정합니다.
-        String reply = service.buildEatingPermissionReply(allergyContext("땅콩"), "땅콩 알레르기 있는데 우유 먹어도 돼?").orElseThrow();
+        String reply = foodSafetyReply(service, allergyContext("땅콩"), "땅콩 알레르기 있는데 우유 먹어도 돼?").orElseThrow();
         assertThat(reply).startsWith("Salus는 먹어도 되는지 판단하지 않아요.")
                 .contains("‘우유’ 이름에서").contains("안전하다는 뜻은 아니에요").doesNotContain("괜찮아요");
         // 한 글자 알레르겐은 낱말 전체가 같아야 합니다(밀 vs 밀크티).
-        assertThat(service.buildEatingPermissionReply(allergyContext("밀"), "밀크티 먹어도 돼?").orElseThrow())
+        assertThat(foodSafetyReply(service, allergyContext("밀"), "밀크티 먹어도 돼?").orElseThrow())
                 .contains("안전하다는 뜻은 아니에요");
     }
 
@@ -360,10 +365,10 @@ class ChatSafetyContextServiceTest {
     void eatingQuestionWithoutAllergyInformationSaysThereIsNoBasis() {
         ChatSafetyContextService service = service(mock(HealthProfileRepository.class), mock(AllergenRegistry.class));
 
-        assertThat(service.buildEatingPermissionReply(allergyContext(), "땅콩 먹어도 돼?").orElseThrow())
+        assertThat(foodSafetyReply(service, allergyContext(), "땅콩 먹어도 돼?").orElseThrow())
                 .contains("등록된 알레르기 정보가 없어 확인할 기준도 없어요").doesNotContain("괜찮아요");
         // 판단 근거가 없는 상태(null)도 '알레르기 없음'으로 보지 않습니다.
-        assertThat(service.buildEatingPermissionReply(null, "땅콩 먹어도 돼?").orElseThrow())
+        assertThat(foodSafetyReply(service, null, "땅콩 먹어도 돼?").orElseThrow())
                 .contains("확인할 기준도 없어요");
     }
 
@@ -373,7 +378,7 @@ class ChatSafetyContextServiceTest {
         ChatSafetyContextService.SafetyContext context = new ChatSafetyContextService.SafetyContext(
                 List.of(), List.of("고혈압"), List.of(), List.of("와파린"), List.of(), true);
 
-        assertThat(service.buildEatingPermissionReply(context, "자몽 먹어도 돼?").orElseThrow())
+        assertThat(foodSafetyReply(service, context, "자몽 먹어도 돼?").orElseThrow())
                 .contains("의사나 약사와 상담해 주세요");
     }
 
@@ -381,8 +386,13 @@ class ChatSafetyContextServiceTest {
     void nonEatingQuestionIsNotHandled() {
         ChatSafetyContextService service = service(mock(HealthProfileRepository.class), mock(AllergenRegistry.class));
 
-        assertThat(service.buildEatingPermissionReply(allergyContext("땅콩"), "땅콩 좋아해")).isEmpty();
-        assertThat(service.buildEatingPermissionReply(allergyContext("땅콩"), "땅콩은 뭐야?")).isEmpty();
+        assertThat(foodSafetyReply(service, allergyContext("땅콩"), "땅콩 좋아해")).isEmpty();
+        assertThat(foodSafetyReply(service, allergyContext("땅콩"), "땅콩은 뭐야?")).isEmpty();
+    }
+
+    private Optional<String> foodSafetyReply(
+            ChatSafetyContextService service, ChatSafetyContextService.SafetyContext context, String message) {
+        return FoodSafetyQuestion.parse(message).map(question -> service.buildFoodSafetyReply(context, question));
     }
 
     // 일반 대화 답변에 등록 알레르겐이 나오면 차단하지 않고 확인 문구를 덧붙입니다.
@@ -442,7 +452,7 @@ class ChatSafetyContextServiceTest {
                 healthProfileRepository,
                 mock(HealthCheckupRepository.class),
                 mock(HealthCheckupAnalysisService.class),
-                allergenMatcher(), allergenRegistry(), mock(ProfileResolutionShadowObserver.class));
+                allergenMatcher(), allergenRegistry(), mock(ProfileResolutionShadowObserver.class), mock(MedicationSafetyService.class));
         ChatDto.Request request = new ChatDto.Request();
         request.setMessage("두부 레시피 알려줘");
         request.setHealthProfile(new ChatDto.HealthProfileContext(
@@ -464,12 +474,35 @@ class ChatSafetyContextServiceTest {
                 mock(HealthProfileRepository.class),
                 healthCheckupRepository,
                 mock(HealthCheckupAnalysisService.class),
-                allergenMatcher(), allergenRegistry(), mock(ProfileResolutionShadowObserver.class));
+                allergenMatcher(), allergenRegistry(), mock(ProfileResolutionShadowObserver.class), mock(MedicationSafetyService.class));
         when(healthCheckupRepository.findTopByUserIdOrderByCheckupDateDescIdDesc(1L))
                 .thenThrow(new IllegalStateException("database unavailable"));
 
         boolean available = service.appendLatestCheckupContext(new StringBuilder(), 1L);
 
         assertThat(available).isFalse();
+    }
+
+    // 후속 답변 재확인(2026-11-06 보안 점검): 레시피를 받은 뒤 알레르기를 등록하면 이전 레시피를 그대로 다시 주지 않습니다.
+    @Test
+    void followUpRecipeConflictingWithCurrentAllergyIsBlocked() {
+        ChatSafetyContextService safety = service(mock(HealthProfileRepository.class), allergenRegistry());
+        ChatSafetyContextService.SafetyContext context = new ChatSafetyContextService.SafetyContext(
+                List.of("달걀"), List.of(), List.of(), List.of(), List.of(), true);
+
+        assertThat(safety.blockFollowUpIfAllergyConflict(context, "계란말이", List.of("계란 3개", "계란을 풀어 부칩니다")))
+                .hasValueSatisfying(reply -> assertThat(reply).contains("추천할 수 없습니다"));
+        // 관련 없는 재료면 막지 않습니다(오탐 방지).
+        assertThat(safety.blockFollowUpIfAllergyConflict(context, "오이무침", List.of("오이 1개", "식초 1큰술"))).isEmpty();
+    }
+
+    // 건강 정보를 불러오지 못한 로그인 요청은 알레르기 없음으로 보지 않고 후속 레시피를 막습니다.
+    @Test
+    void followUpIsBlockedWhenHealthContextUnavailable() {
+        ChatSafetyContextService safety = service(mock(HealthProfileRepository.class), allergenRegistry());
+        ChatSafetyContextService.SafetyContext unavailable = new ChatSafetyContextService.SafetyContext(
+                List.of(), List.of(), List.of(), List.of(), List.of(), false);
+
+        assertThat(safety.blockFollowUpIfAllergyConflict(unavailable, "오이무침", List.of("오이 1개"))).isPresent();
     }
 }

@@ -278,9 +278,12 @@ export default function AccountSettingsScreen({ onToggleSidebar, onNavigate, web
                         </View>
                     ) : (
                         <View style={styles.upgradeSection}>
-                            <Text style={styles.activePremiumText}>
-                                ✨ PLUS 이용 중이에요{user?.plusExpiresAt ? ` (${String(user.plusExpiresAt).slice(0, 10)}까지)` : ''}. 처음 보는 요리 찾기를 제한 없이 이용할 수 있어요.
-                            </Text>
+                            <View style={styles.activePremiumRow}>
+                                <Ionicons name="checkmark-circle-outline" size={18} color={colors.primary} />
+                                <Text style={styles.activePremiumText}>
+                                    PLUS 이용 중이에요{user?.plusExpiresAt ? ` (${String(user.plusExpiresAt).slice(0, 10)}까지)` : ''}. 처음 보는 요리 찾기를 제한 없이 이용할 수 있어요.
+                                </Text>
+                            </View>
                         </View>
                     )}
                 </View>
@@ -705,11 +708,16 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '700',
     },
+    activePremiumRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
     activePremiumText: {
+        flex: 1,
         fontSize: 13,
-        color: colors.warning,
+        color: colors.text,
         fontWeight: '600',
         lineHeight: 18,
-        textAlign: 'center',
     },
 });

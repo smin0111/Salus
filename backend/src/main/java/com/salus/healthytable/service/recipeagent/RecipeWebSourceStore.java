@@ -262,6 +262,10 @@ class RecipeStepSummarizer {
      * 정리 후 두 단계보다 적게 남으면 원래 단계를 그대로 둡니다.
      */
     static List<String> tidySteps(String dishName, String sourceTitle, List<String> steps) {
+        return tidySteps(dishName, sourceTitle, steps, List.of());
+    }
+
+    static List<String> tidySteps(String dishName, String sourceTitle, List<String> steps, List<String> ingredients) {
         if (steps == null || steps.isEmpty()) {
             return steps;
         }
@@ -299,7 +303,86 @@ class RecipeStepSummarizer {
                     : CIRCLED_NUMBER.matcher(step).replaceAll(" ").trim();
             tidied.add(cleaned.trim());
         }
+        tidied = new ArrayList<>(withoutLeadingDishNames(tidied, dishName, ingredients));
         return tidied.size() >= 2 ? List.copyOf(tidied) : steps;
+    }
+
+    /**
+     * 요약 모델이 단계마다 요리 이름을 머리말처럼 붙인 것("두쫀쿠 카다이프면을 굽는다")을 뗍니다.
+     * 지시문이 "'두쫀쿠' 조리 단계를 다시 쓰세요"라서 gemma3:4b가 단계마다 이름을 붙였습니다(2026-11-12 베타, 7단계 중 5단계).
+     * 저장된 요약을 읽을 때도 같은 규칙을 씁니다(이미 저장된 근거를 다시 검색하지 않고 고치려고).
+     * 재료 이름을 지우지 않도록 머리말임이 분명할 때만 뗍니다.
+     * - 단계 두 개 이상, 그리고 절반 이상이 같은 머리말로 시작할 때만(모델의 버릇일 때). "카레 가루 2큰술을 넣는다" 한 단계는 그대로입니다.
+     * - 이름 바로 뒤가 띄어쓰기일 때만. "두쫀쿠를 코코아파우더에 굴린다"처럼 조사가 붙은 이름은 그대로입니다.
+     * - 이름과 다음 낱말을 붙인 말이 재료 목록에 있으면("카레 가루" → 재료 "카레가루 2큰술") 재료 이름이므로 그대로입니다.
+     * - 요리명 자체가 재료 목록에 있으면 그 레시피는 아무것도 떼지 않습니다(머리말인지 재료인지 가를 수 없음).
+     * - 이름 바로 뒤에 분량("카레 2큰술", "카레 한 큰술", "반 개")이 오면 그 이름은 재료이므로 그대로입니다.
+     * - 뗀 뒤 남는 글자가 6자 미만이면 그대로입니다.
+     */
+    private static final java.util.regex.Pattern QUANTITY_WORD = java.util.regex.Pattern.compile(
+            "(?:한|두|세|네|다섯|여섯|일곱|여덟|아홉|열|반|약간|조금|적당량|적당히|한두|두세|서너)(?:개|큰술|작은술|컵|줌|꼬집|스푼|숟가락|장|쪽|알|봉|팩|T|t)?");
+
+    static List<String> withoutLeadingDishNames(List<String> steps, String dishName, List<String> ingredients) {
+        if (steps == null || steps.size() < 2 || dishName == null) {
+            return steps;
+        }
+        String dish = dishName.replaceAll("\\s+", "");
+        if (dish.length() < 2) {
+            return steps;
+        }
+        // 요리 이름의 띄어쓰기는 원문과 다를 수 있어("두바이 쫀득 쿠키") 글자 사이에 공백을 허용해 맞춥니다.
+        StringBuilder pattern = new StringBuilder("^");
+        for (int i = 0; i < dish.length(); i++) {
+            pattern.append(java.util.regex.Pattern.quote(String.valueOf(dish.charAt(i))));
+            if (i < dish.length() - 1) {
+                pattern.append("\\s*");
+            }
+        }
+        pattern.append("\\s+");
+        java.util.regex.Pattern prefix = java.util.regex.Pattern.compile(pattern.toString());
+        long prefixed = steps.stream().filter(step -> step != null && prefix.matcher(step).find()).count();
+        if (prefixed < 2 || prefixed * 2 < steps.size()) {
+            return steps;
+        }
+        List<String> ingredientNames = ingredients == null ? List.of() : ingredients.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(line -> line.replaceAll("\\s+", ""))
+                .toList();
+        // 요리명 자체가 재료 이름이면("카레" 요리에 재료 "카레 3큰술") 단계 앞의 이름이 머리말인지 재료인지 가를 수 없으므로
+        // 아무것도 떼지 않습니다(Codex 검토 3회차: "카레 한 큰술을 넣는다"의 재료명이 지워짐).
+        if (ingredientNames.stream().anyMatch(name -> name.startsWith(dish))) {
+            return steps;
+        }
+        List<String> result = new ArrayList<>();
+        for (String step : steps) {
+            java.util.regex.Matcher matcher = step == null ? null : prefix.matcher(step);
+            if (matcher == null || !matcher.find()) {
+                result.add(step);
+                continue;
+            }
+            String rest = step.substring(matcher.end()).trim();
+            java.util.regex.Matcher nextWord = java.util.regex.Pattern.compile("^[가-힣a-zA-Z]+").matcher(rest);
+            // 이름 바로 뒤가 낱말이 아니라 분량("카레 2큰술을 넣는다")이면 요리명이 아니라 재료 이름이므로 그대로 둡니다(Codex 검토 2회차).
+            if (!nextWord.find()) {
+                result.add(step);
+                continue;
+            }
+            String word = nextWord.group();
+            // 재료 목록을 모를 때를 위해, 이름 뒤에 한글 분량("한 큰술", "반 개", "약간")이 오면 재료 이름으로 보고 그대로 둡니다.
+            if (QUANTITY_WORD.matcher(word).matches()) {
+                result.add(step);
+                continue;
+            }
+            // 다음 낱말 끝에 조사가 붙을 수 있어("카레 가루를") 앞에서부터 줄여 가며 재료 이름과 맞춰 봅니다.
+            boolean ingredientName = false;
+            for (int length = word.length(); length >= 1 && !ingredientName; length--) {
+                String joined = dish + word.substring(0, length);
+                ingredientName = ingredientNames.stream().anyMatch(name -> name.startsWith(joined));
+            }
+            boolean enoughLeft = rest.replaceAll("[^가-힣a-zA-Z0-9]", "").length() >= 6;
+            result.add(!ingredientName && enoughLeft ? rest : step);
+        }
+        return List.copyOf(result);
     }
 
     // 재료를 넣는 동사("레몬즙을 섞어", "통깨를 뿌려")와 고명 표현("통깨로 고명")입니다.
@@ -745,7 +828,10 @@ class WebRecipeSourceStore {
                 row.getServings() == null ? "" : row.getServings(),
                 String.join("\n", row.getIngredients() == null ? List.of() : row.getIngredients()),
                 String.join("\n", row.getStepSummaries() == null ? List.<String>of()
-                        : row.getStepSummaries().stream().map(RecipeStepSummarizer::withoutStepReference).toList()));
+                        : RecipeStepSummarizer.withoutLeadingDishNames(
+                                row.getStepSummaries().stream().map(RecipeStepSummarizer::withoutStepReference).toList(),
+                                dishFromKey(row.getCacheKey()),
+                                row.getIngredients())));
         return new RecipeSourceDocument(
                 "web-store:" + row.getId(),
                 RecipeSourceType.GENERAL_WEB,

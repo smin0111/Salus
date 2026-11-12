@@ -1,0 +1,28 @@
+{
+  "manifest_count": 20,
+  "barcode_exact_match": {
+    "status": "NOT_EVALUATED",
+    "numerator": 0,
+    "denominator": 20,
+    "evaluable_count": 0
+  },
+  "raw_material_presence_among_exact_matches": {
+    "status": "NOT_EVALUATED",
+    "numerator": 0,
+    "denominator": 0,
+    "evaluable_exact_match_count": 0
+  },
+  "recent_product_barcode_match": {
+    "status": "NOT_EVALUATED",
+    "numerator": 0,
+    "denominator": 4,
+    "evaluable_count": 0
+  },
+  "status_counts": {
+    "API_ERROR": 20
+  },
+  "allergen_recall": "NOT_EVALUATED",
+  "false_negative": "NOT_EVALUATED",
+  "api_missing_allergens": "NOT_EVALUATED",
+  "final_safety": "NOT_EVALUATED"
+}

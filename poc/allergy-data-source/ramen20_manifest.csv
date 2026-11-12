@@ -1,0 +1,21 @@
+sku_id,manufacturer,product_name,package,barcode,i1250_search_name,is_recent,barcode_source_url,source_note
+NS001,농심,신라면,120g*5입,8801043014830,신라면,false,https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801043014830,이마트 에브리데이 상품코드
+NS002,농심,올리브짜파게티,140g*5입,8801043015264,올리브짜파게티,false,https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801043015264,이마트 에브리데이 상품코드
+NS003,농심,얼큰한너구리,120g*5입,8801043015011,얼큰한너구리,false,https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801043015011,이마트 에브리데이 상품코드
+NS004,농심,안성탕면,125g*5입,8801043014786,안성탕면,false,https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801043014786,이마트 에브리데이 상품코드
+NS005,농심,신라면 더 레드,125g*4입,8801043069663,신라면 더 레드,true,https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801043069663,이마트 에브리데이 상품코드
+NS006,농심,신라면 툼바,137g*4입,8801043019002,신라면 툼바,true,https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801043019002,이마트 에브리데이 상품코드
+OT001,오뚜기,진라면 매운맛,120g*5입,8801045522265,진라면 매운맛,false,https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801045522265,이마트 에브리데이 상품코드
+OT002,오뚜기,진라면 순한맛,120g*5입,8801045522234,진라면 순한맛,false,https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801045522234,이마트 에브리데이 상품코드
+OT003,오뚜기,열라면,120g*5입,8801045521077,열라면,false,https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801045521077,이마트 에브리데이 상품코드
+OT004,오뚜기,참깨라면,115g*4입,8801045526201,참깨라면,false,https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801045526201,이마트 에브리데이 상품코드
+OT005,오뚜기,마열라면,120g*4입,8801045049182,마열라면,true,https://lottemartzetta.com/products/OS8801045049182/details,롯데마트 제타 상품판매코드
+SY001,삼양식품,삼양라면,120g*5입,8801073102545,삼양라면,false,https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801073102545,이마트 에브리데이 상품코드
+SY002,삼양식품,불닭볶음면,140g*5입,8801073140578,불닭볶음면,false,https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801073140578,이마트 에브리데이 상품코드
+SY003,삼양식품,까르보불닭볶음면,130g*4입,8801073142190,까르보불닭볶음면,false,https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801073142190,이마트 에브리데이 상품코드
+SY004,삼양식품,짜장불닭볶음면,140g*4입,8801073143807,짜장불닭볶음면,false,https://www.coupang.com/vp/products/7158497703,쿠팡 공개 GTIN 08801073143807을 EAN-13으로 정규화
+SY005,삼양식품,삼양1963,131g*4입,8801073145085,삼양1963,true,https://lottemartzetta.com/products/OS8801073145085/details,롯데마트 제타 상품판매코드
+PD001,팔도,팔도비빔면,130g*5입,8801128503051,팔도비빔면,false,https://lottemartzetta.com/products/OS8801128503051/details,롯데마트 제타 상품판매코드
+PD002,팔도,틈새라면 빨계떡,120g*5입,8801128508865,틈새라면,false,https://lottemartzetta.com/products/OS8801128508865/details,롯데마트 제타 상품판매코드
+PD003,팔도,왕뚜껑,110g,8801128503211,왕뚜껑,false,https://lottemartzetta.com/products/OS8801128503211/details,롯데마트 제타 상품판매코드
+PD004,팔도,김치왕뚜껑,110g,8801128503235,김치왕뚜껑,false,https://emile.emarteveryday.co.kr/product/ProductView?skuCode=8801128503235,이마트 에브리데이 상품코드

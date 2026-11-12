@@ -214,6 +214,8 @@ export const AuthProvider = ({ children }) => {
             }
             debugLog('Session saved for auto-login');
         } else {
+            // 이전에 저장된 다른 계정의 자동 로그인 정보가 남아 있으면 다음 실행 때 그 계정으로 복원되므로 지웁니다(2026-11-06 보안 점검).
+            await removeStoredSession();
             debugLog('Session NOT saved (One-time login)');
         }
         return userData;
@@ -733,35 +735,44 @@ export const AuthProvider = ({ children }) => {
         return false;
     };
 
-    // 저장소와 메모리의 로그인 정보를 모두 지웁니다.
+    // 저장된 로그인 정보를 지웁니다. 한 항목을 지우다 실패해도 나머지는 계속 지웁니다.
+    const removeStoredSession = async () => {
+        for (const key of ['user_token', 'refresh_token', 'user_data']) {
+            try {
+                await SafeStorage.removeItem(key);
+            } catch (e) {
+                debugLog(`[AUTH_TRACE] Failed to remove ${key}`);
+            }
+        }
+    };
+
+    // 저장소와 메모리의 로그인 정보를 모두 지웁니다. 화면 상태를 먼저 비워, 저장소 삭제가 실패해도 로그아웃 화면이 되게 합니다.
     const clearAuthState = async () => {
         tokenRef.current = null;
         refreshTokenRef.current = null;
         persistSessionRef.current = false;
-        await SafeStorage.removeItem('user_token');
-        await SafeStorage.removeItem('refresh_token');
-        await SafeStorage.removeItem('user_data');
         setToken(null);
         setUser(null);
         setIsLoggedIn(false);
+        await removeStoredSession();
     };
 
-    // 로그아웃은 서버의 refresh token을 폐기한 뒤 저장소와 메모리 상태를 함께 비웁니다.
-    // 서버 요청이 실패해도(오프라인 등) 기기의 로그인 상태는 반드시 지웁니다.
+    // 로그아웃은 기기의 로그인 정보를 먼저 지운 뒤 서버의 refresh token 폐기를 요청합니다.
+    // 서버가 느리거나 응답하지 않아도 화면과 저장소에 이전 세션이 남지 않게 하기 위해서입니다(2026-11-06 보안 점검).
     const logout = async () => {
         const currentRefreshToken = refreshTokenRef.current;
-        if (currentRefreshToken) {
-            try {
-                await axios.post(`${config.API_BASE_URL}/auth/logout`, { refreshToken: currentRefreshToken });
-            } catch (e) {
-                debugLog('[AUTH_TRACE] Server logout failed; clearing local session anyway');
-            }
-        }
+        sessionExpiredNotified.current = false;
         try {
-            sessionExpiredNotified.current = false;
             await clearAuthState();
         } catch (e) {
             console.error('Logout error:', e);
+        }
+        if (currentRefreshToken) {
+            try {
+                await axios.post(`${config.API_BASE_URL}/auth/logout`, { refreshToken: currentRefreshToken }, { timeout: 5000 });
+            } catch (e) {
+                debugLog('[AUTH_TRACE] Server logout failed; local session already cleared');
+            }
         }
     };
 

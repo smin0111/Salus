@@ -1,0 +1,275 @@
+.salus-landing {
+    --sl-ink: #252927;
+    --sl-muted: #646b65;
+    --sl-green: #30543d;
+    --sl-line: #dfe4df;
+    --sl-paper: #f5f6f3;
+    --sl-progress: 0;
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: clip;
+    background: #fff;
+    color: var(--sl-ink);
+    color-scheme: light;
+    font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+    font-size: 16px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+}
+.salus-landing *, .salus-landing *::before, .salus-landing *::after { box-sizing: border-box; }
+.salus-landing h1, .salus-landing h2, .salus-landing h3, .salus-landing h4, .salus-landing p { margin: 0; }
+.salus-landing button, .salus-landing a { -webkit-tap-highlight-color: transparent; }
+.salus-landing button { font: inherit; color: inherit; cursor: pointer; border: 0; border-radius: 0; background: none; }
+.salus-landing button:focus-visible, .salus-landing a:focus-visible, .salus-landing summary:focus-visible { outline: 2px solid var(--sl-green); outline-offset: 5px; }
+.salus-landing .sl-wrap { width: min(1200px, calc(100% - 112px)); margin-inline: auto; }
+.salus-landing .sl-header { min-height: 84px; padding: 0 40px; position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 24px; background: #fffffff5; border-bottom: 1px solid #ecefec; }
+.salus-landing .sl-wordmark { font-size: 32px; font-weight: 700; letter-spacing: -2px; min-height: 48px; padding: 0; }
+.salus-landing .sl-navigation { display: flex; gap: 30px; }
+.salus-landing .sl-navigation button, .salus-landing .sl-login { font-size: 14px; min-height: 44px; padding: 0; }
+.salus-landing .sl-navigation button:hover, .salus-landing .sl-login:hover { color: var(--sl-green); text-decoration: underline; text-underline-offset: 5px; }
+.salus-landing .sl-header-actions { display: flex; align-items: center; gap: 26px; }
+.salus-landing .sl-button { min-height: 54px; padding: 13px 22px; display: inline-flex; gap: 30px; align-items: center; justify-content: space-between; border: 1px solid var(--sl-green); background: var(--sl-green); border-radius: 5px; color: #fff; font-size: 15px; font-weight: 500; transition: background .18s; }
+.salus-landing .sl-button:hover { background: #233f2c; }
+.salus-landing .sl-button-small { min-height: 42px; padding: 8px 15px; gap: 24px; font-size: 13px; }
+.salus-landing .sl-arrow { font-size: 21px; line-height: 1; display: inline-block; transition: transform .2s; }
+.salus-landing button:hover .sl-arrow { transform: translate(2px, -2px); }
+.salus-landing button:hover .sl-arrow-down { transform: translateY(3px); }
+.salus-landing .sl-text-button { display: inline-flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 48px; padding: 0; font-size: 14px; border-bottom: 1px solid currentColor; }
+.salus-landing .sl-reading-progress { position: absolute; bottom: -1px; left: 0; width: 100%; height: 2px; background: var(--sl-green); transform: scaleX(var(--sl-progress)); transform-origin: left; pointer-events: none; }
+.salus-landing .sl-skip { position: absolute; top: -100px; left: 20px; z-index: 20; padding: 12px; background: white; color: var(--sl-ink); }
+.salus-landing .sl-skip:focus { top: 8px; }
+.salus-landing .sl-hero { min-height: min(840px, calc(100svh - 84px)); display: grid; grid-template-columns: 1.1fr 1fr; align-items: center; gap: 7%; padding-block: 84px 94px; }
+.salus-landing .sl-overline { font-size: 13px; margin-bottom: 27px; color: var(--sl-muted); }
+.salus-landing .sl-hero h1 { font-size: clamp(48px, 5.4vw, 78px); font-weight: 500; letter-spacing: -.065em; line-height: 1.2; word-break: keep-all; }
+.salus-landing .sl-hero h1 span { color: var(--sl-green); }
+.salus-landing .sl-hero-description { margin-top: 30px; color: var(--sl-muted); line-height: 1.85; font-size: 15px; word-break: keep-all; }
+.salus-landing .sl-hero-actions { margin-top: 34px; display: flex; align-items: center; gap: 26px; flex-wrap: wrap; }
+.salus-landing .sl-hero-note { padding-top: 38px; }
+.salus-landing .sl-note-caption { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; color: var(--sl-muted); padding-bottom: 17px; border-bottom: 1px solid var(--sl-ink); }
+.salus-landing .sl-note-caption span:first-child { color: var(--sl-ink); font-size: 13px; }
+.salus-landing .sl-chat-example { padding: 28px; }
+.salus-landing .sl-chat-hero { padding: 30px 0 0; }
+.salus-landing .sl-question { width: fit-content; max-width: 88%; margin-left: auto; background: #edf0ea; padding: 14px 18px; border-radius: 12px 12px 2px 12px; font-size: 14px; line-height: 1.7; }
+.salus-landing .sl-answer { margin-top: 24px; }
+.salus-landing .sl-small-wordmark { font-size: 18px; letter-spacing: -1px; font-weight: 650; }
+.salus-landing .sl-answer > p { font-size: 14px; margin-top: 10px; line-height: 1.8; }
+.salus-landing .sl-recipe-preview { margin-top: 18px; padding: 22px 0 16px; border-block: 1px solid var(--sl-line); }
+.salus-landing .sl-micro { font-size: 11px; color: var(--sl-muted); }
+.salus-landing .sl-recipe-preview h3 { font-size: 23px; font-weight: 500; letter-spacing: -.04em; margin-top: 4px; }
+.salus-landing .sl-recipe-meta { display: flex; gap: 20px; font-size: 12px; color: var(--sl-muted); margin-top: 9px; }
+.salus-landing .sl-ingredient-line { margin-top: 20px; font-size: 13px; }
+.salus-landing .sl-ingredient-line span { margin: 0 9px; color: #a2aaa2; }
+.salus-landing .sl-recipe-note { margin-top: 18px; font-size: 11px; line-height: 1.7; color: var(--sl-muted); }
+.salus-landing .sl-note-bottom { display: flex; justify-content: space-between; gap: 12px; margin-top: 22px; color: var(--sl-muted); font-size: 11px; }
+.salus-landing .sl-note-bottom > span:last-child { font-size: 28px; color: var(--sl-green); }
+.salus-landing .sl-introduction { border-top: 1px solid var(--sl-line); padding-block: 110px 70px; display: grid; grid-template-columns: 1fr 2fr; column-gap: 50px; }
+.salus-landing .sl-section-marker { font-size: 12px; color: var(--sl-muted); display: block; padding-top: 10px; }
+.salus-landing .sl-introduction h2, .salus-landing .sl-health h2 { font-size: clamp(32px, 3.6vw, 50px); font-weight: 500; letter-spacing: -.055em; line-height: 1.4; word-break: keep-all; }
+.salus-landing .sl-introduction > p { grid-column: 2; color: var(--sl-muted); font-size: 15px; margin-top: 25px; line-height: 1.9; }
+.salus-landing .sl-story { padding-block: 0 100px; }
+.salus-landing .sl-story-layout { position: relative; display: grid; grid-template-columns: 1fr 1.15fr; column-gap: 12%; align-items: start; }
+.salus-landing .sl-story-display { grid-column: 2; grid-row: 1; position: sticky; top: 104px; }
+.salus-landing .sl-story-steps { grid-column: 1; grid-row: 1; }
+.salus-landing .sl-mobile-example { display: none; }
+.salus-landing .sl-example-tabs { display: flex; border-bottom: 1px solid var(--sl-line); margin-bottom: 17px; }
+.salus-landing .sl-example-tabs button { flex: 1; min-height: 48px; padding: 8px 4px; font-size: 13px; color: var(--sl-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.salus-landing .sl-example-tabs button span { margin-right: 8px; font-size: 11px; }
+.salus-landing .sl-example-tabs button[aria-current] { border-color: var(--sl-green); color: var(--sl-green); }
+.salus-landing .sl-example-window { border: 1px solid var(--sl-line); border-radius: 7px; background: #fff; overflow: hidden; }
+.salus-landing .sl-window-bar { min-height: 53px; padding: 10px 25px; border-bottom: 1px solid var(--sl-line); display: flex; justify-content: space-between; align-items: center; }
+.salus-landing .sl-window-bar > span:last-child { font-size: 10px; color: var(--sl-muted); }
+.salus-landing .sl-example-panel { height: min(520px, calc(100svh - 310px)); overflow-y: auto; animation: sl-panel-in .32s ease-out both; }
+.salus-landing .sl-window-navigation { display: flex; align-items: center; justify-content: center; gap: 25px; padding: 9px 16px; min-height: 36px; border-bottom: 1px solid var(--sl-line); color: var(--sl-muted); font-size: 11px; }
+.salus-landing .sl-window-navigation .is-active { color: var(--sl-green); }
+.salus-landing .sl-question-example { padding: 32px 28px; }
+.salus-landing .sl-question-example h3 { font-size: 25px; font-weight: 500; letter-spacing: -.045em; line-height: 1.5; text-align: center; margin: 52px 0 28px; }
+.salus-landing .sl-question-composer { border: 1px solid #abb7ac; border-radius: 10px; padding: 18px; min-height: 115px; display: flex; align-items: flex-end; gap: 15px; }
+.salus-landing .sl-question-composer p { font-size: 14px; flex: 1; line-height: 1.85; }
+.salus-landing .sl-type-caret { display: inline-block; width: 1px; height: 15px; vertical-align: -2px; background: var(--sl-green); margin-left: 3px; }
+.salus-landing .sl-example-send { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 7px; background: var(--sl-green); color: #fff; }
+.salus-landing .sl-question-helper { font-size: 11px; color: var(--sl-muted); margin-top: 17px; text-align: center; }
+.salus-landing .sl-demo-caption { font-size: 10px; margin-top: 11px; color: var(--sl-muted); text-align: right; }
+.salus-landing .sl-chapter { min-height: 650px; display: flex; align-items: center; padding-block: 80px; }
+.salus-landing .sl-chapter-copy { width: 100%; }
+.salus-landing .sl-chapter-label { display: flex; gap: 17px; font-size: 13px; color: var(--sl-green); margin-bottom: 24px; }
+.salus-landing .sl-chapter-label > span { font-size: 12px; }
+.salus-landing .sl-chapter h2 { font-size: clamp(30px, 3.25vw, 46px); font-weight: 500; line-height: 1.4; letter-spacing: -.055em; word-break: keep-all; }
+.salus-landing .sl-chapter-description { margin-top: 28px; font-size: 15px; line-height: 1.95; color: var(--sl-muted); word-break: keep-all; }
+.salus-landing .sl-chapter-detail { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--sl-line); font-size: 12px; color: var(--sl-muted); word-break: keep-all; }
+.salus-landing .sl-composer-preview { display: flex; justify-content: space-between; border: 1px solid var(--sl-line); border-radius: 8px; margin-top: 25px; padding: 10px 14px; color: var(--sl-muted); font-size: 12px; }
+.salus-landing .sl-record-example, .salus-landing .sl-recipes-example { padding: 28px; }
+.salus-landing .sl-example-title { display: flex; align-items: center; justify-content: space-between; }
+.salus-landing .sl-example-title h3 { font-size: 21px; font-weight: 550; letter-spacing: -.04em; }
+.salus-landing .sl-example-title > span { font-size: 11px; color: var(--sl-muted); }
+.salus-landing .sl-week { display: grid; grid-template-columns: repeat(7, 1fr); margin-block: 26px 28px; gap: 3px; }
+.salus-landing .sl-week > div { display: flex; flex-direction: column; align-items: center; padding: 10px 0; border-radius: 4px; font-size: 11px; color: var(--sl-muted); }
+.salus-landing .sl-week b { font-size: 14px; font-weight: 500; margin-top: 7px; }
+.salus-landing .sl-week i { width: 3px; height: 3px; margin-top: 8px; border-radius: 50%; }
+.salus-landing .sl-week .has-record { background: var(--sl-green); }
+.salus-landing .sl-week .is-today { background: #edf0ea; color: var(--sl-green); }
+.salus-landing .sl-record-date { font-size: 12px; color: var(--sl-muted); margin-bottom: 14px; }
+.salus-landing .sl-meal-row { display: flex; align-items: center; gap: 20px; border-top: 1px solid var(--sl-line); padding: 18px 0; }
+.salus-landing .sl-meal-row > span:first-child { font-size: 12px; color: var(--sl-muted); }
+.salus-landing .sl-meal-row > div { flex: 1; }
+.salus-landing .sl-meal-row strong { font-size: 14px; font-weight: 500; }
+.salus-landing .sl-meal-row small { display: block; font-size: 10px; color: var(--sl-muted); margin-top: 3px; }
+.salus-landing .sl-meal-row > span:last-child { color: var(--sl-green); font-size: 12px; }
+.salus-landing .sl-example-footnote { color: var(--sl-muted); font-size: 11px; margin-top: 28px; }
+.salus-landing .sl-example-panel .sl-record-example { padding: 22px; }
+.salus-landing .sl-example-panel .sl-week { margin-block: 14px; }
+.salus-landing .sl-example-panel .sl-week > div { padding-block: 4px; }
+.salus-landing .sl-example-panel .sl-record-date, .salus-landing .sl-example-panel .sl-example-footnote { display: none; }
+.salus-landing .sl-example-panel .sl-meal-row { padding-block: 12px; }
+.salus-landing .sl-example-intro { font-size: 12px; color: var(--sl-muted); margin-block: 12px 25px; }
+.salus-landing .sl-saved-row { display: flex; align-items: start; gap: 18px; padding: 21px 0; border-top: 1px solid var(--sl-line); }
+.salus-landing .sl-saved-index { font-size: 11px; color: var(--sl-muted); padding-top: 3px; }
+.salus-landing .sl-saved-row > div { flex: 1; }
+.salus-landing .sl-saved-row small { font-size: 10px; color: var(--sl-muted); }
+.salus-landing .sl-saved-row h4 { margin-top: 5px; font-size: 18px; font-weight: 500; letter-spacing: -.035em; }
+.salus-landing .sl-saved-row p { font-size: 12px; color: var(--sl-muted); margin-top: 5px; }
+.salus-landing .sl-saved-row > span:last-child { color: var(--sl-green); font-size: 18px; }
+.salus-landing .sl-health { background: var(--sl-paper); padding-block: 110px; }
+.salus-landing .sl-health-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 10%; }
+.salus-landing .sl-health h2 { margin-top: 30px; }
+.salus-landing .sl-health-copy > p:first-child { font-size: 24px; line-height: 1.65; letter-spacing: -.035em; }
+.salus-landing .sl-health-copy > p:nth-child(2) { font-size: 15px; color: var(--sl-muted); line-height: 1.95; margin-top: 26px; word-break: keep-all; }
+.salus-landing .sl-health-copy .sl-text-button { margin-top: 26px; color: var(--sl-green); }
+.salus-landing .sl-health-notice { margin-top: 34px; padding-top: 20px; border-top: 1px solid #d4dbd1; color: var(--sl-muted); font-size: 12px; line-height: 1.9; }
+.salus-landing .sl-faq { display: grid; grid-template-columns: 1fr 1.5fr; gap: 10%; padding-block: 120px; }
+.salus-landing .sl-faq h2 { font-size: 38px; font-weight: 500; line-height: 1.45; letter-spacing: -.05em; margin-top: 26px; }
+.salus-landing .sl-faq details { border-top: 1px solid var(--sl-line); }
+.salus-landing .sl-faq details:last-child { border-bottom: 1px solid var(--sl-line); }
+.salus-landing .sl-faq summary { list-style: none; min-height: 76px; display: flex; justify-content: space-between; align-items: center; gap: 20px; cursor: pointer; font-size: 15px; padding-block: 18px; }
+.salus-landing .sl-faq summary::-webkit-details-marker { display: none; }
+.salus-landing .sl-faq summary span { font-size: 23px; color: var(--sl-muted); font-weight: 300; }
+.salus-landing .sl-faq details[open] summary span { transform: rotate(45deg); }
+.salus-landing .sl-faq details > p { font-size: 14px; color: var(--sl-muted); line-height: 1.95; padding-bottom: 25px; word-break: keep-all; }
+.salus-landing .sl-inline-link { padding: 0; text-decoration: underline; text-underline-offset: 3px; }
+.salus-landing .sl-ending { padding-block: 80px 110px; border-top: 1px solid var(--sl-line); text-align: center; }
+.salus-landing .sl-ending > p { font-size: 13px; color: var(--sl-muted); margin-bottom: 24px; }
+.salus-landing .sl-ending h2 { font-size: clamp(46px, 5.4vw, 72px); font-weight: 500; letter-spacing: -.06em; line-height: 1.3; }
+.salus-landing .sl-ending h2 > span { color: var(--sl-green); }
+.salus-landing .sl-ending .sl-button { min-width: 190px; margin-top: 36px; }
+.salus-landing .sl-footer { display: flex; justify-content: space-between; gap: 30px; border-top: 1px solid var(--sl-line); padding-block: 32px 40px; align-items: start; }
+.salus-landing .sl-footer-wordmark { font-size: 27px; font-weight: 650; letter-spacing: -1.5px; }
+.salus-landing .sl-footer p { font-size: 11px; color: var(--sl-muted); margin-top: 8px; }
+.salus-landing .sl-footer-links { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 22px; align-items: center; font-size: 11px; color: var(--sl-muted); }
+.salus-landing .sl-footer-links button { padding: 8px 0; min-height: 44px; }
+.salus-landing[data-motion="on"] [data-reveal] { opacity: 0; transform: translateY(22px); transition: opacity .65s ease, transform .65s cubic-bezier(.2,.7,.2,1); }
+.salus-landing[data-motion="on"] [data-revealed="true"] { opacity: 1; transform: none; }
+@keyframes sl-panel-in { from { opacity: .3; transform: translateY(9px); } to { opacity: 1; transform: none; } }
+@media (min-width: 1600px) { .salus-landing .sl-hero { min-height: 840px; } }
+@media (max-width: 1000px) {
+    .salus-landing .sl-wrap { width: calc(100% - 64px); }
+    .salus-landing .sl-header { padding-inline: 28px; gap: 16px; }
+    .salus-landing .sl-navigation { gap: 20px; }
+    .salus-landing .sl-hero { gap: 5%; padding-block: 72px; }
+    .salus-landing .sl-hero h1 { font-size: 52px; }
+    .salus-landing .sl-hero-description { font-size: 14px; }
+    .salus-landing .sl-hero-actions { gap: 18px; }
+    .salus-landing .sl-story-layout { column-gap: 7%; }
+    .salus-landing .sl-story-display { top: 104px; }
+    .salus-landing .sl-chapter { min-height: 650px; }
+    .salus-landing .sl-chat-example, .salus-landing .sl-record-example, .salus-landing .sl-recipes-example { padding: 22px; }
+    .salus-landing .sl-chat-hero { padding: 28px 0 0; }
+    .salus-landing .sl-question { font-size: 13px; }
+}
+@media (max-width: 760px) {
+    .salus-landing .sl-wrap { width: calc(100% - 40px); }
+    .salus-landing .sl-header { min-height: 68px; padding-inline: 20px; gap: 15px; }
+    .salus-landing .sl-navigation { display: none; }
+    .salus-landing .sl-wordmark { font-size: 29px; }
+    .salus-landing .sl-header-actions { gap: 18px; }
+    .salus-landing .sl-button-small { min-height: 40px; gap: 15px; }
+    .salus-landing .sl-login { font-size: 12px; }
+    .salus-landing .sl-hero { display: block; min-height: auto; padding-block: 54px 60px; }
+    .salus-landing .sl-overline { font-size: 11px; margin-bottom: 24px; }
+    .salus-landing .sl-hero h1 { font-size: clamp(40px, 8.9vw, 62px); line-height: 1.28; letter-spacing: -.06em; }
+    .salus-landing .sl-desktop-break { display: none; }
+    .salus-landing .sl-hero-description { font-size: 13px; margin-top: 25px; }
+    .salus-landing .sl-hero-actions { gap: 21px; margin-top: 27px; }
+    .salus-landing .sl-hero-actions .sl-button { font-size: 13px; gap: 22px; padding-inline: 16px; min-height: 50px; }
+    .salus-landing .sl-hero-actions .sl-text-button { font-size: 12px; gap: 10px; }
+    .salus-landing .sl-hero-note { padding-top: 50px; max-width: 480px; margin-inline: auto; }
+    .salus-landing .sl-note-caption span:first-child { font-size: 12px; }
+    .salus-landing .sl-chat-hero { padding-top: 25px; }
+    .salus-landing .sl-note-bottom { margin-top: 18px; font-size: 10px; }
+    .salus-landing .sl-introduction { display: block; padding-block: 64px 32px; }
+    .salus-landing .sl-section-marker { font-size: 11px; padding-top: 0; }
+    .salus-landing .sl-introduction h2 { margin-top: 26px; font-size: 32px; }
+    .salus-landing .sl-introduction > p { font-size: 13px; margin-top: 20px; }
+    .salus-landing .sl-story { padding-bottom: 45px; }
+    .salus-landing .sl-story-layout { display: block; }
+    .salus-landing .sl-story-display { display: none; }
+    .salus-landing .sl-mobile-example { display: block; width: 100%; border: 1px solid var(--sl-line); border-radius: 6px; margin-top: 28px; overflow: hidden; }
+    .salus-landing .sl-mobile-caption { border-top: 1px solid var(--sl-line); padding: 9px 16px; font-size: 10px; color: var(--sl-muted); }
+    .salus-landing .sl-mobile-panel { animation: none; }
+    .salus-landing .sl-question-example { padding: 25px 16px 32px; }
+    .salus-landing .sl-question-example h3 { font-size: 23px; margin-top: 30px; }
+    .salus-landing .sl-question-composer { padding: 14px; }
+    .salus-landing .sl-question-composer p { font-size: 13px; }
+    .salus-landing .sl-example-tabs { margin-bottom: 9px; }
+    .salus-landing .sl-example-tabs button { min-height: 42px; font-size: 12px; }
+    .salus-landing .sl-example-tabs button span { margin-right: 6px; font-size: 10px; }
+    .salus-landing .sl-window-bar { min-height: 36px; padding: 6px 16px; }
+    .salus-landing .sl-small-wordmark { font-size: 16px; }
+    .salus-landing .sl-window-bar > span:last-child { font-size: 9px; }
+    .salus-landing .sl-example-panel { height: 340px; overscroll-behavior-y: auto; }
+    .salus-landing .sl-example-panel .sl-answer > p, .salus-landing .sl-example-panel .sl-micro, .salus-landing .sl-example-panel .sl-example-footnote, .salus-landing .sl-example-panel .sl-record-date { display: none; }
+    .salus-landing .sl-chat-example, .salus-landing .sl-record-example, .salus-landing .sl-recipes-example { padding: 16px; }
+    .salus-landing .sl-chat-hero { padding: 25px 0 0; }
+    .salus-landing .sl-example-panel .sl-answer { margin-top: 15px; }
+    .salus-landing .sl-example-panel .sl-answer > p { font-size: 12px; margin-top: 5px; }
+    .salus-landing .sl-example-panel .sl-question { padding: 9px 13px; font-size: 12px; }
+    .salus-landing .sl-example-panel .sl-recipe-preview { margin-top: 10px; padding: 10px 0; }
+    .salus-landing .sl-example-panel .sl-recipe-preview h3 { font-size: 19px; }
+    .salus-landing .sl-example-panel .sl-recipe-meta { margin-top: 4px; }
+    .salus-landing .sl-example-panel .sl-ingredient-line { margin-top: 9px; font-size: 12px; }
+    .salus-landing .sl-example-panel .sl-recipe-note { font-size: 10px; margin-top: 9px; }
+    .salus-landing .sl-example-panel .sl-composer-preview { display: none; }
+    .salus-landing .sl-demo-caption { font-size: 9px; margin-top: 6px; }
+    .salus-landing .sl-chapter { min-height: 0; padding-block: 35px 45px; display: block; }
+    .salus-landing .sl-chapter h2 { font-size: 30px; line-height: 1.45; }
+    .salus-landing .sl-chapter-label { font-size: 12px; margin-bottom: 19px; }
+    .salus-landing .sl-chapter-description { font-size: 13px; margin-top: 22px; }
+    .salus-landing .sl-chapter-detail { margin-top: 20px; padding-top: 16px; font-size: 11px; }
+    .salus-landing .sl-week { margin-block: 15px; }
+    .salus-landing .sl-week > div { padding-block: 6px; }
+    .salus-landing .sl-record-date { margin-bottom: 8px; }
+    .salus-landing .sl-meal-row { padding-block: 10px; }
+    .salus-landing .sl-saved-row { padding-block: 12px; }
+    .salus-landing .sl-saved-row h4 { font-size: 16px; }
+    .salus-landing .sl-example-intro { margin-block: 7px 18px; }
+    .salus-landing .sl-example-footnote { margin-top: 18px; }
+    .salus-landing .sl-health { padding-block: 64px; }
+    .salus-landing .sl-health-layout { display: block; }
+    .salus-landing .sl-health h2 { font-size: 32px; margin-top: 26px; }
+    .salus-landing .sl-health-copy { margin-top: 36px; }
+    .salus-landing .sl-health-copy > p:first-child { font-size: 22px; }
+    .salus-landing .sl-health-copy > p:nth-child(2) { font-size: 13px; margin-top: 20px; }
+    .salus-landing .sl-health-notice { font-size: 11px; }
+    .salus-landing .sl-faq { display: block; padding-block: 64px; }
+    .salus-landing .sl-faq h2 { font-size: 32px; margin-top: 24px; }
+    .salus-landing .sl-faq-list { margin-top: 36px; }
+    .salus-landing .sl-faq summary { min-height: 70px; font-size: 14px; }
+    .salus-landing .sl-faq details > p { font-size: 13px; }
+    .salus-landing .sl-ending { padding-block: 64px 70px; }
+    .salus-landing .sl-ending h2 { font-size: 42px; }
+    .salus-landing .sl-footer { flex-direction: column; padding-block: 27px 30px; gap: 22px; }
+    .salus-landing .sl-footer-links { justify-content: start; gap: 15px; font-size: 10px; }
+}
+@media (max-height: 700px) and (min-width: 761px) {
+    .salus-landing .sl-story-display { top: 98px; }
+    .salus-landing .sl-example-panel { height: calc(100svh - 310px); }
+    .salus-landing .sl-chat-example { padding: 20px; }
+    .salus-landing .sl-chat-hero { padding: 30px 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .salus-landing *, .salus-landing *::before, .salus-landing *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+    .salus-landing[data-motion="on"] [data-reveal] { opacity: 1; transform: none; }
+}
+.salus-landing[data-reduced-motion="true"] [data-reveal] { opacity: 1; transform: none; transition: none; }
+.salus-landing[data-reduced-motion="true"] .sl-example-panel { animation: none; }

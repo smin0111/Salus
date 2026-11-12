@@ -6,9 +6,6 @@ import com.salus.healthytable.domain.RecipeApprovalStatus;
 import com.salus.healthytable.dto.RecipeDTO;
 import com.salus.healthytable.exception.GlobalExceptionHandler;
 import com.salus.healthytable.repository.RecipeRepository;
-import com.salus.healthytable.security.AuthenticatedUserProvider;
-import com.salus.healthytable.service.ChatRateLimitService;
-import com.salus.healthytable.service.GeminiService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -37,9 +34,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class RecipeControllerTest {
 
     private RecipeRepository recipeRepository;
-    private GeminiService geminiService;
-    private AuthenticatedUserProvider authenticatedUserProvider;
-    private ChatRateLimitService chatRateLimitService;
 
     private MockMvc mockMvc;
     private ObjectMapper objectMapper;
@@ -47,15 +41,8 @@ class RecipeControllerTest {
     @BeforeEach
     void setUp() {
         recipeRepository = mock(RecipeRepository.class);
-        geminiService = mock(GeminiService.class);
-        authenticatedUserProvider = mock(AuthenticatedUserProvider.class);
-        chatRateLimitService = mock(ChatRateLimitService.class);
 
-        RecipeController controller = new RecipeController(
-                recipeRepository,
-                geminiService,
-                authenticatedUserProvider,
-                chatRateLimitService);
+        RecipeController controller = new RecipeController(recipeRepository);
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
@@ -116,114 +103,5 @@ class RecipeControllerTest {
                 .andExpect(jsonPath("$.message").value("레시피 조회 개수는 1부터 50 사이로 입력해 주세요."));
 
         verifyNoInteractions(recipeRepository);
-    }
-
-    // 추천 요청의 재료 공백/중복을 정리한 뒤 AI 서비스를 호출해야 합니다.
-    @Test
-    void recommendRecipeNormalizesRequestBeforeCallingAiService() throws Exception {
-        RecipeController.RecommendationRequest request = new RecipeController.RecommendationRequest();
-        request.setIngredients(List.of(" 양파 ", "두부", "양파"));
-        request.setHealthContext(" 저염식 ");
-
-        when(authenticatedUserProvider.getCurrentUserId()).thenReturn(Optional.of(7L));
-        when(geminiService.getRecipeRecommendation(List.of("양파", "두부"), "저염식"))
-                .thenReturn(Mono.just("추천 결과"));
-
-        org.springframework.test.web.servlet.MvcResult mvcResult = mockMvc.perform(post("/api/recipes/recommend")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(request().asyncStarted())
-                .andReturn();
-
-        mockMvc.perform(asyncDispatch(mvcResult))
-                .andExpect(status().isOk())
-                .andExpect(content().string("추천 결과"));
-
-        verify(chatRateLimitService).checkAllowed(eq(Optional.of(7L)), any());
-        verify(geminiService).getRecipeRecommendation(List.of("양파", "두부"), "저염식");
-    }
-
-    // 건강 참고 내용이 비어 있으면 기본값("None")으로 채워야 합니다.
-    @Test
-    void recommendRecipeDefaultsBlankHealthContext() throws Exception {
-        RecipeController.RecommendationRequest request = new RecipeController.RecommendationRequest();
-        request.setIngredients(List.of("달걀"));
-        request.setHealthContext(" ");
-
-        when(authenticatedUserProvider.getCurrentUserId()).thenReturn(Optional.empty());
-        when(geminiService.getRecipeRecommendation(List.of("달걀"), "None"))
-                .thenReturn(Mono.just("추천 결과"));
-
-        org.springframework.test.web.servlet.MvcResult mvcResult = mockMvc.perform(post("/api/recipes/recommend")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(request().asyncStarted())
-                .andReturn();
-
-        mockMvc.perform(asyncDispatch(mvcResult))
-                .andExpect(status().isOk())
-                .andExpect(content().string("추천 결과"));
-
-        verify(chatRateLimitService).checkAllowed(eq(Optional.empty()), any());
-        verify(geminiService).getRecipeRecommendation(List.of("달걀"), "None");
-    }
-
-    // 요청 본문이 없으면 AI 호출 전에 400이어야 합니다.
-    @Test
-    void recommendRecipeRejectsNullRequestBeforeCallingAiService() throws Exception {
-        mockMvc.perform(post("/api/recipes/recommend")
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("요청 본문 JSON 형식이 올바르지 않습니다."));
-
-        verifyNoInteractions(geminiService, authenticatedUserProvider, chatRateLimitService);
-    }
-
-    // 빈 재료는 AI 호출 전에 400이어야 합니다.
-    @Test
-    void recommendRecipeRejectsBlankIngredientsBeforeCallingAiService() throws Exception {
-        RecipeController.RecommendationRequest request = new RecipeController.RecommendationRequest();
-        request.setIngredients(Arrays.asList(" ", null));
-
-        mockMvc.perform(post("/api/recipes/recommend")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("추천에 사용할 재료를 1개 이상 입력해 주세요."));
-
-        verifyNoInteractions(geminiService, authenticatedUserProvider, chatRateLimitService);
-    }
-
-    // 재료가 20개를 넘으면 AI 호출 전에 400이어야 합니다.
-    @Test
-    void recommendRecipeRejectsTooManyIngredientsBeforeCallingAiService() throws Exception {
-        RecipeController.RecommendationRequest request = new RecipeController.RecommendationRequest();
-        request.setIngredients(IntStream.rangeClosed(1, 21)
-                .mapToObj(index -> "재료" + index)
-                .toList());
-
-        mockMvc.perform(post("/api/recipes/recommend")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("재료는 최대 20개까지 입력할 수 있습니다."));
-
-        verifyNoInteractions(geminiService, authenticatedUserProvider, chatRateLimitService);
-    }
-
-    // 건강 참고 내용이 1,000자를 넘으면 AI 호출 전에 400이어야 합니다.
-    @Test
-    void recommendRecipeRejectsLongHealthContextBeforeCallingAiService() throws Exception {
-        RecipeController.RecommendationRequest request = new RecipeController.RecommendationRequest();
-        request.setIngredients(List.of("양파"));
-        request.setHealthContext("a".repeat(1001));
-
-        mockMvc.perform(post("/api/recipes/recommend")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("건강 참고 내용은 1000자 이하로 입력해 주세요."));
-
-        verifyNoInteractions(geminiService, authenticatedUserProvider, chatRateLimitService);
     }
 }

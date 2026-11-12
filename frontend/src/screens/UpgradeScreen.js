@@ -83,9 +83,11 @@ export default function UpgradeScreen({ onBack, onSuccess, onNavigate }) {
         reconcile();
     }, [reconcile]);
 
-    // 웹 환경이면 포트원 결제 SDK를 불러옵니다.
+    // 웹 환경이고 서버가 결제를 받을 때만 포트원 결제 SDK를 불러옵니다.
+    // 결제가 꺼져 있으면 외부 스크립트를 실행할 이유가 없으므로 불러오지 않습니다(2026-11-06 보안 점검).
+    const paymentEnabled = Boolean(status?.paymentEnabled);
     useEffect(() => {
-        if (Platform.OS !== 'web') return;
+        if (Platform.OS !== 'web' || !paymentEnabled) return;
         if (window.PortOne) {
             setSdkReady(true);
             return;
@@ -103,7 +105,7 @@ export default function UpgradeScreen({ onBack, onSuccess, onNavigate }) {
             notify('error', '오류', '결제 모듈을 불러오지 못했습니다. 네트워크를 확인해 주세요.');
         };
         document.head.appendChild(script);
-    }, []);
+    }, [paymentEnabled]);
 
     // 결제 확인이 실패했을 때: 서버가 주문번호로 포트원에 다시 조회해 마무리합니다.
     const recheckPayment = async () => {

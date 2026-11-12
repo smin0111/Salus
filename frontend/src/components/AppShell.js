@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import ThemeCycleButton from './ThemeCycleButton';
 import ServiceBrand from './ServiceBrand';
+import { ContentWidthContext } from '../hooks/useResponsive';
+
+const CENTERED_SCREENS = new Set(['calendar', 'my-recipes', 'health', 'health-checkup', 'feed', 'account-settings']);
 
 export const APP_TABS = [
     { id: 'chat', label: '채팅' },
@@ -15,6 +18,10 @@ export const APP_TABS = [
 
 export default function AppShell({ children, currentScreen, onNavigate, onOpenHistory, onNewChat, historyExpanded = false, isLoggedIn, user, onLogout }) {
     const { width } = useWindowDimensions();
+    // 1280px 이상에서는 25:50:25, 그 아래에서는 읽을 폭을 우선합니다.
+    const contentWidth = Platform.OS === 'web' && CENTERED_SCREENS.has(currentScreen)
+        ? Math.min(width, Math.max(640, width / 2))
+        : null;
     const wide = width >= 900;
     const dockedHistory = width >= 768;
     const [profileOpen, setProfileOpen] = useState(false);
@@ -45,7 +52,9 @@ export default function AppShell({ children, currentScreen, onNavigate, onOpenHi
                 </Pressable>
             </View>
             {tabs}
-            <View style={styles.main}>{children}</View>
+            <View style={[styles.main, contentWidth != null && { width: contentWidth, alignSelf: 'center' }]}>
+                <ContentWidthContext.Provider value={contentWidth}>{children}</ContentWidthContext.Provider>
+            </View>
             <Modal visible={profileOpen} transparent animationType="fade" onRequestClose={() => setProfileOpen(false)}>
                 <View style={styles.menuOverlay}>
                     <Pressable style={StyleSheet.absoluteFill} onPress={() => setProfileOpen(false)} accessibilityRole="button" accessibilityLabel="프로필 메뉴 닫기" />

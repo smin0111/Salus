@@ -100,6 +100,10 @@ public class MealLogService {
             } catch (Exception e) {
                 throw new IllegalArgumentException("식단 상세 JSON 형식이 올바르지 않습니다.");
             }
+            // 요청마다 20000자 제한을 지켜도 다른 키로 계속 합치면 한 행이 끝없이 커지므로, 합친 결과에도 같은 제한을 둡니다(2026-11-06 보안 점검).
+            if (mealLog.getMealDetails().length() > MAX_JSON_FIELD_LENGTH) {
+                throw new IllegalArgumentException("하루 식단 상세 정보가 너무 커요. 일부 항목을 지운 뒤 다시 저장해 주세요.");
+            }
         }
 
         if (dto.getDailyStats() != null) {

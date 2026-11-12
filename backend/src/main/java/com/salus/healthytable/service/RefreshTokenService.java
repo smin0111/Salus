@@ -128,9 +128,19 @@ public class RefreshTokenService {
         if (rawToken == null || rawToken.isBlank()) {
             return;
         }
-        refreshTokenRepository.findByTokenHash(hash(rawToken.trim()))
-                .filter(token -> token.getRevokedAt() == null)
-                .ifPresent(token -> token.setRevokedAt(LocalDateTime.now(clock)));
+        LocalDateTime now = LocalDateTime.now(clock);
+        refreshTokenRepository.findByTokenHash(hash(rawToken.trim())).ifPresent(token -> {
+            // 이미 새 토큰으로 바꾼(사용된) 토큰으로 로그아웃하면, 누군가 그 토큰을 먼저 갱신해 이어받은 것일 수 있습니다.
+            // 그 사람의 새 토큰은 이 토큰과 이어진 기록이 없어 따로 지울 수 없으므로 이 회원의 토큰을 모두 폐기합니다(2026-11-06 보안 점검).
+            if (token.getUsedAt() != null) {
+                int revoked = refreshTokenRepository.revokeAllByUserId(token.getUserId(), now);
+                log.warn("Logout with rotated refresh token. userId={}, revokedTokens={}", token.getUserId(), revoked);
+                return;
+            }
+            if (token.getRevokedAt() == null) {
+                token.setRevokedAt(now);
+            }
+        });
     }
 
     static String hash(String rawToken) {

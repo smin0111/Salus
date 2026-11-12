@@ -15,7 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -44,6 +43,9 @@ public class EmailAuthTxHelper {
     private final Clock clock;
     // 관리자 로그인과 같은 강도(12)입니다. 72바이트 넘는 비밀번호는 EmailAuthService에서 미리 거절합니다.
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder(12);
+    // 인증 코드 해시 키. 코드가 6자리(100만 가지)라 키 없는 SHA-256이면 DB가 새면 바로 되돌릴 수 있어 서버 비밀로 HMAC합니다(2026-11-06 보안 점검).
+    @org.springframework.beans.factory.annotation.Value("${jwt.secret}")
+    private String codeHashKey;
     // 없는 이메일로 로그인할 때도 같은 시간이 걸리도록 비교에 쓰는 해시입니다(가입 여부를 응답 시간으로 알 수 없게).
     private final String dummyHash = new BCryptPasswordEncoder(12).encode("salus-dummy-password-for-timing");
 
@@ -96,7 +98,7 @@ public class EmailAuthTxHelper {
         EmailVerification verification = new EmailVerification();
         verification.setEmail(email);
         verification.setPurpose(purpose);
-        verification.setCodeHash(hashCode(email, purpose, code));
+        verification.setCodeHash(hashCode(codeHashKey, email, purpose, code));
         verification.setAttempts(0);
         verification.setCreatedAt(now);
         verification.setExpiresAt(now.plus(CODE_VALIDITY));
@@ -257,7 +259,7 @@ public class EmailAuthTxHelper {
             return CodeResult.TOO_MANY_ATTEMPTS;
         }
         boolean matches = code != null && MessageDigest.isEqual(
-                hashCode(email, purpose, code.trim()).getBytes(StandardCharsets.US_ASCII),
+                hashCode(codeHashKey, email, purpose, code.trim()).getBytes(StandardCharsets.US_ASCII),
                 verification.getCodeHash().getBytes(StandardCharsets.US_ASCII));
         if (!matches) {
             verification.setAttempts(verification.getAttempts() + 1);
@@ -267,12 +269,17 @@ public class EmailAuthTxHelper {
         return CodeResult.OK;
     }
 
-    static String hashCode(String email, EmailVerificationPurpose purpose, String code) {
+    static String hashCode(String key, String email, EmailVerificationPurpose purpose, String code) {
+        if (key == null || key.isBlank()) {
+            throw new IllegalStateException("email code hash key is missing");
+        }
         try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest((purpose.name() + ":" + email + ":" + code).getBytes(StandardCharsets.UTF_8));
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec(
+                    ("email-code:" + key).getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] digest = mac.doFinal((purpose.name() + ":" + email + ":" + code).getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException e) {
+        } catch (java.security.GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }
     }

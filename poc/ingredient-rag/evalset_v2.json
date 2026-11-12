@@ -1,0 +1,1757 @@
+[
+ {
+  "question": "무청이 뭐야?",
+  "gold": [
+   "무청"
+  ],
+  "must": [
+   [
+    "잎"
+   ],
+   [
+    "줄기"
+   ]
+  ],
+  "must_not": [
+   "뿌리 부분"
+  ],
+  "kind": "in",
+  "id": 1,
+  "split": "dev"
+ },
+ {
+  "question": "무우청이 뭐야?",
+  "gold": [
+   "무청"
+  ],
+  "must": [
+   [
+    "잎"
+   ],
+   [
+    "줄기"
+   ]
+  ],
+  "must_not": [
+   "뿌리 부분"
+  ],
+  "kind": "in",
+  "id": 2,
+  "split": "test"
+ },
+ {
+  "question": "무 잎 말린 걸 뭐라고 해?",
+  "gold": [
+   "시래기"
+  ],
+  "must": [
+   [
+    "시래기"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 3,
+  "split": "dev"
+ },
+ {
+  "question": "시래기는 뭘로 만들어?",
+  "gold": [
+   "시래기"
+  ],
+  "must": [
+   [
+    "무청",
+    "무 잎",
+    "무잎",
+    "무의 잎"
+   ],
+   [
+    "말린",
+    "말려"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 4,
+  "split": "test"
+ },
+ {
+  "question": "우거지는 뭐야?",
+  "gold": [
+   "우거지"
+  ],
+  "must": [
+   [
+    "배추"
+   ],
+   [
+    "겉잎",
+    "겉 잎",
+    "바깥"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 5,
+  "split": "dev"
+ },
+ {
+  "question": "시래기랑 우거지 차이가 뭐야?",
+  "gold": [
+   "시래기",
+   "우거지"
+  ],
+  "must": [
+   [
+    "무청",
+    "무 잎",
+    "무잎"
+   ],
+   [
+    "배추"
+   ]
+  ],
+  "must_not": [],
+  "kind": "confuse",
+  "id": 6,
+  "split": "test"
+ },
+ {
+  "question": "깻잎은 어떤 식물의 잎이야?",
+  "gold": [
+   "들깨"
+  ],
+  "must": [
+   [
+    "들깨"
+   ]
+  ],
+  "must_not": [
+   "참깨의 잎",
+   "참깨 잎"
+  ],
+  "kind": "in",
+  "id": 7,
+  "split": "dev"
+ },
+ {
+  "question": "들기름은 뭘로 짜?",
+  "gold": [
+   "들기름"
+  ],
+  "must": [
+   [
+    "들깨"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 8,
+  "split": "test"
+ },
+ {
+  "question": "참기름 원료가 뭐야?",
+  "gold": [
+   "참기름"
+  ],
+  "must": [
+   [
+    "참깨"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 9,
+  "split": "dev"
+ },
+ {
+  "question": "열무가 뭐야?",
+  "gold": [
+   "열무"
+  ],
+  "must": [
+   [
+    "어린"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 10,
+  "split": "test"
+ },
+ {
+  "question": "곤드레는 어떤 식물이야?",
+  "gold": [
+   "고려엉겅퀴"
+  ],
+  "must": [
+   [
+    "엉겅퀴"
+   ]
+  ],
+  "must_not": [],
+  "kind": "related",
+  "id": 11,
+  "split": "dev"
+ },
+ {
+  "question": "방풍나물은 무슨 식물이야?",
+  "gold": [
+   "갯기름나물"
+  ],
+  "must": [
+   [
+    "갯기름나물"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 12,
+  "split": "test"
+ },
+ {
+  "question": "새송이버섯 정식 이름이 뭐야?",
+  "gold": [
+   "큰느타리"
+  ],
+  "must": [
+   [
+    "큰느타리"
+   ]
+  ],
+  "must_not": [],
+  "kind": "related",
+  "id": 13,
+  "split": "dev"
+ },
+ {
+  "question": "팽이버섯 다른 이름은?",
+  "gold": [
+   "팽나무버섯"
+  ],
+  "must": [
+   [
+    "팽나무버섯"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 14,
+  "split": "test"
+ },
+ {
+  "question": "청포묵은 뭘로 만들어?",
+  "gold": [
+   "녹두묵"
+  ],
+  "must": [
+   [
+    "녹두"
+   ]
+  ],
+  "must_not": [
+   "도토리"
+  ],
+  "kind": "related",
+  "id": 15,
+  "split": "dev"
+ },
+ {
+  "question": "도토리묵은 뭘로 만들어?",
+  "gold": [
+   "도토리묵"
+  ],
+  "must": [
+   [
+    "도토리"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 16,
+  "split": "test"
+ },
+ {
+  "question": "숙주나물은 무슨 콩으로 키워?",
+  "gold": [
+   "숙주나물"
+  ],
+  "must": [
+   [
+    "녹두"
+   ]
+  ],
+  "must_not": [
+   "대두"
+  ],
+  "kind": "in",
+  "id": 17,
+  "split": "dev"
+ },
+ {
+  "question": "콩나물은 무슨 콩으로 키워?",
+  "gold": [
+   "콩나물"
+  ],
+  "must": [
+   [
+    "대두",
+    "메주콩",
+    "노란콩"
+   ]
+  ],
+  "must_not": [
+   "녹두"
+  ],
+  "kind": "in",
+  "id": 18,
+  "split": "test"
+ },
+ {
+  "question": "우엉은 무슨 과 식물이야?",
+  "gold": [
+   "우엉"
+  ],
+  "must": [
+   [
+    "국화과"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 19,
+  "split": "dev"
+ },
+ {
+  "question": "연근은 연꽃의 어느 부분이야?",
+  "gold": [
+   "연근"
+  ],
+  "must": [
+   [
+    "땅속줄기",
+    "뿌리줄기"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 20,
+  "split": "test"
+ },
+ {
+  "question": "토란은 무슨 과 식물이야?",
+  "gold": [
+   "토란"
+  ],
+  "must": [
+   [
+    "천남성과"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 21,
+  "split": "dev"
+ },
+ {
+  "question": "곤약은 뭘로 만들어?",
+  "gold": [
+   "곤약"
+  ],
+  "must": [
+   [
+    "구약",
+    "뿌리",
+    "알줄기",
+    "덩이줄기"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 22,
+  "split": "test"
+ },
+ {
+  "question": "유부는 뭐야?",
+  "gold": [
+   "유부"
+  ],
+  "must": [
+   [
+    "두부"
+   ],
+   [
+    "튀"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 23,
+  "split": "dev"
+ },
+ {
+  "question": "어묵 재료가 뭐야?",
+  "gold": [
+   "어묵"
+  ],
+  "must": [
+   [
+    "생선"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 24,
+  "split": "test"
+ },
+ {
+  "question": "당면은 뭘로 만들어?",
+  "gold": [
+   "당면"
+  ],
+  "must": [
+   [
+    "녹말",
+    "전분"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 25,
+  "split": "dev"
+ },
+ {
+  "question": "조청이 뭐야?",
+  "gold": [
+   "조청"
+  ],
+  "must": [
+   [
+    "엿"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 26,
+  "split": "test"
+ },
+ {
+  "question": "엿기름은 뭐야?",
+  "gold": [
+   "엿기름"
+  ],
+  "must": [
+   [
+    "보리",
+    "밀"
+   ],
+   [
+    "싹"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 27,
+  "split": "dev"
+ },
+ {
+  "question": "누룽지는 뭐야?",
+  "gold": [
+   "누룽지"
+  ],
+  "must": [
+   [
+    "밥"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 28,
+  "split": "test"
+ },
+ {
+  "question": "곶감은 뭐야?",
+  "gold": [
+   "곶감"
+  ],
+  "must": [
+   [
+    "감"
+   ],
+   [
+    "말린",
+    "말려"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 29,
+  "split": "dev"
+ },
+ {
+  "question": "과메기는 무슨 생선으로 만들어?",
+  "gold": [
+   "과메기"
+  ],
+  "must": [
+   [
+    "청어",
+    "꽁치"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 30,
+  "split": "test"
+ },
+ {
+  "question": "꼬막은 뭐야?",
+  "gold": [
+   "꼬막"
+  ],
+  "must": [
+   [
+    "조개"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 31,
+  "split": "dev"
+ },
+ {
+  "question": "매생이는 뭐야?",
+  "gold": [
+   "매생이"
+  ],
+  "must": [
+   [
+    "녹조",
+    "해조",
+    "바닷말"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 32,
+  "split": "test"
+ },
+ {
+  "question": "톳은 뭐야?",
+  "gold": [
+   "톳"
+  ],
+  "must": [
+   [
+    "바닷말",
+    "해조",
+    "갈색말",
+    "갈조"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 33,
+  "split": "dev"
+ },
+ {
+  "question": "미역은 어떤 종류의 생물이야?",
+  "gold": [
+   "미역"
+  ],
+  "must": [
+   [
+    "갈조"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 34,
+  "split": "test"
+ },
+ {
+  "question": "파래는 뭐야?",
+  "gold": [
+   "파래"
+  ],
+  "must": [
+   [
+    "해초",
+    "해조"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 35,
+  "split": "dev"
+ },
+ {
+  "question": "머위는 무슨 과 식물이야?",
+  "gold": [
+   "머위"
+  ],
+  "must": [
+   [
+    "국화과"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 36,
+  "split": "test"
+ },
+ {
+  "question": "두릅은 어디서 나는 거야?",
+  "gold": [
+   "두릅나무"
+  ],
+  "must": [
+   [
+    "두릅나무"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 37,
+  "split": "dev"
+ },
+ {
+  "question": "더덕은 어떤 식물이야?",
+  "gold": [
+   "더덕"
+  ],
+  "must": [
+   [
+    "덩굴"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 38,
+  "split": "test"
+ },
+ {
+  "question": "도라지는 무슨 과 식물이야?",
+  "gold": [
+   "도라지"
+  ],
+  "must": [
+   [
+    "초롱꽃과"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 39,
+  "split": "dev"
+ },
+ {
+  "question": "고사리는 어떤 식물이야?",
+  "gold": [
+   "고사리"
+  ],
+  "must": [
+   [
+    "양치"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 40,
+  "split": "test"
+ },
+ {
+  "question": "냉이 영어로 뭐야?",
+  "gold": [
+   "냉이"
+  ],
+  "must": [
+   [
+    "shepherd"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 41,
+  "split": "dev"
+ },
+ {
+  "question": "달래는 무슨 속 식물이야?",
+  "gold": [
+   "달래"
+  ],
+  "must": [
+   [
+    "부추속"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 42,
+  "split": "test"
+ },
+ {
+  "question": "취나물은 뭐야?",
+  "gold": [
+   "취나물"
+  ],
+  "must": [
+   [
+    "참취"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 43,
+  "split": "dev"
+ },
+ {
+  "question": "고들빼기는 무슨 과 식물이야?",
+  "gold": [
+   "고들빼기"
+  ],
+  "must": [
+   [
+    "국화과"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 44,
+  "split": "test"
+ },
+ {
+  "question": "씀바귀는 무슨 과 식물이야?",
+  "gold": [
+   "씀바귀"
+  ],
+  "must": [
+   [
+    "국화과"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 45,
+  "split": "dev"
+ },
+ {
+  "question": "청국장은 뭘로 만들어?",
+  "gold": [
+   "청국장"
+  ],
+  "must": [
+   [
+    "콩"
+   ],
+   [
+    "발효"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 46,
+  "split": "test"
+ },
+ {
+  "question": "고춧가루는 어떻게 만들어?",
+  "gold": [
+   "고춧가루"
+  ],
+  "must": [
+   [
+    "말려",
+    "말린"
+   ],
+   [
+    "빻",
+    "갈"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 47,
+  "split": "dev"
+ },
+ {
+  "question": "된장은 어떻게 만들어?",
+  "gold": [
+   "된장"
+  ],
+  "must": [
+   [
+    "메주"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 48,
+  "split": "test"
+ },
+ {
+  "question": "무청이랑 열무는 뭐가 달라?",
+  "gold": [
+   "무청",
+   "열무"
+  ],
+  "must": [
+   [
+    "잎"
+   ],
+   [
+    "어린"
+   ]
+  ],
+  "must_not": [],
+  "kind": "confuse",
+  "id": 49,
+  "split": "dev"
+ },
+ {
+  "question": "참기름이랑 들기름 차이가 뭐야?",
+  "gold": [
+   "참기름",
+   "들기름"
+  ],
+  "must": [
+   [
+    "참깨"
+   ],
+   [
+    "들깨"
+   ]
+  ],
+  "must_not": [],
+  "kind": "confuse",
+  "id": 50,
+  "split": "test"
+ },
+ {
+  "question": "된장이랑 청국장은 어떻게 달라?",
+  "gold": [
+   "된장",
+   "청국장"
+  ],
+  "must": [
+   [
+    "메주"
+   ],
+   [
+    "콩"
+   ]
+  ],
+  "must_not": [],
+  "kind": "confuse",
+  "id": 51,
+  "split": "dev"
+ },
+ {
+  "question": "간장이랑 국간장 차이가 뭐야?",
+  "gold": [
+   "간장",
+   "국간장"
+  ],
+  "must": [
+   [
+    "국"
+   ]
+  ],
+  "must_not": [],
+  "kind": "confuse",
+  "id": 52,
+  "split": "test"
+ },
+ {
+  "question": "청포묵이랑 도토리묵 차이가 뭐야?",
+  "gold": [
+   "녹두묵",
+   "도토리묵"
+  ],
+  "must": [
+   [
+    "녹두"
+   ],
+   [
+    "도토리"
+   ]
+  ],
+  "must_not": [],
+  "kind": "confuse",
+  "id": 53,
+  "split": "dev"
+ },
+ {
+  "question": "숙주나물이랑 콩나물은 뭐가 달라?",
+  "gold": [
+   "숙주나물",
+   "콩나물"
+  ],
+  "must": [
+   [
+    "녹두"
+   ],
+   [
+    "대두"
+   ]
+  ],
+  "must_not": [],
+  "kind": "confuse",
+  "id": 54,
+  "split": "test"
+ },
+ {
+  "question": "피망이랑 파프리카는 다른 거야?",
+  "gold": [
+   "단고추"
+  ],
+  "must": [
+   [
+    "단고추",
+    "맵지 않"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 55,
+  "split": "dev"
+ },
+ {
+  "question": "고추냉이랑 겨자는 같은 거야?",
+  "gold": [
+   "고추냉이",
+   "겨자"
+  ],
+  "must": [
+   [
+    "배추과",
+    "다른",
+    "달라"
+   ]
+  ],
+  "must_not": [
+   "같은 식물입니다"
+  ],
+  "kind": "confuse",
+  "id": 56,
+  "split": "test"
+ },
+ {
+  "question": "미림이랑 맛술 차이가 뭐야?",
+  "gold": [
+   "미림",
+   "맛술"
+  ],
+  "must": [
+   [
+    "일본"
+   ],
+   [
+    "청주",
+    "소주",
+    "포도주"
+   ]
+  ],
+  "must_not": [],
+  "kind": "confuse",
+  "id": 57,
+  "split": "dev"
+ },
+ {
+  "question": "상추랑 양상추는 뭐가 달라?",
+  "gold": [
+   "상추",
+   "양상추"
+  ],
+  "must": [
+   [
+    "결구",
+    "둥글게"
+   ]
+  ],
+  "must_not": [],
+  "kind": "confuse",
+  "id": 58,
+  "split": "test"
+ },
+ {
+  "question": "곰취랑 참취는 같은 거야?",
+  "gold": [
+   "곰취",
+   "참취"
+  ],
+  "must": [
+   [
+    "국화과"
+   ]
+  ],
+  "must_not": [
+   "같은 식물입니다"
+  ],
+  "kind": "confuse",
+  "id": 59,
+  "split": "dev"
+ },
+ {
+  "question": "붕장어랑 뱀장어 차이가 뭐야?",
+  "gold": [
+   "붕장어",
+   "뱀장어"
+  ],
+  "must": [
+   [
+    "비늘"
+   ]
+  ],
+  "must_not": [],
+  "kind": "confuse",
+  "id": 60,
+  "split": "test"
+ },
+ {
+  "question": "곱창이랑 막창은 어느 부위야?",
+  "gold": [
+   "곱창",
+   "막창"
+  ],
+  "must": [
+   [
+    "작은창자"
+   ],
+   [
+    "주름위",
+    "네 번째 위"
+   ]
+  ],
+  "must_not": [],
+  "kind": "confuse",
+  "id": 61,
+  "split": "dev"
+ },
+ {
+  "question": "명란젓이랑 창난젓 차이가 뭐야?",
+  "gold": [
+   "명란젓",
+   "창난젓"
+  ],
+  "must": [
+   [
+    "알"
+   ],
+   [
+    "창자"
+   ]
+  ],
+  "must_not": [],
+  "kind": "confuse",
+  "id": 62,
+  "split": "test"
+ },
+ {
+  "question": "식혜랑 수정과는 뭘로 만들어?",
+  "gold": [
+   "식혜",
+   "수정과"
+  ],
+  "must": [
+   [
+    "엿기름"
+   ],
+   [
+    "생강",
+    "곶감",
+    "계피"
+   ]
+  ],
+  "must_not": [],
+  "kind": "confuse",
+  "id": 63,
+  "split": "dev"
+ },
+ {
+  "question": "순두부랑 두부는 뭐가 달라?",
+  "gold": [
+   "순두부",
+   "두부"
+  ],
+  "must": [
+   [
+    "굳히지",
+    "무르"
+   ]
+  ],
+  "must_not": [],
+  "kind": "confuse",
+  "id": 64,
+  "split": "test"
+ },
+ {
+  "question": "산초랑 초피는 같은 거야?",
+  "gold": [
+   "산초나무",
+   "초피나무"
+  ],
+  "must": [
+   [
+    "운향과"
+   ]
+  ],
+  "must_not": [
+   "같은 나무입니다"
+  ],
+  "kind": "confuse",
+  "id": 65,
+  "split": "dev"
+ },
+ {
+  "question": "굴비는 무슨 생선으로 만들어?",
+  "gold": [
+   "참조기"
+  ],
+  "must": [
+   [
+    "조기"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 66,
+  "split": "test"
+ },
+ {
+  "question": "광어 정식 이름이 뭐야?",
+  "gold": [
+   "넙치"
+  ],
+  "must": [
+   [
+    "넙치"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 67,
+  "split": "dev"
+ },
+ {
+  "question": "우럭은 정식으로 뭐라고 불러?",
+  "gold": [
+   "조피볼락"
+  ],
+  "must": [
+   [
+    "조피볼락"
+   ]
+  ],
+  "must_not": [],
+  "kind": "related",
+  "id": 68,
+  "split": "test"
+ },
+ {
+  "question": "노가리는 뭐야?",
+  "gold": [
+   "명태"
+  ],
+  "must": [
+   [
+    "명태"
+   ],
+   [
+    "어린"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 69,
+  "split": "dev"
+ },
+ {
+  "question": "한천은 뭘로 만들어?",
+  "gold": [
+   "우무"
+  ],
+  "must": [
+   [
+    "우뭇가사리"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 70,
+  "split": "test"
+ },
+ {
+  "question": "참치 정식 이름은 뭐야?",
+  "gold": [
+   "다랑어"
+  ],
+  "must": [
+   [
+    "다랑어"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 71,
+  "split": "dev"
+ },
+ {
+  "question": "멍게 표준어가 뭐야?",
+  "gold": [
+   "멍게"
+  ],
+  "must": [
+   [
+    "우렁쉥이"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 72,
+  "split": "test"
+ },
+ {
+  "question": "능이버섯 정식 이름은?",
+  "gold": [
+   "노루털버섯"
+  ],
+  "must": [
+   [
+    "노루털버섯"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 73,
+  "split": "dev"
+ },
+ {
+  "question": "명이나물은 무슨 식물이야?",
+  "gold": [
+   "울릉산마늘"
+  ],
+  "must": [
+   [
+    "산마늘"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 74,
+  "split": "test"
+ },
+ {
+  "question": "부추를 경상도에서 뭐라고 해?",
+  "gold": [
+   "부추"
+  ],
+  "must": [
+   [
+    "정구지"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 75,
+  "split": "dev"
+ },
+ {
+  "question": "아욱 다른 이름이 뭐야?",
+  "gold": [
+   "아욱"
+  ],
+  "must": [
+   [
+    "동규"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 76,
+  "split": "test"
+ },
+ {
+  "question": "양배추 다른 이름은?",
+  "gold": [
+   "양배추"
+  ],
+  "must": [
+   [
+    "감람"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 77,
+  "split": "dev"
+ },
+ {
+  "question": "배추는 무슨 식물의 재배종이야?",
+  "gold": [
+   "배추"
+  ],
+  "must": [
+   [
+    "순무"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 78,
+  "split": "test"
+ },
+ {
+  "question": "시금치는 무슨 과 식물이야?",
+  "gold": [
+   "시금치"
+  ],
+  "must": [
+   [
+    "비름과"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 79,
+  "split": "dev"
+ },
+ {
+  "question": "셀러리는 무슨 과야?",
+  "gold": [
+   "셀러리"
+  ],
+  "must": [
+   [
+    "미나리과"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 80,
+  "split": "test"
+ },
+ {
+  "question": "치커리는 무슨 과 식물이야?",
+  "gold": [
+   "치커리"
+  ],
+  "must": [
+   [
+    "국화과"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 81,
+  "split": "dev"
+ },
+ {
+  "question": "청경채는 뭐야?",
+  "gold": [
+   "청경채"
+  ],
+  "must": [
+   [
+    "배추"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 82,
+  "split": "test"
+ },
+ {
+  "question": "재첩은 어디 사는 조개야?",
+  "gold": [
+   "재첩"
+  ],
+  "must": [
+   [
+    "민물"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 83,
+  "split": "dev"
+ },
+ {
+  "question": "초장은 뭘로 만들어?",
+  "gold": [
+   "초장"
+  ],
+  "must": [
+   [
+    "고추장"
+   ],
+   [
+    "식초"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 84,
+  "split": "test"
+ },
+ {
+  "question": "춘장은 어느 나라 요리에 쓰는 장이야?",
+  "gold": [
+   "춘장"
+  ],
+  "must": [
+   [
+    "중국"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 85,
+  "split": "dev"
+ },
+ {
+  "question": "미숫가루는 뭘로 만들어?",
+  "gold": [
+   "미수 (음료)"
+  ],
+  "must": [
+   [
+    "찹쌀",
+    "멥쌀",
+    "보리",
+    "콩"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 86,
+  "split": "test"
+ },
+ {
+  "question": "단무지는 어떻게 만들어?",
+  "gold": [
+   "단무지"
+  ],
+  "must": [
+   [
+    "무"
+   ],
+   [
+    "절"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 87,
+  "split": "dev"
+ },
+ {
+  "question": "동치미는 어떤 김치야?",
+  "gold": [
+   "동치미"
+  ],
+  "must": [
+   [
+    "무"
+   ],
+   [
+    "물김치",
+    "소금물"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 88,
+  "split": "test"
+ },
+ {
+  "question": "새우젓은 뭐야?",
+  "gold": [
+   "새우젓"
+  ],
+  "must": [
+   [
+    "새우"
+   ],
+   [
+    "소금",
+    "젓갈"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 89,
+  "split": "dev"
+ },
+ {
+  "question": "정향은 식물의 어느 부분이야?",
+  "gold": [
+   "정향나무"
+  ],
+  "must": [
+   [
+    "꽃봉오리",
+    "봉오리"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 90,
+  "split": "test"
+ },
+ {
+  "question": "율무는 무슨 과 식물이야?",
+  "gold": [
+   "율무"
+  ],
+  "must": [
+   [
+    "벼과"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 91,
+  "split": "dev"
+ },
+ {
+  "question": "오미자 이름은 왜 오미자야?",
+  "gold": [
+   "오미자"
+  ],
+  "must": [
+   [
+    "다섯"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 92,
+  "split": "test"
+ },
+ {
+  "question": "송이버섯은 어디서 자라?",
+  "gold": [
+   "송이"
+  ],
+  "must": [
+   [
+    "소나무"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 93,
+  "split": "dev"
+ },
+ {
+  "question": "석이버섯은 어디서 자라?",
+  "gold": [
+   "석이"
+  ],
+  "must": [
+   [
+    "바위"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 94,
+  "split": "test"
+ },
+ {
+  "question": "근대는 무슨 과 채소야?",
+  "gold": [
+   "근대 (식물)"
+  ],
+  "must": [
+   [
+    "비름과"
+   ]
+  ],
+  "must_not": [],
+  "kind": "in",
+  "id": 95,
+  "split": "dev"
+ },
+ {
+  "question": "북어는 뭐야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "related",
+  "id": 96,
+  "split": "test"
+ },
+ {
+  "question": "코다리는 무슨 생선이야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "related",
+  "id": 97,
+  "split": "dev"
+ },
+ {
+  "question": "물엿은 뭐야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "related",
+  "id": 98,
+  "split": "test"
+ },
+ {
+  "question": "황태는 뭐야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "ooc",
+  "id": 99,
+  "split": "dev"
+ },
+ {
+  "question": "동태는 뭐야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "ooc",
+  "id": 100,
+  "split": "test"
+ },
+ {
+  "question": "얼갈이배추가 뭐야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "ooc",
+  "id": 101,
+  "split": "dev"
+ },
+ {
+  "question": "케일은 어떤 채소야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "ooc",
+  "id": 102,
+  "split": "test"
+ },
+ {
+  "question": "서리태는 뭐야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "ooc",
+  "id": 103,
+  "split": "dev"
+ },
+ {
+  "question": "까나리액젓은 뭐로 만들어?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "ooc",
+  "id": 104,
+  "split": "test"
+ },
+ {
+  "question": "민어는 어떤 생선이야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "ooc",
+  "id": 105,
+  "split": "dev"
+ },
+ {
+  "question": "방어는 어떤 생선이야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "ooc",
+  "id": 106,
+  "split": "test"
+ },
+ {
+  "question": "청각은 어떤 해조류야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "ooc",
+  "id": 107,
+  "split": "dev"
+ },
+ {
+  "question": "꼬시래기는 뭐야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "ooc",
+  "id": 108,
+  "split": "test"
+ },
+ {
+  "question": "목이버섯은 뭐야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "ooc",
+  "id": 109,
+  "split": "dev"
+ },
+ {
+  "question": "퀴노아는 뭐야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "ooc",
+  "id": 110,
+  "split": "test"
+ },
+ {
+  "question": "오크라는 어떤 채소야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "ooc",
+  "id": 111,
+  "split": "dev"
+ },
+ {
+  "question": "아티초크는 어떻게 먹어?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "ooc",
+  "id": 112,
+  "split": "test"
+ },
+ {
+  "question": "공심채는 뭐야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "ooc",
+  "id": 113,
+  "split": "dev"
+ },
+ {
+  "question": "콜라비는 어떤 채소야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "ooc",
+  "id": 114,
+  "split": "test"
+ },
+ {
+  "question": "여주는 어떤 채소야?",
+  "gold": null,
+  "must": [],
+  "must_not": [],
+  "kind": "ooc",
+  "id": 115,
+  "split": "dev"
+ }
+]

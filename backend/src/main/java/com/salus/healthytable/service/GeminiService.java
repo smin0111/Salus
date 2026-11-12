@@ -8,7 +8,7 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 
 /**
- * 영수증 분석, 재료 기반 레시피 추천, 월간 식단 총평 같은 보조 AI 기능을 모은 서비스입니다.
+ * 영수증 분석, 월간 식단 총평 같은 보조 AI 기능을 모은 서비스입니다.
  *
  * 이름은 GeminiService지만, 실제 호출은 설정된 {@link LlmService}(기본값: 로컬 Ollama)로 전달합니다.
  */
@@ -26,22 +26,6 @@ public class GeminiService {
     public Mono<String> getChatResponse(String currentMessage, List<ChatDto.Message> history) {
         log.info("[AI Service] Redirecting chat request to configured LLM service.");
         return llmService.getChatResponse(currentMessage, history);
-    }
-
-    /**
-     * 재료 목록과 건강 참고 정보로 프롬프트를 만들어 레시피 추천 답변(자유 형식 텍스트)을 받습니다.
-     */
-    public Mono<String> getRecipeRecommendation(List<String> ingredients, String healthContext) {
-        log.info("[AI Service] Generating recipe recommendation via configured LLM service.");
-        String prompt = String.format(
-                "사용자가 가진 재료: [%s]. " +
-                        "건강/상황 고려: [%s]. " +
-                        "이 재료들을 활용해 만들 수 있는 맛있고 건강한 요리를 하나 추천해주세요. " +
-                        "요리 이름, 간단한 설명, 필요한 재료(계량 포함), 조리 순서를 알려주세요. " +
-                        "중요: 반드시 이 요리의 1인분 총 칼로리를 계산하여 응답 마지막에 '총 XXXkcal' 형식으로 명시해주세요.",
-                String.join(", ", ingredients),
-                healthContext);
-        return llmService.getChatResponse(LlmService.Task.RECIPE_SUGGESTION, prompt, null);
     }
 
     /**

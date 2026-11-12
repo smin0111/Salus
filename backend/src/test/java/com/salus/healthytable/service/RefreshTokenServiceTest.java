@@ -127,6 +127,18 @@ class RefreshTokenServiceTest {
         assertThat(token.getRevokedAt()).isEqualTo(NOW);
     }
 
+    // 이미 갱신에 쓰인 토큰으로 로그아웃하면(누군가 먼저 갱신해 이어받았을 수 있음) 이 회원의 토큰을 모두 폐기합니다.
+    @Test
+    void logoutWithRotatedTokenRevokesAllUserTokens() {
+        RefreshToken used = token(7L, NOW.plusDays(1));
+        used.setUsedAt(NOW.minusMinutes(1));
+        when(repository.findByTokenHash(RefreshTokenService.hash("used"))).thenReturn(Optional.of(used));
+
+        service.revoke("used");
+
+        verify(repository).revokeAllByUserId(7L, NOW);
+    }
+
     // 처음 로그인 시각(identity_confirmed_at)은 저장되고, 토큰을 교체해도 현재 시각이 아니라 원래 값을 이어받아야 합니다.
     @Test
     void identityConfirmedAtIsStoredAndCarriedAcrossRotation() {

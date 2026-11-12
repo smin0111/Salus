@@ -407,6 +407,10 @@ class RecipeWebSourceAdapterTest {
                 .isInstanceOf(SafeWebPageFetchException.class);
         assertThatThrownBy(() -> fetcher.resolveAndValidateRedirect(URI.create("https://example.com/recipe"), "http://169.254.169.254/latest"))
                 .isInstanceOf(SafeWebPageFetchException.class);
+        // HTTPS 페이지가 HTTP로 넘기면 공개 주소여도 따라가지 않습니다(중간 변조 방지, 2026-11-06).
+        assertThatThrownBy(() -> fetcher.resolveAndValidateRedirect(URI.create("https://example.com/recipe"), "http://example.com/recipe"))
+                .isInstanceOf(SafeWebPageFetchException.class)
+                .hasMessageContaining("https to http");
         assertThatThrownBy(() -> fetcher.validateHtmlContentType("application/json"))
                 .isInstanceOf(SafeWebPageFetchException.class);
         assertThatThrownBy(() -> fetcher.readLimited(new ByteArrayInputStream("12345".getBytes(StandardCharsets.UTF_8)), 4))

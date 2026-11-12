@@ -1,5 +1,6 @@
 package com.salus.healthytable.service;
 
+import com.salus.healthytable.service.recipeagent.MedicationSafetyService;
 import com.salus.healthytable.domain.Recipe;
 import com.salus.healthytable.service.allergen.AllergenDictionary;
 import com.salus.healthytable.service.allergen.AllergenMatcher;
@@ -20,7 +21,7 @@ class AllergenGapTest {
 
     private final ChatSafetyContextService service =
             new ChatSafetyContextService(null, null, null, matcher(), org.mockito.Mockito.mock(AllergenRegistry.class),
-                    org.mockito.Mockito.mock(ProfileResolutionShadowObserver.class));
+                    org.mockito.Mockito.mock(ProfileResolutionShadowObserver.class), org.mockito.Mockito.mock(MedicationSafetyService.class));
 
     // 실제 알레르겐 사전으로 Matcher를 만듭니다.
     private static AllergenMatcher matcher() {

@@ -8,6 +8,7 @@ import com.salus.healthytable.dto.MealLogDTO;
 import com.salus.healthytable.dto.RecipeWorkSessionDTO;
 import com.salus.healthytable.repository.UserRepository;
 import com.salus.healthytable.service.ChatSafetyContextService.SafetyContext;
+import com.salus.healthytable.service.recipeagent.RecipeServingsScaler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,10 +50,11 @@ public class ChatFollowUpService {
      * 조정 요청이 아니거나 직전 승인 레시피가 없으면 빈 Optional을 반환해 다음 처리 단계로 넘깁니다.
      * 요청에 없는 값은 작업 세션에 저장된 기존 값을 유지합니다(인분 기본값 2).
      */
-    Optional<ChatDto.Response> buildApprovedRecipeAdjustment(
+    Optional<ApprovedAdjustment> buildApprovedRecipeAdjustment(
             Long userId,
             ChatSession chatSession,
-            String requestMessage) {
+            String requestMessage,
+            SafetyContext safetyContext) {
         if (userId == null || chatSession == null) {
             return Optional.empty();
         }
@@ -80,16 +82,23 @@ public class ChatFollowUpService {
                     current.getRecipeVersion(),
                     servings,
                     spice);
-            saveApprovedRecipeState(userId, chatSession.getId(), rendered);
+            var medication = chatSafetyContextService.assessRecipeMedication(safetyContext, rendered.recipe());
+            if (medication.avoid()) {
+                return Optional.of(new ApprovedAdjustment(
+                        new ChatDto.Response(chatSession.getId(), medication.blockedRecipeReply(), false, false), null));
+            }
             ChatDto.Response response = new ChatDto.Response(chatSession.getId(), rendered.reply(), true, false);
-            ChatDto.RecipeCard card = recipeResponseSanitizer.buildRecipeCard(rendered.recipe(), List.of());
+            ChatDto.RecipeCard card = recipeResponseSanitizer.buildRecipeCard(rendered.recipe(), medication.notes());
             card.setSources(ApprovedRecipeService.sourceLinks(rendered));
             response.setRecipe(card);
-            return Optional.of(response);
+            return Optional.of(new ApprovedAdjustment(response, rendered));
         } catch (IllegalArgumentException | IllegalStateException error) {
-            return Optional.of(new ChatDto.Response(chatSession.getId(), error.getMessage(), true, false));
+            return Optional.of(new ApprovedAdjustment(
+                    new ChatDto.Response(chatSession.getId(), error.getMessage(), true, false), null));
         }
     }
+
+    record ApprovedAdjustment(ChatDto.Response response, ApprovedRecipeService.RenderedRecipe rendered) {}
 
     // 렌더링한 승인 레시피의 ID/버전/인분/맵기를 작업 세션에 저장해 다음 조정 요청의 기준으로 삼습니다.
     void saveApprovedRecipeState(
@@ -322,18 +331,24 @@ public class ChatFollowUpService {
         variant.setDifficulty(baseRecipe.getDifficulty());
         variant.setCookingTime(baseRecipe.getCookingTime());
 
+        var medication = chatSafetyContextService.assessRecipeMedication(safetyContext, variant);
+        if (medication.avoid()) {
+            return Optional.of(new ChatDto.Response(chatSession.getId(), medication.blockedRecipeReply(), false, false));
+        }
         String reply = recipeResponseSanitizer.buildGeneratedRecipeReply(variant);
         recipeWorkSessionService.saveRecommendation(userId, chatSession.getId(), reply);
 
         ChatDto.Response response = new ChatDto.Response(chatSession.getId(), reply, true, false);
         // 변형 레시피 카드에도 알레르기/건강 주의 문구를 다시 계산해 붙입니다.
-        response.setRecipe(recipeResponseSanitizer.buildRecipeCard(variant, chatSafetyContextService.buildRecipeSafetyNotes(Optional.of(userId), safetyContext, variant)));
+        response.setRecipe(recipeResponseSanitizer.buildRecipeCard(variant, chatSafetyContextService.buildRecipeSafetyNotes(Optional.of(userId), safetyContext, variant, medication)));
         return Optional.of(response);
     }
 
     /**
      * "양파 빼줘", "깻잎 말고 상추 넣어줘", "치즈 넣어줘"를 직전 레시피에 그대로 적용합니다.
      * LLM으로 새로 쓰지 않으므로 바뀌는 것은 요청한 재료뿐이고, 알레르기 판정은 바뀐 결과로 다시 합니다.
+     * 직전 레시피는 로그인 사용자면 작업 세션에서, 게스트면 앱이 보낸 대화 기록의 마지막 레시피 답변에서 찾습니다
+     * (2026-11-12 베타: 게스트의 "돼지고기 빼고 2인분으로 바꿔줘"가 일반 대화로 가서 안내 문구만 받음).
      * 직전 레시피가 없거나 읽을 수 없으면 빈 Optional을 반환해 다음 처리 단계로 넘깁니다.
      */
     Optional<ChatDto.Response> buildIngredientEditFollowUp(
@@ -341,24 +356,37 @@ public class ChatFollowUpService {
             ChatSession chatSession,
             ChatDto.Request request,
             SafetyContext safetyContext) {
-        if (userId == null || chatSession == null) {
-            return Optional.empty();
-        }
         Optional<IngredientEdits.Edit> parsed = IngredientEdits.parse(request.getMessage());
         if (parsed.isEmpty()) {
             return Optional.empty();
         }
-        Optional<RecipeWorkSessionDTO> workSession = recipeWorkSessionService.find(userId, chatSession.getId());
-        if (workSession.isEmpty()) {
+        boolean member = userId != null && chatSession != null;
+        Optional<RecipeWorkSessionDTO> workSession = member
+                ? recipeWorkSessionService.find(userId, chatSession.getId())
+                : Optional.empty();
+        if (member && workSession.isEmpty()) {
             return Optional.empty();
         }
-        Recipe base = previousRecipe(workSession.get());
+        Recipe base = member ? previousRecipe(workSession.get()) : recipeFromHistory(request.getHistory());
         if (base == null || base.getIngredients() == null || base.getIngredients().isEmpty()) {
             return Optional.empty();
         }
         IngredientEdits.Edit edit = parsed.get();
 
         List<String> notes = new java.util.ArrayList<>();
+        // 같은 문장의 인분 변경("양파 빼고 2인분으로")도 반영합니다(2026-11-12 베타: 인분 요청이 무시됨).
+        // 승인 레시피는 원본에서 그 인분으로 다시 계산하고, 그 밖에는 원래 인분을 알 때만 분량을 비율대로 바꿉니다.
+        Optional<Integer> requestedServings = RecipeServingsScaler.requestedServings(request.getMessage());
+        if (requestedServings.isPresent() && !requestedServings.get().equals(base.getBaseServings())) {
+            Recipe approvedAt = member ? approvedAtServings(workSession.get(), requestedServings.get()) : null;
+            if (approvedAt != null) {
+                base = approvedAt;
+            } else if (base.getBaseServings() != null && base.getBaseServings() > 0) {
+                base = scaledTo(base, requestedServings.get());
+            } else {
+                notes.add("원래 레시피의 인분을 알 수 없어 분량은 그대로 두었어요.");
+            }
+        }
         List<String> ingredients = recipeResponseSanitizer.removeExcludedIngredients(base.getIngredients(), edit.removals());
         List<String> steps = new java.util.ArrayList<>();
         for (String step : Optional.ofNullable(base.getSteps()).orElse(List.of())) {
@@ -396,6 +424,12 @@ public class ChatFollowUpService {
         if (steps.isEmpty()) {
             return Optional.empty();
         }
+        // 재료가 바뀌면 원래 열량은 맞지 않고 다시 계산할 근거도 없으므로 열량을 보여 주지 않습니다
+        // (2026-11-12 베타: 돼지고기를 뺀 김치찌개에 원래 열량 360kcal이 그대로 나옴).
+        boolean ingredientsChanged = !ingredients.equals(base.getIngredients());
+        if (ingredientsChanged) {
+            notes.add("재료가 바뀌어 열량은 표시하지 않았어요.");
+        }
 
         Recipe variant = new Recipe();
         variant.setTitle(base.getTitle());
@@ -403,25 +437,33 @@ public class ChatFollowUpService {
         variant.setIngredients(ingredients);
         variant.setSteps(steps);
         variant.setBaseServings(base.getBaseServings());
-        variant.setCalories(base.getCalories());
-        variant.setCaloriesPerServing(base.getCaloriesPerServing());
+        variant.setCalories(ingredientsChanged ? null : base.getCalories());
+        variant.setCaloriesPerServing(ingredientsChanged ? null : base.getCaloriesPerServing());
         variant.setDifficulty(base.getDifficulty());
         variant.setCookingTime(base.getCookingTime());
 
         // 등록 알레르기는 요청 문구보다 우선합니다. 바뀐 레시피(더한 재료 포함)로 다시 판정합니다.
         List<String> conflicts = chatSafetyContextService.findAllergyConflicts(
                 safetyContext, variant.getTitle(), variant, request.getMessage());
+        Long sessionId = member ? chatSession.getId() : null;
         if (!conflicts.isEmpty()) {
-            return Optional.of(new ChatDto.Response(chatSession.getId(),
-                    chatSafetyContextService.buildAllergyBlockedReply(variant.getTitle(), conflicts), true, false));
+            return Optional.of(new ChatDto.Response(sessionId,
+                    chatSafetyContextService.buildAllergyBlockedReply(variant.getTitle(), conflicts), member, false));
         }
 
+        var medication = chatSafetyContextService.assessRecipeMedication(safetyContext, variant);
+        if (medication.avoid()) {
+            return Optional.of(new ChatDto.Response(sessionId, medication.blockedRecipeReply(), false, false));
+        }
         String reply = recipeResponseSanitizer.buildGeneratedRecipeReply(variant);
-        List<ChatDto.SourceLink> sources = previousSources(workSession.get());
-        recipeWorkSessionService.saveRecommendation(userId, chatSession.getId(), reply);
-        ChatDto.Response response = new ChatDto.Response(chatSession.getId(), reply, true, false);
+        // 게스트는 작업 세션이 없어 출처를 다시 읽을 수 없으므로 출처 없이 보여 줍니다(내용은 대화 기록의 레시피 그대로).
+        List<ChatDto.SourceLink> sources = workSession.map(this::previousSources).orElse(List.of());
+        if (member) {
+            recipeWorkSessionService.saveRecommendation(userId, chatSession.getId(), reply);
+        }
+        ChatDto.Response response = new ChatDto.Response(sessionId, reply, member, false);
         ChatDto.RecipeCard card = recipeResponseSanitizer.buildRecipeCard(
-                variant, chatSafetyContextService.buildRecipeSafetyNotes(Optional.of(userId), safetyContext, variant));
+                variant, chatSafetyContextService.buildRecipeSafetyNotes(Optional.ofNullable(userId), safetyContext, variant, medication));
         // 고친 레시피도 원래 레시피의 출처를 그대로 보여 줍니다(바뀐 재료는 출처에 없는 내용이라 안내 문구로 밝힘).
         card.setSources(sources);
         response.setRecipe(card);
@@ -656,6 +698,39 @@ public class ChatFollowUpService {
         return answer.toString();
     }
 
+    /**
+     * 후속 답변의 알레르기 재확인에 쓰는 직전 레시피 글입니다(제목·재료·조리 순서·직전 답변 원문).
+     * "몇 분 볶아?"의 답처럼 재료가 빠진 짧은 답도, 그 바탕 레시피가 알레르기와 충돌하면 막기 위해서입니다(2026-11-06 보안 점검).
+     */
+    List<String> previousRecipeTexts(Long userId, ChatSession chatSession, ChatDto.Request request) {
+        List<String> texts = new java.util.ArrayList<>();
+        Recipe previous = null;
+        if (userId != null && chatSession != null) {
+            Optional<RecipeWorkSessionDTO> workSession = recipeWorkSessionService.find(userId, chatSession.getId());
+            if (workSession.isPresent()) {
+                previous = previousRecipe(workSession.get());
+                if (workSession.get().getLastRecommendation() != null) {
+                    texts.add(workSession.get().getLastRecommendation());
+                }
+            }
+        }
+        if (previous == null && request != null) {
+            previous = recipeFromHistory(request.getHistory());
+        }
+        if (previous != null) {
+            if (previous.getTitle() != null) {
+                texts.add(previous.getTitle());
+            }
+            if (previous.getIngredients() != null) {
+                texts.addAll(previous.getIngredients());
+            }
+            if (previous.getSteps() != null) {
+                texts.addAll(previous.getSteps());
+            }
+        }
+        return texts;
+    }
+
     // 게스트: 앱이 보낸 대화 기록에서 가장 최근의 레시피 답변을 읽습니다.
     private Recipe recipeFromHistory(List<ChatDto.Message> history) {
         if (history == null) {
@@ -702,6 +777,105 @@ public class ChatFollowUpService {
             // 직전 레시피를 읽지 못하면 추측하지 않고 다음 처리 단계로 넘깁니다.
             return null;
         }
+    }
+
+    // 직전 레시피가 승인 레시피면 원본에서 요청한 인분으로 다시 계산합니다. 승인 레시피가 아니거나 계산할 수 없으면 null입니다.
+    private Recipe approvedAtServings(RecipeWorkSessionDTO workSession, int servings) {
+        if (workSession.getRecipeId() == null || agentRecipe(workSession.getAgentSession()) != null) {
+            return null;
+        }
+        try {
+            return approvedRecipeService.renderApprovedRecipe(
+                    workSession.getRecipeId(),
+                    workSession.getRecipeVersion(),
+                    servings,
+                    parseStoredSpiceLevel(workSession.getSpiceLevel())).recipe();
+        } catch (RuntimeException error) {
+            return null;
+        }
+    }
+
+    // 원래 인분을 아는 레시피의 재료 분량을 요청 인분 비율로 바꿉니다. 1인분 열량은 그대로이고 전체 열량은 다시 셉니다.
+    private static Recipe scaledTo(Recipe base, int servings) {
+        Recipe scaled = new Recipe();
+        scaled.setTitle(base.getTitle());
+        scaled.setDescription(base.getDescription());
+        scaled.setIngredients(RecipeServingsScaler.scale(base.getIngredients(), (double) servings / base.getBaseServings()));
+        // 단계에 적힌 분량("돼지고기 200g을 넣고")도 같은 비율로 바꿉니다. 시간·온도·크기는 환산기가 그대로 둡니다(Codex 검토).
+        scaled.setSteps(base.getSteps() == null ? null
+                : RecipeServingsScaler.scale(base.getSteps(), (double) servings / base.getBaseServings()));
+        scaled.setBaseServings(servings);
+        scaled.setCaloriesPerServing(base.getCaloriesPerServing());
+        scaled.setCalories(base.getCaloriesPerServing() == null ? null : base.getCaloriesPerServing() * servings);
+        scaled.setDifficulty(base.getDifficulty());
+        scaled.setCookingTime(base.getCookingTime());
+        return scaled;
+    }
+
+    /**
+     * 직전 레시피의 핵심 재료를 빼 달라는 후속 요청("돼지고기 빼고 2인분으로 바꿔줘")을 새 레시피 요청 문장으로 바꿉니다.
+     * 핵심 재료를 규칙으로 지우면 그 재료를 위한 단계가 남습니다(2026-11-12 베타: 돼지고기를 뺀 김치찌개 2단계가
+     * "식용유 넣어 볶는다 / 완료 기준: 고기 겉면의 붉은색이 사라지고"). 처음 질문의 레시피 요청 경로는 그 재료 없는 레시피를
+     * 출처에서 다시 찾으므로("고기 없는 김치찌개") 같은 경로로 보냅니다. 지어내지 않고, 출처가 없으면 그 경로가 정직하게 거절합니다.
+     * 핵심 재료를 다른 재료로 바꾸는 요청("돼지고기 말고 참치 넣어줘")도 같습니다. 같은 자리에 같은 분량으로 끼워 넣으면 "고기 겉면이 익을 때까지"
+     * 같은 단계가 그대로 남으므로, "돼지고기 빼고 참치 김치찌개 레시피 알려줘"로 바꿔 그 재료가 들어간 레시피를 출처에서 찾습니다.
+     * 재료를 더하기만 하거나 더하기가 섞인 요청, 핵심이 아닌 재료만 빼거나 바꾸는 요청은 기존 규칙 수정으로 처리합니다(빈 값).
+     */
+    Optional<String> coreRemovalRecipeRequest(Long userId, Long chatSessionId, ChatDto.Request request) {
+        String message = request == null ? null : request.getMessage();
+        if (message == null || message.contains("레시피")) {
+            return Optional.empty();
+        }
+        Optional<IngredientEdits.Edit> parsed = IngredientEdits.parse(message);
+        if (parsed.isEmpty() || !parsed.get().additions().isEmpty()
+                || (parsed.get().removals().isEmpty() && parsed.get().substitutions().isEmpty())) {
+            return Optional.empty();
+        }
+        Recipe base;
+        if (userId != null && chatSessionId != null) {
+            base = recipeWorkSessionService.find(userId, chatSessionId).map(this::previousRecipe).orElse(null);
+        } else {
+            base = recipeFromHistory(request.getHistory());
+        }
+        if (base == null || base.getTitle() == null || base.getTitle().isBlank() || base.getSteps() == null) {
+            return Optional.empty();
+        }
+        // 빼는 재료와 바꿔서 빠지는 재료를 함께 봅니다. 하나라도 핵심이면 레시피를 다시 찾습니다.
+        List<String> removed = new java.util.ArrayList<>(parsed.get().removals());
+        parsed.get().substitutions().forEach(substitution -> removed.add(substitution.from()));
+        if (removed.stream().noneMatch(ingredient -> isCoreIngredient(base.getSteps(), ingredient))) {
+            return Optional.empty();
+        }
+        String dish = base.getTitle().replaceFirst("\\s+\\d{1,2}\\s*인분$", "").trim();
+        String replacements = parsed.get().substitutions().stream()
+                .map(IngredientEdits.Substitution::to)
+                .map(to -> to + " ")
+                .collect(java.util.stream.Collectors.joining());
+        String servings = RecipeServingsScaler.requestedServings(message).map(n -> " " + n + "인분").orElse("");
+        return Optional.of(String.join(", ", removed) + " 빼고 " + replacements + dish + servings + " 레시피 알려줘");
+    }
+
+    /**
+     * 재료를 지운 뒤에도 그 재료를 가리키는 말이 단계에 남으면 그 단계는 그 재료를 위한 단계입니다.
+     * 예: "식용유와 돼지고기를 넣어 볶는다 [완료 기준: 고기 겉면의 붉은색이 사라지고]"에서 돼지고기를 지워도 "고기"가 남습니다.
+     * 재료 이름의 뒷부분(두 글자 이상, 예: 돼지고기 → 고기)으로 확인하고, 그 재료가 원래 들어 있던 단계만 봅니다.
+     */
+    boolean isCoreIngredient(List<String> steps, String removal) {
+        if (steps == null || removal == null || removal.length() < 3) {
+            return false;
+        }
+        for (String step : steps) {
+            if (step == null || !recipeResponseSanitizer.containsExcludedIngredient(step, List.of(removal))) {
+                continue;
+            }
+            String cleaned = recipeResponseSanitizer.removeExcludedIngredientMentions(step, List.of(removal));
+            for (int start = 1; start <= removal.length() - 2; start++) {
+                if (cleaned.contains(removal.substring(start))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private Recipe agentRecipe(java.util.Map<String, Object> agentSession) {

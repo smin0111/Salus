@@ -66,10 +66,15 @@ class DefaultFoodNutrientNormalizer implements FoodNutrientNormalizer {
     private final List<NormalizedFoodConcept> concepts = List.of(
             concept("자몽", FoodConceptType.SPECIFIC_FOOD, "자몽", "자몽주스", "grapefruit", "grapefruit juice"),
             concept("우유", FoodConceptType.FOOD_GROUP, "우유", "유제품", "milk", "dairy", "dairy products"),
+            concept("칼슘 강화 음료", FoodConceptType.FOOD_GROUP, "칼슘 강화 음료", "칼슘 강화 주스", "calcium-fortified juice", "calcium-fortified juices"),
             concept("알코올", FoodConceptType.ALCOHOL, "술", "알코올", "주류", "alcohol", "alcoholic beverages"),
             concept("카페인", FoodConceptType.CAFFEINE, "카페인", "커피", "차", "에너지 음료", "caffeine", "coffee", "tea", "energy drink"),
             concept("고칼륨 식품", FoodConceptType.NUTRIENT, "고칼륨 식품", "칼륨", "potassium-rich foods", "potassium"),
-            concept("비타민 K 함유 식품", FoodConceptType.NUTRIENT, "비타민 k", "비타민k", "vitamin k", "vitamin k-rich foods", "녹색잎채소"),
+            concept("비타민 K 함유 식품", FoodConceptType.NUTRIENT, "비타민 k", "비타민k", "vitamin k", "vitamin k-rich foods", "녹색잎채소", "시금치", "브로콜리", "spinach", "broccoli"),
+            concept("고티라민 식품", FoodConceptType.FOOD_GROUP, "고티라민 식품", "티라민 함량이 높은",
+                    "high tyramine", "significant tyramine", "tyramine-rich", "숙성 치즈", "aged cheese", "살라미", "salami"),
+            concept("칼슘 보충제", FoodConceptType.NUTRIENT, "칼슘 보충제", "칼슘제", "calcium supplement", "calcium supplements"),
+            concept("철분 보충제", FoodConceptType.NUTRIENT, "철분 보충제", "철분제", "iron supplement", "iron supplements"),
             concept("음식", FoodConceptType.FOOD_GROUP, "음식", "식사", "food", "meal", "meals")
     );
 
@@ -81,8 +86,7 @@ class DefaultFoodNutrientNormalizer implements FoodNutrientNormalizer {
         }
         for (NormalizedFoodConcept concept : concepts) {
             for (String alias : concept.aliases()) {
-                String normalizedAlias = RecipeCandidate.normalize(alias);
-                if (!normalizedAlias.isBlank() && (normalized.contains(normalizedAlias) || normalizedAlias.contains(normalized))) {
+                if (containsAlias(foodOrIngredient, alias)) {
                     return concept;
                 }
             }
@@ -92,6 +96,19 @@ class DefaultFoodNutrientNormalizer implements FoodNutrientNormalizer {
 
     List<NormalizedFoodConcept> knownConcepts() {
         return concepts;
+    }
+
+    static boolean containsAlias(String text, String alias) {
+        String normalizedAlias = RecipeCandidate.normalize(alias);
+        if (normalizedAlias.isBlank() || text == null) {
+            return false;
+        }
+        if (normalizedAlias.length() == 1 || normalizedAlias.chars().allMatch(character -> character < 128)) {
+            return Pattern.compile("(?<![\\p{L}\\p{N}])" + Pattern.quote(alias)
+                    + "(?![\\p{L}\\p{N}])", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE)
+                    .matcher(text).find();
+        }
+        return RecipeCandidate.normalize(text).contains(normalizedAlias);
     }
 
     private NormalizedFoodConcept concept(String canonical, FoodConceptType type, String... aliases) {
@@ -107,6 +124,9 @@ class DefaultFoodNutrientNormalizer implements FoodNutrientNormalizer {
 class MedicationFoodEvidenceExtractor {
 
     private final DefaultFoodNutrientNormalizer normalizer;
+    private static final Pattern AVOID_STANDALONE = Pattern.compile(
+            "\\balone\\s+should\\s+be\\s+avoided\\b"
+                    + "|\\b(?:avoid|should not be taken with|do not take with)\\b[^.;]*\\balone\\b");
 
     MedicationFoodEvidenceExtractor(DefaultFoodNutrientNormalizer normalizer) {
         this.normalizer = normalizer;
@@ -152,6 +172,21 @@ class MedicationFoodEvidenceExtractor {
         return AgentText.distinctMedicationEvidences(evidences);
     }
 
+    boolean hasUnresolvedFoodInstruction(DrugLabelEvidenceResult result) {
+        return result.status() == MedicationDataStatus.FOUND && result.labels().stream()
+                .flatMap(label -> label.sections().stream())
+                .filter(MedicationLabelSection::tableRow)
+                .anyMatch(this::separatesFoodAndInstruction);
+    }
+
+    private boolean separatesFoodAndInstruction(MedicationLabelSection section) {
+        List<String> cells = section.originalText().lines().toList();
+        return cells.stream().anyMatch(cell -> !foodConceptsIn(cell).isEmpty()
+                        && effectType(cell) == MedicationFoodEffectType.UNSPECIFIED)
+                && cells.stream().anyMatch(cell -> foodConceptsIn(cell).isEmpty()
+                        && effectType(cell) != MedicationFoodEffectType.UNSPECIFIED);
+    }
+
     /**
      * 텍스트에서 음식 근거를 추출합니다.
      * 영향 종류를 판단할 수 없는 문장은 건너뛰고, "식후 복용"처럼 음식 이름 없이 식사 조건만 말한 문장은 일반 "음식" 개념으로 기록합니다.
@@ -170,7 +205,11 @@ class MedicationFoodEvidenceExtractor {
             if (effect == MedicationFoodEffectType.UNSPECIFIED) {
                 continue;
             }
-            List<NormalizedFoodConcept> foods = foodConceptsIn(sentence);
+            // A generic word such as "food" in a warning about a specific ingredient
+            // does not make that warning apply to every meal.
+            List<NormalizedFoodConcept> foods = foodConceptsIn(sentence).stream()
+                    .filter(food -> genericFoodCondition(effect) || !"음식".equals(food.canonicalName()))
+                    .toList();
             if (foods.isEmpty() && genericFoodCondition(effect)) {
                 foods = List.of(normalizer.normalize("food"));
             }
@@ -205,13 +244,10 @@ class MedicationFoodEvidenceExtractor {
 
     // 문장에 알려진 음식 개념의 별칭이 들어 있으면 모두 반환합니다.
     private List<NormalizedFoodConcept> foodConceptsIn(String sentence) {
-        String normalized = RecipeCandidate.normalize(sentence);
         List<NormalizedFoodConcept> matches = new ArrayList<>();
         for (NormalizedFoodConcept concept : normalizer.knownConcepts()) {
             boolean found = concept.aliases().stream()
-                    .map(RecipeCandidate::normalize)
-                    .filter(alias -> !alias.isBlank())
-                    .anyMatch(normalized::contains);
+                    .anyMatch(alias -> DefaultFoodNutrientNormalizer.containsAlias(sentence, alias));
             if (found) {
                 matches.add(concept);
             }
@@ -238,6 +274,12 @@ class MedicationFoodEvidenceExtractor {
                 || AgentText.containsAnyNormalized(compact, List.of("확립되지않", "입증되지않"))) {
             return MedicationFoodEffectType.NOT_ESTABLISHED;
         }
+        if (AVOID_STANDALONE.matcher(normalized).find()) {
+            return MedicationFoodEffectType.AVOID_STANDALONE;
+        }
+        if (containsAny(normalized, "do not take with food", "do not take with meals")) {
+            return MedicationFoodEffectType.TAKE_WITHOUT_FOOD;
+        }
         if (containsAny(normalized, "avoid", "do not", "not take with", "contraindicated")
                 || AgentText.containsAnyNormalized(compact, List.of("피하십시오", "피해야", "금지", "함께복용하지", "먹지마"))) {
             return MedicationFoodEffectType.AVOID;
@@ -253,12 +295,12 @@ class MedicationFoodEvidenceExtractor {
                 || AgentText.containsAnyNormalized(compact, List.of("식사와함께", "음식과함께", "식후"))) {
             return MedicationFoodEffectType.TAKE_WITH_FOOD;
         }
-        if (containsAny(normalized, "separate", "hours before", "hours after")
+        if (containsAny(normalized, "separate", "hours before", "hours after", "minutes before", "minutes after")
                 || AgentText.containsAnyNormalized(compact, List.of("간격", "시간전", "시간후", "전후"))) {
             return MedicationFoodEffectType.SEPARATE_TIMING;
         }
         if (containsAny(normalized, "consistent", "same amount")
-                || AgentText.containsAnyNormalized(compact, List.of("일정하게", "비타민k"))) {
+                || compact.contains("일정하게")) {
             return MedicationFoodEffectType.CONSISTENT_INTAKE_REQUIRED;
         }
         if (containsAny(normalized, "limit", "monitor", "caution")
@@ -688,6 +730,7 @@ class MedicationRecipeEvidenceMatcher {
         }
         MedicationFoodEffectType effect = evidence.effectType();
         return effect == MedicationFoodEffectType.AVOID
+                || effect == MedicationFoodEffectType.AVOID_STANDALONE
                 || effect == MedicationFoodEffectType.LIMIT
                 || effect == MedicationFoodEffectType.SEPARATE_TIMING
                 || effect == MedicationFoodEffectType.TAKE_WITH_FOOD
@@ -713,11 +756,8 @@ class MedicationRecipeEvidenceMatcher {
                 && RecipeCandidate.normalize(evidence.canonicalName()).equals(RecipeCandidate.normalize(ingredient.canonicalName()))) {
             return true;
         }
-        String normalizedIngredient = RecipeCandidate.normalize(rawIngredient);
         return evidence.aliases().stream()
-                .map(RecipeCandidate::normalize)
-                .filter(alias -> !alias.isBlank())
-                .anyMatch(normalizedIngredient::contains);
+                .anyMatch(alias -> DefaultFoodNutrientNormalizer.containsAlias(rawIngredient, alias));
     }
 }
 
@@ -746,6 +786,7 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
     private final MedicationRecipeEvidenceMatcher matcher;
     private final InMemoryMedicationEvidenceCache cache;
     private final UnknownMedicationFoodInteractionAdapter unknownFallback;
+    private final MedicationFoodEvidenceArchive evidenceArchive;
 
     @Value("${recipe.agent.medication-interaction-enabled:false}")
     private boolean enabled;
@@ -882,14 +923,18 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
                 continue;
             }
             if (matched.isEmpty()) {
+                InteractionStatus status = lookup.unmatchedStatus();
                 perDrugResults.add(perDrug(
                         medicationText,
                         normalized,
                         evidenceStatus,
-                        InteractionStatus.NO_MATCHING_INTERACTION_FOUND,
+                        status,
                         List.of(),
                         sources,
-                        evidences.isEmpty() ? "NO_FOOD_EVIDENCE" : "NO_RECIPE_INGREDIENT_MATCH"));
+                        switch (status) {
+                            case API_DISABLED, API_FAILED, EVIDENCE_INSUFFICIENT -> status.name();
+                            default -> evidences.isEmpty() ? "NO_FOOD_EVIDENCE" : "NO_RECIPE_INGREDIENT_MATCH";
+                        }));
                 continue;
             }
             MedicationInteractionResult single = resultFromMatches(matched, new ArrayList<>(), evidences);
@@ -906,12 +951,22 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
         }
         MedicationResultSummary summary = MedicationResultSummary.from(perDrugResults);
         notices.addAll(summaryNotices(summary));
+        boolean sourceDisabled = perDrugResults.stream()
+                .anyMatch(result -> result.interactionStatus() == InteractionStatus.API_DISABLED);
+        if (sourceDisabled) {
+            notices.add("복용약의 공식 근거 조회가 꺼져 있어 일부 또는 전체 약을 확인하지 못했습니다.");
+        }
+        long incomplete = perDrugResults.stream()
+                .filter(result -> result.interactionStatus() == InteractionStatus.EVIDENCE_INSUFFICIENT).count();
+        if (incomplete > 0) {
+            notices.add("복용약 " + incomplete + "개의 공식 자료가 불완전하거나 여러 후보로 나와 확인을 완료하지 못했습니다.");
+        }
         InteractionStatus overallStatus = aggregateStatus(perDrugResults);
         if (overallStatus == InteractionStatus.EVIDENCE_CONFLICT) {
             notices.add("공식 출처 간 음식 관련 지시가 서로 달라 자동 차단하지 않았습니다. 의사 또는 약사에게 확인해 주세요.");
         }
         if (summary.unidentifiedCount() > 0 || summary.apiFailedCount() > 0 || summary.multipleMatchesCount() > 0
-                || summary.withoutFoodEvidenceCount() > 0) {
+                || summary.withoutFoodEvidenceCount() > 0 || sourceDisabled || incomplete > 0) {
             notices = new ArrayList<>(inconclusiveNotices(notices));
         }
         return new MedicationInteractionResult(
@@ -983,6 +1038,7 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
                 InteractionStatus.MULTIPLE_MEDICATION_MATCHES,
                 InteractionStatus.MEDICATION_NOT_IDENTIFIED,
                 InteractionStatus.API_FAILED,
+                InteractionStatus.API_DISABLED,
                 InteractionStatus.EVIDENCE_INSUFFICIENT,
                 InteractionStatus.NO_MATCHING_INTERACTION_FOUND)) {
             if (statuses.contains(status)) {
@@ -1016,7 +1072,6 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
 
     private List<String> inconclusiveNotices(List<String> existing) {
         List<String> notices = new ArrayList<>(existing == null ? List.of() : existing);
-        notices.add("확인된 공식 음식 상호작용 근거를 찾지 못했습니다.");
         notices.add("상호작용이 없다는 의미는 아닙니다.");
         notices.add("약 복용 방식은 의사 또는 약사에게 확인하세요.");
         return AgentText.distinct(notices);
@@ -1037,7 +1092,7 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
         String cacheKey = cache.key(medication);
         Optional<CachedMedicationEvidence> cached = cache.get(cacheKey);
         if (cached.isPresent()) {
-            return new MedicationEvidenceLookup(cached.get().evidences(), MedicationDataStatus.INCOMPLETE, MedicationDataStatus.INCOMPLETE, List.of("Medication evidence cache hit."));
+            return cached.get().lookup();
         }
         List<MedicationFoodEvidence> evidences = new ArrayList<>();
         MedicationInformationResult mfds = mfdsPort.findMedicationInformation(medication);
@@ -1045,11 +1100,20 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
         DrugLabelEvidenceResult fda = openFdaPort.findLabelEvidence(medication);
         evidences.addAll(evidenceExtractor.fromOpenFda(medication, fda));
         List<MedicationFoodEvidence> distinct = AgentText.distinctMedicationEvidences(evidences);
-        cache.put(cacheKey, medication, distinct);
+        evidenceArchive.record(distinct);
         List<String> warnings = new ArrayList<>();
         warnings.addAll(mfds.warnings());
         warnings.addAll(fda.warnings());
-        return new MedicationEvidenceLookup(distinct, mfds.status(), fda.status(), AgentText.distinct(warnings));
+        MedicationDataStatus fdaStatus = fda.status();
+        if (evidenceExtractor.hasUnresolvedFoodInstruction(fda)) {
+            fdaStatus = MedicationDataStatus.INCOMPLETE;
+            warnings.add("An openFDA table separates food and usage instructions across cells.");
+        }
+        MedicationEvidenceLookup lookup = new MedicationEvidenceLookup(distinct, mfds.status(), fdaStatus, AgentText.distinct(warnings));
+        if (lookup.unmatchedStatus() == InteractionStatus.NO_MATCHING_INTERACTION_FOUND) {
+            cache.put(cacheKey, medication, lookup);
+        }
+        return lookup;
     }
 
     private MedicationResearchResult researchResult(
@@ -1122,6 +1186,8 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
         for (MatchedMedicationFoodEvidence match : matches) {
             MedicationFoodEvidence evidence = match.evidence();
             MedicationFoodEffectType effect = evidence.effectType();
+            notices.add("복약 근거 · " + evidence.medication().normalizedProductName() + " / "
+                    + evidence.foodOrNutrient() + " (" + sourceReference(evidence.source()) + ")");
             if (effect == MedicationFoodEffectType.AVOID
                     && evidence.strength() == InteractionEvidenceStrength.EXPLICIT_LABEL_INSTRUCTION
                     && evidence.confidence() >= 0.8) {
@@ -1138,13 +1204,29 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
                     status = InteractionStatus.TIMING_CONDITION;
                 }
                 notices.add("공식 복약정보에서 " + evidence.foodOrNutrient() + "와(과) 복용 간격 조건을 안내합니다. Salus가 복용 일정을 알 수 없어 구체적인 시간표는 만들지 않았습니다.");
+            } else if (effect == MedicationFoodEffectType.AVOID_STANDALONE) {
+                if (status != InteractionStatus.CONFIRMED_CONFLICT && status != InteractionStatus.TIMING_CONDITION) {
+                    status = InteractionStatus.FOOD_INTAKE_CONDITION;
+                }
+                notices.add("공식 복약정보에서 " + evidence.foodOrNutrient()
+                        + "만으로 약을 복용하는 경우를 피하도록 안내합니다. 식사와 복용 조건은 의사 또는 약사에게 확인해 주세요.");
             } else if (effect == MedicationFoodEffectType.TAKE_WITH_FOOD
                     || effect == MedicationFoodEffectType.TAKE_ON_EMPTY_STOMACH
                     || effect == MedicationFoodEffectType.TAKE_WITHOUT_FOOD) {
                 if (status != InteractionStatus.CONFIRMED_CONFLICT && status != InteractionStatus.TIMING_CONDITION) {
                     status = InteractionStatus.FOOD_INTAKE_CONDITION;
                 }
-                notices.add("공식 복약정보에서 음식 섭취 조건을 안내합니다. 복용 방법은 의사 또는 약사에게 확인해 주세요.");
+                String condition = switch (effect) {
+                    case TAKE_ON_EMPTY_STOMACH -> "공복에 복용";
+                    case TAKE_WITHOUT_FOOD -> "음식 없이 복용";
+                    case TAKE_WITH_FOOD -> "음식과 함께 복용";
+                    default -> throw new IllegalStateException("Unexpected intake condition: " + effect);
+                };
+                notices.add("공식 복약정보에 " + condition
+                        + "하는 조건이 있어요. 적용 조건과 복용 방법은 의사 또는 약사에게 확인해 주세요.");
+            } else if (effect == MedicationFoodEffectType.CONSISTENT_INTAKE_REQUIRED) {
+                notices.add("공식 복약정보에서 " + evidence.foodOrNutrient()
+                        + "의 섭취량을 일정하게 유지하도록 안내합니다. 식단을 크게 바꾸기 전에 의사 또는 약사에게 확인해 주세요.");
             } else {
                 conflicts.add(new RecipeConflict(
                         RecipeConflictType.MEDICATION_INTERACTION,
@@ -1175,7 +1257,9 @@ class OfficialMedicationFoodInteractionAdapter implements MedicationFoodInteract
         if (source == null) {
             return "medication-label";
         }
-        return source.sourceType() + ":" + source.sourceId();
+        return source.sourceUrl() == null || source.sourceUrl().isBlank()
+                ? source.sourceType() + ":" + source.sourceId()
+                : source.sourceUrl();
     }
 }
 
@@ -1189,6 +1273,27 @@ record MedicationEvidenceLookup(
     MedicationEvidenceLookup {
         evidences = evidences == null ? List.of() : List.copyOf(evidences);
         warnings = warnings == null ? List.of() : List.copyOf(warnings);
+    }
+
+    InteractionStatus unmatchedStatus() {
+        if (mfdsStatus == MedicationDataStatus.API_DISABLED && openFdaStatus == MedicationDataStatus.API_DISABLED) {
+            return InteractionStatus.API_DISABLED;
+        }
+        if (failed(mfdsStatus) || failed(openFdaStatus)) {
+            return InteractionStatus.API_FAILED;
+        }
+        if (incomplete(mfdsStatus) || incomplete(openFdaStatus)) {
+            return InteractionStatus.EVIDENCE_INSUFFICIENT;
+        }
+        return InteractionStatus.NO_MATCHING_INTERACTION_FOUND;
+    }
+
+    private static boolean failed(MedicationDataStatus status) {
+        return status == MedicationDataStatus.API_FAILED || status == MedicationDataStatus.PARSING_FAILED;
+    }
+
+    private static boolean incomplete(MedicationDataStatus status) {
+        return status == MedicationDataStatus.INCOMPLETE || status == MedicationDataStatus.MULTIPLE_RESULTS;
     }
 }
 
@@ -1214,12 +1319,12 @@ class InMemoryMedicationEvidenceCache {
         return Optional.of(cached);
     }
 
-    void put(String key, NormalizedMedication medication, List<MedicationFoodEvidence> evidences) {
+    void put(String key, NormalizedMedication medication, MedicationEvidenceLookup lookup) {
         if (key == null || key.isBlank()) {
             return;
         }
         LocalDateTime now = LocalDateTime.now();
-        List<MedicationEvidenceSource> sources = evidences == null ? List.of() : evidences.stream()
+        List<MedicationEvidenceSource> sources = lookup.evidences().stream()
                 .map(MedicationFoodEvidence::source)
                 .filter(source -> source != null)
                 .collect(LinkedHashSet<MedicationEvidenceSource>::new, LinkedHashSet::add, LinkedHashSet::addAll)
@@ -1227,9 +1332,9 @@ class InMemoryMedicationEvidenceCache {
                 .toList();
         cache.put(key, new CachedMedicationEvidence(
                 medication,
-                evidences == null ? List.of() : List.copyOf(evidences),
+                lookup,
                 sources,
-                sha256(key + ":" + (evidences == null ? "" : evidences.toString())),
+                sha256(key + ":" + lookup.evidences()),
                 now,
                 now.plus(DEFAULT_TTL)));
     }

@@ -412,13 +412,12 @@ public class RecipePromptFactory {
                 알레르기: %s
                 만성질환: %s
                 식단 제한: %s
-                복용 약물: %s
                 건강 목표: %s
+                음식과 약물의 상호작용이나 복용 방법을 추정하지 마세요.
                 """.formatted(
                 formatList(safety.allergies()),
                 formatList(safety.chronicConditions()),
                 formatList(safety.dietaryRestrictions()),
-                formatList(safety.medications()),
                 formatList(safety.goals())).trim();
     }
 

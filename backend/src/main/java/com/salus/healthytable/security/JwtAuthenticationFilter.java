@@ -51,13 +51,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             authenticated = authenticate(jwt, request);
         } catch (Exception ex) {
-            // DB 장애 같은 예외로 공개 API까지 500이 되지 않도록, 예외는 기존처럼 인증 없이 통과시킵니다.
-            // 인증이 필요한 엔드포인트는 이후 SecurityConfig에서 401/403으로 정리됩니다.
-            logger.warn("JWT authentication was skipped: " + ex.getMessage());
+            // 토큰을 보낸 요청을 DB 장애 등으로 확인하지 못하면 게스트로 넘기지 않고 503을 줍니다.
+            // 게스트로 넘기면 로그인 사용자의 채팅이 등록 알레르기 없이 처리됩니다(모르는 것은 안전이 아님, 2026-11-06 보안 점검).
+            logger.warn("JWT authentication unavailable: " + ex.getClass().getSimpleName());
             if (logger.isDebugEnabled()) {
                 logger.debug("JWT authentication failure details", ex);
             }
-            filterChain.doFilter(request, response);
+            errorHandler.handleAuthenticationUnavailable(request, response);
             return;
         }
 
