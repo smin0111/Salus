@@ -1,24 +1,70 @@
 # Salus
 
-Salus는 식단 기록, 건강 프로필과 알레르기 정보를 한 흐름에서 관리하고, 근거를 확인한 레시피를 제공하려는 개인 식생활 관리 서비스입니다. 핵심 문제는 “무엇을 먹을지”와 “내 조건에서 먹어도 되는지”가 서로 다른 앱과 기억에 흩어지는 점입니다.
+<img src="docs/images/salus-cover.png" width="100%"/>
+
+알레르기·건강 정보를 한 번 등록해 두면, 레시피마다 먹어도 되는지 판단해 주는 로컬 LLM 식생활 서비스입니다. 채팅으로 요리를 물으면 미리 넣어 둔 기본 레시피나 웹에 실제로 있는 레시피를 출처와 함께 보여 주고, 등록한 알레르기 재료가 포함되어 있으면 위험을 알려 줍니다.
 
 > 이 저장소는 포트폴리오 및 개발 검증 단계입니다. 의료 진단·처방을 제공하지 않으며, 생성 결과는 전문 의료인의 판단을 대체하지 않습니다.
 
-## 구현 범위
+화면과 만든 이유, 설계하며 내린 판단은 [노션 포트폴리오](https://charming-floss-d83.notion.site/2c2e4c08601480c096eeca4867278c68)에 정리했습니다. 이 문서는 코드 기준의 설계와 실행 방법을 다룹니다.
 
-현재 코드와 자동화 테스트로 확인하는 범위:
+## 핵심 설계와 해결한 문제
 
-- JWT 인증, 소셜 로그인 연결부, 사용자·건강 프로필·건강검진 관리
-- 식단 기록, 커뮤니티, 결제 검증, 관리자 API/웹
-- 채팅 세션과 작업 세션, 내부 DB/공식·웹 근거 검색, 구조화 레시피 생성·검증·감사 기록
-- 알레르기 충돌 차단, 재료 제외·대체, 상세 설명, 식단 캘린더 저장 후속 요청
-- Flyway 기반 스키마 변경, Redis 작업 세션, CI·Dependabot, 컨테이너 빌드
+### 1. 레시피를 생성하지 않고 추출한다
 
-검증 중이거나 기본 비활성화된 범위:
+**문제.** 처음에는 검색 결과 요약문(최대 1,200자)을 LLM에 주고 레시피 전체를 쓰게 했습니다. 8B 모델은 비어 있는 재료와 분량을 그럴듯하게 채웠고, 평가 12개 중 7개만 통과했습니다.
 
-- `Recipe Agent` 초기 라우팅과 외부 source discovery
-- YouTube transcript, MFDS 의약품, RxNorm, openFDA를 이용한 live medication evidence
-- 실제 운영 트래픽에서의 임상적 안전성, 외부 API 가용성·정확성, 모바일 스토어 배포
+**해결.** 레시피 페이지를 직접 열어 그대로 꺼내 오는 방식으로 바꿨습니다.
+
+- 검색은 SearXNG를 기본으로 쓰고, 실패하면 DuckDuckGo로 넘어갑니다(`FallbackSearchEngine`). 검색이 실패한 경우와 정말 결과가 없는 경우를 구분해, 일시 장애가 7일짜리 "결과 없음" 캐시로 남지 않게 했습니다(`SearxngSearchEngine`).
+- 페이지에 구조화 데이터(JSON-LD)가 있으면 코드로 먼저 읽고(`SchemaOrgRecipeJsonLdExtractor`), 없을 때만 `gemma3:4b`가 본문에서 재료와 단계를 추출합니다(`RecipeTextExtraction`).
+- 요청한 요리 이름이 페이지 제목이나 본문에 없으면 받지 않습니다(`DISH_NOT_GROUNDED_IN_SOURCE`). 없는 요리를 비슷한 요리로 대신 채우는 일을 막기 위해서입니다.
+- 웹 페이지 요청은 내부망 주소를 거부하고 리다이렉트마다 다시 검증합니다(`DefaultSafeWebPageFetcher`). 검색어에 건강 정보가 섞이면 외부로 보내지 않습니다(`ExternalSearchQueryPolicy`).
+- 찾은 레시피는 `web_recipe_sources`에 "검토 전"으로 저장하고, 원문 대신 재료·요약 단계·출처 링크만 남깁니다.
+
+**결과.** 처음 보는 유행 요리 14개 모두 출처를 찾았고, 본문 추출 시험에서 원문에 없는 재료는 0개였습니다.
+
+### 2. 운영 판정 코드를 그대로 쓰는 평가 하네스
+
+평가 도구가 채점 규칙을 따로 가지면 점수와 실제 서비스 동작이 갈라집니다. 그래서 하네스는 질문을 흘려보내고 점수만 모으고, 판정은 모두 운영 코드가 합니다([`docs/llm-eval-harness.md`](docs/llm-eval-harness.md)).
+
+| 단계 | 사용하는 운영 코드 |
+| --- | --- |
+| 프롬프트 | `RecipePromptFactory` |
+| 호출·파싱 | `OllamaRecipeGenerationClient`, `OllamaLlmService` |
+| 레시피 규칙 | `RecipeDraftValidator` |
+| 알레르기 | `AllergenMatcher` + `AllergenDictionary` |
+
+- `live`는 실제 Ollama를 부르고, `replay`는 녹화한 응답을 HTTP 경계에서 넣어 결정적으로 다시 돌립니다(`./eval.sh --mode replay`).
+- 모델을 비교할 때 바꾸는 건 모델 이름 하나뿐이고, 프롬프트·설정·검증 기준은 모두 같습니다.
+- 알레르기 실패는 점수에 넣지 않고, 한 건이라도 있으면 무조건 실패입니다. 점수에 섞으면 총점이 높다는 이유로 안전 실패가 묻히기 때문입니다.
+
+이 하네스로 로컬 모델 8개를 비교해 대화는 `qwen3:8b`, 추출·요약은 `gemma3:4b`로 나눴습니다(요약 응답 29.8초 → 15.9초). 서비스 흐름 전체는 실제 API로 질문을 보내는 실전 평가 43개(`scripts/e2e-eval.py`)로 확인하며, 통과 32 → 38개, 알레르기 위반 1 → 0건이 됐습니다.
+
+### 3. 같은 코드인데 평가 결과가 매번 달랐던 이유
+
+**문제.** 코드를 바꾸지 않았는데 평가 통과 수가 실행마다 7~9개로 달랐고, 우유 알레르기 감자스프 사례는 특정 실행에서만 우유가 남았습니다.
+
+**원인.** Ollama는 JSON Schema의 `properties` 순서대로 필드를 생성합니다. 그런데 이 스키마를 `Map.of`로 만들고 있었고, `Map.of`의 순회 순서는 JVM이 시작할 때 정해지는 무작위 값(SALT)에 따라 바뀝니다. 같은 JVM 안에서는 순서가 일정하고 단위 테스트는 가짜 LLM 응답을 쓰기 때문에, 매번 새 JVM에서 실제 LLM을 부르는 평가에서만 드러났습니다. 감자스프는 `name → unit → amount` 순서일 때만 3번 중 3번 우유가 남았습니다.
+
+**해결.** 스키마를 순서가 고정된 `LinkedHashMap`으로 만들고(`RecipePromptFactory.ordered`), 실제로 Ollama에 보내는 JSON 문자열의 순서까지 검사하는 테스트를 추가했습니다(`RecipePromptFactoryTest#schemaPropertyOrderIsFixedForEveryRequestKind`). 이후 3회 반복 결과가 같아졌습니다.
+
+### 4. 알레르기 판정: 모르면 안전하다고 하지 않는다
+
+- 식약처 알레르기 표시 대상을 기준으로 한 사전(`allergens/ko-allergens.yaml`)에 다른 이름과 파생 원료를 묶었습니다. 예를 들어 우유에는 버터·치즈·생크림·탈지분유 등이 들어갑니다. '코코넛밀크'처럼 잘못 걸리는 이름은 넣지 않고, '밀'처럼 한 글자 이름은 따로 떨어진 낱말일 때만 찾습니다.
+- 레시피에 알레르기 재료가 있으면 포함 사실을 알리고, 뺄 수 있으면 빼고, 빼면 요리가 성립하지 않으면 추천하지 않습니다. 겹치는 재료를 찾지 못해도 "안전"이라고 하지 않고 원재료 표시 확인을 안내합니다.
+- 등록한 알레르기는 대화 속 "빼고"보다 항상 우선합니다.
+
+**해결한 문제 두 가지**
+
+- 실전 평가에서 두쫀쿠의 '우유맛스틱'만 빼고 버터·탈지분유가 남은 레시피를 "우유 제외"로 안내했습니다. 제외 판단과 최종 검증이 '우유'라는 글자만 본 것이 원인이었고, 파생 원료까지 사전 기준으로 판정하도록 바꿨습니다(`AgentAllergyRemovalSafetyTest`).
+- 등록 알레르기 '오이'의 끝 글자를 조사로 보고 잘라 '오'로 판정해 오이무침을 막지 못했습니다. 메시지에서 읽은 알레르기에만 조사를 떼도록 바꾸고, 포도·송이 등 같은 형태를 회귀 테스트로 추가했습니다(`ChatSafetyContextServiceTest`).
+
+### 5. 계정과 결제
+
+- **로그인:** Google·Kakao·Apple 토큰은 서버에서 직접 검증합니다. 같은 검증된 이메일의 계정이 있으면 기존 계정으로 다시 로그인한 뒤에만 연결하고, 동시 가입은 MySQL `GET_LOCK`으로 직렬화합니다.
+- **Refresh 토큰:** 쓸 때마다 새 토큰으로 바꾸고, 이미 쓴 토큰이 다시 오면 탈취로 보고 그 회원의 토큰을 모두 폐기합니다. 앱이 같은 토큰으로 거의 동시에 두 번 갱신하는 정상 경합은 짧은 유예 시간으로 구분합니다(`RefreshTokenService`).
+- **결제(포트원 V2):** 금액과 기간은 서버가 만든 주문으로 정하고, 결제 결과는 포트원에 다시 조회해 상태·금액·상점·통화를 대조합니다. 앱이 결제 직후 꺼져도 웹훅으로 같은 완료 처리를 타며, 주문 행을 잠가 한 번만 처리합니다. 웹훅은 서명과 5분 시간 범위를 확인한 뒤에도 본문 값을 믿지 않고 다시 조회합니다(`PaymentService`, `PaymentTxHelper`).
 
 ## 구조
 
@@ -27,183 +73,45 @@ Salus/
 ├── backend/                 # Spring Boot API, 도메인, JPA Repository, Flyway
 ├── frontend/                # Expo/React Native 사용자 앱
 ├── admin/                   # Vite/React 관리자 웹
+├── docs/                    # 설계 문서, 평가 하네스, AI 작업 지침
+├── scripts/                 # 실전 평가, 베타 서버 운영 스크립트
 ├── .github/                 # CI, Dependabot, Issue/PR 템플릿
 ├── docker-compose.yml       # 로컬 Redis
-└── docker-compose.prod.yml  # MySQL, Redis, backend, admin
+└── docker-compose.prod.yml  # MySQL, Redis, SearXNG, backend, admin
 ```
 
-## 실제 기술 스택
+## 기술 스택
 
 | 영역 | 기술 |
 | --- | --- |
 | Backend | Java 17, Spring Boot 3.2.1, Spring MVC, WebFlux `WebClient`, Spring Security, JWT |
 | Data | Spring Data JPA, Hibernate, MySQL 8.0, Flyway, Redis `StringRedisTemplate` |
-| AI/Search | Ollama, 선택적 Gemini·Tavily, DuckDuckGo HTML search, 선택적 MFDS/YouTube/RxNorm/openFDA adapter |
+| AI/Search | Ollama(`qwen3:8b`, `gemma3:4b`), SearXNG, DuckDuckGo 대체 검색, 선택적 Tavily·MFDS·RxNorm·openFDA adapter |
+| Payment | PortOne V2 |
 | User app | Expo 54, React Native 0.81, React 19 |
 | Admin | React 19, Vite 6, React Router 7 |
 | Quality/Operations | JUnit 5, Mockito, Maven, npm, GitHub Actions, Dependabot, Docker Compose |
 
-Salus의 영속성 계층은 **Spring Data JPA · Hibernate**입니다. MyBatis mapper, mapper XML, MyBatis dependency는 사용하지 않습니다. Maven 좌표와 Java package는 `com.salus`를 사용합니다.
-
-## 사전 조건
-
-- Java 17+
-- Maven 3.9+
-- Node.js 20 / npm
-- Docker Desktop(Compose v2 포함)
-- 로컬 LLM을 사용할 경우 [Ollama](https://ollama.com/)와 `qwen3:8b` 모델
-
-## 로컬 실행
-
-### 1. 예시 환경변수와 인프라
-
-```bash
-cp .env.example .env
-```
-
-`.env`의 DB 비밀번호, JWT secret, CORS origin, PortOne 예시값을 로컬 값으로 교체하세요. `.env`는 Git에서 제외되며 커밋하면 안 됩니다.
-
-MySQL과 Redis만 먼저 실행할 수 있습니다.
-
-```bash
-docker compose --env-file .env -f docker-compose.prod.yml up -d mysql redis
-```
-
-Redis만 필요하면 더 작은 개발 구성을 사용합니다.
-
-```bash
-docker compose up -d redis
-```
-
-### 2. Ollama
-
-```bash
-ollama pull qwen3:8b
-ollama serve
-```
-
-호스트에서 백엔드를 실행할 때 기본 주소는 `http://localhost:11434/api/chat`입니다. Docker 백엔드에서 호스트 Ollama를 사용할 때는 `.env.example`처럼 `host.docker.internal`을 사용합니다.
-
-### 3. Backend
-
-Compose용 `.env`를 현재 셸에도 불러온 뒤 실행하면 MySQL 계정과 JWT 설정이 일치합니다.
-
-```bash
-set -a
-source .env
-set +a
-cd backend
-mvn spring-boot:run
-```
-
-또는 `backend/src/main/resources/application-secret.example.properties`를 `application-secret.properties`로 복사해 로컬 비밀값을 넣을 수 있습니다. 실제 파일은 커밋하지 않습니다. API 기본 주소는 `http://localhost:8080`, health endpoint는 `/actuator/health`입니다.
-
-스키마의 기준은 `backend/src/main/resources/db/migration`의 Flyway migration입니다. 루트 `schema.sql`, `init_db.sql`, `test_data.sql`은 사용하거나 추적하지 않습니다. JPA는 `ddl-auto=validate`, SQL init은 비활성화되어 있습니다.
-
-### 4. Frontend와 Admin
-
-```bash
-cd frontend
-npm ci
-cp src/secrets.example.js src/secrets.js
-npx expo start --web --port 8081 --host localhost
-```
-
-```bash
-cd admin
-npm ci
-npm run dev
-```
-
-## 외부 API 기본 정책
-
-`.env.example`에서 Recipe Agent, source discovery, YouTube, MFDS 의약품, RxNorm, openFDA live 연동은 모두 `false`입니다. API key가 비어 있으면 해당 공급자를 사용할 수 없습니다. DuckDuckGo 검색과 로컬 Ollama는 별도 유료 키 없이 사용할 수 있지만 네트워크·로컬 모델 상태에 영향을 받습니다. PortOne은 결제 검증 요청이 들어올 때만 호출됩니다.
-
-외부 연동을 켜기 전에는 이용약관, 호출 제한, 개인정보 전달 범위, timeout/fallback, 운영 로그를 별도로 검토하세요.
+영속성 계층은 Spring Data JPA·Hibernate만 사용합니다. MyBatis는 쓰지 않습니다.
 
 ## 승인 레시피 카탈로그
 
-사용자에게 기본 레시피로 노출하는 원본은
-`backend/src/main/resources/recipes/approved-recipes.json`입니다. 현재는 2인분 기준 10개만 승인하며,
-애플리케이션 시작 시 Flyway v6 스키마의 `recipes`, `recipe_sources`,
-`approved_recipe_documents`로 원자적으로 동기화합니다.
+기본 레시피의 원본은 `backend/src/main/resources/recipes/approved-recipes.json`입니다. 현재 10개를 승인하며, 애플리케이션 시작 시 엄격하게 검증한 뒤 DB와 동기화합니다. 검증에 실패하면 서버가 시작되지 않습니다.
 
-- 공개 목록과 내부 DB 근거 검색은 `approval_status=APPROVED`인 행만 사용합니다.
-- 기존 레시피는 삭제하지 않고 `UNVERIFIED`로 보존합니다.
-- AI/웹 검색 결과는 `generated_recipes` 감사 기록에 남지만 승인 카탈로그로 자동 승격하지 않습니다.
+- 공개 목록과 내부 DB 근거 검색은 `approval_status=APPROVED`인 행만 사용합니다. 파일에 없는 승인 행은 `UNVERIFIED`로 되돌립니다.
+- 웹 검색 결과는 승인 카탈로그로 자동 승격하지 않습니다.
 - 승인 문서에는 기준 인분, 재료별 계량값, 불 세기, 시간, 완료 상태, 버전, SHA-256 해시와 서로 다른 도메인의 출처 2개를 기록합니다.
-- 인분 변경은 1~6인분 범위에서 승인 원본을 매번 다시 계산합니다. 맵기는 해당 레시피에 정의된 프로필만 허용합니다.
-- Validator는 각 맵기 프로필을 최종 사용자 출력으로 렌더링한 뒤, `0g`으로 제외된 재료가 단계에 남거나 활성 재료가 단계에서 빠지는 경우 승인을 거부합니다.
-- 순차 단계의 최대 시간 합계가 표시 총 시간을 넘거나 설명되지 않은 시간이 10분을 넘으면 승인을 거부합니다.
-- 사용자용 완료 기준에는 내부 규칙이나 안전 온도를 섞지 않습니다. 식품 안전 온도·유지 시간은 별도 구조화 필드로 검증합니다.
-- 생성 레시피 Validator는 오븐·에어프라이어 외 단계의 온도값, 관찰 불가능한 완료 기준, 과조리를 악화시키는 복구법, 두부·채소에 붙은 육류식 안전문구를 사용자 노출 전에 거부합니다.
-- 이 의미 검증을 통과한 새 감사 행은 `validator_version=v2.0`으로 기록해 과거 `v1.0` 판정과 구분합니다.
-- `찌게`처럼 알려진 음식명 오타도 승인 카탈로그명으로 먼저 정규화해, 승인 원본이 있는데 LLM이 다시 생성하는 경로를 차단합니다.
-- Flyway v7부터 `servings`와 `calories_per_serving`을 API·감사 데이터에 명시적으로 전달합니다. 기존 `calories`는 클라이언트 호환용으로만 유지합니다.
-- 채팅·상세 화면은 `조리 시간 · n인분 · 1인분 약 n kcal · 난이도`를 함께 표시하고, 기준 인분이 없는 기존 열량은 1인분 값이라고 추측하지 않습니다.
-- 승인 DB에 없는 메뉴는 신뢰 가능한 검색 근거가 없으면 LLM으로 추측하지 않고 사용자 노출을 거절합니다.
+- 인분 변경은 1~6인분 범위에서 승인 원본을 매번 다시 계산합니다.
+- 식품 안전 온도·유지 시간은 사용자 문구와 분리된 구조화 필드로 검증합니다.
 
-레시피를 늘릴 때는 원본 JSON에 후보를 바로 추가하지 말고, 두 출처 대조와 실제 조리 검증을 완료한 뒤
-카탈로그 버전을 올리고 `ApprovedRecipeServiceTest` 및 전체 백엔드 테스트를 통과시켜야 합니다.
-현재 10개 역시 코드·출처·식품 안전 기준 검증을 통과한 초기 기준본이며, 실제 주방 반복 테스트가 끝나기 전까지
-“절대적으로 완벽한 맛”을 보증하는 자료로 표현하지 않습니다.
+레시피를 늘릴 때는 두 출처 대조와 실제 조리 검증을 마친 뒤 카탈로그 버전을 올리고 `ApprovedRecipeServiceTest`와 전체 백엔드 테스트를 통과시켜야 합니다.
 
-## 테스트와 CI 재현
+## 현재 한계
 
-Backend 전체 테스트:
-
-```bash
-cd backend
-mvn -q clean test
-```
-
-Admin:
-
-```bash
-cd admin
-npm ci
-npm run build
-npm audit --audit-level=moderate
-```
-
-Frontend web export:
-
-```bash
-cd frontend
-npm ci
-cp src/secrets.example.js src/secrets.js
-npx expo export --platform web --output-dir dist
-npm audit --audit-level=high
-```
-
-Compose와 이미지:
-
-```bash
-docker compose --env-file .env.example -f docker-compose.prod.yml config
-docker build -t salus-backend:local-check ./backend
-docker build --build-arg VITE_API_BASE_URL=/api -t salus-admin:local-check ./admin
-```
-
-전체 스택은 실제 비밀값을 채운 `.env`로만 실행하세요.
-
-```bash
-docker compose --env-file .env -f docker-compose.prod.yml up -d --build
-```
-
-## 주요 PR과 브랜치 맥락
-
-- [PR #15 — Recipe Agent](https://github.com/smin0111/Salus/pull/15)
-- [PR #16 — 서비스 고도화](https://github.com/smin0111/Salus/pull/16)
-- [PR #17 — Frontend renewal (draft)](https://github.com/smin0111/Salus/pull/17)
-
-PR #17은 PR #16의 head branch를 base로 둔 stacked PR입니다. 리뷰·merge 전에 각 PR의 base와 CI 상태를 다시 확인해야 합니다.
-
-## 평가와 현재 한계
-
-- fixture 기반 Recipe Agent 평가는 동일 입력에 대한 회귀를 잡는 도구입니다. 실제 외부 API 품질, 최신 의약품 정보, 임상적 안전성을 증명하지 않습니다.
-- 생성 레시피는 구조·근거·금지 재료 검증을 거치지만 모든 식품명 동의어, 교차오염, 개인별 복약 상황을 완전하게 판정하지 못합니다.
-- 외부 검색과 로컬 LLM은 네트워크, 모델 설치, 공급자 응답 형식에 따라 실패할 수 있습니다.
-- 관리자 전용 로그인·토큰 강제 폐기·권한 변경 감사 UI는 아직 없습니다.
-- Recipe Agent 패키지의 일부 외부 API adapter와 domain 집합 파일은 여전히 크며 provider별 분리가 후속 과제입니다.
+- 처음 보는 요리는 16GB 노트북의 로컬 LLM으로 처리해 답까지 30초 정도 걸립니다. 한 번 찾은 레시피는 저장해 다시 씁니다.
+- 회원이 몇 시간 뒤 같은 채팅방에서 이어서 물으면 작업 세션(Redis TTL 6시간)이 만료돼 앞의 레시피를 찾지 못합니다.
+- 게스트의 하루 새 요리 검색 횟수는 IP로 세서, 같은 네트워크의 사용자끼리 횟수를 나눠 씁니다.
+- 복용약과 음식 궁합 확인은 대표 사례도 잡지 못해 꺼 두었습니다.
+- 알레르기 사전은 모든 식품명 동의어와 교차오염을 다루지 못합니다.
 
 비밀정보와 민감 데이터 처리 원칙은 [SECURITY.md](SECURITY.md)를 참고하세요.
